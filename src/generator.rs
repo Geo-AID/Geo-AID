@@ -1,17 +1,23 @@
-use std::{ops::{Mul, Add, AddAssign, Sub, SubAssign}, thread::{JoinHandle, self}, sync::{mpsc, Arc}, collections::VecDeque, mem, fmt::Display};
+use std::{ops::{Mul, Add, AddAssign, Sub, SubAssign, Div, Neg}, thread::{JoinHandle, self}, sync::{mpsc, Arc}, collections::VecDeque, mem, fmt::Display};
 
 use crate::script::Criteria;
 
+#[derive(Debug)]
+pub enum EvaluationError {
+    ParallelLines
+}
+
 mod magic_box;
 mod critic;
+pub mod geometry;
 
 /// Represents a complex number located on a "unit" plane.
 #[derive(Debug, Clone, Copy)]
 pub struct Complex {
     /// X coordinate located in range [0, 1).
-    real: f64,
+    pub real: f64,
     /// Y coordinate located in range [0, 1).
-    imaginary: f64
+    pub imaginary: f64
 }
 
 impl Complex {
@@ -19,6 +25,14 @@ impl Complex {
 
     pub fn mangitude(self) -> f64 {
         f64::sqrt(self.real.powi(2) + self.imaginary.powi(2))
+    }
+}
+
+impl Mul for Complex {
+    type Output = Complex;
+
+    fn mul(self, rhs: Complex) -> Self::Output {
+        Complex::new(self.real * rhs.real, self.imaginary * rhs.imaginary)
     }
 }
 
@@ -46,6 +60,21 @@ impl Add for Complex {
     }
 }
 
+impl Div<f64> for Complex {
+    type Output = Complex;
+
+    fn div(self, rhs: f64) -> Self::Output {
+        Complex::new(self.real / rhs, self.imaginary / rhs)
+    }
+}
+
+impl Div for Complex {
+    type Output = Complex;
+
+    fn div(self, rhs: Complex) -> Self::Output {
+        Complex::new(self.real / rhs.real, self.imaginary / rhs.imaginary)
+    }
+}
 
 impl Sub<f64> for Complex {
     type Output = Complex;
@@ -78,6 +107,14 @@ impl AddAssign for Complex {
 impl Display for Complex {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{} + {}i", self.real, self.imaginary)
+    }
+}
+
+impl Neg for Complex {
+    type Output = Complex;
+    
+    fn neg(self) -> Self::Output {
+        Complex::new(-self.real, -self.imaginary)
     }
 }
 
@@ -149,7 +186,7 @@ impl Generator {
     }
 
     /// Performs a generation cycle with pre-baked magnitudes (how much a point can get adjusted).
-    fn cycle_prebaked(&mut self, magnitudes: &Vec<f64>) {
+    fn cycle_prebaked(&mut self, magnitudes: &[f64]) {
         // Send data to each worker
         for (i, sender) in self.senders.iter().enumerate() {
             sender.send(Message::Generate(magnitudes[i], (self.current_points.clone(), Vec::new()))).unwrap();
@@ -238,7 +275,7 @@ impl Drop for Generator {
             sender.send(Message::Terminate).unwrap();
         }
 
-        let workers = mem::replace(&mut self.workers, Vec::new());
+        let workers = mem::take(&mut self.workers);
 
         for worker in workers {
             worker.join().unwrap();

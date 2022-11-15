@@ -1,8 +1,6 @@
 use std::{sync::Arc, ops::{Mul, Deref, DerefMut, Div}, hash::Hash};
 
-use self::geometry::Point;
-
-pub mod geometry;
+pub mod figure;
 
 /// Defines an object with assigned weight
 #[derive(Debug)]
@@ -54,6 +52,8 @@ impl Mul<SimpleUnit> for ComplexUnit {
     fn mul(mut self, rhs: SimpleUnit) -> Self::Output {
         match rhs {
             SimpleUnit::Scalar => (),
+            // Clippy doesn't like exponentiation. Thanks, Clippy
+            #[allow(clippy::suspicious_arithmetic_impl)]
             _ => self[rhs as usize] += 1
         }
         self
@@ -75,6 +75,8 @@ impl Div<SimpleUnit> for ComplexUnit {
     fn div(mut self, rhs: SimpleUnit) -> Self::Output {
         match rhs {
             SimpleUnit::Scalar => (),
+            // Oh, c'mon, Clippy
+            #[allow(clippy::suspicious_arithmetic_impl)]
             _ => self[rhs as usize] -= 1
         }
         self
@@ -115,8 +117,8 @@ pub enum Expression {
     AnglePoint(Box<Weighed<Expression>>, Box<Weighed<Expression>>, Box<Weighed<Expression>>),
     /// A real literal.
     Literal(f64, ComplexUnit),
-    /// A point in euclidean space
-    Point(Arc<Point>),
+    /// An adjustable indexed point in euclidean space
+    FreePoint(usize),
     /// A line in euclidean space. defined by two points.
     Line(Box<Weighed<Expression>>, Box<Weighed<Expression>>),
     /// The point where two lines cross.

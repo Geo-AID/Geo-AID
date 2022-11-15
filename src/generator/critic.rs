@@ -1,14 +1,10 @@
 use std::sync::Arc;
 
-use crate::script::{Criteria, CriteriaKind, Expression, ComplexUnit, SimpleUnit, Weighed};
+use crate::{script::{Criteria, CriteriaKind, Expression, ComplexUnit, SimpleUnit, Weighed}, generator::geometry};
 
-use super::{Complex, Logger};
+use super::{Complex, Logger, EvaluationError};
 
 type PointVec = Vec<(Complex, f64)>;
-
-pub enum EvaluationError {
-    ParallelLines
-}
 
 /// That's the infamous sigma function. It packs a [0, +inf) range into [0, 1).
 fn smooth_0_inf(x: f64) -> f64 {
@@ -42,26 +38,13 @@ fn invert(q: f64) -> f64 {
     1.0 - q
 }
 
-fn get_line(p1: Complex, p2: Complex, _logger: &mut Logger) -> Complex {
-    let slope = if f64::abs(p1.real - p2.real) < 1e-6 {
-        // Assumed to be vertical, intercept is offset
-        return Complex::new(f64::INFINITY, p1.real)
-    } else {
-        (p1.imaginary - p2.imaginary) / (p1.real - p2.real)
-    };
-
-    let intercept = p1.imaginary - p1.real * slope;
-    // logger.push(format!("The line is {slope}x + {intercept}."));
-    Complex::new(slope, intercept)
-}
-
-fn evaluate_expression(expr: &Weighed<Expression>, weights: &mut Vec<f64>, points: &PointVec, logger: &mut Logger, weight_mult: f64)
+fn evaluate_expression(expr: &Weighed<Expression>, weights: &mut Vec<f64>, points: &PointVec, _logger: &mut Logger, weight_mult: f64)
     -> Result<(Complex, ComplexUnit), EvaluationError> {
     Ok(match &expr.object {
         Expression::PointPointDistance(p1, p2) => {
             // Evaluate the two points
-            let p1 = evaluate_expression(p1, weights, points, logger, weight_mult * expr.weight)?;
-            let p2 = evaluate_expression(p2, weights, points, logger, weight_mult * expr.weight)?;
+            let p1 = evaluate_expression(p1, weights, points, _logger, weight_mult * expr.weight)?;
+            let p2 = evaluate_expression(p2, weights, points, _logger, weight_mult * expr.weight)?;
 
             assert_eq!(p1.1, ComplexUnit::new(SimpleUnit::Point));
             assert_eq!(p2.1, ComplexUnit::new(SimpleUnit::Point));
@@ -72,8 +55,8 @@ fn evaluate_expression(expr: &Weighed<Expression>, weights: &mut Vec<f64>, point
         },
         Expression::PointLineDistance(point, line) => {
             // Evaluate the line and the point
-            let point = evaluate_expression(point, weights, points, logger, weight_mult * expr.weight)?;
-            let line = evaluate_expression(line, weights, points, logger, weight_mult * expr.weight)?;
+            let point = evaluate_expression(point, weights, points, _logger, weight_mult * expr.weight)?;
+            let line = evaluate_expression(line, weights, points, _logger, weight_mult * expr.weight)?;
 
             assert_eq!(point.1, ComplexUnit::new(SimpleUnit::Point));
             assert_eq!(line.1, ComplexUnit::new(SimpleUnit::Line));
@@ -105,9 +88,9 @@ fn evaluate_expression(expr: &Weighed<Expression>, weights: &mut Vec<f64>, point
         },
         Expression::AnglePoint(p1, p2, p3) => {
             // Evaluate the two points
-            let p1 = evaluate_expression(p1, weights, points, logger, weight_mult * expr.weight)?;
-            let p2 = evaluate_expression(p2, weights, points, logger, weight_mult * expr.weight)?;
-            let p3 = evaluate_expression(p3, weights, points, logger, weight_mult * expr.weight)?;
+            let p1 = evaluate_expression(p1, weights, points, _logger, weight_mult * expr.weight)?;
+            let p2 = evaluate_expression(p2, weights, points, _logger, weight_mult * expr.weight)?;
+            let p3 = evaluate_expression(p3, weights, points, _logger, weight_mult * expr.weight)?;
 
             assert_eq!(p1.1, ComplexUnit::new(SimpleUnit::Point));
             assert_eq!(p2.1, ComplexUnit::new(SimpleUnit::Point));
@@ -127,54 +110,30 @@ fn evaluate_expression(expr: &Weighed<Expression>, weights: &mut Vec<f64>, point
             (Complex::new(angle, 0.0), ComplexUnit::new(SimpleUnit::Angle))
         },
         Expression::Literal(v, unit) => (Complex::new(*v, 0.0), unit.clone()),
-        Expression::Point(p) => {
-            weights[p.index] += expr.weight * weight_mult;
+        Expression::FreePoint(p) => {
+            weights[*p] += expr.weight * weight_mult;
 
-            (points[p.index].0, ComplexUnit::new(SimpleUnit::Point))
+            (points[*p].0, ComplexUnit::new(SimpleUnit::Point))
         },
         Expression::Line(p1, p2) => {
             // Evaluate the two points
-            let p1 = evaluate_expression(p1, weights, points, logger, weight_mult * expr.weight)?;
-            let p2 = evaluate_expression(p2, weights, points, logger, weight_mult * expr.weight)?;
+            let p1 = evaluate_expression(p1, weights, points, _logger, weight_mult * expr.weight)?;
+            let p2 = evaluate_expression(p2, weights, points, _logger, weight_mult * expr.weight)?;
 
             assert_eq!(p1.1, ComplexUnit::new(SimpleUnit::Point));
             assert_eq!(p2.1, ComplexUnit::new(SimpleUnit::Point));
 
-            (get_line(p1.0, p2.0, logger), ComplexUnit::new(SimpleUnit::Line))
+            (geometry::get_line(p1.0, p2.0), ComplexUnit::new(SimpleUnit::Line))
         },
         Expression::LineCrossing(l1, l2) => {
             // Evaluate the two lines
-            let l1 = evaluate_expression(l1, weights, points, logger, weight_mult * expr.weight)?;
-            let l2 = evaluate_expression(l2, weights, points, logger, weight_mult * expr.weight)?;
+            let l1 = evaluate_expression(l1, weights, points, _logger, weight_mult * expr.weight)?;
+            let l2 = evaluate_expression(l2, weights, points, _logger, weight_mult * expr.weight)?;
 
             assert_eq!(l1.1, ComplexUnit::new(SimpleUnit::Line));
             assert_eq!(l2.1, ComplexUnit::new(SimpleUnit::Line));
 
-            // Further on we assume either only l1 is vertical or both are.
-            let (l1, l2) = if l2.0.real.is_infinite() {
-                (l2.0, l1.0)
-            } else {
-                (l1.0, l2.0)
-            };
-
-            let x = if l1.real.is_infinite() {
-                // l1 is vertical
-                if l2.real.is_infinite() {
-                    // l2 is also vertical, the two lines are parallel
-                    return Err(EvaluationError::ParallelLines)
-                } else {
-                    // If l2 is not vertical, l1's offset is the crossing point.
-                    l1.imaginary
-                }
-            } else {
-                // None are vertical
-                (l2.imaginary - l1.imaginary) / (l1.real - l2.real)
-            };
-
-            // Calculate the y based on the second line, as it's now guaranteed not to be vertical
-            let y = l2.real * x + l2.imaginary;
-
-            (Complex::new(x, y), ComplexUnit::new(SimpleUnit::Point))
+            (geometry::get_crossing(l1.0, l2.0)?, ComplexUnit::new(SimpleUnit::Point))
         },
     })
 }
@@ -271,6 +230,6 @@ pub fn evaluate(points: PointVec, criteria: &Arc<Vec<Criteria>>, logger: &mut Lo
 
     // Find the final evaluation
     point_evaluation.into_iter().enumerate().map(
-        |(i, eval)| (points[i].0, if eval.len() > 0 {weighed_mean(eval.into_iter())} else {1.0})
+        |(i, eval)| (points[i].0, if !eval.is_empty() {weighed_mean(eval.into_iter())} else {1.0})
     ).collect()
 }

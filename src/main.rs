@@ -1,30 +1,30 @@
 use std::sync::Arc;
 
-use geo_aid::{generator::Generator, script::{Weighed, CriteriaKind, Expression, geometry::Point, ComplexUnit, SimpleUnit}};
+use geo_aid::{generator::Generator, script::{Weighed, CriteriaKind, Expression, ComplexUnit, SimpleUnit, figure::{Figure, Point, PointDefinition, Line, LineDefinition}}, projector, drawer::svg};
 
 fn main() {
-    let points = vec![
-        Arc::new(Point {
-            position: None,
-            index: 0,
-            name: String::from("A")
-        }),
-        Arc::new(Point {
-            position: None,
-            index: 1,
-            name: String::from("B")
-        }),
-        Arc::new(Point {
-            position: None,
-            index: 2,
-            name: String::from("C")
-        }),
-        Arc::new(Point {
-            position: None,
-            index: 3,
-            name: String::from("D")
-        })
-    ];
+    // let points = vec![
+    //     Arc::new(Point {
+    //         position: None,
+    //         index: 0,
+    //         name: String::from("A")
+    //     }),
+    //     Arc::new(Point {
+    //         position: None,
+    //         index: 1,
+    //         name: String::from("B")
+    //     }),
+    //     Arc::new(Point {
+    //         position: None,
+    //         index: 2,
+    //         name: String::from("C")
+    //     }),
+    //     Arc::new(Point {
+    //         position: None,
+    //         index: 3,
+    //         name: String::from("D")
+    //     })
+    // ];
 
     let mut gen = Generator::new(4, 5, Arc::new(
         vec![
@@ -35,12 +35,12 @@ fn main() {
                         weight: 1.0,
                         object: Expression::PointLineDistance(Box::new(Weighed {
                             weight: 1.0,
-                            object: Expression::Point(Arc::clone(&points[2]))
+                            object: Expression::FreePoint(2)
                         }), Box::new(Weighed {
                             weight: 1.0,
                             object: Expression::Line(
-                                Box::new(Weighed{weight:1.0,object:Expression::Point(Arc::clone(&points[0]))}),
-                                Box::new(Weighed{weight:1.0,object:Expression::Point(Arc::clone(&points[1]))}),
+                                Box::new(Weighed{weight:1.0,object:Expression::FreePoint(0)}),
+                                Box::new(Weighed{weight:1.0,object:Expression::FreePoint(1)}),
                             )
                         }))
                     }),
@@ -57,12 +57,12 @@ fn main() {
                         weight: 1.0,
                         object: Expression::PointLineDistance(Box::new(Weighed {
                             weight: 1.0,
-                            object: Expression::Point(Arc::clone(&points[3]))
+                            object: Expression::FreePoint(3)
                         }), Box::new(Weighed {
                             weight: 1.0,
                             object: Expression::Line(
-                                Box::new(Weighed{weight:1.0,object:Expression::Point(Arc::clone(&points[0]))}),
-                                Box::new(Weighed{weight:1.0,object:Expression::Point(Arc::clone(&points[1]))}),
+                                Box::new(Weighed{weight:1.0,object:Expression::FreePoint(0)}),
+                                Box::new(Weighed{weight:1.0,object:Expression::FreePoint(1)}),
                             )
                         }))
                     }),
@@ -77,5 +77,37 @@ fn main() {
 
     gen.cycle_until_mean_delta(0.5, 4, 0.01);
 
-    println!("{:#?}, q: {}", gen.get_points(), gen.get_total_quality());
+    let fig = Figure {
+        points: vec![
+            Point {
+                label: String::from("A"),
+                definition: PointDefinition::Indexed(0)
+            },
+            Point {
+                label: String::from("B"),
+                definition: PointDefinition::Indexed(1)
+            },
+            Point {
+                label: String::from("C"),
+                definition: PointDefinition::Indexed(2)
+            },
+            Point {
+                label: String::from("D"),
+                definition: PointDefinition::Indexed(3)
+            }
+        ],
+        lines: vec![
+            Line {
+                label: String::from("a"),
+                definition: LineDefinition::TwoPoints(0, 1)
+            }
+        ],
+        segments: vec![],
+        canvas_size: (300, 300),
+    };
+    
+    let rendered = projector::project(&fig, gen.get_points().iter().map(|x| x.0).collect()).unwrap();
+    svg::draw(String::from("test.svg"), (300, 300), rendered);
+
+    println!("q: {}", gen.get_total_quality());
 }
