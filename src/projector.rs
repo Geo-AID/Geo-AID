@@ -100,11 +100,7 @@ pub fn project(figure: &Figure, generated_points: Vec<Complex>) -> Result<Vec<Re
     // The scaled frame should be at most (and equal for at least one dimension) 90% of the size of the desired image (margins for rendering).
     let scale = f64::min(size09.real / furthest.real, size09.imaginary / furthest.imaginary);
 
-    println!("Frame: {furthest}, ");
-
-    println!("Points before: {:?}", points);
     let points: Vec<Complex> = points.into_iter().map(|x| x * scale + size005).collect();
-    println!("Points after: {:?}", points);
 
     let mut blueprint_points = Vec::new();
 

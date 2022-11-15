@@ -109,5 +109,5 @@ fn main() {
     let rendered = projector::project(&fig, gen.get_points().iter().map(|x| x.0).collect()).unwrap();
     svg::draw(String::from("test.svg"), (300, 300), rendered);
 
-    println!("q: {}", gen.get_total_quality());
+    println!("Finished rendering with total quality {}%.", gen.get_total_quality() * 100.0);
 }
