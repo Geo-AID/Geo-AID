@@ -88,7 +88,7 @@ impl Sub for Complex {
     type Output = Complex;
 
     fn sub(self, rhs: Self) -> Self::Output {
-        Complex::new(self.real - rhs.real, self.imaginary + rhs.imaginary)
+        Complex::new(self.real - rhs.real, self.imaginary - rhs.imaginary)
     }
 }
 
@@ -115,6 +115,15 @@ impl Neg for Complex {
     
     fn neg(self) -> Self::Output {
         Complex::new(-self.real, -self.imaginary)
+    }
+}
+
+impl Default for Complex {
+    fn default() -> Self {
+        Self {
+            real: 0.0,
+            imaginary: 0.0
+        }
     }
 }
 
@@ -169,7 +178,7 @@ impl Generator {
 
         Self {
             current_points: (0..point_count).map(
-                |_| (Complex::new(0.5, 0.5), 0.0)
+                |_| (Complex::new(rand::random(), rand::random()), 0.0)
             ).collect(),
             workers: input_receivers.into_iter().map(
                 |rec| {

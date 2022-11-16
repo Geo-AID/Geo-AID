@@ -26,7 +26,7 @@ fn main() {
     //     })
     // ];
 
-    let mut gen = Generator::new(4, 5, Arc::new(
+    let mut gen = Generator::new(4, 128, Arc::new(
         vec![
             Weighed {
                 weight: 1.0,
@@ -75,8 +75,6 @@ fn main() {
         ]
     ));
 
-    gen.cycle_until_mean_delta(0.5, 4, 0.01);
-
     let fig = Figure {
         points: vec![
             Point {
@@ -105,9 +103,17 @@ fn main() {
         segments: vec![],
         canvas_size: (300, 300),
     };
-    
+
+    gen.cycle_until_mean_delta(0.5, 4, 0.001);
     let rendered = projector::project(&fig, gen.get_points().iter().map(|x| x.0).collect()).unwrap();
-    svg::draw(String::from("test.svg"), (300, 300), rendered);
+    svg::draw("debug-output/output.svg".to_string(), (300, 300), rendered);
+    
+    
+    // for i in 1..=200 {
+    //     gen.single_cycle(0.5);
+    //     let rendered = projector::project(&fig, gen.get_points().iter().map(|x| x.0).collect()).unwrap();
+    //     svg::draw(format!("debug-output/gen{i}.svg"), (300, 300), rendered);
+    // }
 
     println!("Finished rendering with total quality {}%.", gen.get_total_quality() * 100.0);
 }

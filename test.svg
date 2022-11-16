@@ -1,11 +1,11 @@
 <svg height="300" width="300" xmlns="http://www.w3.org/2000/svg">
-<circle cx="158.33791279132623" cy="96.06436519116559" fill="black" r="2"/>
-<text content="A" stroke="black" x="143.33791279132623" y="81.06436519116559"/>
-<circle cx="135.69449045602403" cy="143.43905801767337" fill="black" r="2"/>
-<text content="B" stroke="black" x="120.69449045602403" y="128.43905801767337"/>
-<circle cx="67.0224339250111" cy="15" fill="black" r="2"/>
-<text content="C" stroke="black" x="52.0224339250111" y="0"/>
-<circle cx="138.92927034436818" cy="136.64378730398073" fill="black" r="2"/>
-<text content="D" stroke="black" x="123.92927034436818" y="121.64378730398073"/>
-<line stroke="black" x1="204.25327102620122" x2="60.863914910107795" y1="0" y2="300"/>
+<circle cx="18.83204285497673" cy="285" fill="black" r="2"/>
+<text content="A" stroke="black" x="3.8320428549767307" y="270"/>
+<circle cx="56.20004327170478" cy="163.60512014327827" fill="black" r="2"/>
+<text content="B" stroke="black" x="41.20004327170478" y="148.60512014327827"/>
+<circle cx="15" cy="15" fill="black" r="2"/>
+<text content="C" stroke="black" x="0" y="0"/>
+<circle cx="56.49963139871329" cy="162.63436413097259" fill="black" r="2"/>
+<text content="D" stroke="black" x="41.49963139871329" y="147.63436413097259"/>
+<line stroke="black" x1="14.214714620767152" x2="106.5612793049587" y1="300" y2="0"/>
 </svg>
