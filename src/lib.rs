@@ -1,9 +1,9 @@
-pub mod script;
+pub mod drawer;
 pub mod generator;
 pub mod projector;
-pub mod drawer;
+pub mod script;
 
 #[derive(Debug)]
 pub enum Error {
-    TypeMismatch(String, String)
+    TypeMismatch(String, String),
 }
