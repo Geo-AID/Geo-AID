@@ -1,150 +1,135 @@
-use std::sync::Arc;
+use std::{sync::Arc, env, fs, path::PathBuf, str::FromStr};
 
 use geo_aid::{
     drawer::svg,
     generator::Generator,
     projector,
-    script::{
-        figure::{Figure, Line, LineDefinition, Point, PointDefinition},
-        ComplexUnit, CriteriaKind, Expression, SimpleUnit, Weighed, unroll,
-    },
+    script::compile,
 };
 
 fn main() {
-    // let points = vec![
-    //     Arc::new(Point {
-    //         position: None,
-    //         index: 0,
-    //         name: String::from("A")
-    //     }),
-    //     Arc::new(Point {
-    //         position: None,
-    //         index: 1,
-    //         name: String::from("B")
-    //     }),
-    //     Arc::new(Point {
-    //         position: None,
-    //         index: 2,
-    //         name: String::from("C")
-    //     }),
-    //     Arc::new(Point {
-    //         position: None,
-    //         index: 3,
-    //         name: String::from("D")
-    //     })
-    // ];
+    let script_path: Vec<String> = env::args().collect();
 
-    let script = r#"
-        let A | B | C | D = Point();
+    let script = fs::read_to_string(PathBuf::from_str(script_path.get(1).unwrap()).unwrap()).unwrap();
 
-        dst(C, AB) > 0.01;
-        dst(D, AB) < 0.01;
-    "#;
+    let (criteria, figure, point_count) = compile::compile(script, (500, 500)).unwrap();
 
-    for rule in unroll::unroll(script.to_string()).unwrap().0 {
-        println!("{rule}");
-    }
+    // println!("{:#?}", figure);
 
     let mut gen = Generator::new(
-        4,
+        point_count,
         128,
-        Arc::new(vec![
-            Weighed {
-                weight: 1.0,
-                object: CriteriaKind::Greater(
-                    Box::new(Weighed {
-                        weight: 1.0,
-                        object: Expression::PointLineDistance(
-                            Box::new(Weighed {
-                                weight: 1.0,
-                                object: Expression::FreePoint(2),
-                            }),
-                            Box::new(Weighed {
-                                weight: 1.0,
-                                object: Expression::Line(
-                                    Box::new(Weighed {
-                                        weight: 1.0,
-                                        object: Expression::FreePoint(0),
-                                    }),
-                                    Box::new(Weighed {
-                                        weight: 1.0,
-                                        object: Expression::FreePoint(1),
-                                    }),
-                                ),
-                            }),
-                        ),
-                    }),
-                    Box::new(Weighed {
-                        weight: 1.0,
-                        object: Expression::Literal(0.01, ComplexUnit::new(SimpleUnit::Distance)),
-                    }),
-                ),
-            },
-            Weighed {
-                weight: 1.0,
-                object: CriteriaKind::Less(
-                    Box::new(Weighed {
-                        weight: 1.0,
-                        object: Expression::PointLineDistance(
-                            Box::new(Weighed {
-                                weight: 1.0,
-                                object: Expression::FreePoint(3),
-                            }),
-                            Box::new(Weighed {
-                                weight: 1.0,
-                                object: Expression::Line(
-                                    Box::new(Weighed {
-                                        weight: 1.0,
-                                        object: Expression::FreePoint(0),
-                                    }),
-                                    Box::new(Weighed {
-                                        weight: 1.0,
-                                        object: Expression::FreePoint(1),
-                                    }),
-                                ),
-                            }),
-                        ),
-                    }),
-                    Box::new(Weighed {
-                        weight: 1.0,
-                        object: Expression::Literal(0.01, ComplexUnit::new(SimpleUnit::Distance)),
-                    }),
-                ),
-            },
-        ]),
+        Arc::new(criteria)
     );
 
-    let fig = Figure {
-        points: vec![
-            Point {
-                label: String::from("A"),
-                definition: PointDefinition::Indexed(0),
-            },
-            Point {
-                label: String::from("B"),
-                definition: PointDefinition::Indexed(1),
-            },
-            Point {
-                label: String::from("C"),
-                definition: PointDefinition::Indexed(2),
-            },
-            Point {
-                label: String::from("D"),
-                definition: PointDefinition::Indexed(3),
-            },
-        ],
-        lines: vec![Line {
-            label: String::from("a"),
-            definition: LineDefinition::TwoPoints(0, 1),
-        }],
-        segments: vec![],
-        canvas_size: (300, 300),
-    };
+    // for rule in unroll::unroll(script.to_string()).unwrap().0 {
+    //     println!("{rule}");
+    // }
 
-    gen.cycle_until_mean_delta(0.5, 4, 0.001);
+    // let mut gen = Generator::new(
+    //     4,
+    //     128,
+    //     Arc::new(vec![
+    //         Weighed {
+    //             weight: 1.0,
+    //             object: CriteriaKind::Greater(
+    //                 Arc::new(Weighed {
+    //                     weight: 1.0,
+    //                     object: Expression::PointLineDistance(
+    //                         Arc::new(Weighed {
+    //                             weight: 1.0,
+    //                             object: Expression::FreePoint(2),
+    //                         }),
+    //                         Arc::new(Weighed {
+    //                             weight: 1.0,
+    //                             object: Expression::Line(
+    //                                 Arc::new(Weighed {
+    //                                     weight: 1.0,
+    //                                     object: Expression::FreePoint(0),
+    //                                 }),
+    //                                 Arc::new(Weighed {
+    //                                     weight: 1.0,
+    //                                     object: Expression::FreePoint(1),
+    //                                 }),
+    //                             ),
+    //                         }),
+    //                     ),
+    //                 }),
+    //                 Arc::new(Weighed {
+    //                     weight: 1.0,
+    //                     object: Expression::Literal(0.01, ComplexUnit::new(SimpleUnit::Distance)),
+    //                 }),
+    //             ),
+    //         },
+    //         Weighed {
+    //             weight: 1.0,
+    //             object: CriteriaKind::Less(
+    //                 Arc::new(Weighed {
+    //                     weight: 1.0,
+    //                     object: Expression::PointLineDistance(
+    //                         Arc::new(Weighed {
+    //                             weight: 1.0,
+    //                             object: Expression::FreePoint(3),
+    //                         }),
+    //                         Arc::new(Weighed {
+    //                             weight: 1.0,
+    //                             object: Expression::Line(
+    //                                 Arc::new(Weighed {
+    //                                     weight: 1.0,
+    //                                     object: Expression::FreePoint(0),
+    //                                 }),
+    //                                 Arc::new(Weighed {
+    //                                     weight: 1.0,
+    //                                     object: Expression::FreePoint(1),
+    //                                 }),
+    //                             ),
+    //                         }),
+    //                     ),
+    //                 }),
+    //                 Arc::new(Weighed {
+    //                     weight: 1.0,
+    //                     object: Expression::Literal(0.01, ComplexUnit::new(SimpleUnit::Distance)),
+    //                 }),
+    //             ),
+    //         },
+    //     ]),
+    // );
+
+    // let fig = Figure {
+    //     points: vec![
+    //         Point {
+    //             label: String::from("A"),
+    //             definition: PointDefinition::Indexed(0),
+    //         },
+    //         Point {
+    //             label: String::from("B"),
+    //             definition: PointDefinition::Indexed(1),
+    //         },
+    //         Point {
+    //             label: String::from("C"),
+    //             definition: PointDefinition::Indexed(2),
+    //         },
+    //         Point {
+    //             label: String::from("D"),
+    //             definition: PointDefinition::Indexed(3),
+    //         },
+    //     ],
+    //     lines: vec![Line {
+    //         label: String::from("a"),
+    //         definition: LineDefinition::TwoPoints(
+    //             Box::new(PointDefinition::Indexed(0)),
+    //             Box::new(PointDefinition::Indexed(1))
+    //         ),
+    //     }],
+    //     segments: vec![],
+    //     canvas_size: (300, 300),
+    // };
+
+    gen.cycle_until_mean_delta(0.5, 20, 0.001);
+    // println!("{:#?}", gen.get_points());
     let rendered =
-        projector::project(&fig, gen.get_points().iter().map(|x| x.0).collect()).unwrap();
-    svg::draw("debug-output/output.svg".to_string(), (300, 300), rendered);
+        projector::project(&figure, gen.get_points().iter().map(|x| x.0).collect()).unwrap();
+    svg::draw("debug-output/output.svg".to_string(), (500, 500), rendered);
 
     // for i in 1..=200 {
     //     gen.single_cycle(0.5);

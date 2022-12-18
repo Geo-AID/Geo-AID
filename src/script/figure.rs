@@ -1,3 +1,4 @@
+#[derive(Debug)]
 pub struct Figure {
     pub points: Vec<Point>,
     pub lines: Vec<Line>,
@@ -29,26 +30,31 @@ impl Construct {
     }
 }
 
+#[derive(Debug)]
 pub struct Point {
     pub label: String,
     pub definition: PointDefinition,
 }
 
+#[derive(Debug)]
 pub enum PointDefinition {
     Indexed(usize),
     Crossing(LineDefinition, LineDefinition),
 }
 
+#[derive(Debug)]
 pub enum LineDefinition {
     /// Indices pointing to geometrical constructs creating that line
-    TwoPoints(usize, usize),
+    TwoPoints(Box<PointDefinition>, Box<PointDefinition>),
 }
 
+#[derive(Debug)]
 pub struct Line {
     pub label: String,
     pub definition: LineDefinition,
 }
 
+#[derive(Debug)]
 pub struct Segment {
     pub label: String,
     pub points: (usize, usize),

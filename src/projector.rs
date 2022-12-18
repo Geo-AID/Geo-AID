@@ -1,6 +1,6 @@
 use crate::{
     generator::{geometry, Complex, EvaluationError},
-    script::figure::{Figure, LineDefinition, Point, PointDefinition},
+    script::figure::{Figure, LineDefinition, PointDefinition},
 };
 
 pub struct Blueprint {
@@ -13,6 +13,7 @@ pub enum Rendered {
     Line(RenderedLine),
 }
 
+#[derive(Debug)]
 pub struct RenderedPoint {
     /// The point's label
     pub label: String,
@@ -30,35 +31,25 @@ pub struct RenderedLine {
 
 fn evaluate_line(
     line: &LineDefinition,
-    figure_points: &Vec<Point>,
-    generated_points: &Vec<Complex>,
-    points: &mut Vec<Option<Complex>>,
+    points: &Vec<Complex>,
 ) -> Result<Complex, EvaluationError> {
     Ok(match line {
         LineDefinition::TwoPoints(i1, i2) => geometry::get_line(
-            evaluate_point(figure_points, *i1, generated_points, points)?,
-            evaluate_point(figure_points, *i2, generated_points, points)?,
+            evaluate_point(i1, points)?,
+            evaluate_point(i2, points)?,
         ),
     })
 }
 
 fn evaluate_point(
-    figure_points: &Vec<Point>,
-    index: usize,
-    generated_points: &Vec<Complex>,
-    points: &mut Vec<Option<Complex>>,
+    definition: &PointDefinition,
+    points: &Vec<Complex>,
 ) -> Result<Complex, EvaluationError> {
-    Ok(match &figure_points[index].definition {
-        PointDefinition::Indexed(gen_index) => match points[index] {
-            Some(v) => v,
-            None => {
-                points[index] = Some(generated_points[*gen_index]);
-                points[index].unwrap()
-            }
-        },
+    Ok(match definition {
+        PointDefinition::Indexed(gen_index) => points[*gen_index],
         PointDefinition::Crossing(l1, l2) => {
-            let l1 = evaluate_line(l1, figure_points, generated_points, points)?;
-            let l2 = evaluate_line(l2, figure_points, generated_points, points)?;
+            let l1 = evaluate_line(l1, points)?;
+            let l2 = evaluate_line(l2, points)?;
 
             geometry::get_crossing(l1, l2)?
         }
@@ -69,22 +60,13 @@ pub fn project(
     figure: &Figure,
     generated_points: Vec<Complex>,
 ) -> Result<Vec<Rendered>, EvaluationError> {
-    let mut points = Vec::new();
-    points.resize(figure.points.len(), None);
-
-    // First, evaluate the exact position of each point
-    for index in 0..figure.points.len() {
-        evaluate_point(&figure.points, index, &generated_points, &mut points)?;
-    }
+    let points: Vec<Complex> = figure.points.iter().map(
+        |pt| evaluate_point(&pt.definition, &generated_points)
+    ).collect::<Result<Vec<Complex>, EvaluationError>>()?;
 
     let size1 = Complex::new(figure.canvas_size.0 as f64, figure.canvas_size.1 as f64);
     let size09 = size1 * 0.9;
     let size005 = size1 * 0.05;
-
-    let points = points
-        .into_iter()
-        .collect::<Option<Vec<Complex>>>()
-        .unwrap();
 
     // Frame topleft point.
     let mut offset = points.get(0).cloned().unwrap_or_default();
@@ -138,9 +120,7 @@ pub fn project(
     let mut blueprint_lines = Vec::new();
 
     for ln in figure.lines.iter() {
-        let ln_c = match &ln.definition {
-            LineDefinition::TwoPoints(p1, p2) => geometry::get_line(points[*p1], points[*p2]),
-        };
+        let ln_c = evaluate_line(&ln.definition, &generated_points)?;
 
         // +--0--+
         // |     |
@@ -246,6 +226,8 @@ pub fn project(
             points: (i1, i2),
         });
     }
+
+    // println!("{:#?}", blueprint_points);
 
     Ok(blueprint_points
         .into_iter()

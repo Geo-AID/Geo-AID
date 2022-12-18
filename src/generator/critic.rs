@@ -162,6 +162,63 @@ fn evaluate_expression(
                 ComplexUnit::new(SimpleUnit::Point),
             )
         }
+        Expression::SetUnit(e, unit) => {
+            // Evaluate e
+            let e = evaluate_expression(e, weights, points, _logger, weight_mult * e.weight)?;
+
+            (
+                e.0,
+                unit.clone()
+            )
+        },
+        Expression::Sum(e1, e2) => {
+            let v1 = evaluate_expression(e1, weights, points, _logger, weight_mult * e1.weight)?;
+            let v2 = evaluate_expression(e2, weights, points, _logger, weight_mult * e2.weight)?;
+
+            assert_eq!(v1.1, v2.1);
+
+            (
+                v1.0 + v2.0,
+                v1.1
+            )
+        },
+        Expression::Difference(e1, e2) => {
+            let v1 = evaluate_expression(e1, weights, points, _logger, weight_mult * e1.weight)?;
+            let v2 = evaluate_expression(e2, weights, points, _logger, weight_mult * e2.weight)?;
+
+            assert_eq!(v1.1, v2.1);
+
+            (
+                v1.0 - v2.0,
+                v1.1
+            )
+        },
+        Expression::Product(e1, e2) => {
+            let v1 = evaluate_expression(e1, weights, points, _logger, weight_mult * e1.weight)?;
+            let v2 = evaluate_expression(e2, weights, points, _logger, weight_mult * e2.weight)?;
+
+            (
+                v1.0 * v2.0,
+                v1.1 * v2.1
+            )
+        },
+        Expression::Quotient(e1, e2) => {
+            let v1 = evaluate_expression(e1, weights, points, _logger, weight_mult * e1.weight)?;
+            let v2 = evaluate_expression(e2, weights, points, _logger, weight_mult * e2.weight)?;
+
+            (
+                v1.0 / v2.0,
+                v1.1 / v2.1
+            )
+        },
+        Expression::Negation(expr) => {
+            let v = evaluate_expression(expr, weights, points, _logger, weight_mult * expr.weight)?;
+
+            (
+                -v.0,
+                v.1
+            )
+        },
     })
 }
 

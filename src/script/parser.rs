@@ -1028,6 +1028,16 @@ pub enum PredefinedType {
     PointCollection(usize),
 }
 
+impl PredefinedType {
+    pub fn as_scalar(&self) -> Option<&Option<ComplexUnit>> {
+        if let Self::Scalar(v) = self {
+            Some(v)
+        } else {
+            None
+        }
+    }
+}
+
 pub struct DefinedType {
     pub name: String,
 }
@@ -1090,6 +1100,14 @@ impl Type {
             },
             Type::Defined => false,
             Type::Undefined => false,
+        }
+    }
+
+    pub fn as_predefined(&self) -> Option<&PredefinedType> {
+        if let Self::Predefined(v) = self {
+            Some(v)
+        } else {
+            None
         }
     }
 }

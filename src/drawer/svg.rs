@@ -18,6 +18,8 @@ pub fn draw(target: String, canvas_size: (usize, usize), rendered: Vec<Rendered>
                     canvas_size.1 as f64 - pt.position.imaginary,
                 );
 
+                // println!("{} -> {p}", pt.position);
+
                 let circle = Circle::new()
                     .set("cx", p.real)
                     .set("cy", p.imaginary)

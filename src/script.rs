@@ -1,7 +1,7 @@
 use std::{
     hash::Hash,
     ops::{Deref, DerefMut, Div, Mul},
-    sync::Arc,
+    sync::Arc, rc::Rc,
 };
 
 use self::token::{NamedIdent, Span, Token};
@@ -12,6 +12,7 @@ pub mod parser;
 pub mod token;
 pub mod unroll;
 mod builtins;
+pub mod compile;
 
 #[derive(Debug)]
 pub enum ScriptError {
@@ -182,6 +183,15 @@ pub struct Weighed<T> {
     pub weight: f64,
 }
 
+impl<T> Weighed<T> {
+    pub fn one(object: T) -> Self {
+        Self {
+            object,
+            weight: 1.0
+        }
+    }
+}
+
 /// Defines a simple unit.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum SimpleUnit {
@@ -289,9 +299,9 @@ impl DerefMut for ComplexUnit {
 #[derive(Debug)]
 pub enum Expression {
     /// Euclidean distance between two points.
-    PointPointDistance(Box<Weighed<Expression>>, Box<Weighed<Expression>>),
+    PointPointDistance(Arc<Weighed<Expression>>, Arc<Weighed<Expression>>),
     /// Euclidean distance between a point and its rectangular projection onto a line.
-    PointLineDistance(Box<Weighed<Expression>>, Box<Weighed<Expression>>),
+    PointLineDistance(Arc<Weighed<Expression>>, Arc<Weighed<Expression>>),
     /// An angle defined with 3 points.
     AnglePoint(
         Box<Weighed<Expression>>,
@@ -303,20 +313,32 @@ pub enum Expression {
     /// An adjustable indexed point in euclidean space
     FreePoint(usize),
     /// A line in euclidean space. defined by two points.
-    Line(Box<Weighed<Expression>>, Box<Weighed<Expression>>),
+    Line(Arc<Weighed<Expression>>, Arc<Weighed<Expression>>),
     /// The point where two lines cross.
     LineCrossing(Box<Weighed<Expression>>, Box<Weighed<Expression>>),
+    /// Changes the unit
+    SetUnit(Arc<Weighed<Expression>>, ComplexUnit),
+    /// Adds two values
+    Sum(Arc<Weighed<Expression>>, Arc<Weighed<Expression>>),
+    /// Subtracts two values
+    Difference(Arc<Weighed<Expression>>, Arc<Weighed<Expression>>),
+    /// Multiplies two values
+    Product(Arc<Weighed<Expression>>, Arc<Weighed<Expression>>),
+    /// Divides two values
+    Quotient(Arc<Weighed<Expression>>, Arc<Weighed<Expression>>),
+    /// Changes the sign
+    Negation(Arc<Weighed<Expression>>)
 }
 
 /// Defines the kind and information about criteria the figure must obey.
 #[derive(Debug)]
 pub enum CriteriaKind {
     /// Equality. Quality rises quickly as two values approach each other, drops quickly as their difference grows.
-    Equal(Box<Weighed<Expression>>, Box<Weighed<Expression>>),
+    Equal(Arc<Weighed<Expression>>, Arc<Weighed<Expression>>),
     /// Less. Quality starts rising on equality.
-    Less(Box<Weighed<Expression>>, Box<Weighed<Expression>>),
+    Less(Arc<Weighed<Expression>>, Arc<Weighed<Expression>>),
     /// Greater. Quality starts rising on equality.
-    Greater(Box<Weighed<Expression>>, Box<Weighed<Expression>>),
+    Greater(Arc<Weighed<Expression>>, Arc<Weighed<Expression>>),
     /// Inverts the criteria. The quality is calculated as 1 - the quality of the inverted criteria.
     Inverse(Box<CriteriaKind>),
 }
@@ -324,7 +346,13 @@ pub enum CriteriaKind {
 /// Defines a weighed piece of criteria the figure must obey.
 pub type Criteria = Weighed<CriteriaKind>;
 
-pub struct HashableArc<T>(pub Arc<T>);
+pub struct HashableArc<T>(Arc<T>);
+
+impl<T> HashableArc<T> {
+    pub fn new(content: Arc<T>) -> Self {
+        Self(content)
+    }
+}
 
 impl<T> Hash for HashableArc<T> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
@@ -340,4 +368,36 @@ impl<T> PartialEq for HashableArc<T> {
 
 impl<T> Eq for HashableArc<T> {
     fn assert_receiver_is_total_eq(&self) {}
+}
+
+pub struct HashableRc<T: ?Sized>(Rc<T>);
+
+impl<T: ?Sized> HashableRc<T> {
+    pub fn new(content: Rc<T>) -> Self {
+        Self(content)
+    }
+}
+
+impl<T: ?Sized> Hash for HashableRc<T> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        Rc::as_ptr(&self.0).hash(state)
+    }
+}
+
+impl<T: ?Sized> PartialEq for HashableRc<T> {
+    fn eq(&self, other: &Self) -> bool {
+        Rc::as_ptr(&self.0) == Rc::as_ptr(&other.0)
+    }
+}
+
+impl<T: ?Sized> Eq for HashableRc<T> {
+    fn assert_receiver_is_total_eq(&self) {}
+}
+
+impl<T: ?Sized> Deref for HashableRc<T> {
+    type Target = Rc<T>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
 }
