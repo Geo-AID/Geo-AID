@@ -1,7 +1,7 @@
 use std::{sync::Arc, env, fs, path::PathBuf, str::FromStr};
 
 use geo_aid::{
-    drawer::svg,
+    drawer::latex,
     generator::Generator,
     projector,
     script::compile,
@@ -129,8 +129,8 @@ fn main() {
     // println!("{:#?}", gen.get_points());
     let rendered =
         projector::project(&figure, gen.get_points().iter().map(|x| x.0).collect()).unwrap();
-    svg::draw("debug-output/output.svg".to_string(), (500, 500), rendered);
-
+    latex::draw("debug-output/output.svg".to_string(), (500, 500), rendered);
+    
     // for i in 1..=200 {
     //     gen.single_cycle(0.5);
     //     let rendered = projector::project(&fig, gen.get_points().iter().map(|x| x.0).collect()).unwrap();
