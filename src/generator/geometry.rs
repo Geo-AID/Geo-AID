@@ -2,6 +2,7 @@ use crate::generator::Complex;
 
 use super::EvaluationError;
 
+#[must_use]
 pub fn get_line(p1: Complex, p2: Complex) -> Complex {
     let slope = if f64::abs(p1.real - p2.real) < 1e-6 {
         // Assumed to be vertical, intercept is offset
@@ -15,6 +16,10 @@ pub fn get_line(p1: Complex, p2: Complex) -> Complex {
     Complex::new(slope, intercept)
 }
 
+/// Gets the intersection point of two lines.
+///
+/// # Errors
+/// If the two lines are parallel, return an evaluation error.
 pub fn get_crossing(l1: Complex, l2: Complex) -> Result<Complex, EvaluationError> {
     // Further on we assume either only l1 is vertical or both are.
     let (l1, l2) = if l2.real.is_infinite() {
@@ -28,10 +33,10 @@ pub fn get_crossing(l1: Complex, l2: Complex) -> Result<Complex, EvaluationError
         if l2.real.is_infinite() {
             // l2 is also vertical, the two lines are parallel
             return Err(EvaluationError::ParallelLines);
-        } else {
-            // If l2 is not vertical, l1's offset is the crossing point.
-            l1.imaginary
         }
+
+        // If l2 is not vertical, l1's offset is the crossing point.
+        l1.imaginary
     } else {
         // None are vertical
         (l2.imaginary - l1.imaginary) / (l1.real - l2.real)

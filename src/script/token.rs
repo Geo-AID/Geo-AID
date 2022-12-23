@@ -1,6 +1,6 @@
 use std::iter::Peekable;
 
-use super::ScriptError;
+use super::Error;
 
 #[cfg(test)]
 mod tests {
@@ -21,7 +21,7 @@ let ABC = Triangle;
         "#;
 
         assert_eq!(
-            tokenize(script.to_string()).unwrap(),
+            tokenize(script).unwrap(),
             vec![
                 Token::Let(Let {
                     span: span!(1, 1, 1, 4)
@@ -116,6 +116,7 @@ pub struct Span {
 }
 
 impl Span {
+    #[must_use]
     pub fn join(self, other: Span) -> Self {
         Self {
             start: if self.start < other.start {
@@ -281,10 +282,12 @@ pub struct PointCollection {
 }
 
 impl PointCollection {
+    #[must_use]
     pub fn len(&self) -> usize {
         self.collection.len()
     }
 
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.collection.is_empty()
     }
@@ -298,6 +301,7 @@ pub enum Ident {
 }
 
 impl Ident {
+    #[must_use]
     pub fn as_collection(&self) -> Option<&PointCollection> {
         if let Self::Collection(v) = self {
             Some(v)
@@ -356,7 +360,7 @@ fn read_number<I: Iterator<Item = char>>(it: &mut Peekable<I>, position: &mut Po
     while let Some(&c) = it.peek() {
         if c.is_ascii_digit() {
             integral *= 10;
-            integral += (c as u64) - b'0' as u64;
+            integral += (c as u64) - u64::from(b'0');
             position.column += 1;
             it.next();
         } else if c == '.' {
@@ -383,7 +387,7 @@ fn read_number<I: Iterator<Item = char>>(it: &mut Peekable<I>, position: &mut Po
     while let Some(&c) = it.peek() {
         if c.is_ascii_digit() {
             decimal *= 10;
-            decimal += (c as u64) - b'0' as u64;
+            decimal += (c as u64) - u64::from(b'0');
             decimal_places += 1;
             position.column += 1;
             it.next();
@@ -424,7 +428,92 @@ fn dispatch_ident(sp: Span, ident: String) -> Ident {
     Ident::Collection(collection)
 }
 
-pub fn tokenize(input: String) -> Result<Vec<Token>, ScriptError> {
+fn tokenize_special<I: Iterator<Item = char>>(
+    position: &mut Position,
+    tokens: &mut Vec<Token>,
+    c: char,
+    it: &mut Peekable<I>,
+) -> Result<(), Error> {
+    let sp = span!(
+        position.line,
+        position.column,
+        position.line,
+        position.column + 1
+    );
+
+    if c == '=' {
+        let last = tokens.last().cloned();
+
+        match last {
+            Some(Token::Lt(Lt { span })) => {
+                if span
+                    == span!(
+                        sp.start.line,
+                        sp.start.column - 1,
+                        sp.start.line,
+                        sp.start.column
+                    )
+                {
+                    *tokens.last_mut().unwrap() = Token::Lteq(Lteq {
+                        span: span!(
+                            sp.start.line,
+                            sp.start.column - 1,
+                            sp.start.line,
+                            sp.start.column + 1
+                        ),
+                    });
+                }
+            }
+            Some(Token::Gt(Gt { span })) => {
+                if span
+                    == span!(
+                        sp.start.line,
+                        sp.start.column - 1,
+                        sp.start.line,
+                        sp.start.column
+                    )
+                {
+                    *tokens.last_mut().unwrap() = Token::Gteq(Gteq {
+                        span: span!(
+                            sp.start.line,
+                            sp.start.column - 1,
+                            sp.start.line,
+                            sp.start.column + 1
+                        ),
+                    });
+                }
+            }
+            _ => tokens.push(Token::Eq(Eq { span: sp })),
+        }
+    } else {
+        tokens.push(match c {
+            ';' => Token::Semi(Semi { span: sp }),
+            ',' => Token::Comma(Comma { span: sp }),
+            '+' => Token::Plus(Plus { span: sp }),
+            '-' => Token::Minus(Minus { span: sp }),
+            '*' => Token::Asterisk(Asterisk { span: sp }),
+            '/' => Token::Slash(Slash { span: sp }),
+            '(' => Token::LParen(LParen { span: sp }),
+            ')' => Token::RParen(RParen { span: sp }),
+            '|' => Token::Vertical(Vertical { span: sp }),
+            '<' => Token::Lt(Lt { span: sp }),
+            '>' => Token::Gt(Gt { span: sp }),
+            '!' => Token::Exclamation(Exclamation { span: sp }),
+            _ => return Err(Error::invalid_character(c)),
+        });
+    }
+
+    position.column += 1;
+    it.next();
+
+    Ok(())
+}
+
+/// Tokenizes the given script.
+///
+/// # Errors
+/// Emits an appropiate error if the script is invalid and tokenization fails.
+pub fn tokenize(input: &str) -> Result<Vec<Token>, Error> {
     let mut it = input.chars().peekable();
     let mut tokens = vec![];
     let mut position = Position { line: 1, column: 1 };
@@ -459,77 +548,7 @@ pub fn tokenize(input: String) -> Result<Vec<Token>, ScriptError> {
                         }
                     }
                 } else {
-                    let sp = span!(
-                        position.line,
-                        position.column,
-                        position.line,
-                        position.column + 1
-                    );
-
-                    if c == '=' {
-                        let last = tokens.last().cloned();
-
-                        match last {
-                            Some(Token::Lt(Lt { span })) => {
-                                if span
-                                    == span!(
-                                        sp.start.line,
-                                        sp.start.column - 1,
-                                        sp.start.line,
-                                        sp.start.column
-                                    )
-                                {
-                                    *tokens.last_mut().unwrap() = Token::Lteq(Lteq {
-                                        span: span!(
-                                            sp.start.line,
-                                            sp.start.column - 1,
-                                            sp.start.line,
-                                            sp.start.column + 1
-                                        ),
-                                    });
-                                }
-                            }
-                            Some(Token::Gt(Gt { span })) => {
-                                if span
-                                    == span!(
-                                        sp.start.line,
-                                        sp.start.column - 1,
-                                        sp.start.line,
-                                        sp.start.column
-                                    )
-                                {
-                                    *tokens.last_mut().unwrap() = Token::Gteq(Gteq {
-                                        span: span!(
-                                            sp.start.line,
-                                            sp.start.column - 1,
-                                            sp.start.line,
-                                            sp.start.column + 1
-                                        ),
-                                    });
-                                }
-                            }
-                            _ => tokens.push(Token::Eq(Eq { span: sp })),
-                        }
-                    } else {
-                        tokens.push(match c {
-                            ';' => Token::Semi(Semi { span: sp }),
-                            ',' => Token::Comma(Comma { span: sp }),
-                            '+' => Token::Plus(Plus { span: sp }),
-                            '-' => Token::Minus(Minus { span: sp }),
-                            '*' => Token::Asterisk(Asterisk { span: sp }),
-                            '/' => Token::Slash(Slash { span: sp }),
-                            '(' => Token::LParen(LParen { span: sp }),
-                            ')' => Token::RParen(RParen { span: sp }),
-                            '|' => Token::Vertical(Vertical { span: sp }),
-                            '<' => Token::Lt(Lt { span: sp }),
-                            '>' => Token::Gt(Gt { span: sp }),
-                            '!' => Token::Exclamation(Exclamation { span: sp }),
-                            _ => return Err(ScriptError::invalid_character(c)),
-                        });
-                    }
-
-                    position.column += 1;
-                    it.next();
+                    tokenize_special(&mut position, &mut tokens, c, &mut it)?;
                 }
             }
         }

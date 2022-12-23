@@ -5,14 +5,19 @@ use svg::{
 
 use crate::{generator::Complex, projector::Rendered};
 
-pub fn draw(target: String, canvas_size: (usize, usize), rendered: Vec<Rendered>) {
+/// Draws the given figure as .svg format.
+///
+/// # Panics
+/// Panics when there are issues with writing to file.
+pub fn draw(target: String, canvas_size: (usize, usize), rendered: &Vec<Rendered>) {
     let mut document = Document::new()
         .set("width", canvas_size.0)
         .set("height", canvas_size.1);
 
-    for elem in &rendered {
+    for elem in rendered {
         match elem {
             Rendered::Point(pt) => {
+                #[allow(clippy::cast_precision_loss)]
                 let p = Complex::new(
                     pt.position.real,
                     canvas_size.1 as f64 - pt.position.imaginary,
@@ -35,10 +40,12 @@ pub fn draw(target: String, canvas_size: (usize, usize), rendered: Vec<Rendered>
                 document = document.add(circle).add(label);
             }
             Rendered::Line(ln) => {
+                #[allow(clippy::cast_precision_loss)]
                 let p1 = Complex::new(
                     ln.points.0.real,
                     canvas_size.1 as f64 - ln.points.0.imaginary,
                 );
+                #[allow(clippy::cast_precision_loss)]
                 let p2 = Complex::new(
                     ln.points.1.real,
                     canvas_size.1 as f64 - ln.points.1.imaginary,

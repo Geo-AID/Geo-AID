@@ -21,6 +21,7 @@ impl Construct {
         matches!(self, Self::Point(..))
     }
 
+    #[must_use]
     pub fn as_point(&self) -> Option<&PointDefinition> {
         if let Self::Point(v) = self {
             Some(v)

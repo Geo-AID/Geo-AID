@@ -41,73 +41,96 @@ fn invert(q: f64) -> f64 {
     1.0 - q
 }
 
+fn evaluate_point_point_distance(
+    p1: &Weighed<Expression>,
+    p2: &Weighed<Expression>,
+    weights: &mut Vec<f64>,
+    points: &PointVec,
+    logger: &mut Logger,
+    weight_mult: f64,
+) -> Result<(Complex, ComplexUnit), EvaluationError> {
+    // Evaluate the two points
+    let p1 = evaluate_expression(p1, weights, points, logger, weight_mult)?;
+    let p2 = evaluate_expression(p2, weights, points, logger, weight_mult)?;
+
+    assert_eq!(p1.1, ComplexUnit::new(SimpleUnit::Point));
+    assert_eq!(p2.1, ComplexUnit::new(SimpleUnit::Point));
+
+    // Pythagorean theorem
+    let distance = (p1.0 - p2.0).mangitude();
+    Ok((
+        Complex::new(distance, 0.0),
+        ComplexUnit::new(SimpleUnit::Distance),
+    ))
+}
+
+fn evaluate_point_line_distance(
+    point: &Weighed<Expression>,
+    line: &Weighed<Expression>,
+    weights: &mut Vec<f64>,
+    points: &PointVec,
+    logger: &mut Logger,
+    weight_mult: f64,
+) -> Result<(Complex, ComplexUnit), EvaluationError> {
+    // Evaluate the line and the point
+    let point = evaluate_expression(point, weights, points, logger, weight_mult)?;
+    let line = evaluate_expression(line, weights, points, logger, weight_mult)?;
+
+    assert_eq!(point.1, ComplexUnit::new(SimpleUnit::Point));
+    assert_eq!(line.1, ComplexUnit::new(SimpleUnit::Line));
+
+    // If the line's vertical (slope is NaN), the question's easy
+    let distance = if line.0.real.is_infinite() {
+        f64::abs(point.0.real - line.0.imaginary)
+    } else {
+        // We use the formula
+        // Get the general form
+
+        // A is the slope
+        let a = line.0.real;
+        // B is -1
+        let b = -1.0f64;
+        // C is the intercept
+        let c = line.0.imaginary;
+
+        f64::abs(a * point.0.real + b * point.0.imaginary + c) / f64::sqrt(a.powi(2) + b.powi(2))
+    };
+
+    Ok((
+        Complex::new(distance, 0.0),
+        ComplexUnit::new(SimpleUnit::Distance),
+    ))
+}
+
 fn evaluate_expression(
     expr: &Weighed<Expression>,
     weights: &mut Vec<f64>,
     points: &PointVec,
-    _logger: &mut Logger,
+    logger: &mut Logger,
     weight_mult: f64,
 ) -> Result<(Complex, ComplexUnit), EvaluationError> {
     Ok(match &expr.object {
-        Expression::PointPointDistance(p1, p2) => {
-            // Evaluate the two points
-            let p1 = evaluate_expression(p1, weights, points, _logger, weight_mult * expr.weight)?;
-            let p2 = evaluate_expression(p2, weights, points, _logger, weight_mult * expr.weight)?;
-
-            assert_eq!(p1.1, ComplexUnit::new(SimpleUnit::Point));
-            assert_eq!(p2.1, ComplexUnit::new(SimpleUnit::Point));
-
-            // Pythagorean theorem
-            let distance = (p1.0 - p2.0).mangitude();
-            (
-                Complex::new(distance, 0.0),
-                ComplexUnit::new(SimpleUnit::Distance),
-            )
-        }
-        Expression::PointLineDistance(point, line) => {
-            // Evaluate the line and the point
-            let point =
-                evaluate_expression(point, weights, points, _logger, weight_mult * expr.weight)?;
-            let line =
-                evaluate_expression(line, weights, points, _logger, weight_mult * expr.weight)?;
-
-            assert_eq!(point.1, ComplexUnit::new(SimpleUnit::Point));
-            assert_eq!(line.1, ComplexUnit::new(SimpleUnit::Line));
-
-            // If the line's vertical (slope is NaN), the question's easy
-            let distance = if line.0.real.is_infinite() {
-                f64::abs(point.0.real - line.0.imaginary)
-            } else {
-                // We use the formula
-                // Get the general form
-
-                // A is the slope
-                let a = line.0.real;
-                // B is -1
-                let b = -1.0f64;
-                // C is the intercept
-                let c = line.0.imaginary;
-
-                // logger.push(format!("A = {a}, B = {b}, C = {c}"));
-                // logger.push(format!("A^2 = {}, B^2 = {}", a.powi(2), b.powi(2)));
-                // logger.push(format!("(x0, y0) = {}", point.0));
-                // logger.push(format!("Ax0 + By0 + C = {}", a * point.0.real + b * point.0.imaginary + c));
-                // logger.push(format!("|Ax0 + By0 + C|/sqrt(A^2 + B^2) = {}", f64::abs(a * point.0.real + b * point.0.imaginary + c) / f64::sqrt(a.powi(2) + b.powi(2))));
-
-                f64::abs(a * point.0.real + b * point.0.imaginary + c)
-                    / f64::sqrt(a.powi(2) + b.powi(2))
-            };
-
-            (
-                Complex::new(distance, 0.0),
-                ComplexUnit::new(SimpleUnit::Distance),
-            )
-        }
+        Expression::PointPointDistance(p1, p2) => evaluate_point_point_distance(
+            p1,
+            p2,
+            weights,
+            points,
+            logger,
+            weight_mult * expr.weight,
+        )?,
+        Expression::PointLineDistance(point, line) => evaluate_point_line_distance(
+            point,
+            line,
+            weights,
+            points,
+            logger,
+            weight_mult * expr.weight,
+        )?,
         Expression::AnglePoint(p1, p2, p3) => {
             // Evaluate the two points
-            let p1 = evaluate_expression(p1, weights, points, _logger, weight_mult * expr.weight)?;
-            let p2 = evaluate_expression(p2, weights, points, _logger, weight_mult * expr.weight)?;
-            let p3 = evaluate_expression(p3, weights, points, _logger, weight_mult * expr.weight)?;
+            let p1 = evaluate_expression(p1, weights, points, logger, weight_mult * expr.weight)?;
+            let p2 = evaluate_expression(p2, weights, points, logger, weight_mult * expr.weight)?;
+            let p3 = evaluate_expression(p3, weights, points, logger, weight_mult * expr.weight)?;
 
             assert_eq!(p1.1, ComplexUnit::new(SimpleUnit::Point));
             assert_eq!(p2.1, ComplexUnit::new(SimpleUnit::Point));
@@ -138,8 +161,8 @@ fn evaluate_expression(
         }
         Expression::Line(p1, p2) => {
             // Evaluate the two points
-            let p1 = evaluate_expression(p1, weights, points, _logger, weight_mult * expr.weight)?;
-            let p2 = evaluate_expression(p2, weights, points, _logger, weight_mult * expr.weight)?;
+            let p1 = evaluate_expression(p1, weights, points, logger, weight_mult * expr.weight)?;
+            let p2 = evaluate_expression(p2, weights, points, logger, weight_mult * expr.weight)?;
 
             assert_eq!(p1.1, ComplexUnit::new(SimpleUnit::Point));
             assert_eq!(p2.1, ComplexUnit::new(SimpleUnit::Point));
@@ -151,8 +174,8 @@ fn evaluate_expression(
         }
         Expression::LineCrossing(l1, l2) => {
             // Evaluate the two lines
-            let l1 = evaluate_expression(l1, weights, points, _logger, weight_mult * expr.weight)?;
-            let l2 = evaluate_expression(l2, weights, points, _logger, weight_mult * expr.weight)?;
+            let l1 = evaluate_expression(l1, weights, points, logger, weight_mult * expr.weight)?;
+            let l2 = evaluate_expression(l2, weights, points, logger, weight_mult * expr.weight)?;
 
             assert_eq!(l1.1, ComplexUnit::new(SimpleUnit::Line));
             assert_eq!(l2.1, ComplexUnit::new(SimpleUnit::Line));
@@ -164,61 +187,43 @@ fn evaluate_expression(
         }
         Expression::SetUnit(e, unit) => {
             // Evaluate e
-            let e = evaluate_expression(e, weights, points, _logger, weight_mult * e.weight)?;
+            let e = evaluate_expression(e, weights, points, logger, weight_mult * e.weight)?;
 
-            (
-                e.0,
-                unit.clone()
-            )
-        },
+            (e.0, unit.clone())
+        }
         Expression::Sum(e1, e2) => {
-            let v1 = evaluate_expression(e1, weights, points, _logger, weight_mult * e1.weight)?;
-            let v2 = evaluate_expression(e2, weights, points, _logger, weight_mult * e2.weight)?;
+            let v1 = evaluate_expression(e1, weights, points, logger, weight_mult * e1.weight)?;
+            let v2 = evaluate_expression(e2, weights, points, logger, weight_mult * e2.weight)?;
 
             assert_eq!(v1.1, v2.1);
 
-            (
-                v1.0 + v2.0,
-                v1.1
-            )
-        },
+            (v1.0 + v2.0, v1.1)
+        }
         Expression::Difference(e1, e2) => {
-            let v1 = evaluate_expression(e1, weights, points, _logger, weight_mult * e1.weight)?;
-            let v2 = evaluate_expression(e2, weights, points, _logger, weight_mult * e2.weight)?;
+            let v1 = evaluate_expression(e1, weights, points, logger, weight_mult * e1.weight)?;
+            let v2 = evaluate_expression(e2, weights, points, logger, weight_mult * e2.weight)?;
 
             assert_eq!(v1.1, v2.1);
 
-            (
-                v1.0 - v2.0,
-                v1.1
-            )
-        },
+            (v1.0 - v2.0, v1.1)
+        }
         Expression::Product(e1, e2) => {
-            let v1 = evaluate_expression(e1, weights, points, _logger, weight_mult * e1.weight)?;
-            let v2 = evaluate_expression(e2, weights, points, _logger, weight_mult * e2.weight)?;
+            let v1 = evaluate_expression(e1, weights, points, logger, weight_mult * e1.weight)?;
+            let v2 = evaluate_expression(e2, weights, points, logger, weight_mult * e2.weight)?;
 
-            (
-                v1.0 * v2.0,
-                v1.1 * v2.1
-            )
-        },
+            (v1.0 * v2.0, v1.1 * v2.1)
+        }
         Expression::Quotient(e1, e2) => {
-            let v1 = evaluate_expression(e1, weights, points, _logger, weight_mult * e1.weight)?;
-            let v2 = evaluate_expression(e2, weights, points, _logger, weight_mult * e2.weight)?;
+            let v1 = evaluate_expression(e1, weights, points, logger, weight_mult * e1.weight)?;
+            let v2 = evaluate_expression(e2, weights, points, logger, weight_mult * e2.weight)?;
 
-            (
-                v1.0 / v2.0,
-                v1.1 / v2.1
-            )
-        },
+            (v1.0 / v2.0, v1.1 / v2.1)
+        }
         Expression::Negation(expr) => {
-            let v = evaluate_expression(expr, weights, points, _logger, weight_mult * expr.weight)?;
+            let v = evaluate_expression(expr, weights, points, logger, weight_mult * expr.weight)?;
 
-            (
-                -v.0,
-                v.1
-            )
-        },
+            (-v.0, v.1)
+        }
     })
 }
 
@@ -293,13 +298,13 @@ fn evaluate_single(crit: &CriteriaKind, points: &PointVec, logger: &mut Logger) 
     (quality, weights)
 }
 
-pub fn evaluate(points: PointVec, criteria: &Arc<Vec<Criteria>>, logger: &mut Logger) -> PointVec {
+pub fn evaluate(points: &PointVec, criteria: &Arc<Vec<Criteria>>, logger: &mut Logger) -> PointVec {
     let mut point_evaluation = Vec::new();
     point_evaluation.resize(points.len(), Vec::new());
 
     for crit in criteria.iter() {
         // println!("Evaluating criteria {:#?}", crit);
-        let (quality, weights) = evaluate_single(&crit.object, &points, logger);
+        let (quality, weights) = evaluate_single(&crit.object, points, logger);
 
         // println!("Evaluation result: {quality}, {:?}", weights);
 
@@ -319,10 +324,10 @@ pub fn evaluate(points: PointVec, criteria: &Arc<Vec<Criteria>>, logger: &mut Lo
         .map(|(i, eval)| {
             (
                 points[i].0,
-                if !eval.is_empty() {
-                    weighed_mean(eval.into_iter())
-                } else {
+                if eval.is_empty() {
                     1.0
+                } else {
+                    weighed_mean(eval.into_iter())
                 },
             )
         })
