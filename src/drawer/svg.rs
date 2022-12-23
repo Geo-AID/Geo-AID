@@ -1,7 +1,4 @@
-use svg::{
-    node::element::{Circle, Line, Text},
-    Document,
-};
+use std::{fs::File, io::Write};
 
 use crate::{generator::Complex, projector::Rendered};
 
@@ -10,9 +7,11 @@ use crate::{generator::Complex, projector::Rendered};
 /// # Panics
 /// Panics when there are issues with writing to file.
 pub fn draw(target: String, canvas_size: (usize, usize), rendered: &Vec<Rendered>) {
-    let mut document = Document::new()
-        .set("width", canvas_size.0)
-        .set("height", canvas_size.1);
+    let mut content = String::new();
+    content += &format!(
+        "<svg height=\"{}\" width=\"{}\" xmlns=\"http://www.w3.org/2000/svg\">",
+        canvas_size.0, canvas_size.1
+    );
 
     for elem in rendered {
         match elem {
@@ -22,23 +21,17 @@ pub fn draw(target: String, canvas_size: (usize, usize), rendered: &Vec<Rendered
                     pt.position.real,
                     canvas_size.1 as f64 - pt.position.imaginary,
                 );
-
-                // println!("{} -> {p}", pt.position);
-
-                let circle = Circle::new()
-                    .set("cx", p.real)
-                    .set("cy", p.imaginary)
-                    .set("r", 2)
-                    .set("fill", "black");
-
-                let label = Text::new()
-                    .set("x", p.real - 15.0)
-                    .set("y", p.imaginary - 15.0)
-                    .set("content", pt.label.as_str())
-                    .set("stroke", "black");
-
-                document = document.add(circle).add(label);
+                content += &format!(
+                    "<circle cx=\"{}\" cy=\"{}\" fill=\"black\" r=\"2\"/>
+                <text stroke=\"black\" x=\"{}\" y=\"{}\">{}</text>",
+                    p.real,
+                    p.imaginary,
+                    p.real - 20.0,
+                    p.imaginary - 20.0,
+                    pt.label
+                );
             }
+
             Rendered::Line(ln) => {
                 #[allow(clippy::cast_precision_loss)]
                 let p1 = Complex::new(
@@ -50,18 +43,15 @@ pub fn draw(target: String, canvas_size: (usize, usize), rendered: &Vec<Rendered
                     ln.points.1.real,
                     canvas_size.1 as f64 - ln.points.1.imaginary,
                 );
-
-                let line = Line::new()
-                    .set("x1", p1.real)
-                    .set("y1", p1.imaginary)
-                    .set("x2", p2.real)
-                    .set("y2", p2.imaginary)
-                    .set("stroke", "black");
-
-                document = document.add(line);
+                content += &format!(
+                    "<line stroke=\"black\" x1=\"{}\" x2=\"{}\" y1=\"{}\" y2=\"{}\"/>",
+                    p1.real, p2.real, p1.imaginary, p2.imaginary
+                );
             }
         }
     }
+    content += "</svg>";
 
-    svg::save(target, &document).unwrap();
+    let mut file = File::create(target).unwrap();
+    file.write_all(content.as_bytes()).unwrap();
 }

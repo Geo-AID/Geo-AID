@@ -7,4 +7,3 @@ license = "MIT"
 
 [dependencies]
 rand = "0.8.5"
-svg = "0.10.0"
