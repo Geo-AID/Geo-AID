@@ -955,7 +955,7 @@ fn create_variables(
                 &mut variables,
             )?,
             Ident::Collection(col) => {
-                create_variable_collection(stat, context, col, rhs_unrolled, &mut variables)?
+                create_variable_collection(stat, context, col, rhs_unrolled, &mut variables)?;
             }
         }
     }

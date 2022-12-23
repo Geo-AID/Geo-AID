@@ -2,3 +2,6 @@
 - Primitive GeoScript
 - Primitive figure rendering
 - Basic generation
+
+## Version 0.2.1
+- Refactorized svg.rs to optimize the rendering
