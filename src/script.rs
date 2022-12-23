@@ -1,21 +1,22 @@
 use std::{
     hash::Hash,
     ops::{Deref, DerefMut, Div, Mul},
-    sync::Arc, rc::Rc,
+    rc::Rc,
+    sync::Arc,
 };
 
 use self::token::{NamedIdent, Span, Token};
 use self::{parser::Type, token::PointCollection};
 
+mod builtins;
+pub mod compile;
 pub mod figure;
 pub mod parser;
 pub mod token;
 pub mod unroll;
-mod builtins;
-pub mod compile;
 
 #[derive(Debug)]
-pub enum ScriptError {
+pub enum Error {
     InvalidToken {
         token: Token,
     },
@@ -59,55 +60,61 @@ pub enum ScriptError {
     },
     FetureNotSupported {
         error_span: Span,
-        feature_name: &'static str
+        feature_name: &'static str,
     },
     InvalidArgumentCount {
         error_span: Span,
         expected: &'static [u8],
-        got: u8
+        got: u8,
     },
     OverloadNotFound {
         error_span: Span,
         params: Vec<Type>,
-        function_name: String
+        function_name: String,
     },
     CannotUnpack {
         error_span: Span,
-        ty: Type
+        ty: Type,
     },
     ImplicitConversionDoesNotExist {
         error_span: Span,
         from: Type,
-        to: Type
+        to: Type,
     },
     InvalidOperandType {
         error_span: Span,
         got: (Type, Span),
-        op: String
-    }
+        op: String,
+    },
 }
 
-impl ScriptError {
+impl Error {
+    #[must_use]
     pub fn invalid_token(token: Token) -> Self {
         Self::InvalidToken { token }
     }
 
+    #[must_use]
     pub fn invalid_character(character: char) -> Self {
         Self::InvalidCharacter { character }
     }
 
+    #[must_use]
     pub fn end_of_input() -> Self {
         Self::EndOfInput
     }
 
+    #[must_use]
     pub fn undefined_operator(name: NamedIdent) -> Self {
         Self::UndefinedOperator { operator: name }
     }
 
+    #[must_use]
     pub fn inconsistent_iterators(span: Span) -> Self {
         Self::InconsistentIterators { span }
     }
 
+    #[must_use]
     pub fn inconsistent_types(expected: Type, exp_span: Span, got: Type, got_span: Span) -> Self {
         Self::InconsistentTypes {
             expected: (expected, exp_span),
@@ -115,6 +122,7 @@ impl ScriptError {
         }
     }
 
+    #[must_use]
     pub fn invalid_type(expected: Type, got: Type, got_span: Span) -> Self {
         Self::InvalidType {
             expected,
@@ -122,6 +130,7 @@ impl ScriptError {
         }
     }
 
+    #[must_use]
     pub fn redefined_variable(defined_at: Span, error_span: Span, variable_name: String) -> Self {
         Self::RedefinedVariable {
             defined_at,
@@ -130,6 +139,7 @@ impl ScriptError {
         }
     }
 
+    #[must_use]
     pub fn collection_not_infered(error_span: Span, collection: PointCollection) -> Self {
         Self::CollectionNotInfered {
             error_span,
@@ -137,10 +147,12 @@ impl ScriptError {
         }
     }
 
+    #[must_use]
     pub fn undefined_type_variable(definition: Span) -> Self {
         Self::UndefinedTypeVariable { definition }
     }
 
+    #[must_use]
     pub fn undefined_variable(error_span: Span, variable_name: String) -> Self {
         Self::UndefinedVariable {
             error_span,
@@ -148,6 +160,7 @@ impl ScriptError {
         }
     }
 
+    #[must_use]
     pub fn undefined_function(error_span: Span, function_name: String) -> Self {
         Self::UndefinedFunction {
             error_span,
@@ -155,24 +168,44 @@ impl ScriptError {
         }
     }
 
+    #[must_use]
     pub fn feature_not_supported(error_span: Span, feature_name: &'static str) -> Self {
-        Self::FetureNotSupported { error_span, feature_name }
+        Self::FetureNotSupported {
+            error_span,
+            feature_name,
+        }
     }
 
+    #[must_use]
     pub fn invalid_argument_count(error_span: Span, expected: &'static [u8], got: u8) -> Self {
-        Self::InvalidArgumentCount { error_span, expected, got }
+        Self::InvalidArgumentCount {
+            error_span,
+            expected,
+            got,
+        }
     }
 
+    #[must_use]
     pub fn overload_not_found(error_span: Span, function_name: String, params: Vec<Type>) -> Self {
-        Self::OverloadNotFound { error_span, params, function_name }
+        Self::OverloadNotFound {
+            error_span,
+            params,
+            function_name,
+        }
     }
 
+    #[must_use]
     pub fn cannot_unpack(error_span: Span, ty: Type) -> Self {
         Self::CannotUnpack { error_span, ty }
     }
 
+    #[must_use]
     pub fn implicit_conversion_does_not_exist(error_span: Span, from: Type, to: Type) -> Self {
-        Self::ImplicitConversionDoesNotExist { error_span, from, to }
+        Self::ImplicitConversionDoesNotExist {
+            error_span,
+            from,
+            to,
+        }
     }
 }
 
@@ -187,7 +220,7 @@ impl<T> Weighed<T> {
     pub fn one(object: T) -> Self {
         Self {
             object,
-            weight: 1.0
+            weight: 1.0,
         }
     }
 }
@@ -217,6 +250,7 @@ impl Mul for SimpleUnit {
 pub struct ComplexUnit([i8; SimpleUnit::Scalar as usize]);
 
 impl ComplexUnit {
+    #[must_use]
     pub fn new(simple: SimpleUnit) -> Self {
         let mut arr = [0; SimpleUnit::Scalar as usize];
 
@@ -327,7 +361,7 @@ pub enum Expression {
     /// Divides two values
     Quotient(Arc<Weighed<Expression>>, Arc<Weighed<Expression>>),
     /// Changes the sign
-    Negation(Arc<Weighed<Expression>>)
+    Negation(Arc<Weighed<Expression>>),
 }
 
 /// Defines the kind and information about criteria the figure must obey.
@@ -349,6 +383,7 @@ pub type Criteria = Weighed<CriteriaKind>;
 pub struct HashableArc<T>(Arc<T>);
 
 impl<T> HashableArc<T> {
+    #[must_use]
     pub fn new(content: Arc<T>) -> Self {
         Self(content)
     }
@@ -356,7 +391,7 @@ impl<T> HashableArc<T> {
 
 impl<T> Hash for HashableArc<T> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        Arc::as_ptr(&self.0).hash(state)
+        Arc::as_ptr(&self.0).hash(state);
     }
 }
 
@@ -373,6 +408,7 @@ impl<T> Eq for HashableArc<T> {
 pub struct HashableRc<T: ?Sized>(Rc<T>);
 
 impl<T: ?Sized> HashableRc<T> {
+    #[must_use]
     pub fn new(content: Rc<T>) -> Self {
         Self(content)
     }
@@ -380,7 +416,7 @@ impl<T: ?Sized> HashableRc<T> {
 
 impl<T: ?Sized> Hash for HashableRc<T> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        Rc::as_ptr(&self.0).hash(state)
+        Rc::as_ptr(&self.0).hash(state);
     }
 }
 

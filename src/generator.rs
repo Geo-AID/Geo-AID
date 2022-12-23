@@ -28,10 +28,12 @@ pub struct Complex {
 }
 
 impl Complex {
+    #[must_use]
     pub fn new(real: f64, imaginary: f64) -> Self {
         Self { real, imaginary }
     }
 
+    #[must_use]
     pub fn mangitude(self) -> f64 {
         f64::sqrt(self.real.powi(2) + self.imaginary.powi(2))
     }
@@ -144,16 +146,16 @@ pub enum Message {
 }
 
 fn generation_cycle(
-    receiver: mpsc::Receiver<Message>,
-    sender: mpsc::Sender<(Vec<(Complex, f64)>, Logger)>,
-    criteria: Arc<Vec<Criteria>>,
+    receiver: &mpsc::Receiver<Message>,
+    sender: &mpsc::Sender<(Vec<(Complex, f64)>, Logger)>,
+    criteria: &Arc<Vec<Criteria>>,
 ) {
     loop {
         match receiver.recv().unwrap() {
             Message::Generate(adjustment, points) => {
                 let mut logger = points.1;
                 let points = magic_box::adjust(points.0, adjustment);
-                let points = critic::evaluate(points, &criteria, &mut logger);
+                let points = critic::evaluate(&points, criteria, &mut logger);
 
                 // println!("Adjustment + critic = {:#?}", points);
 
@@ -181,10 +183,11 @@ pub struct Generator {
 }
 
 impl Generator {
+    #[must_use]
     pub fn new(
         point_count: usize,
         cycles_per_generation: usize,
-        criteria: Arc<Vec<Criteria>>,
+        criteria: &Arc<Vec<Criteria>>,
     ) -> Self {
         let (input_senders, input_receivers): (
             Vec<mpsc::Sender<Message>>,
@@ -201,8 +204,8 @@ impl Generator {
                 .into_iter()
                 .map(|rec| {
                     let sender = mpsc::Sender::clone(&output_sender);
-                    let criteria = Arc::clone(&criteria);
-                    thread::spawn(move || generation_cycle(rec, sender, criteria))
+                    let criteria = Arc::clone(criteria);
+                    thread::spawn(move || generation_cycle(&rec, &sender, &criteria))
                 })
                 .collect(),
             senders: input_senders,
@@ -230,6 +233,7 @@ impl Generator {
         for _ in 0..self.workers.len() {
             // If the total quality is larger than the current total, replace the points.
             let (points, logger) = self.receiver.recv().unwrap();
+            #[allow(clippy::cast_precision_loss)]
             let total_quality =
                 points.iter().map(|x| x.1).sum::<f64>() / self.current_points.len() as f64;
 
@@ -249,6 +253,7 @@ impl Generator {
     }
 
     fn bake_magnitudes(&self, maximum_adjustment: f64) -> Vec<f64> {
+        #[allow(clippy::cast_precision_loss)]
         let step = maximum_adjustment / self.workers.len() as f64;
 
         let mut magnitudes = Vec::new();
@@ -269,6 +274,10 @@ impl Generator {
         self.delta = self.total_quality - current_quality;
     }
 
+    /// Performs generation cycles until the mean delta from the last `mean_count` deltas becomes less or equal to `max_mean`.
+    ///
+    /// # Panics
+    /// Panics if there are multithreading issues (there has been a panic in one of the generation threads).
     pub fn cycle_until_mean_delta(
         &mut self,
         maximum_adjustment: f64,
@@ -283,14 +292,16 @@ impl Generator {
 
         last_deltas.resize(mean_count, 1.0);
 
+        #[allow(clippy::cast_precision_loss)]
+        let mean_count_f = mean_count as f64;
+
         while mean_delta > max_mean {
             self.cycle_prebaked(&magnitudes);
 
             self.delta = self.total_quality - current_quality;
             current_quality = self.total_quality;
             let dropped_delta = last_deltas.pop_front().unwrap();
-            mean_delta =
-                (mean_delta * mean_count as f64 - dropped_delta + self.delta) / mean_count as f64;
+            mean_delta = (mean_delta * mean_count_f - dropped_delta + self.delta) / mean_count_f;
             last_deltas.push_back(self.delta);
         }
     }
@@ -310,7 +321,7 @@ impl Generator {
 
 impl Drop for Generator {
     fn drop(&mut self) {
-        for sender in self.senders.iter_mut() {
+        for sender in &mut self.senders {
             sender.send(Message::Terminate).unwrap();
         }
 

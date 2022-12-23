@@ -1,8 +1,10 @@
-use std::{sync::Arc, env, fs, path::PathBuf, str::FromStr};
+#![warn(clippy::pedantic)]
+
+use std::{env, fs, path::PathBuf, str::FromStr, sync::Arc};
 
 use geo_aid::{
     drawer::latex,
-    generator::Generator,
+    generator::{Complex, Generator},
     projector,
     script::compile,
 };
@@ -10,17 +12,14 @@ use geo_aid::{
 fn main() {
     let script_path: Vec<String> = env::args().collect();
 
-    let script = fs::read_to_string(PathBuf::from_str(script_path.get(1).unwrap()).unwrap()).unwrap();
+    let script =
+        fs::read_to_string(PathBuf::from_str(script_path.get(1).unwrap()).unwrap()).unwrap();
 
-    let (criteria, figure, point_count) = compile::compile(script, (500, 500)).unwrap();
+    let (criteria, figure, point_count) = compile::compile(&script, (500, 500)).unwrap();
 
     // println!("{:#?}", figure);
 
-    let mut gen = Generator::new(
-        point_count,
-        128,
-        Arc::new(criteria)
-    );
+    let mut gen = Generator::new(point_count, 128, &Arc::new(criteria));
 
     // for rule in unroll::unroll(script.to_string()).unwrap().0 {
     //     println!("{rule}");
@@ -127,10 +126,16 @@ fn main() {
 
     gen.cycle_until_mean_delta(0.5, 20, 0.001);
     // println!("{:#?}", gen.get_points());
-    let rendered =
-        projector::project(&figure, gen.get_points().iter().map(|x| x.0).collect()).unwrap();
-    latex::draw("debug-output/output.svg".to_string(), (500, 500), rendered);
-    
+    let rendered = projector::project(
+        &figure,
+        &gen.get_points()
+            .iter()
+            .map(|x| x.0)
+            .collect::<Vec<Complex>>(),
+    )
+    .unwrap();
+    latex::draw("debug-output/output.svg", (500, 500), rendered);
+
     // for i in 1..=200 {
     //     gen.single_cycle(0.5);
     //     let rendered = projector::project(&fig, gen.get_points().iter().map(|x| x.0).collect()).unwrap();

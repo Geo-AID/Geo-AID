@@ -1,2 +1,2 @@
-pub mod point;
 pub mod dst;
+pub mod point;
