@@ -5,19 +5,21 @@ use crate::span;
 use super::{
     token::{
         Asterisk, Comma, Eq, Exclamation, Gt, Gteq, Ident, LParen, Let, Lt, Lteq, Minus,
-        NamedIdent, Number, Plus, PointCollection, Position, RParen, Semi, Slash, Span, Token,
-        Vertical,
+        NamedIdent, Number, Plus, Position, RParen, Semi, Slash, Span, Token, Vertical,
     },
     unroll::{CompileContext, RuleOperatorDefinition},
     ComplexUnit, Error, SimpleUnit,
 };
 
+/// A unary operator, like `-`.
 #[derive(Debug)]
 pub enum UnaryOperator {
+    /// A negation, as in `-x`.
     Neg(NegOp),
 }
 
 impl UnaryOperator {
+    /// Gets the type that this operator returns.
     #[must_use]
     pub fn get_returned(&self, param: &Type) -> Type {
         match self {
@@ -34,43 +36,62 @@ impl UnaryOperator {
     }
 }
 
+/// A parsed unary `-` operator.
 #[derive(Debug)]
 pub struct NegOp {
+    /// The `-` token.
     pub minus: Minus,
 }
 
+/// A parsed `+` operator.
 #[derive(Debug)]
 pub struct AddOp {
+    //. The `+` token.
     pub plus: Plus,
 }
 
+/// A parsed `-` operator.
 #[derive(Debug)]
 pub struct SubOp {
+    //. The `-` token.
     pub minus: Minus,
 }
 
+/// A parsed `*` operator.
 #[derive(Debug)]
 pub struct MulOp {
+    //. The `*` token.
     pub asterisk: Asterisk,
 }
 
+/// A parsed `/` operator.
 #[derive(Debug)]
 pub struct DivOp {
+    //. The `/` token.
     pub slash: Slash,
 }
 
+/// A binary operator, like `+`, `-`, `*` or `/`.
 #[derive(Debug)]
 pub enum BinaryOperator {
+    /// Addition
     Add(AddOp),
+    /// Subtraction
     Sub(SubOp),
+    /// Multiplication
     Mul(MulOp),
+    /// Division
     Div(DivOp),
 }
 
 impl BinaryOperator {
+    /// Gets the type returned by this operator given the operand types.
     #[must_use]
     pub fn get_returned(&self, lhs: &Type, rhs: &Type) -> Type {
         match self {
+            // For addition and subtraction the unit of both operands must be the same. The result is of the same type as the operands.
+            // This code primarily checks if the two operands are of the same type. If one does not have a type (scalar(none)) and
+            // the other does, the former is assumed to be of the same type.
             BinaryOperator::Add(_) | BinaryOperator::Sub(_) => {
                 let left_unit = match lhs {
                     Type::Predefined(PredefinedType::Scalar(Some(unit))) => {
@@ -118,6 +139,8 @@ impl BinaryOperator {
                     Type::Undefined
                 }
             }
+            // For multiplication and division the result is a product of operand types.
+            // If a type is a scalar(None), it's assumed to be a dimensionless scalar.
             BinaryOperator::Mul(_) | BinaryOperator::Div(_) => {
                 let left_unit = match lhs {
                     Type::Predefined(PredefinedType::Scalar(Some(unit))) => Some(unit.clone()),
@@ -166,9 +189,12 @@ impl ToString for BinaryOperator {
     }
 }
 
+/// A parsed expression.
 #[derive(Debug)]
 pub enum Expression {
+    /// An iterator of simple expressions
     Simple(Punctuated<SimpleExpression, Vertical>),
+    /// A binary operator expression.
     Binop(ExprBinop),
 }
 
@@ -183,12 +209,18 @@ impl Expression {
     }
 }
 
+/// A parsed simple expression.
 #[derive(Debug)]
 pub enum SimpleExpression {
+    /// An identifier (variable access, most likely)
     Ident(Ident),
+    /// A raw number
     Number(ExprNumber),
+    /// A function call
     Call(ExprCall),
+    /// A unary operator expression
     Unop(ExprUnop),
+    /// An expression inside parentheses.
     Parenthised(ExprParenthised),
 }
 
@@ -203,144 +235,214 @@ impl SimpleExpression {
     }
 }
 
+/// A parsed function call
 #[derive(Debug)]
 pub struct ExprCall {
+    /// The ident of the function.
     pub name: NamedIdent,
+    /// The `(` token.
     pub lparen: LParen,
+    /// The `)` token.
     pub rparen: RParen,
+    /// Punctuated params. `None` if no params are given.
     pub params: Option<Punctuated<Box<Expression>, Comma>>,
 }
 
+/// A parsed parenthesed expression
 #[derive(Debug)]
 pub struct ExprParenthised {
+    /// The `(` token.
     pub lparen: LParen,
+    /// The `)` token.
     pub rparen: RParen,
+    /// The contained `Expression`.
     pub content: Box<Expression>,
 }
 
+/// A parsed unary operator expression.
 #[derive(Debug)]
 pub struct ExprUnop {
+    /// The operator.
     pub operator: UnaryOperator,
+    /// The operand (right hand side).
     pub rhs: Box<SimpleExpression>,
 }
 
+/// A parsed binary operator expression.
 #[derive(Debug)]
 pub struct ExprBinop {
+    /// The operator
     pub operator: BinaryOperator,
+    /// Left hand side
     pub lhs: Box<Expression>,
+    /// Right hand side.
     pub rhs: Box<Expression>,
 }
 
+/// A parsed raw number.
 #[derive(Debug)]
 pub struct ExprNumber {
+    /// Its value.
     pub value: f64,
+    /// Its token.
     pub token: Number,
 }
 
+/// A no-operation statement - a single semicolon.
 #[derive(Debug)]
 pub struct Noop {
+    /// The `;` token.
     pub semi: Semi,
 }
 
+/// A `=` rule operator.
 #[derive(Debug)]
 pub struct EqOp {
+    /// The `=` token.
     pub eq: Eq,
 }
 
+/// A `<` rule operator.
 #[derive(Debug)]
 pub struct LtOp {
+    /// The `=` token.
     pub lt: Lt,
 }
 
+/// A `>` rule operator.
 #[derive(Debug)]
 pub struct GtOp {
+    /// The `>` token.
     pub gt: Gt,
 }
 
+/// A `<=` rule operator.
 #[derive(Debug)]
 pub struct LteqOp {
+    /// The `<=` token.
     pub lteq: Lteq,
 }
 
+/// A `>=` rule operator.
 #[derive(Debug)]
 pub struct GteqOp {
+    /// The `>=` token.
     pub gteq: Gteq,
 }
 
+/// A user-defined rule operator.
 #[derive(Debug)]
 pub struct DefinedRuleOperator {
+    /// The ident.
     pub ident: NamedIdent,
+    /// Pointer to the definition.
     pub definition: Rc<RuleOperatorDefinition>,
 }
 
+/// A builtin rule operator
 #[derive(Debug)]
 pub enum PredefinedRuleOperator {
+    /// Equality
     Eq(EqOp),
+    /// Less than
     Lt(LtOp),
+    /// Greater than
     Gt(GtOp),
+    /// Less than or equal
     Lteq(LteqOp),
+    /// Greater than or equal
     Gteq(GteqOp),
 }
 
+/// A rule operator.
 #[derive(Debug)]
 pub enum RuleOperator {
     Predefined(PredefinedRuleOperator),
     Defined(DefinedRuleOperator),
+    /// A inverted rule operator (!op)
     Inverted(InvertedRuleOperator),
 }
 
+/// An inverted rule operator.
 #[derive(Debug)]
 pub struct InvertedRuleOperator {
+    /// The `!` token
     pub exlamation: Exclamation,
+    /// The operator.
     pub operator: Box<RuleOperator>,
 }
 
+/// `let <something> = <something else>`.
+/// Defines variables and possibly adds rules to them.
 #[derive(Debug)]
 pub struct LetStatement {
+    /// The `let` token.
     pub let_token: Let,
+    /// The lhs ident iterator.
     pub ident: Punctuated<Ident, Vertical>,
+    /// The `=` token.
     pub eq: Eq,
+    /// The rhs expression.
     pub expr: Expression,
+    /// The rules after the rhs expression.
     pub rules: Vec<(RuleOperator, Expression)>,
+    /// The ending semicolon.
     pub semi: Semi,
 }
 
+/// `lhs ruleop rhs`.
+/// Defines a rule.
 #[derive(Debug)]
 pub struct RuleStatement {
+    /// Left hand side
     pub lhs: Expression,
+    /// Rule operator
     pub op: RuleOperator,
+    /// Right hand side
     pub rhs: Expression,
+    /// The ending semicolon.
     pub semi: Semi,
 }
 
+/// A general statement.
 #[derive(Debug)]
 pub enum Statement {
+    /// No operation
     Noop(Noop),
+    /// let
     Let(LetStatement),
+    /// rule
     Rule(RuleStatement),
 }
 
+/// A utility struct for collections of parsed items with punctuators between them.
 #[derive(Debug)]
 pub struct Punctuated<T, P> {
+    /// The first parsed item.
     pub first: T,
+    /// The next items with punctuators.
     pub collection: Vec<(P, T)>,
 }
 
 impl<T, P> Punctuated<T, P> {
+    /// Turns the punctuated into an iterator on the items.
     pub fn iter(&self) -> impl Iterator<Item = &T> {
         vec![&self.first]
             .into_iter()
             .chain(self.collection.iter().map(|x| &x.1))
     }
 
+    /// Gets the item count.
     pub fn len(&self) -> usize {
         self.collection.len() + 1
     }
 
+    /// Checks if there are no items (always false).
     pub fn is_empty(&self) -> bool {
         false
     }
 
+    /// Tries to get the element on `index`.
     pub fn get(&self, index: usize) -> Option<&T> {
         match index {
             0 => Some(&self.first),
@@ -353,12 +455,13 @@ pub trait Parse: Sized {
     /// Tries to parse input tokens into Self.
     ///
     /// # Errors
-    /// Errors originate from ivalid scripts.
+    /// Errors originate from invalid scripts.
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
         it: &mut Peekable<I>,
         context: &CompileContext,
     ) -> Result<Self, Error>;
 
+    /// Gets the parsed item's span.
     fn get_span(&self) -> Span;
 }
 
@@ -385,6 +488,7 @@ impl Parse for ExprCall {
     }
 
     fn get_span(&self) -> Span {
+        // From the ident to the ).
         self.name.span.join(self.rparen.span)
     }
 }
@@ -489,6 +593,7 @@ impl Parse for LetStatement {
         let expr = Expression::parse(it, context)?;
         let mut rules = Vec::new();
 
+        // After the defining expression there can be rules.
         loop {
             let next = it.peek().copied();
 
@@ -523,6 +628,7 @@ impl Parse for ExprNumber {
         _context: &CompileContext,
     ) -> Result<Self, Error> {
         match it.next() {
+            // The integral and decimal parts have to be merged into one floating point number.
             #[allow(clippy::cast_precision_loss)]
             Some(Token::Number(num)) => Ok(ExprNumber {
                 value: {
@@ -587,17 +693,20 @@ impl BinaryOperator {
     }
 }
 
+/// Inserts an operator with an rhs into a operator series, considering the order of operations.
 fn dispatch_order(
     lhs: Expression,
     op: BinaryOperator,
     rhs: Punctuated<SimpleExpression, Vertical>,
 ) -> Expression {
     match lhs {
+        // if lhs is simple, there is no order to consider.
         Expression::Simple(s) => Expression::Binop(ExprBinop {
             lhs: Box::new(Expression::Simple(s)),
             operator: op,
             rhs: Box::new(Expression::Simple(rhs)),
         }),
+        // Otherwise we compare indices of the operators and act accordingly.
         Expression::Binop(lhs) => {
             if op.index() > lhs.operator.index() {
                 Expression::Binop(ExprBinop {
@@ -640,6 +749,7 @@ impl Parse for SimpleExpression {
                         Ident::Named(name) => {
                             let next = it.peek().copied();
 
+                            // Names can mean either function calls
                             if let Some(Token::LParen(lparen)) = next {
                                 it.next();
 
@@ -652,6 +762,7 @@ impl Parse for SimpleExpression {
                                     params,
                                 })
                             } else {
+                                // or variable access.
                                 SimpleExpression::Ident(Ident::Named(name.clone()))
                             }
                         }
@@ -1035,11 +1146,16 @@ impl<T: GetType + Parse, U> GetType for Punctuated<T, U> {
     }
 }
 
+/// A builtin type.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PredefinedType {
+    /// A point
     Point,
+    /// A line
     Line,
+    /// A scalar of a certain unit.
     Scalar(Option<ComplexUnit>),
+    /// A point collection.
     PointCollection(usize),
 }
 
@@ -1054,38 +1170,30 @@ impl PredefinedType {
     }
 }
 
+/// A user-defined type.
 pub struct DefinedType {
+    /// The type's name.
     pub name: String,
 }
 
+/// A type of an expression or a variable.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Type {
+    /// Builtin
     Predefined(PredefinedType),
+    /// User-defined
     Defined,
+    /// undefined, unknown
     Undefined,
 }
 
 impl Type {
-    #[must_use]
-    pub fn can_infer_pc(&self, collection: &PointCollection) -> bool {
-        match self {
-            Self::Predefined(pre) => match pre {
-                PredefinedType::Point => collection.len() == 1,
-                PredefinedType::Line => collection.len() == 2,
-                PredefinedType::PointCollection(l) => collection.len() == *l,
-                PredefinedType::Scalar(None) => false,
-                PredefinedType::Scalar(Some(unit)) => {
-                    unit == &ComplexUnit::new(SimpleUnit::Distance) && collection.len() == 2
-                }
-            },
-            Self::Defined | Self::Undefined => false,
-        }
-    }
-
+    /// Whether `self` can be cast to `into`.
     #[must_use]
     pub fn can_cast(&self, into: &Type) -> bool {
         match self {
             Type::Predefined(pre) => match pre {
+                // A point can only be cast into another point or a point collection with length one.
                 PredefinedType::Point => match into {
                     Type::Predefined(pre) => matches!(
                         pre,
@@ -1093,13 +1201,9 @@ impl Type {
                     ),
                     _ => false,
                 },
-                PredefinedType::Line => match into {
-                    Type::Predefined(pre) => matches!(
-                        pre,
-                        PredefinedType::Line | PredefinedType::PointCollection(2)
-                    ),
-                    _ => false,
-                },
+                // A line can only be cast into another line.
+                PredefinedType::Line => matches!(into, Type::Predefined(PredefinedType::Line)),
+                // A scalar with a defined unit can only be cast into another scalar with the same unit.
                 PredefinedType::Scalar(Some(unit1)) => {
                     if let Type::Predefined(PredefinedType::Scalar(Some(unit2))) = into {
                         unit1 == unit2
@@ -1107,6 +1211,7 @@ impl Type {
                         false
                     }
                 }
+                // A scalar with no defined unit can be cast into any other scalar.
                 PredefinedType::Scalar(None) => {
                     matches!(into, Type::Predefined(PredefinedType::Scalar(_)))
                 }

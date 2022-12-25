@@ -14,36 +14,52 @@ use super::{
     ComplexUnit, Error, SimpleUnit,
 };
 
+/// A definition for a user-defined rule operator.
 #[derive(Debug)]
 pub struct RuleOperatorDefinition {
+    /// Operator's name.
     pub name: String,
 }
 
+/// Meta info about a point.
 #[derive(Debug)]
 pub struct PointMeta {
+    /// The letter of a point.
     pub letter: char,
+    /// The count of `'` in the point's name.
     pub primes: u8,
+    /// The point index.
     pub index: Option<u16>,
 }
 
+/// A point in variable meta.
 #[derive(Debug)]
 pub struct Point {
+    /// A point meta is optional, since not every point has a letter.
     pub meta: Option<PointMeta>,
 }
 
+/// Defines meta information about variables, mostly in regard to the displaying of them.
 #[derive(Debug)]
 pub enum VariableMeta {
+    /// Point variable
     Point(Point),
     Scalar,
     Line,
+    /// Properties for user-defined types.
     Properties,
 }
 
+/// A variable created with a let statement.
 #[derive(Debug)]
 pub struct Variable {
+    /// Variable's name
     pub name: String,
+    /// Variable's definition span.
     pub definition_span: Span,
+    /// Variable's definition.
     pub definition: UnrolledExpression,
+    /// Variable's metadata.
     pub meta: VariableMeta,
 }
 
@@ -67,21 +83,30 @@ impl GetType for Variable {
     }
 }
 
+/// An overload of a function in `GeoScript`.
 #[derive(Debug)]
 pub struct FunctionOverload {
+    /// The parameter types.
     pub params: Vec<Type>,
+    /// The returned type
     pub returned_type: Type,
+    /// The definition span (if there is one).
     pub definition_span: Option<Span>,
+    /// The definition.
     pub definition: UnrolledExpression,
 }
 
+/// A function.
 #[derive(Debug)]
 pub struct Function {
+    /// Function's name
     pub name: String,
+    /// Function's overloads.
     pub overloads: Vec<FunctionOverload>,
 }
 
 impl Function {
+    /// Checks if the given params can be converted into the expected params.
     #[must_use]
     pub fn match_params(expected: &Vec<Type>, received: &Vec<Type>) -> bool {
         if expected.len() == received.len() {
@@ -97,6 +122,7 @@ impl Function {
         }
     }
 
+    /// Tries to find an overload for the given param types.
     #[must_use]
     pub fn get_overload(&self, params: &Vec<Type>) -> Option<&FunctionOverload> {
         self.overloads
@@ -111,14 +137,23 @@ impl Function {
     }
 }
 
+/// The context of compilation process. It's necessary since `GeoScript` is context-dependent.
 #[derive(Debug)]
 pub struct CompileContext {
+    /// The rule operators.
     pub rule_ops: HashMap<String, Rc<RuleOperatorDefinition>>,
+    /// Variables
     pub variables: HashMap<String, Rc<Variable>>,
+    /// Points
     pub points: HashMap<u64, Rc<Variable>>,
+    /// Functions
     pub functions: HashMap<String, Function>,
 }
 
+/// Finds the common length of all iterators.
+///
+/// # Errors
+/// Returns an error if the iterators are of different lengths.
 fn check_expression_iterators(expr: &Expression) -> Result<usize, Error> {
     match expr {
         Expression::Simple(s) => match s.collection.len() {
@@ -136,6 +171,10 @@ fn check_expression_iterators(expr: &Expression) -> Result<usize, Error> {
     }
 }
 
+/// Finds the common length of all iterators.
+///
+/// # Errors
+/// Returns an error if the iterators are of different lengths.
 fn check_simple_iterators(expr: &SimpleExpression) -> Result<usize, Error> {
     match expr {
         SimpleExpression::Number(_) | SimpleExpression::Ident(_) => Ok(1),
@@ -162,6 +201,7 @@ fn check_simple_iterators(expr: &SimpleExpression) -> Result<usize, Error> {
     }
 }
 
+/// Checks if all iterators are of given length.
 fn check_simple_iterators_hint(expr: &SimpleExpression, hint: usize) -> bool {
     match expr {
         SimpleExpression::Number(_) | SimpleExpression::Ident(_) => true,
@@ -183,6 +223,7 @@ fn check_simple_iterators_hint(expr: &SimpleExpression, hint: usize) -> bool {
     }
 }
 
+/// Checks if all iterators are of given length.
 fn check_expression_iterators_hint(expr: &Expression, hint: usize) -> bool {
     match expr {
         Expression::Simple(s) => match s.collection.len() {
@@ -196,6 +237,7 @@ fn check_expression_iterators_hint(expr: &Expression, hint: usize) -> bool {
     }
 }
 
+/// The kind on the unrolled rule.
 #[derive(Debug)]
 pub enum UnrolledRuleKind {
     Eq,
@@ -292,14 +334,17 @@ impl Display for UnrolledRule {
     }
 }
 
+/// A point id is a 64-bit integer. First 32 bits are for the letter codepoint, next 8 for the amount of primes, next 16 for the point index.
 fn construct_point_id(letter: char, primes: u8) -> u64 {
     ((letter as u64) << 8) | u64::from(primes)
 }
 
+/// Constructs the point name based on the letter and the primes.
 fn construct_point_name(letter: char, primes: u8) -> String {
     String::from(letter) + &"'".repeat(primes as usize)
 }
 
+/// Replaces all Parameter unrolled expressions with the given parameters.
 fn unroll_parameters(
     definition: &UnrolledExpression,
     params: &Vec<UnrolledExpression>,
@@ -362,6 +407,7 @@ fn unroll_parameters(
     }
 }
 
+/// Unrolls the conversion of a point collection into the given type.
 fn unroll_pc_conversion(
     expr: &UnrolledExpression,
     to: &Type,
@@ -417,6 +463,7 @@ fn unroll_pc_conversion(
     }
 }
 
+/// Unrolls the conversion of the given expression to a scalar type.
 fn unroll_conversion_to_scalar(
     expr: &UnrolledExpression,
     to: &Type,
@@ -500,6 +547,7 @@ fn unroll_conversion_to_scalar(
     }
 }
 
+/// Unrolls implicit conversions between types.
 fn unroll_implicit_conversion(
     expr: UnrolledExpression,
     to: &Type,
@@ -879,6 +927,7 @@ fn create_variable_named(
     }
 }
 
+/// If the lhs of let statement is a point collection, the rhs has to be unpacked.
 fn create_variable_collection(
     stat: &LetStatement,
     context: &mut CompileContext,

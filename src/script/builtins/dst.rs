@@ -43,7 +43,7 @@ fn dst_function_scalar() -> UnrolledExpression {
     }
 }
 
-/// dst(point, point) - distance convertible as param.
+/// dst(point, point) - distance between two points.
 fn dst_function_point_point() -> UnrolledExpression {
     UnrolledExpression {
         ty: Type::Predefined(PredefinedType::Scalar(Some(ComplexUnit::new(
@@ -65,7 +65,7 @@ fn dst_function_point_point() -> UnrolledExpression {
     }
 }
 
-/// dst(point, line) - distance convertible as param.
+/// dst(point, line) - distance between a point and a line.
 fn dst_function_point_line() -> UnrolledExpression {
     UnrolledExpression {
         ty: Type::Predefined(PredefinedType::Scalar(Some(ComplexUnit::new(
@@ -87,7 +87,7 @@ fn dst_function_point_line() -> UnrolledExpression {
     }
 }
 
-/// dst(line, point) - distance convertible as param.
+/// dst(line, point) - distance between a line and a point.
 fn dst_function_line_point() -> UnrolledExpression {
     UnrolledExpression {
         ty: Type::Predefined(PredefinedType::Scalar(Some(ComplexUnit::new(

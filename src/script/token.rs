@@ -83,6 +83,7 @@ let ABC = Triangle;
     }
 }
 
+/// Defines a position in the script.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Position {
     pub line: usize,
@@ -109,6 +110,7 @@ impl Ord for Position {
     }
 }
 
+/// Defines a span in the script.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Span {
     pub start: Position,
@@ -409,6 +411,7 @@ fn read_number<I: Iterator<Item = char>>(it: &mut Peekable<I>, position: &mut Po
     }
 }
 
+/// Decides whether the given string is a standard named identifier or a point collection.
 fn dispatch_ident(sp: Span, ident: String) -> Ident {
     let mut collection = PointCollection {
         collection: vec![],

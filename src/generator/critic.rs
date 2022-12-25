@@ -93,6 +93,7 @@ fn evaluate_point_line_distance(
         // C is the intercept
         let c = line.0.imaginary;
 
+        // And the magical formula
         f64::abs(a * point.0.real + b * point.0.imaginary + c) / f64::sqrt(a.powi(2) + b.powi(2))
     };
 
@@ -227,6 +228,7 @@ fn evaluate_expression(
     })
 }
 
+/// Evaluates a single rule in terms of quality.
 fn evaluate_single(crit: &CriteriaKind, points: &PointVec, logger: &mut Logger) -> (f64, Vec<f64>) {
     let mut weights = Vec::new();
     weights.resize(points.len(), 0.0);
@@ -298,6 +300,7 @@ fn evaluate_single(crit: &CriteriaKind, points: &PointVec, logger: &mut Logger) 
     (quality, weights)
 }
 
+/// Evaluates all rules in terms of quality
 pub fn evaluate(points: &PointVec, criteria: &Arc<Vec<Criteria>>, logger: &mut Logger) -> PointVec {
     let mut point_evaluation = Vec::new();
     point_evaluation.resize(points.len(), Vec::new());
