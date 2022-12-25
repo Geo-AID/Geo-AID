@@ -1,131 +1,90 @@
 #![warn(clippy::pedantic)]
 
-use std::{env, fs, path::PathBuf, str::FromStr, sync::Arc};
+use std::{fs, path::PathBuf, sync::Arc, io::{self, Write}};
 
+use clap::{Parser, ValueEnum};
+use crossterm::{terminal, cursor, ExecutableCommand, QueueableCommand};
 use geo_aid::{
-    drawer::latex,
+    drawer::{latex, svg},
     generator::{Complex, Generator},
     projector,
     script::compile,
 };
 
+#[derive(Debug, Parser)]
+#[command(name = "Geo-AID")]
+#[command(version)]
+#[command(author)]
+#[command(about = "Tool for generating and rendering geometrical figures.", long_about = None)]
+struct Args {
+    /// The input script file.
+    input: PathBuf,
+    /// The output target.
+    output: PathBuf,
+    /// The maximum mean quality delta.
+    #[arg(long, short, default_value_t = 0.0001)]
+    delta_max_mean: f64,
+    /// The count of workers to use for generation.
+    #[arg(long, short, default_value_t = 512)]
+    count_of_workers: usize,
+    /// The count of last deltas to include in mean calculation.
+    #[arg(long, short, default_value_t = 128)]
+    mean_count: usize,
+    /// Maximal adjustment of a point during generation.
+    #[arg(long, short, default_value_t = 0.5)]
+    adjustment_max: f64,
+    /// Renderer to use.
+    #[arg(long, short, default_value_t = Renderer::Latex, value_enum)]
+    renderer: Renderer,
+    /// Canvas width
+    #[arg(long, default_value_t = 500)]
+    width: usize,
+    /// Canvas height
+    #[arg(long, default_value_t = 500)]
+    height: usize,
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum, Debug)]
+enum Renderer {
+    /// The LaTeX + tikz renderer.
+    Latex,
+    /// The .svg format renderer.
+    Svg
+}
+
 fn main() {
-    let script_path: Vec<String> = env::args().collect();
+    let args = Args::parse();
 
-    let script =
-        fs::read_to_string(PathBuf::from_str(script_path.get(1).unwrap()).unwrap()).unwrap();
+    let script = fs::read_to_string(args.input).expect("Failed to read file.");
+    let canvas_size = (args.width, args.height);
 
-    let (criteria, figure, point_count) = compile::compile(&script, (500, 500)).unwrap();
+    let (criteria, figure, point_count) = compile::compile(
+        &script,
+        canvas_size
+    ).unwrap();
 
-    // println!("{:#?}", figure);
+    let mut gen = Generator::new(point_count, args.count_of_workers, &Arc::new(criteria));
 
-    let mut gen = Generator::new(point_count, 128, &Arc::new(criteria));
+    let mut stdout = io::stdout();
 
-    // for rule in unroll::unroll(script.to_string()).unwrap().0 {
-    //     println!("{rule}");
-    // }
+    stdout.execute(cursor::Hide).unwrap();
 
-    // let mut gen = Generator::new(
-    //     4,
-    //     128,
-    //     Arc::new(vec![
-    //         Weighed {
-    //             weight: 1.0,
-    //             object: CriteriaKind::Greater(
-    //                 Arc::new(Weighed {
-    //                     weight: 1.0,
-    //                     object: Expression::PointLineDistance(
-    //                         Arc::new(Weighed {
-    //                             weight: 1.0,
-    //                             object: Expression::FreePoint(2),
-    //                         }),
-    //                         Arc::new(Weighed {
-    //                             weight: 1.0,
-    //                             object: Expression::Line(
-    //                                 Arc::new(Weighed {
-    //                                     weight: 1.0,
-    //                                     object: Expression::FreePoint(0),
-    //                                 }),
-    //                                 Arc::new(Weighed {
-    //                                     weight: 1.0,
-    //                                     object: Expression::FreePoint(1),
-    //                                 }),
-    //                             ),
-    //                         }),
-    //                     ),
-    //                 }),
-    //                 Arc::new(Weighed {
-    //                     weight: 1.0,
-    //                     object: Expression::Literal(0.01, ComplexUnit::new(SimpleUnit::Distance)),
-    //                 }),
-    //             ),
-    //         },
-    //         Weighed {
-    //             weight: 1.0,
-    //             object: CriteriaKind::Less(
-    //                 Arc::new(Weighed {
-    //                     weight: 1.0,
-    //                     object: Expression::PointLineDistance(
-    //                         Arc::new(Weighed {
-    //                             weight: 1.0,
-    //                             object: Expression::FreePoint(3),
-    //                         }),
-    //                         Arc::new(Weighed {
-    //                             weight: 1.0,
-    //                             object: Expression::Line(
-    //                                 Arc::new(Weighed {
-    //                                     weight: 1.0,
-    //                                     object: Expression::FreePoint(0),
-    //                                 }),
-    //                                 Arc::new(Weighed {
-    //                                     weight: 1.0,
-    //                                     object: Expression::FreePoint(1),
-    //                                 }),
-    //                             ),
-    //                         }),
-    //                     ),
-    //                 }),
-    //                 Arc::new(Weighed {
-    //                     weight: 1.0,
-    //                     object: Expression::Literal(0.01, ComplexUnit::new(SimpleUnit::Distance)),
-    //                 }),
-    //             ),
-    //         },
-    //     ]),
-    // );
+    gen.cycle_until_mean_delta(
+        args.adjustment_max,
+        args.mean_count,
+        args.delta_max_mean,
+        |quality| {
+            stdout.queue(terminal::Clear(terminal::ClearType::FromCursorDown)).unwrap();
 
-    // let fig = Figure {
-    //     points: vec![
-    //         Point {
-    //             label: String::from("A"),
-    //             definition: PointDefinition::Indexed(0),
-    //         },
-    //         Point {
-    //             label: String::from("B"),
-    //             definition: PointDefinition::Indexed(1),
-    //         },
-    //         Point {
-    //             label: String::from("C"),
-    //             definition: PointDefinition::Indexed(2),
-    //         },
-    //         Point {
-    //             label: String::from("D"),
-    //             definition: PointDefinition::Indexed(3),
-    //         },
-    //     ],
-    //     lines: vec![Line {
-    //         label: String::from("a"),
-    //         definition: LineDefinition::TwoPoints(
-    //             Box::new(PointDefinition::Indexed(0)),
-    //             Box::new(PointDefinition::Indexed(1))
-    //         ),
-    //     }],
-    //     segments: vec![],
-    //     canvas_size: (300, 300),
-    // };
+            stdout.queue(cursor::SavePosition).unwrap();
+            stdout.write_all(format!("Quality: {:.2}% ", quality * 100.0).as_bytes()).unwrap();
+            stdout.queue(cursor::RestorePosition).unwrap();
+            stdout.flush().unwrap();
+        }
+    );
 
-    gen.cycle_until_mean_delta(0.5, 20, 0.001);
-    // println!("{:#?}", gen.get_points());
+    stdout.execute(cursor::Show).unwrap();
+
     let rendered = projector::project(
         &figure,
         &gen.get_points()
@@ -134,7 +93,11 @@ fn main() {
             .collect::<Vec<Complex>>(),
     )
     .unwrap();
-    latex::draw("debug-output/output.svg", (500, 500), rendered);
+
+    match args.renderer {
+        Renderer::Latex => latex::draw(&args.output, canvas_size, &rendered),
+        Renderer::Svg => svg::draw(&args.output, canvas_size, &rendered),
+    }
 
     // for i in 1..=200 {
     //     gen.single_cycle(0.5);
@@ -143,7 +106,7 @@ fn main() {
     // }
 
     println!(
-        "Finished rendering with total quality {}%.",
+        "Finished rendering with total quality {:.2}%.",
         gen.get_total_quality() * 100.0
     );
 }
