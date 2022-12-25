@@ -87,11 +87,19 @@ rule-operator := ['!'], predefined-ruleop;
 ```
 
 ## Statements
-Geoscript is a statement-based language. As of version 0.1.0, there are two (2) kinds of statements.
+Geoscript is a statement-based language. As of the current version, there are three (3) kinds of statements.
 
 ### Let statement
 ```
 letstat := 'let', iterator<ident>, '=', expr, {rule-operator, expr}, ';';
+```
+
+A let statement defines a variable based on the right hand expression. After the expression there can be rules to be defined immediately on the created variable as a syntatic sugar. Let statements support iterators. All iterators must have uniform length and if the left hand side of the statement has no iterators, the expression defining the variable also must have no iterators.
+
+If the left hand side of the statement is a point collection, the defining expression will be unpacked onto the collection if possible.
+
+```
+let A | |BC = Point() on DE | EF | DF;
 ```
 
 ### Rule statement
@@ -99,11 +107,31 @@ letstat := 'let', iterator<ident>, '=', expr, {rule-operator, expr}, ';';
 rulestat := expr, rule-operator, expr, ';';
 ```
 
+A rule statement defines a rule - a criteria that must be met by the figure. All iterators here must be of uniform legth, only one rule operator is allowed.
+
+### Noop statement
+```
+noop := ';';
+```
+
 ### Statement
-stat := letstat | rulestat;
+stat := letstat | rulestat | noop;
 
 ## Functions
 Functions are called with the `call` syntax. They take arguments in and output a single value.
 
 Example:
 `let x = dst(A, B);`
+
+## Conversions
+GeoScript has implicit conversions defined for some types:
+- A point collection of length 1 can be automatically converted into a point.
+- A point collection of length 2 can be automatically converted into a line.
+- A point collection of length 2 can be automatically converted into the distance between two points.
+- A scalar with no specified type can be automatically converted into a scalar of any type.
+
+## Scalars
+Scalars are real numbers with a defined or not defined unit. Any number literal is by default a unitless scalar (not a dimensionless). Only unitless scalars can be freely converted into any other unit. The units of GeoScript are:
+- Distance
+- Angle
+- Scalar (dimensionless)

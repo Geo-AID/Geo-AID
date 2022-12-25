@@ -5,3 +5,5 @@
 
 ## Version 0.2.1
 - Refactorized svg.rs to optimize the rendering
+- Created the latex drawer
+- Completed the documentation as of now.
