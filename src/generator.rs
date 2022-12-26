@@ -7,6 +7,8 @@ use std::{
     thread::{self, JoinHandle},
 };
 
+use serde::Serialize;
+
 use crate::script::Criteria;
 
 #[derive(Debug)]
@@ -19,7 +21,7 @@ pub mod geometry;
 mod magic_box;
 
 /// Represents a complex number located on a "unit" plane.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize)]
 pub struct Complex {
     /// X coordinate located in range [0, 1).
     pub real: f64,
