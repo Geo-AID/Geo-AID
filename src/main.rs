@@ -1,9 +1,16 @@
 #![warn(clippy::pedantic)]
 
-use std::{fs, path::PathBuf, sync::Arc, io::{self, Write}};
+use std::{
+    fs,
+    io::{self, Write},
+    path::PathBuf,
+    process,
+    sync::Arc,
+};
 
 use clap::{Parser, ValueEnum};
-use crossterm::{terminal, cursor, ExecutableCommand, QueueableCommand};
+use crossterm::{cursor, terminal, ExecutableCommand, QueueableCommand};
+use geo_aid::cli::{Diagnostic, DiagnosticKind};
 use geo_aid::{
     drawer::{latex, svg},
     generator::{Complex, Generator},
@@ -49,19 +56,26 @@ enum Renderer {
     /// The LaTeX + tikz renderer.
     Latex,
     /// The .svg format renderer.
-    Svg
+    Svg,
 }
 
 fn main() {
     let args = Args::parse();
-
-    let script = fs::read_to_string(args.input).expect("Failed to read file.");
+    let script = fs::read_to_string(&args.input).expect("Failed to read file.");
     let canvas_size = (args.width, args.height);
 
-    let (criteria, figure, point_count) = compile::compile(
-        &script,
-        canvas_size
-    ).unwrap();
+    let result = compile::compile(&script, canvas_size);
+
+    let (criteria, figure, point_count) = match result {
+        Ok(v) => v,
+        Err(err) => {
+            let data = err.diagnostic();
+            let diagnostic = Diagnostic::new(DiagnosticKind::Error, data, &args.input, &script);
+
+            println!("{diagnostic}");
+            process::exit(0);
+        }
+    };
 
     let mut gen = Generator::new(point_count, args.count_of_workers, &Arc::new(criteria));
 
@@ -74,13 +88,17 @@ fn main() {
         args.mean_count,
         args.delta_max_mean,
         |quality| {
-            stdout.queue(terminal::Clear(terminal::ClearType::FromCursorDown)).unwrap();
+            stdout
+                .queue(terminal::Clear(terminal::ClearType::FromCursorDown))
+                .unwrap();
 
             stdout.queue(cursor::SavePosition).unwrap();
-            stdout.write_all(format!("Quality: {:.2}% ", quality * 100.0).as_bytes()).unwrap();
+            stdout
+                .write_all(format!("Quality: {:.2}% ", quality * 100.0).as_bytes())
+                .unwrap();
             stdout.queue(cursor::RestorePosition).unwrap();
             stdout.flush().unwrap();
-        }
+        },
     );
 
     stdout.execute(cursor::Show).unwrap();

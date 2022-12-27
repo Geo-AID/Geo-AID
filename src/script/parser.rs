@@ -1,4 +1,8 @@
-use std::{fmt::Debug, iter::Peekable, rc::Rc};
+use std::{
+    fmt::{Debug, Display},
+    iter::Peekable,
+    rc::Rc,
+};
 
 use crate::span;
 
@@ -670,6 +674,8 @@ impl Parse for Expression {
                 None => break,
             };
 
+            it.next();
+
             expr = dispatch_order(expr, op, Punctuated::parse(it, context)?);
         }
 
@@ -795,7 +801,7 @@ impl Parse for SimpleExpression {
     }
 }
 
-impl<T: Parse + Debug, U: Parse> Parse for Punctuated<T, U> {
+impl<T: Parse, U: Parse> Parse for Punctuated<T, U> {
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
         it: &mut Peekable<I>,
         context: &CompileContext,
@@ -890,7 +896,7 @@ impl Parse for RuleOperator {
                             definition: Rc::clone(definition),
                         }))
                     } else {
-                        Err(Error::undefined_operator(name.clone()))
+                        Err(Error::undefined_rule_operator(name.clone()))
                     }
                 }
                 Token::Exclamation(excl) => Ok(RuleOperator::Inverted(InvertedRuleOperator {
@@ -1121,15 +1127,17 @@ impl<T: Parse> Parse for Box<T> {
     }
 }
 
-impl<T: GetType + Parse, U> GetType for Punctuated<T, U> {
+impl<T: GetType + Parse, U: Parse> GetType for Punctuated<T, U> {
     fn get_type(&self, context: &CompileContext) -> Result<Type, Error> {
         let t = self.first.get_type(context)?;
 
         for (_, v) in &self.collection {
             v.match_type(context, &t).map_err(|err| match err {
-                Error::InvalidType { expected, got } => {
-                    Error::inconsistent_types(expected, self.first.get_span(), got.0, got.1)
-                }
+                Error::InvalidType { expected, got } => Error::InconsistentTypes {
+                    expected: (expected, Box::new(self.first.get_span())),
+                    got: (got.0, Box::new(got.1)),
+                    error_span: Box::new(self.get_span()),
+                },
                 err => err,
             })?;
         }
@@ -1185,6 +1193,24 @@ pub enum Type {
     Defined,
     /// undefined, unknown
     Undefined,
+}
+
+impl Display for Type {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Type::Predefined(pre) => match pre {
+                PredefinedType::Point => write!(f, "Point"),
+                PredefinedType::Line => write!(f, "Line"),
+                PredefinedType::Scalar(unit) => match unit {
+                    Some(unit) => write!(f, "Scalar ({unit})"),
+                    None => write!(f, "Scalar (no unit)"),
+                },
+                PredefinedType::PointCollection(l) => write!(f, "Point collection ({l})"),
+            },
+            Type::Defined => write!(f, "Defined"),
+            Type::Undefined => write!(f, "Undefined"),
+        }
+    }
 }
 
 impl Type {
@@ -1259,7 +1285,10 @@ impl GetType for Expression {
         if vt.can_cast(t) {
             Ok(())
         } else {
-            Err(Error::invalid_type(t.clone(), vt, self.get_span()))
+            Err(Error::InvalidType {
+                expected: t.clone(),
+                got: (vt, self.get_span()),
+            })
         }
     }
 }
@@ -1306,7 +1335,10 @@ impl GetType for SimpleExpression {
         if vt.can_cast(t) {
             Ok(())
         } else {
-            Err(Error::invalid_type(t.clone(), vt, self.get_span()))
+            Err(Error::InvalidType {
+                expected: t.clone(),
+                got: (vt, self.get_span()),
+            })
         }
     }
 }

@@ -284,7 +284,7 @@ impl Generator {
         maximum_adjustment: f64,
         mean_count: usize,
         max_mean: f64,
-        mut cyclic: P
+        mut cyclic: P,
     ) {
         let magnitudes = self.bake_magnitudes(maximum_adjustment);
         let mut last_deltas = VecDeque::new();

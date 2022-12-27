@@ -1,12 +1,15 @@
 use std::{
+    fmt::Display,
     hash::Hash,
     ops::{Deref, DerefMut, Div, Mul},
     rc::Rc,
     sync::Arc,
 };
 
+use crate::cli::{AnnotationKind, DiagnosticData};
+
+use self::parser::Type;
 use self::token::{NamedIdent, Span, Token};
-use self::{parser::Type, token::PointCollection};
 
 mod builtins;
 pub mod compile;
@@ -22,17 +25,24 @@ pub enum Error {
     },
     InvalidCharacter {
         character: char,
+        error_span: Span,
     },
     EndOfInput,
-    UndefinedOperator {
+    UndefinedRuleOperator {
         operator: NamedIdent,
     },
     InconsistentIterators {
-        span: Span,
+        first_span: Span,
+        first_length: usize,
+        occured_span: Span,
+        occured_length: usize,
+        error_span: Span,
     },
     InconsistentTypes {
-        expected: (Type, Span),
-        got: (Type, Span),
+        // boxes here to reduce size
+        expected: (Type, Box<Span>),
+        got: (Type, Box<Span>),
+        error_span: Box<Span>,
     },
     InvalidType {
         expected: Type,
@@ -42,10 +52,6 @@ pub enum Error {
         defined_at: Span,
         error_span: Span,
         variable_name: String,
-    },
-    CollectionNotInfered {
-        error_span: Span,
-        collection: PointCollection,
     },
     UndefinedTypeVariable {
         definition: Span,
@@ -86,17 +92,38 @@ pub enum Error {
         got: (Type, Span),
         op: String,
     },
+    LetStatUnexpectedIterator {
+        var_span: Span,
+        error_span: Span,
+    },
 }
 
 impl Error {
+    #[must_use]
+    pub fn inconsistent_iterators_get_span(&self) -> Option<Span> {
+        match self {
+            Self::InconsistentIterators {
+                first_span: _,
+                first_length: _,
+                occured_span,
+                occured_length: _,
+                error_span: _,
+            } => Some(*occured_span),
+            _ => None,
+        }
+    }
+
     #[must_use]
     pub fn invalid_token(token: Token) -> Self {
         Self::InvalidToken { token }
     }
 
     #[must_use]
-    pub fn invalid_character(character: char) -> Self {
-        Self::InvalidCharacter { character }
+    pub fn invalid_character(character: char, error_span: Span) -> Self {
+        Self::InvalidCharacter {
+            character,
+            error_span,
+        }
     }
 
     #[must_use]
@@ -105,29 +132,8 @@ impl Error {
     }
 
     #[must_use]
-    pub fn undefined_operator(name: NamedIdent) -> Self {
-        Self::UndefinedOperator { operator: name }
-    }
-
-    #[must_use]
-    pub fn inconsistent_iterators(span: Span) -> Self {
-        Self::InconsistentIterators { span }
-    }
-
-    #[must_use]
-    pub fn inconsistent_types(expected: Type, exp_span: Span, got: Type, got_span: Span) -> Self {
-        Self::InconsistentTypes {
-            expected: (expected, exp_span),
-            got: (got, got_span),
-        }
-    }
-
-    #[must_use]
-    pub fn invalid_type(expected: Type, got: Type, got_span: Span) -> Self {
-        Self::InvalidType {
-            expected,
-            got: (got, got_span),
-        }
+    pub fn undefined_rule_operator(name: NamedIdent) -> Self {
+        Self::UndefinedRuleOperator { operator: name }
     }
 
     #[must_use]
@@ -140,24 +146,8 @@ impl Error {
     }
 
     #[must_use]
-    pub fn collection_not_infered(error_span: Span, collection: PointCollection) -> Self {
-        Self::CollectionNotInfered {
-            error_span,
-            collection,
-        }
-    }
-
-    #[must_use]
     pub fn undefined_type_variable(definition: Span) -> Self {
         Self::UndefinedTypeVariable { definition }
-    }
-
-    #[must_use]
-    pub fn undefined_variable(error_span: Span, variable_name: String) -> Self {
-        Self::UndefinedVariable {
-            error_span,
-            variable_name,
-        }
     }
 
     #[must_use]
@@ -205,6 +195,140 @@ impl Error {
             error_span,
             from,
             to,
+        }
+    }
+
+    #[must_use]
+    #[allow(clippy::too_many_lines)]
+    pub fn diagnostic(self) -> DiagnosticData {
+        match self {
+            Self::InvalidToken { token } => {
+                DiagnosticData::new(&format!("invalid token: `{token}`")).add_span(token.get_span())
+            }
+            Self::InvalidCharacter {
+                character,
+                error_span,
+            } => DiagnosticData::new(&format!("invalid character: `{character}`"))
+                .add_span(error_span),
+            Self::EndOfInput => DiagnosticData::new("unexpected end of input"),
+            Self::UndefinedRuleOperator { operator } => {
+                DiagnosticData::new(&format!("undefined rule operator: `{}`", operator.ident))
+                    .add_span(operator.span)
+            }
+            Self::InconsistentIterators {
+                first_span,
+                first_length,
+                occured_span,
+                occured_length,
+                error_span,
+            } => DiagnosticData::new(&"inconsitent iterator lengths")
+                .add_span(error_span)
+                .add_annotation(
+                    first_span,
+                    AnnotationKind::Note,
+                    &format!("First iterator with length {first_length} here."),
+                )
+                .add_annotation(
+                    occured_span,
+                    AnnotationKind::Note,
+                    &format!("Inconsistensy (iterator with length {occured_length}) here."),
+                ),
+            Self::InconsistentTypes {
+                expected,
+                got,
+                error_span,
+            } => DiagnosticData::new("inconsistent types")
+                .add_span(*error_span)
+                .add_annotation(
+                    *expected.1,
+                    AnnotationKind::Note,
+                    &format!("This expression is of type {}", expected.0),
+                )
+                .add_annotation(
+                    *got.1,
+                    AnnotationKind::Note,
+                    &format!("This expression is of type {}", got.0),
+                ),
+            Self::InvalidType { expected, got } => DiagnosticData::new(&format!(
+                "invalid type: `{expected}` expected, got `{}`",
+                got.0
+            ))
+            .add_span(got.1),
+            Self::RedefinedVariable {
+                defined_at,
+                error_span,
+                variable_name,
+            } => DiagnosticData::new(&format!("redefined variable: `{variable_name}`"))
+                .add_span(error_span)
+                .add_annotation(defined_at, AnnotationKind::Note, "First defined here.")
+                .add_annotation(error_span, AnnotationKind::Note, "Then redefined here."),
+            Self::UndefinedTypeVariable { definition } => {
+                DiagnosticData::new("variable of undefined type")
+                    .add_span(definition)
+                    .add_annotation(definition, AnnotationKind::Note, "Defined here.")
+            }
+            Self::UndefinedVariable {
+                error_span,
+                variable_name,
+            } => DiagnosticData::new(&format!("undefined variable: `{variable_name}`"))
+                .add_span(error_span),
+            Self::UndefinedFunction {
+                error_span,
+                function_name,
+            } => DiagnosticData::new(&format!("undefined function: `{function_name}`"))
+                .add_span(error_span),
+            Self::FetureNotSupported {
+                error_span,
+                feature_name,
+            } => {
+                DiagnosticData::new(&format!("feature `{feature_name}` of undefined type"))
+                    .add_span(error_span)
+            }
+            Self::InvalidArgumentCount {
+                error_span,
+                expected,
+                got,
+            } => {
+                DiagnosticData::new(&format!("invalid argument count. Expected one of `{expected:?}`, got {got}"))
+                    .add_span(error_span)
+            }
+            Self::OverloadNotFound {
+                error_span,
+                params,
+                function_name,
+            } => {
+                DiagnosticData::new(&format!("overload for function `{function_name}` with params `({})` not found", params.into_iter().map(|x| format!("{x}")).collect::<Vec<String>>().join(", ")))
+                    .add_span(error_span)
+            },
+            Self::CannotUnpack { error_span, ty } => {
+                DiagnosticData::new(&format!("could not unpack `{ty}` onto a point collection"))
+                    .add_span(error_span)
+            }
+            Self::ImplicitConversionDoesNotExist {
+                error_span,
+                from,
+                to,
+            } => {
+                DiagnosticData::new(&format!("implicit conversion from `{from}` to `{to}` does not exist."))
+                    .add_span(error_span)
+            }
+            Self::InvalidOperandType {
+                error_span,
+                got,
+                op,
+            } => {
+                DiagnosticData::new(&format!("invalid operand type `{}` for operator `{op}`", got.0))
+                    .add_span(error_span)
+                    .add_annotation(got.1, AnnotationKind::Note, "This is of invalid type.")
+            }
+            Self::LetStatUnexpectedIterator {
+                var_span,
+                error_span,
+            } => {
+                DiagnosticData::new(&"unexpected iterator in right-hand side of `let` statement")
+                    .add_span(error_span)
+                    .add_annotation(var_span, AnnotationKind::Note, "There was no iterator of left-hand side, so the same is expected for the right.")
+            }
         }
     }
 }
@@ -260,6 +384,42 @@ impl ComplexUnit {
         }
 
         Self(arr)
+    }
+}
+
+impl Display for ComplexUnit {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut s = String::new();
+
+        for i in 0..(SimpleUnit::Scalar as usize) {
+            if self.0[i] > 0 {
+                let name = match i {
+                    0 => "Distance",
+                    1 => "Point",
+                    2 => "Angle",
+                    3 => "Line",
+                    _ => unreachable!(),
+                };
+
+                if self.0[i] == 1 {
+                    s += name;
+                } else {
+                    s += &format!("{name}^{}", self.0[i]);
+                };
+
+                s += " * ";
+            }
+        }
+
+        if s.is_empty() {
+            write!(f, "no unit")
+        } else {
+            write!(
+                f,
+                "{}",
+                String::from_utf8(s.as_bytes()[0..(s.len() - 3)].to_vec()).unwrap()
+            )
+        }
     }
 }
 
