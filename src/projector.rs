@@ -1,3 +1,5 @@
+use serde::Serialize;
+
 use crate::{
     generator::{geometry, Complex, EvaluationError},
     script::figure::{Figure, LineDefinition, PointDefinition},
@@ -8,12 +10,15 @@ pub struct Blueprint {
     pub lines: Vec<RenderedLine>,
 }
 
+#[derive(Serialize)]
+#[serde(tag = "type")]
+#[serde(rename_all = "snake_case")]
 pub enum Rendered {
     Point(RenderedPoint),
     Line(RenderedLine),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub struct RenderedPoint {
     /// The point's label
     pub label: String,
@@ -21,6 +26,7 @@ pub struct RenderedPoint {
     pub position: Complex,
 }
 
+#[derive(Serialize)]
 pub struct RenderedLine {
     /// The line's label
     pub label: String,
