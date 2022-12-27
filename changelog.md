@@ -7,4 +7,5 @@
 - Refactorized svg.rs to optimize the rendering
 - Created the latex drawer
 - Completed the documentation as of now.
-- Added .json drawer
+- Added the .json drawer
+- Added the raw drawer
