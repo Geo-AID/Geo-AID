@@ -18,8 +18,7 @@ pub enum Rendered {
     Line(RenderedLine),
 }
 
-#[derive(Debug)]
-#[derive(Serialize)]
+#[derive(Debug, Serialize)]
 pub struct RenderedPoint {
     /// The point's label
     pub label: String,
