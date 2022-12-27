@@ -1237,10 +1237,14 @@ impl Type {
                         false
                     }
                 }
-                // A scalar with no defined unit can be cast into any other scalar.
-                PredefinedType::Scalar(None) => {
-                    matches!(into, Type::Predefined(PredefinedType::Scalar(_)))
-                }
+                // A scalar with no defined unit can be cast into any other scalar, except angle.
+                PredefinedType::Scalar(None) => match into {
+                    Type::Predefined(PredefinedType::Scalar(unit)) => match unit {
+                        Some(unit) => unit.0[3] == 0, // no angle
+                        None => true,
+                    },
+                    _ => false,
+                },
                 PredefinedType::PointCollection(l) => match into {
                     Type::Predefined(pre) => match pre {
                         PredefinedType::Point => *l == 1,

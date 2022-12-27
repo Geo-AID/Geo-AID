@@ -1,4 +1,4 @@
-use std::{fs::File, io::Write, path::PathBuf};
+use std::{fs::File, io::Write, path::Path};
 
 use serde::Serialize;
 
@@ -13,7 +13,7 @@ struct Data<'r> {
 
 /// # Panics
 /// Panics whenever there is a filesystem problem
-pub fn draw(target: &PathBuf, canvas_size: (usize, usize), rendered: &Vec<Rendered>) {
+pub fn draw(target: &Path, canvas_size: (usize, usize), rendered: &Vec<Rendered>) {
     let mut content = String::new();
     let data = Data {
         width: canvas_size.0,
@@ -22,6 +22,6 @@ pub fn draw(target: &PathBuf, canvas_size: (usize, usize), rendered: &Vec<Render
     };
     content += (serde_json::to_string(&data).unwrap()).as_str();
 
-    let mut file = File::create(&target).unwrap();
+    let mut file = File::create(target).unwrap();
     file.write_all(content.as_bytes()).unwrap();
 }

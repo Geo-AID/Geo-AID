@@ -131,7 +131,7 @@ GeoScript has implicit conversions defined for some types:
 - A scalar with no specified type can be automatically converted into a scalar of any type.
 
 ## Scalars
-Scalars are real numbers with a defined or not defined unit. Any number literal is by default a unitless scalar (not a dimensionless). Only unitless scalars can be freely converted into any other unit. The units of GeoScript are:
+Scalars are real numbers with a defined or not defined unit. Any number literal is by default a unitless scalar (not a dimensionless). Only unitless scalars can be freely converted into any other unit (except angless to avoid confusing radians with degrees). The units of GeoScript are:
 - Distance
 - Angle
 - Scalar (dimensionless)

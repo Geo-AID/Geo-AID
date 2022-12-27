@@ -113,6 +113,19 @@ fn compile_expression(
             compile_expression(v1, variables, expressions, point_index),
             compile_expression(v2, variables, expressions, point_index),
         ))),
+        UnrolledExpressionData::ThreePointAngle(v1, v2, v3) => {
+            Arc::new(Weighed::one(Expression::AnglePoint(
+                compile_expression(v1, variables, expressions, point_index),
+                compile_expression(v2, variables, expressions, point_index),
+                compile_expression(v3, variables, expressions, point_index),
+            )))
+        }
+        UnrolledExpressionData::TwoLineAngle(v1, v2) => {
+            Arc::new(Weighed::one(Expression::AngleLine(
+                compile_expression(v1, variables, expressions, point_index),
+                compile_expression(v2, variables, expressions, point_index),
+            )))
+        }
     };
 
     // We insert for memory.

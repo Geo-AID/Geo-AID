@@ -27,7 +27,7 @@ fn dst_function_dst_convertible() -> UnrolledExpression {
 fn dst_function_scalar() -> UnrolledExpression {
     UnrolledExpression {
         ty: Type::Predefined(PredefinedType::Scalar(Some(ComplexUnit::new(
-            SimpleUnit::Scalar,
+            SimpleUnit::Distance,
         )))),
         span: span!(0, 0, 0, 0),
         data: Rc::new(UnrolledExpressionData::SetUnit(

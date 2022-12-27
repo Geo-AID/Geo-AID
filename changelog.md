@@ -9,5 +9,8 @@
 - Completed the documentation as of now.
 - Added a Command Line Interface
 - Pretty error printing
-- Added the .json drawer
+- Added the JSON drawer
 - Added the raw drawer
+- Added angle support
+- Fixed draw signatures
+- Added benchmarking for generation

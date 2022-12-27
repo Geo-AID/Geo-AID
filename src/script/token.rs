@@ -57,7 +57,7 @@ let ABC = Triangle;
                     span: span!(2, 9, 2, 12),
                     integral: 5,
                     decimal: 5,
-                    decimal_places: 2,
+                    decimal_places: 1,
                     dot: Some(Dot {
                         span: span!(2, 10, 2, 11)
                     })

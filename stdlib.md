@@ -34,6 +34,14 @@ Returns a free point that is later adjusted by the generator.
 **Returns**
 The converted input.
 
+### dst(scalar)
+
+**Params**
+1. A dimensionless scalar
+
+**Returns**
+The converted input.
+
 #### dst(point, point)
 **Params**
 Two points.
@@ -47,3 +55,33 @@ A line and a point, any order.
 
 **Returns**
 The distance between them.
+
+### angle(point, point, point)
+**Params**
+Three points.
+
+**Returns**
+The angle between arms given by (point 2 to point 1) and (point 2 to point 3).
+
+### angle(line, line)
+**Params**
+Two lines.
+
+**Returns**
+The angle between the lines.
+
+### degrees(scalar)
+
+**Params**
+1. A dimensionless scalar
+
+**Returns**
+The converted input as an angle.
+
+### radians(scalar)
+
+**Params**
+1. A dimensionless scalar
+
+**Returns**
+The converted input as an angle.

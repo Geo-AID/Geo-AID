@@ -83,7 +83,7 @@ fn main() {
 
     stdout.execute(cursor::Hide).unwrap();
 
-    gen.cycle_until_mean_delta(
+    let duration = gen.cycle_until_mean_delta(
         args.adjustment_max,
         args.mean_count,
         args.delta_max_mean,
@@ -124,7 +124,8 @@ fn main() {
     // }
 
     println!(
-        "Finished rendering with total quality {:.2}%.",
-        gen.get_total_quality() * 100.0
+        "Finished rendering with total quality {:.2}% in {:.2} seconds.",
+        gen.get_total_quality() * 100.0,
+        duration.as_secs_f64()
     );
 }
