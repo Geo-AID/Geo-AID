@@ -1,4 +1,4 @@
-use std::{fs::File, io::Write};
+use std::{fs::File, io::Write, path::PathBuf};
 
 use crate::projector::Rendered;
 
@@ -6,7 +6,7 @@ use crate::projector::Rendered;
 ///
 /// # Panics
 /// Panics whenever there is a filesystem related problem.
-pub fn draw(target: &str, canvas_size: (usize, usize), rendered: Vec<Rendered>) {
+pub fn draw(target: &PathBuf, canvas_size: (usize, usize), rendered: &Vec<Rendered>) {
     // We must allow losing precision here.
     #[allow(clippy::cast_precision_loss)]
     let scale = f64::min(20.0 / canvas_size.0 as f64, 20.0 / canvas_size.1 as f64);

@@ -46,6 +46,7 @@ pub enum VariableMeta {
     Point(Point),
     Scalar,
     Line,
+    PointCollection,
     /// Properties for user-defined types.
     Properties,
 }
@@ -74,11 +75,10 @@ impl GetType for Variable {
         if &vartype == t {
             Ok(())
         } else {
-            Err(Error::invalid_type(
-                t.clone(),
-                vartype,
-                self.definition_span,
-            ))
+            Err(Error::InvalidType {
+                expected: t.clone(),
+                got: (vartype, self.definition_span),
+            })
         }
     }
 }
@@ -154,20 +154,22 @@ pub struct CompileContext {
 ///
 /// # Errors
 /// Returns an error if the iterators are of different lengths.
-fn check_expression_iterators(expr: &Expression) -> Result<usize, Error> {
+fn check_expression_iterators(
+    expr: &Expression,
+    full_span: Span,
+) -> Result<Option<(usize, Span)>, Error> {
     match expr {
         Expression::Simple(s) => match s.collection.len() {
-            0 => check_simple_iterators(&s.first),
-            l => Ok(l + 1),
+            0 => check_simple_iterators(&s.first, full_span),
+            l => Ok(Some((l + 1, s.get_span()))),
         },
-        Expression::Binop(e) => {
-            let iters = check_expression_iterators(&e.lhs)?;
-            if check_expression_iterators_hint(&e.rhs, iters) {
-                Ok(iters)
-            } else {
-                Err(Error::inconsistent_iterators(expr.get_span()))
+        Expression::Binop(e) => match check_expression_iterators(&e.lhs, full_span)? {
+            Some((hint, hint_span)) => {
+                match_expression_iterators(&e.rhs, hint, hint_span, full_span)
+                    .map(|_| Some((hint, hint_span)))
             }
-        }
+            None => check_expression_iterators(&e.rhs, full_span),
+        },
     }
 }
 
@@ -175,20 +177,21 @@ fn check_expression_iterators(expr: &Expression) -> Result<usize, Error> {
 ///
 /// # Errors
 /// Returns an error if the iterators are of different lengths.
-fn check_simple_iterators(expr: &SimpleExpression) -> Result<usize, Error> {
+fn check_simple_iterators(
+    expr: &SimpleExpression,
+    full_span: Span,
+) -> Result<Option<(usize, Span)>, Error> {
     match expr {
-        SimpleExpression::Number(_) | SimpleExpression::Ident(_) => Ok(1),
+        SimpleExpression::Number(_) | SimpleExpression::Ident(_) => Ok(None),
         SimpleExpression::Call(e) => {
-            let mut iters = 1;
+            let mut iters = None;
 
             if let Some(params) = &e.params {
                 for param in params.iter() {
                     match iters {
-                        1 => iters = check_expression_iterators(param)?,
-                        _ => {
-                            if !check_expression_iterators_hint(param, iters) {
-                                return Err(Error::inconsistent_iterators(param.get_span()));
-                            }
+                        None => iters = check_expression_iterators(param, full_span)?,
+                        Some((hint, hint_span)) => {
+                            match_expression_iterators(param, hint, hint_span, full_span)?;
                         }
                     }
                 }
@@ -196,43 +199,67 @@ fn check_simple_iterators(expr: &SimpleExpression) -> Result<usize, Error> {
 
             Ok(iters)
         }
-        SimpleExpression::Unop(e) => check_simple_iterators(e.rhs.as_ref()),
-        SimpleExpression::Parenthised(p) => check_expression_iterators(p.content.as_ref()),
+        SimpleExpression::Unop(e) => check_simple_iterators(e.rhs.as_ref(), full_span),
+        SimpleExpression::Parenthised(p) => {
+            check_expression_iterators(p.content.as_ref(), full_span)
+        }
     }
 }
 
 /// Checks if all iterators are of given length.
-fn check_simple_iterators_hint(expr: &SimpleExpression, hint: usize) -> bool {
+fn match_simple_iterators(
+    expr: &SimpleExpression,
+    hint: usize,
+    hint_span: Span,
+    full_span: Span,
+) -> Result<(), Error> {
     match expr {
-        SimpleExpression::Number(_) | SimpleExpression::Ident(_) => true,
+        SimpleExpression::Number(_) | SimpleExpression::Ident(_) => Ok(()),
         SimpleExpression::Call(e) => {
             if let Some(params) = &e.params {
                 for param in params.iter() {
-                    if !check_expression_iterators_hint(param.as_ref(), hint) {
-                        return false;
-                    }
+                    match_expression_iterators(param.as_ref(), hint, hint_span, full_span)?;
                 }
             }
 
-            true
+            Ok(())
         }
-        SimpleExpression::Unop(e) => check_simple_iterators_hint(e.rhs.as_ref(), hint),
+        SimpleExpression::Unop(e) => {
+            match_simple_iterators(e.rhs.as_ref(), hint, hint_span, full_span)
+        }
         SimpleExpression::Parenthised(e) => {
-            check_expression_iterators_hint(e.content.as_ref(), hint)
+            match_expression_iterators(e.content.as_ref(), hint, hint_span, full_span)
         }
     }
 }
 
 /// Checks if all iterators are of given length.
-fn check_expression_iterators_hint(expr: &Expression, hint: usize) -> bool {
+fn match_expression_iterators(
+    expr: &Expression,
+    hint: usize,
+    hint_span: Span,
+    full_span: Span,
+) -> Result<(), Error> {
     match expr {
         Expression::Simple(s) => match s.collection.len() {
-            0 => check_simple_iterators_hint(&s.first, hint),
-            l => l + 1 == hint,
+            0 => match_simple_iterators(&s.first, hint, hint_span, full_span),
+            l => {
+                if l + 1 == hint {
+                    Ok(())
+                } else {
+                    Err(Error::InconsistentIterators {
+                        first_span: hint_span,
+                        first_length: hint,
+                        occured_span: s.get_span(),
+                        occured_length: l + 1,
+                        error_span: full_span,
+                    })
+                }
+            }
         },
         Expression::Binop(e) => {
-            check_expression_iterators_hint(e.lhs.as_ref(), hint)
-                && check_expression_iterators_hint(e.rhs.as_ref(), hint)
+            match_expression_iterators(e.lhs.as_ref(), hint, hint_span, full_span)?;
+            match_expression_iterators(e.rhs.as_ref(), hint, hint_span, full_span)
         }
     }
 }
@@ -594,7 +621,10 @@ fn unroll_simple(
         SimpleExpression::Ident(i) => match i {
             Ident::Named(named) => {
                 let var = context.variables.get(&named.ident).ok_or_else(|| {
-                    Error::undefined_variable(expr.get_span(), named.ident.clone())
+                    Error::UndefinedVariable {
+                        error_span: expr.get_span(),
+                        variable_name: named.ident.clone(),
+                    }
                 })?;
 
                 UnrolledExpression {
@@ -611,10 +641,10 @@ fn unroll_simple(
                         .map(|(letter, primes)| {
                             match context.points.get(&construct_point_id(*letter, *primes)) {
                                 Some(var) => Ok(Rc::clone(var)),
-                                None => Err(Error::undefined_variable(
-                                    col.span,
-                                    construct_point_name(*letter, *primes),
-                                )),
+                                None => Err(Error::UndefinedVariable {
+                                    error_span: col.span,
+                                    variable_name: construct_point_name(*letter, *primes),
+                                }),
                             }
                         })
                         .collect::<Result<Vec<Rc<Variable>>, Error>>()?,
@@ -662,10 +692,7 @@ fn unroll_simple(
                     ));
                 }
             } else {
-                return Err(Error::undefined_function(
-                    e.get_span(),
-                    e.name.ident.clone(),
-                ));
+                return Err(Error::undefined_function(e.name.span, e.name.ident.clone()));
             }
         }
         SimpleExpression::Unop(op) => {
@@ -897,18 +924,7 @@ fn create_variable_named(
                             if *l == 1 {
                                 VariableMeta::Point(Point { meta: None })
                             } else {
-                                return Err(Error::collection_not_infered(
-                                    stat.get_span(),
-                                    stat.expr
-                                        .as_simple()
-                                        .unwrap()
-                                        .first
-                                        .as_ident()
-                                        .unwrap()
-                                        .as_collection()
-                                        .unwrap()
-                                        .clone(),
-                                ));
+                                VariableMeta::PointCollection
                             }
                         }
                     },
@@ -1019,8 +1035,23 @@ fn unroll_let(
 ) -> Result<(), Error> {
     let max_iter_len = stat.ident.len();
 
-    if !check_expression_iterators_hint(&stat.expr, max_iter_len) {
-        return Err(Error::inconsistent_iterators(stat.expr.get_span()));
+    match match_expression_iterators(
+        &stat.expr,
+        max_iter_len,
+        stat.ident.get_span(),
+        stat.ident.get_span().join(stat.expr.get_span()),
+    ) {
+        Ok(_) => (),
+        Err(err) => {
+            if max_iter_len == 1 {
+                return Err(Error::LetStatUnexpectedIterator {
+                    var_span: stat.ident.get_span(),
+                    error_span: err.inconsistent_iterators_get_span().unwrap(),
+                });
+            }
+
+            return Err(err);
+        }
     }
 
     let (variables, rhs_type) = create_variables(stat, context)?;
@@ -1045,25 +1076,32 @@ fn unroll_let(
             },
         };
 
-        let mut max_iter_len = max_iter_len;
+        let mut max_iter_len = match max_iter_len {
+            1 => None,
+            l => Some((l, stat.ident.get_span())),
+        };
 
         for (rule, expr) in &stat.rules {
             match max_iter_len {
-                1 => max_iter_len = check_expression_iterators(expr)?,
-                _ => {
-                    if !check_expression_iterators_hint(expr, max_iter_len) {
-                        return Err(Error::inconsistent_iterators(expr.get_span()));
-                    }
+                None => max_iter_len = check_expression_iterators(expr, stat.get_span())?,
+                Some((hint, hint_span)) => {
+                    match_expression_iterators(expr, hint, hint_span, stat.get_span())?;
                 }
             }
 
-            for i in 0..max_iter_len {
+            let l = match max_iter_len {
+                None => 1,
+                Some((hint, _)) => hint,
+            };
+
+            for i in 0..l {
                 unroll_rule(
                     lhs_unrolled.clone(),
                     rule,
                     unroll_expression(expr, context, i)?,
                     context,
                     unrolled,
+                    stat.get_span(),
                 )?;
             }
         }
@@ -1091,9 +1129,7 @@ fn unroll_let(
             .collect();
 
         for (rule, expr) in &stat.rules {
-            if !check_expression_iterators_hint(expr, max_iter_len) {
-                return Err(Error::inconsistent_iterators(expr.get_span()));
-            }
+            match_expression_iterators(expr, max_iter_len, stat.ident.get_span(), stat.get_span())?;
 
             for (i, lhs) in lhs_unrolled.iter().enumerate() {
                 unroll_rule(
@@ -1102,6 +1138,7 @@ fn unroll_let(
                     unroll_expression(expr, context, i)?,
                     context,
                     unrolled,
+                    stat.get_span(),
                 )?;
             }
         }
@@ -1114,6 +1151,7 @@ fn unroll_eq(
     lhs: UnrolledExpression,
     rhs: UnrolledExpression,
     unrolled: &mut Vec<UnrolledRule>,
+    full_span: Span,
 ) -> Result<(), Error> {
     if lhs.ty == Type::Predefined(PredefinedType::PointCollection(2))
         && rhs.ty == Type::Predefined(PredefinedType::PointCollection(2))
@@ -1146,8 +1184,9 @@ fn unroll_eq(
             lhs = unroll_implicit_conversion(lhs, &rhs.ty)?;
         } else {
             return Err(Error::InconsistentTypes {
-                expected: (lhs.ty, lhs.span),
-                got: (rhs.ty, rhs.span),
+                expected: (lhs.ty, Box::new(lhs.span)),
+                got: (rhs.ty, Box::new(rhs.span)),
+                error_span: Box::new(full_span),
             });
         }
 
@@ -1166,6 +1205,7 @@ fn unroll_gt(
     lhs: UnrolledExpression,
     rhs: UnrolledExpression,
     unrolled: &mut Vec<UnrolledRule>,
+    full_span: Span,
 ) -> Result<(), Error> {
     let left_unit = match &lhs.ty {
         Type::Predefined(PredefinedType::Scalar(Some(unit))) => Some(unit.clone()),
@@ -1175,7 +1215,7 @@ fn unroll_gt(
         }
         _ => {
             return Err(Error::InvalidOperandType {
-                error_span: lhs.span.join(rhs.span),
+                error_span: full_span,
                 got: (lhs.ty.clone(), lhs.span),
                 op: String::from(">"),
             })
@@ -1203,8 +1243,9 @@ fn unroll_gt(
             });
         } else {
             return Err(Error::InconsistentTypes {
-                expected: (lhs.ty, lhs.span),
-                got: (rhs.ty, rhs.span),
+                expected: (lhs.ty, Box::new(lhs.span)),
+                got: (rhs.ty, Box::new(rhs.span)),
+                error_span: Box::new(full_span),
             });
         }
     } else {
@@ -1256,6 +1297,7 @@ fn unroll_lt(
     lhs: UnrolledExpression,
     rhs: UnrolledExpression,
     unrolled: &mut Vec<UnrolledRule>,
+    full_span: Span,
 ) -> Result<(), Error> {
     let left_unit = match &lhs.ty {
         Type::Predefined(PredefinedType::Scalar(Some(unit))) => Some(unit.clone()),
@@ -1293,8 +1335,9 @@ fn unroll_lt(
             });
         } else {
             return Err(Error::InconsistentTypes {
-                expected: (lhs.ty, lhs.span),
-                got: (rhs.ty, rhs.span),
+                expected: (lhs.ty, Box::new(lhs.span)),
+                got: (rhs.ty, Box::new(rhs.span)),
+                error_span: Box::new(full_span),
             });
         }
     } else {
@@ -1306,7 +1349,7 @@ fn unroll_lt(
             }
             _ => {
                 return Err(Error::InvalidOperandType {
-                    error_span: lhs.span.join(rhs.span),
+                    error_span: full_span,
                     got: (rhs.ty.clone(), rhs.span),
                     op: String::from("<"),
                 })
@@ -1348,9 +1391,10 @@ fn unroll_invert(
     rhs: UnrolledExpression,
     context: &mut CompileContext,
     unrolled: &mut Vec<UnrolledRule>,
+    full_span: Span,
 ) -> Result<(), Error> {
     let mut unrolled_content = Vec::new();
-    unroll_rule(lhs, op, rhs, context, &mut unrolled_content)?;
+    unroll_rule(lhs, op, rhs, context, &mut unrolled_content, full_span)?;
 
     unrolled.extend(unrolled_content.into_iter().map(|mut x| {
         x.inverted = !x.inverted;
@@ -1364,9 +1408,10 @@ fn unroll_gteq(
     lhs: UnrolledExpression,
     rhs: UnrolledExpression,
     unrolled: &mut Vec<UnrolledRule>,
+    full_span: Span,
 ) -> Result<(), Error> {
     let mut unrolled_content = Vec::new();
-    unroll_lt(lhs, rhs, &mut unrolled_content)?;
+    unroll_lt(lhs, rhs, &mut unrolled_content, full_span)?;
 
     unrolled.extend(unrolled_content.into_iter().map(|mut x| {
         x.inverted = !x.inverted;
@@ -1380,9 +1425,10 @@ fn unroll_lteq(
     lhs: UnrolledExpression,
     rhs: UnrolledExpression,
     unrolled: &mut Vec<UnrolledRule>,
+    full_span: Span,
 ) -> Result<(), Error> {
     let mut unrolled_content = Vec::new();
-    unroll_gt(lhs, rhs, &mut unrolled_content)?;
+    unroll_gt(lhs, rhs, &mut unrolled_content, full_span)?;
 
     unrolled.extend(unrolled_content.into_iter().map(|mut x| {
         x.inverted = !x.inverted;
@@ -1398,20 +1444,23 @@ fn unroll_rule(
     rhs: UnrolledExpression,
     context: &mut CompileContext,
     unrolled: &mut Vec<UnrolledRule>,
+    full_span: Span,
 ) -> Result<(), Error> {
     match op {
         RuleOperator::Predefined(pre) => match pre {
-            PredefinedRuleOperator::Eq(_) => unroll_eq(lhs, rhs, unrolled),
-            PredefinedRuleOperator::Lt(_) => unroll_lt(lhs, rhs, unrolled),
-            PredefinedRuleOperator::Gt(_) => unroll_gt(lhs, rhs, unrolled),
-            PredefinedRuleOperator::Lteq(_) => unroll_lteq(lhs, rhs, unrolled),
-            PredefinedRuleOperator::Gteq(_) => unroll_gteq(lhs, rhs, unrolled),
+            PredefinedRuleOperator::Eq(_) => unroll_eq(lhs, rhs, unrolled, full_span),
+            PredefinedRuleOperator::Lt(_) => unroll_lt(lhs, rhs, unrolled, full_span),
+            PredefinedRuleOperator::Gt(_) => unroll_gt(lhs, rhs, unrolled, full_span),
+            PredefinedRuleOperator::Lteq(_) => unroll_lteq(lhs, rhs, unrolled, full_span),
+            PredefinedRuleOperator::Gteq(_) => unroll_gteq(lhs, rhs, unrolled, full_span),
         },
         RuleOperator::Defined(_) => Err(Error::feature_not_supported(
             op.get_span(),
             "custom_rule_operators",
         )),
-        RuleOperator::Inverted(op) => unroll_invert(lhs, &op.operator, rhs, context, unrolled),
+        RuleOperator::Inverted(op) => {
+            unroll_invert(lhs, &op.operator, rhs, context, unrolled, full_span)
+        }
     }
 }
 
@@ -1420,51 +1469,60 @@ fn unroll_rulestat(
     context: &mut CompileContext,
     unrolled: &mut Vec<UnrolledRule>,
 ) -> Result<(), Error> {
-    let max_iter_len = check_expression_iterators(&rule.lhs)?;
+    let max_iter_len = check_expression_iterators(&rule.lhs, rule.get_span())?;
 
     match max_iter_len {
-        1 => {
+        None => {
             // There is no iterator in lhs.
             let lhs_unrolled = unroll_expression(&rule.lhs, context, 0)?;
 
-            for i in 0..check_expression_iterators(&rule.rhs)? {
+            for i in 0..check_expression_iterators(&rule.rhs, rule.get_span())?.map_or(1, |x| x.0) {
                 unroll_rule(
                     lhs_unrolled.clone(),
                     &rule.op,
                     unroll_expression(&rule.rhs, context, i)?,
                     context,
                     unrolled,
+                    rule.get_span(),
                 )?;
             }
         }
-        _ => {
+        Some((hint, hint_span)) => {
             // There is an iterator in lhs.
-            match check_expression_iterators(&rule.rhs)? {
-                1 => {
+            match check_expression_iterators(&rule.rhs, rule.get_span())? {
+                None => {
                     let rhs_unrolled = unroll_expression(&rule.rhs, context, 0)?;
 
-                    for i in 0..max_iter_len {
+                    for i in 0..hint {
                         unroll_rule(
                             unroll_expression(&rule.lhs, context, i)?,
                             &rule.op,
                             rhs_unrolled.clone(),
                             context,
                             unrolled,
+                            rule.get_span(),
                         )?;
                     }
                 }
-                l => {
-                    if l != max_iter_len {
-                        return Err(Error::inconsistent_iterators(rule.rhs.get_span()));
+                Some((rhs_hint, rspan)) => {
+                    if rhs_hint != hint {
+                        return Err(Error::InconsistentIterators {
+                            first_span: hint_span,
+                            first_length: hint,
+                            occured_span: rspan,
+                            occured_length: rhs_hint,
+                            error_span: rule.get_span(),
+                        });
                     }
 
-                    for i in 0..max_iter_len {
+                    for i in 0..hint {
                         unroll_rule(
                             unroll_expression(&rule.lhs, context, i)?,
                             &rule.op,
                             unroll_expression(&rule.rhs, context, i)?,
                             context,
                             unrolled,
+                            rule.get_span(),
                         )?;
                     }
                 }

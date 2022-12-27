@@ -277,14 +277,16 @@ impl Generator {
     }
 
     /// Performs generation cycles until the mean delta from the last `mean_count` deltas becomes less or equal to `max_mean`.
+    /// Executes `cyclic` after the end of each cycle.
     ///
     /// # Panics
     /// Panics if there are multithreading issues (there has been a panic in one of the generation threads).
-    pub fn cycle_until_mean_delta(
+    pub fn cycle_until_mean_delta<P: FnMut(f64)>(
         &mut self,
         maximum_adjustment: f64,
         mean_count: usize,
         max_mean: f64,
+        mut cyclic: P,
     ) {
         let magnitudes = self.bake_magnitudes(maximum_adjustment);
         let mut last_deltas = VecDeque::new();
@@ -305,6 +307,8 @@ impl Generator {
             let dropped_delta = last_deltas.pop_front().unwrap();
             mean_delta = (mean_delta * mean_count_f - dropped_delta + self.delta) / mean_count_f;
             last_deltas.push_back(self.delta);
+
+            cyclic(current_quality);
         }
     }
 

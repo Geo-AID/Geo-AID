@@ -6,7 +6,7 @@ use super::{
     unroll::{
         self, UnrolledExpression, UnrolledExpressionData, UnrolledRule, UnrolledRuleKind, Variable,
     },
-    Criteria, CriteriaKind, Error, Expression, HashableRc, Weighed,
+    ComplexUnit, Criteria, CriteriaKind, Error, Expression, HashableRc, SimpleUnit, Weighed,
 };
 
 /// Takes the unrolled expression of type `PointCollection` and takes the point at `index`, isolating it out of the entire expression.
@@ -53,7 +53,7 @@ fn compile_expression(
                 .as_scalar()
                 .unwrap()
                 .as_ref()
-                .unwrap()
+                .unwrap_or(&ComplexUnit::new(SimpleUnit::Scalar))
                 .clone(),
         ))),
         UnrolledExpressionData::FreePoint => {
