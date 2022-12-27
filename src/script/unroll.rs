@@ -290,6 +290,8 @@ pub enum UnrolledExpressionData {
     Subtract(UnrolledExpression, UnrolledExpression),
     Multiply(UnrolledExpression, UnrolledExpression),
     Divide(UnrolledExpression, UnrolledExpression),
+    ThreePointAngle(UnrolledExpression, UnrolledExpression, UnrolledExpression),
+    TwoLineAngle(UnrolledExpression, UnrolledExpression),
 }
 
 impl Display for UnrolledExpressionData {
@@ -319,6 +321,10 @@ impl Display for UnrolledExpressionData {
             UnrolledExpressionData::Multiply(e1, e2) => write!(f, "{e1} * {e2}"),
             UnrolledExpressionData::Divide(e1, e2) => write!(f, "{e1} / {e2}"),
             UnrolledExpressionData::Subtract(e1, e2) => write!(f, "{e1} - {e2}"),
+            UnrolledExpressionData::ThreePointAngle(e1, e2, e3) => {
+                write!(f, "angle({e1}, {e2}, {e3})")
+            }
+            UnrolledExpressionData::TwoLineAngle(e1, e2) => write!(f, "angle({e1}, {e2})"),
         }
     }
 }
@@ -430,6 +436,17 @@ fn unroll_parameters(
                 unroll_parameters(e1, params),
                 unroll_parameters(e2, params),
             ),
+            UnrolledExpressionData::ThreePointAngle(e1, e2, e3) => {
+                UnrolledExpressionData::ThreePointAngle(
+                    unroll_parameters(e1, params),
+                    unroll_parameters(e2, params),
+                    unroll_parameters(e3, params),
+                )
+            }
+            UnrolledExpressionData::TwoLineAngle(e1, e2) => UnrolledExpressionData::TwoLineAngle(
+                unroll_parameters(e1, params),
+                unroll_parameters(e2, params),
+            ),
         }),
     }
 }
@@ -490,7 +507,7 @@ fn unroll_pc_conversion(
     }
 }
 
-/// Unrolls the conversion of the given expression to a scalar type.
+/// Unrolls the conversion of the given expression of type scalar(none) to a scalar type.
 fn unroll_conversion_to_scalar(
     expr: &UnrolledExpression,
     to: &Type,
@@ -567,7 +584,9 @@ fn unroll_conversion_to_scalar(
         | UnrolledExpressionData::LineFromPoints(_, _)
         | UnrolledExpressionData::SetUnit(_, _)
         | UnrolledExpressionData::PointPointDistance(_, _)
-        | UnrolledExpressionData::PointLineDistance(_, _) => unreachable!(
+        | UnrolledExpressionData::PointLineDistance(_, _)
+        | UnrolledExpressionData::ThreePointAngle(_, _, _)
+        | UnrolledExpressionData::TwoLineAngle(_, _) => unreachable!(
             "This data should not be of type scalar(none) and yet is: {:#?}",
             expr.data
         ),
@@ -586,14 +605,27 @@ fn unroll_implicit_conversion(
             Type::Predefined(pre) => match pre {
                 PredefinedType::PointCollection(l) => unroll_pc_conversion(&expr, to, *l),
                 PredefinedType::Scalar(None) => {
-                    if matches!(to, Type::Predefined(PredefinedType::Scalar(_))) {
-                        unroll_conversion_to_scalar(&expr, to)
-                    } else {
-                        Err(Error::implicit_conversion_does_not_exist(
+                    match to {
+                        Type::Predefined(PredefinedType::Scalar(unit)) => match unit {
+                            Some(unit) => {
+                                if unit.0[3] == 0 {
+                                    // no angle
+                                    unroll_conversion_to_scalar(&expr, to)
+                                } else {
+                                    Err(Error::implicit_conversion_does_not_exist(
+                                        expr.span,
+                                        expr.ty,
+                                        to.clone(),
+                                    ))
+                                }
+                            }
+                            None => unroll_conversion_to_scalar(&expr, to),
+                        },
+                        _ => Err(Error::implicit_conversion_does_not_exist(
                             expr.span,
                             expr.ty,
                             to.clone(),
-                        ))
+                        )),
                     }
                 }
                 _ => Err(Error::implicit_conversion_does_not_exist(
@@ -1548,6 +1580,9 @@ pub fn unroll(input: &str) -> Result<(Vec<UnrolledRule>, CompileContext), Error>
 
     builtins::point::register_point_function(&mut context); // Point()
     builtins::dst::register_dst_function(&mut context); // dst()
+    builtins::angle::register_angle_function(&mut context); // angle()
+    builtins::degrees::register_degrees_function(&mut context); // degrees()
+    builtins::radians::register_radians_function(&mut context); // radians()
 
     let tokens = token::tokenize(input)?;
     let mut it = tokens.iter().peekable();

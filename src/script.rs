@@ -498,10 +498,12 @@ pub enum Expression {
     PointLineDistance(Arc<Weighed<Expression>>, Arc<Weighed<Expression>>),
     /// An angle defined with 3 points.
     AnglePoint(
-        Box<Weighed<Expression>>,
-        Box<Weighed<Expression>>,
-        Box<Weighed<Expression>>,
+        Arc<Weighed<Expression>>,
+        Arc<Weighed<Expression>>,
+        Arc<Weighed<Expression>>,
     ),
+    /// An angle defined with 2 lines.
+    AngleLine(Arc<Weighed<Expression>>, Arc<Weighed<Expression>>),
     /// A real literal.
     Literal(f64, ComplexUnit),
     /// An adjustable indexed point in euclidean space

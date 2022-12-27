@@ -103,6 +103,7 @@ fn evaluate_point_line_distance(
     ))
 }
 
+#[allow(clippy::too_many_lines)]
 fn evaluate_expression(
     expr: &Weighed<Expression>,
     weights: &mut Vec<f64>,
@@ -138,19 +139,8 @@ fn evaluate_expression(
             assert_eq!(p3.1, ComplexUnit::new(SimpleUnit::Point));
 
             let (arm1, origin, arm2) = (p1.0, p2.0, p3.0);
-
-            // Get the vectors to calculate the angle between them.
-            let arm1_vec = arm1 - origin;
-            let arm2_vec = arm2 - origin;
-
-            // Get the dot product
-            let dot_product =
-                arm1_vec.real * arm2_vec.real + arm1_vec.imaginary * arm2_vec.imaginary;
-            // Get the angle
-            let angle = f64::acos(dot_product / (arm1_vec.mangitude() * arm2_vec.mangitude()));
-
             (
-                Complex::new(angle, 0.0),
+                Complex::new(geometry::get_angle(arm1, origin, arm2), 0.0),
                 ComplexUnit::new(SimpleUnit::Angle),
             )
         }
@@ -161,7 +151,7 @@ fn evaluate_expression(
             (points[*p].0, ComplexUnit::new(SimpleUnit::Point))
         }
         Expression::Line(p1, p2) => {
-            // Evaluate the two points
+            // Evaluate the three points
             let p1 = evaluate_expression(p1, weights, points, logger, weight_mult * expr.weight)?;
             let p2 = evaluate_expression(p2, weights, points, logger, weight_mult * expr.weight)?;
 
@@ -224,6 +214,33 @@ fn evaluate_expression(
             let v = evaluate_expression(expr, weights, points, logger, weight_mult * expr.weight)?;
 
             (-v.0, v.1)
+        }
+        Expression::AngleLine(l1, l2) => {
+            // Evaluate the two lines
+            let l1 = evaluate_expression(l1, weights, points, logger, weight_mult * expr.weight)?;
+            let l2 = evaluate_expression(l2, weights, points, logger, weight_mult * expr.weight)?;
+
+            assert_eq!(l1.1, ComplexUnit::new(SimpleUnit::Line));
+            assert_eq!(l2.1, ComplexUnit::new(SimpleUnit::Line));
+
+            let arm1 = if l1.0.real.is_infinite() {
+                Complex::new(0.0, 1.0) // (0, 1) - vertical
+            } else {
+                Complex::new(1.0, l1.0.real)
+            };
+
+            let arm2 = if l2.0.real.is_infinite() {
+                Complex::new(0.0, 1.0) // (0, 1) - vertical
+            } else {
+                Complex::new(1.0, l2.0.real)
+            };
+
+            let origin = Complex::new(0.0, 0.0);
+
+            (
+                Complex::new(geometry::get_angle(arm1, origin, arm2), 0.0),
+                ComplexUnit::new(SimpleUnit::Angle),
+            )
         }
     })
 }

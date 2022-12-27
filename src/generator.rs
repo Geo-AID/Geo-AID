@@ -5,6 +5,7 @@ use std::{
     ops::{Add, AddAssign, Div, Mul, Neg, Sub, SubAssign},
     sync::{mpsc, Arc},
     thread::{self, JoinHandle},
+    time::{Duration, Instant},
 };
 
 use serde::Serialize;
@@ -218,7 +219,12 @@ impl Generator {
     }
 
     /// Performs a generation cycle with pre-baked magnitudes (how much a point can get adjusted).
-    fn cycle_prebaked(&mut self, magnitudes: &[f64]) {
+    ///
+    /// # Returns
+    /// The time it took for this cycle to complete.
+    fn cycle_prebaked(&mut self, magnitudes: &[f64]) -> Duration {
+        let now = Instant::now();
+
         // Send data to each worker
         for (i, sender) in self.senders.iter().enumerate() {
             sender
@@ -248,10 +254,14 @@ impl Generator {
             }
         }
 
+        let delta = now.elapsed();
+
         // Show the logger's output
         for line in final_logger {
             println!("{line}");
         }
+
+        delta
     }
 
     fn bake_magnitudes(&self, maximum_adjustment: f64) -> Vec<f64> {
@@ -279,6 +289,9 @@ impl Generator {
     /// Performs generation cycles until the mean delta from the last `mean_count` deltas becomes less or equal to `max_mean`.
     /// Executes `cyclic` after the end of each cycle.
     ///
+    /// # Returns
+    /// The time it took to generate the figure.
+    ///
     /// # Panics
     /// Panics if there are multithreading issues (there has been a panic in one of the generation threads).
     pub fn cycle_until_mean_delta<P: FnMut(f64)>(
@@ -287,7 +300,7 @@ impl Generator {
         mean_count: usize,
         max_mean: f64,
         mut cyclic: P,
-    ) {
+    ) -> Duration {
         let magnitudes = self.bake_magnitudes(maximum_adjustment);
         let mut last_deltas = VecDeque::new();
 
@@ -299,8 +312,10 @@ impl Generator {
         #[allow(clippy::cast_precision_loss)]
         let mean_count_f = mean_count as f64;
 
+        let mut duration = Duration::new(0, 0);
+
         while mean_delta > max_mean {
-            self.cycle_prebaked(&magnitudes);
+            duration += self.cycle_prebaked(&magnitudes);
 
             self.delta = self.total_quality - current_quality;
             current_quality = self.total_quality;
@@ -310,6 +325,8 @@ impl Generator {
 
             cyclic(current_quality);
         }
+
+        duration
     }
 
     pub fn get_points(&self) -> &Vec<(Complex, f64)> {

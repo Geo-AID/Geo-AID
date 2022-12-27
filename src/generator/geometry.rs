@@ -47,3 +47,16 @@ pub fn get_crossing(l1: Complex, l2: Complex) -> Result<Complex, EvaluationError
 
     Ok(Complex::new(x, y))
 }
+
+/// Gets the angle between two arms and the origin
+#[must_use]
+pub fn get_angle(arm1: Complex, origin: Complex, arm2: Complex) -> f64 {
+    // Get the vectors to calculate the angle between them.
+    let arm1_vec = arm1 - origin;
+    let arm2_vec = arm2 - origin;
+
+    // Get the dot product
+    let dot_product = arm1_vec.real * arm2_vec.real + arm1_vec.imaginary * arm2_vec.imaginary;
+    // Get the angle
+    f64::acos(dot_product / (arm1_vec.mangitude() * arm2_vec.mangitude()))
+}
