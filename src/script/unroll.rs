@@ -1595,6 +1595,7 @@ fn unroll_rulestat(
     Ok(())
 }
 
+
 /// Unrolls the given script. All iterators are expanded and all conversions applied. The output can be immediately compiled.
 ///
 /// # Errors
@@ -1623,17 +1624,15 @@ pub fn unroll(input: &str) -> Result<(Vec<UnrolledRule>, CompileContext), Error>
     while next {
         let stat = Statement::parse(&mut it, &context)?;
 
-        // Compile the statement
+        // Unroll the statement
         match stat {
             Statement::Noop(_) => (),
             Statement::Let(stat) => unroll_let(&stat, &mut context, &mut unrolled)?,
             Statement::Rule(stat) => unroll_rulestat(&stat, &mut context, &mut unrolled)?,
         }
 
-        // println!("Context: {:#?}\nUnrolled: {:#?}", context, unrolled);
-
         next = it.peek().is_some();
     }
-
+    
     Ok((unrolled, context))
 }

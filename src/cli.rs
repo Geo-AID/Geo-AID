@@ -373,7 +373,7 @@ impl<'r> Display for Diagnostic<'r> {
                         f,
                         "{:indent$} {vertical} {}",
                         "",
-                        (String::from("|") + &"_".repeat(ann.span.start.column) + "^")
+                        (String::from("|") + &"_".repeat(ann.span.end.column - 1) + "^")
                             .with(get_color(self.kind))
                             .bold()
                     )?;
@@ -503,7 +503,13 @@ impl<'r> Display for Diagnostic<'r> {
                             ann.span.start.line.to_string().blue().bold(),
                             lines.next().unwrap()
                         )?,
-                        _ => writeln!(f, "{:indent$}{}", "", "...".blue().bold())?,
+                        diff => {
+                            for _ in 0..(diff-1) {
+                                lines.next();
+                            }
+
+                            writeln!(f, "{:indent$}{}", "", "...".blue().bold())?;
+                        },
                     }
                 }
             }
