@@ -35,10 +35,47 @@ fn weighed_mean<I: Iterator<Item = (f64, f64)>>(it: I) -> f64 {
     sum / weight_sum
 }
 
+#[derive(Debug, Clone, Copy)]
+enum Quality {
+    /// Absolute zero, cannot be inverted. Used with evaluation errors.
+    Zero,
+    /// An actual value that can be manipulated.
+    Some(f64)
+}
+
+impl PartialEq for Quality {
+    fn eq(&self, other: &Self) -> bool {
+        self.as_f64().eq(&other.as_f64())
+    }
+}
+
+impl Eq for Quality {
+
+}
+
+impl PartialOrd for Quality {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        self.as_f64().partial_cmp(&other.as_f64())
+    }
+}
+
+impl Quality {
+    #[must_use]
+    pub fn as_f64(&self) -> f64 {
+        match self {
+            Self::Zero => 0.0,
+            Self::Some(v) => *v
+        }
+    }
+}
+
 /// Inverts the quality. As simple as 1 - q
 #[inline]
-fn invert(q: f64) -> f64 {
-    1.0 - q
+fn invert(q: Quality) -> Quality {
+    match q {
+        Quality::Zero => Quality::Zero,
+        Quality::Some(v) => Quality::Some(1.0 - v),
+    }
 }
 
 fn evaluate_point_point_distance(
@@ -246,7 +283,7 @@ fn evaluate_expression(
 }
 
 /// Evaluates a single rule in terms of quality.
-fn evaluate_single(crit: &CriteriaKind, points: &PointVec, logger: &mut Logger) -> (f64, Vec<f64>) {
+fn evaluate_single(crit: &CriteriaKind, points: &PointVec, logger: &mut Logger) -> (Quality, Vec<f64>) {
     let mut weights = Vec::new();
     weights.resize(points.len(), 0.0);
 
@@ -260,10 +297,10 @@ fn evaluate_single(crit: &CriteriaKind, points: &PointVec, logger: &mut Logger) 
 
                 let diff = (v1.0 - v2.0).mangitude();
                 // Interestingly, it's easier to calculate the quality function for != and then invert it.
-                invert(smooth_0_inf(1130.0 * diff.powi(2)))
+                invert(Quality::Some(smooth_0_inf(1130.0 * diff.powi(2))))
             } else {
                 // An evaluation error means the criteria is surely not met
-                0.0
+                Quality::Zero
             }
         }
         CriteriaKind::Less(e1, e2) => {
@@ -281,10 +318,10 @@ fn evaluate_single(crit: &CriteriaKind, points: &PointVec, logger: &mut Logger) 
                 // logger.push(format!("Distance is {}", v1.0.real));
                 // logger.push(format!("Diff's {diff}"));
                 // Interestingly, it's easier to calculate the quality function for != and then invert it.
-                smooth_inf_inf(-54.0 * f64::cbrt(diff + 0.001))
+                Quality::Some(smooth_inf_inf(-54.0 * f64::cbrt(diff + 0.001)))
             } else {
                 // An evaluation error means the criteria is surely not met
-                0.0
+                Quality::Zero
             }
         }
         CriteriaKind::Greater(e1, e2) => {
@@ -300,10 +337,10 @@ fn evaluate_single(crit: &CriteriaKind, points: &PointVec, logger: &mut Logger) 
                 // Note that the difference is not the same as with equality. This time we have to be prepared for negative diffs.
                 let diff = (v1.0.real - v2.0.real) / v1.0.real;
                 // Interestingly, it's easier to calculate the quality function for != and then invert it.
-                smooth_inf_inf(54.0 * f64::cbrt(diff - 0.001))
+                Quality::Some(smooth_inf_inf(54.0 * f64::cbrt(diff - 0.001)))
             } else {
                 // An evaluation error means the criteria is surely not met
-                0.0
+                Quality::Zero
             }
         }
         // There's a problem here: if there is an evaluation error, the inverse is treated as 100% met, which might lead to some problems in some edge cases.
@@ -347,7 +384,7 @@ pub fn evaluate(points: &PointVec, criteria: &Arc<Vec<Criteria>>, logger: &mut L
                 if eval.is_empty() {
                     1.0
                 } else {
-                    weighed_mean(eval.into_iter())
+                    weighed_mean(eval.into_iter().map(|v| (v.0.as_f64(), v.1)))
                 },
             )
         })

@@ -11,7 +11,7 @@ use super::{
         PredefinedType, RuleOperator, RuleStatement, SimpleExpression, Statement, Type,
     },
     token::{self, Ident, NamedIdent, PointCollection, Span},
-    ComplexUnit, Error, SimpleUnit,
+    ComplexUnit, Error, SimpleUnit, ty,
 };
 
 /// A definition for a user-defined rule operator.
@@ -474,25 +474,57 @@ fn unroll_pc_conversion(
             }
         }
         2 => {
-            if to == &Type::Predefined(PredefinedType::Line) {
-                Ok(UnrolledExpression {
-                    data: Rc::new(UnrolledExpressionData::LineFromPoints(
-                        UnrolledExpression {
-                            data: Rc::new(UnrolledExpressionData::IndexCollection(expr.clone(), 0)),
-                            ty: Type::Predefined(PredefinedType::Point),
-                            span: expr.span,
-                        },
-                        UnrolledExpression {
-                            data: Rc::new(UnrolledExpressionData::IndexCollection(expr.clone(), 1)),
-                            ty: Type::Predefined(PredefinedType::Point),
-                            span: expr.span,
-                        },
-                    )),
-                    ty: Type::Predefined(PredefinedType::Line),
-                    span: expr.span,
-                })
-            } else {
-                Err(Error::implicit_conversion_does_not_exist(
+            match to  {
+                Type::Predefined(pre) => match pre {
+                    PredefinedType::Line => Ok(UnrolledExpression {
+                        data: Rc::new(UnrolledExpressionData::LineFromPoints(
+                            UnrolledExpression {
+                                data: Rc::new(UnrolledExpressionData::IndexCollection(expr.clone(), 0)),
+                                ty: Type::Predefined(PredefinedType::Point),
+                                span: expr.span,
+                            },
+                            UnrolledExpression {
+                                data: Rc::new(UnrolledExpressionData::IndexCollection(expr.clone(), 1)),
+                                ty: Type::Predefined(PredefinedType::Point),
+                                span: expr.span,
+                            },
+                        )),
+                        ty: Type::Predefined(PredefinedType::Line),
+                        span: expr.span,
+                    }),
+                    PredefinedType::Scalar(unit) => {
+                        if unit == &Some(ComplexUnit::new(SimpleUnit::Distance)) {
+                            Ok(UnrolledExpression {
+                                data: Rc::new(UnrolledExpressionData::PointPointDistance(
+                                    UnrolledExpression {
+                                        data: Rc::new(UnrolledExpressionData::IndexCollection(expr.clone(), 0)),
+                                        ty: Type::Predefined(PredefinedType::Point),
+                                        span: expr.span,
+                                    },
+                                    UnrolledExpression {
+                                        data: Rc::new(UnrolledExpressionData::IndexCollection(expr.clone(), 1)),
+                                        ty: Type::Predefined(PredefinedType::Point),
+                                        span: expr.span,
+                                    },
+                                )),
+                                ty: Type::Predefined(PredefinedType::Scalar(Some(ComplexUnit::new(SimpleUnit::Distance)))),
+                                span: expr.span,
+                            })
+                        } else {
+                            Err(Error::implicit_conversion_does_not_exist(
+                                expr.span,
+                                expr.ty.clone(),
+                                to.clone(),
+                            ))
+                        }
+                    },
+                    _ => Err(Error::implicit_conversion_does_not_exist(
+                        expr.span,
+                        expr.ty.clone(),
+                        to.clone(),
+                    ))
+                },
+                _ => Err(Error::implicit_conversion_does_not_exist(
                     expr.span,
                     expr.ty.clone(),
                     to.clone(),
@@ -776,9 +808,7 @@ fn unroll_binop(
             PredefinedType::Scalar(_) => lhs,
             PredefinedType::PointCollection(2) => unroll_implicit_conversion(
                 lhs,
-                &Type::Predefined(PredefinedType::Scalar(Some(ComplexUnit::new(
-                    SimpleUnit::Distance,
-                )))),
+                &ty::DISTANCE,
             )?,
             _ => {
                 return Err(Error::InvalidOperandType {
@@ -1565,6 +1595,7 @@ fn unroll_rulestat(
     Ok(())
 }
 
+
 /// Unrolls the given script. All iterators are expanded and all conversions applied. The output can be immediately compiled.
 ///
 /// # Errors
@@ -1593,17 +1624,15 @@ pub fn unroll(input: &str) -> Result<(Vec<UnrolledRule>, CompileContext), Error>
     while next {
         let stat = Statement::parse(&mut it, &context)?;
 
-        // Compile the statement
+        // Unroll the statement
         match stat {
             Statement::Noop(_) => (),
             Statement::Let(stat) => unroll_let(&stat, &mut context, &mut unrolled)?,
             Statement::Rule(stat) => unroll_rulestat(&stat, &mut context, &mut unrolled)?,
         }
 
-        // println!("Context: {:#?}\nUnrolled: {:#?}", context, unrolled);
-
         next = it.peek().is_some();
     }
-
+    
     Ok((unrolled, context))
 }
