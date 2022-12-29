@@ -373,9 +373,29 @@ impl Mul for SimpleUnit {
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct ComplexUnit([i8; SimpleUnit::Scalar as usize]);
 
+pub mod unit {
+    use super::{ComplexUnit, SimpleUnit};
+
+    pub const DISTANCE: ComplexUnit = ComplexUnit::new(SimpleUnit::Distance);
+    pub const POINT: ComplexUnit = ComplexUnit::new(SimpleUnit::Distance);
+    pub const ANGLE: ComplexUnit = ComplexUnit::new(SimpleUnit::Distance);
+    pub const LINE: ComplexUnit = ComplexUnit::new(SimpleUnit::Distance);
+    pub const SCALAR: ComplexUnit = ComplexUnit::new(SimpleUnit::Distance);
+}
+
+pub mod ty {
+    use super::{parser::{Type, PredefinedType}, ComplexUnit, SimpleUnit};
+
+    pub const DISTANCE: Type = Type::Predefined(PredefinedType::Scalar(Some(ComplexUnit::new(SimpleUnit::Distance))));
+    pub const POINT: Type = Type::Predefined(PredefinedType::Scalar(Some(ComplexUnit::new(SimpleUnit::Distance))));
+    pub const ANGLE: Type = Type::Predefined(PredefinedType::Scalar(Some(ComplexUnit::new(SimpleUnit::Distance))));
+    pub const LINE: Type = Type::Predefined(PredefinedType::Scalar(Some(ComplexUnit::new(SimpleUnit::Distance))));
+    pub const SCALAR: Type = Type::Predefined(PredefinedType::Scalar(Some(ComplexUnit::new(SimpleUnit::Distance))));
+}
+
 impl ComplexUnit {
     #[must_use]
-    pub fn new(simple: SimpleUnit) -> Self {
+    pub const fn new(simple: SimpleUnit) -> Self {
         let mut arr = [0; SimpleUnit::Scalar as usize];
 
         match simple {
