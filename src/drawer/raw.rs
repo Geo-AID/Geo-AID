@@ -1,10 +1,10 @@
-use std::{fs::OpenOptions, io::Write, path::Path};
+use std::{fs::OpenOptions, io::Write, path::PathBuf};
 
 use crate::projector::Rendered;
 
 /// # Panics
 /// Panics whenever there is a filesystem problem
-pub fn draw(target: &Path, canvas_size: (usize, usize), rendered: &Vec<Rendered>) {
+pub fn draw(target: &PathBuf, canvas_size: (usize, usize), rendered: &Vec<Rendered>) {
     let mut file = OpenOptions::new()
         .write(true)
         .create(true)
