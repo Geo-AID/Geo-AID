@@ -5,6 +5,109 @@ use crate::{
     script::figure::{Figure, LineDefinition, PointDefinition},
 };
 
+#[cfg(test)]
+mod testing {
+    use std::path::PathBuf;
+
+    use crate::{
+        drawer,
+        generator::Complex,
+        script::figure::{Figure, Line, LineDefinition, Point, PointDefinition},
+    };
+
+    use super::project;
+
+    #[test]
+    fn test_project() {
+        let gen_points: [Complex; 4] = [
+            Complex {
+                real: 0.3463,
+                imaginary: 0.436,
+            },
+            Complex {
+                real: 0.23,
+                imaginary: 0.87,
+            },
+            Complex {
+                real: 0.312,
+                imaginary: 0.314,
+            },
+            Complex {
+                real: 0.54764,
+                imaginary: 0.7546,
+            },
+        ];
+
+        let fig = Figure {
+            points: vec![
+                Point {
+                    label: "A".to_string(),
+                    definition: PointDefinition::Indexed(0),
+                },
+                Point {
+                    label: "B".to_string(),
+                    definition: PointDefinition::Indexed(1),
+                },
+                Point {
+                    label: "C".to_string(),
+                    definition: PointDefinition::Indexed(2),
+                },
+                Point {
+                    label: "D".to_string(),
+                    definition: PointDefinition::Indexed(3),
+                },
+            ],
+            lines: vec![
+                Line {
+                    label: "l".to_string(),
+                    definition: LineDefinition::TwoPoints(
+                        Box::new(PointDefinition::Indexed(0)),
+                        Box::new(PointDefinition::Indexed(1)),
+                    ),
+                },
+                Line {
+                    label: "k".to_string(),
+                    definition: LineDefinition::TwoPoints(
+                        Box::new(PointDefinition::Indexed(1)),
+                        Box::new(PointDefinition::Indexed(2)),
+                    ),
+                },
+            ],
+            segments: Vec::new(),
+            canvas_size: (200, 200),
+        };
+
+        let path_latex = PathBuf::from("testoutputs\\test.latex");
+        let path_svg = PathBuf::from("testoutputs\\test.svg");
+        let path_json = PathBuf::from("testoutputs\\test.json");
+        let path_raw = PathBuf::from("testoutputs\\test.raw");
+
+        drawer::latex::draw(
+            &path_latex,
+            (fig.canvas_size.0, fig.canvas_size.1),
+            &project(&fig, &gen_points).unwrap(),
+        );
+
+        drawer::svg::draw(
+            &path_svg,
+            (fig.canvas_size.0, fig.canvas_size.1),
+            &project(&fig, &gen_points).unwrap(),
+        );
+
+        drawer::json::draw(
+            &path_json,
+            (fig.canvas_size.0, fig.canvas_size.1),
+            &project(&fig, &gen_points).unwrap(),
+        );
+
+        drawer::raw::draw(
+            &path_raw,
+            (fig.canvas_size.0, fig.canvas_size.1),
+            &project(&fig, &gen_points).unwrap(),
+        );
+    }
+}
+
 pub struct Blueprint {
     pub points: Vec<RenderedPoint>,
     pub lines: Vec<RenderedLine>,

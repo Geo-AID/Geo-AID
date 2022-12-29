@@ -14,3 +14,4 @@
 - Added angle support
 - Fixed draw signatures
 - Added benchmarking for generation
+- Added testing environment for the projector and drawers

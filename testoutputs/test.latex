@@ -1,0 +1,7 @@
+
+    \documentclass{article}
+    \usepackage{tikz}
+    \usetikzlibrary {angles,calc,quotes}
+    \begin{document}
+    \begin{tikzpicture}
+    \coordinate [label=left:$A$] (A) at (4.765107913669064, 4.949640287769784); \fill[black] (A) circle (1pt);\coordinate [label=left:$B$] (B) at (1, 19); \fill[black] (B) circle (1pt);\coordinate [label=left:$C$] (C) at (3.6546762589928052, 1); \fill[black] (C) circle (1pt);\coordinate [label=left:$D$] (D) at (11.283309352517986, 15.264028776978419); \fill[black] (D) circle (1pt);\draw (0,0.17282975064488393) -- (0.04631359447004608,0);\draw (0,0.2429512195121952) -- (0.03583093525179856,0);\end{tikzpicture} \end{document}
