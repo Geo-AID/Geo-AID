@@ -1,4 +1,4 @@
-use std::{fs::File, io::Write, path::PathBuf};
+use std::{fs::File, io::Write, path::Path};
 
 use serde::Serialize;
 
@@ -13,7 +13,7 @@ struct Data<'r> {
 
 /// # Panics
 /// Panics whenever there is a filesystem problem
-pub fn draw(target: &PathBuf, canvas_size: (usize, usize), rendered: &Vec<Rendered>) {
+pub fn draw(target: &Path, canvas_size: (usize, usize), rendered: &Vec<Rendered>) {
     let mut content = String::new();
     let data = Data {
         width: canvas_size.0,

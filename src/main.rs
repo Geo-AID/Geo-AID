@@ -1,7 +1,7 @@
 #![warn(clippy::pedantic)]
 
 use std::{
-    fs,
+    fs::{self, File},
     io::{self, Write},
     path::PathBuf,
     process,
@@ -10,7 +10,7 @@ use std::{
 
 use clap::{Parser, ValueEnum};
 use crossterm::{cursor, terminal, ExecutableCommand, QueueableCommand};
-use geo_aid::cli::{Diagnostic, DiagnosticKind};
+use geo_aid::{cli::{Diagnostic, DiagnosticKind}, drawer::{json, raw}};
 use geo_aid::{
     drawer::{latex, svg},
     generator::{Complex, Generator},
@@ -49,14 +49,21 @@ struct Args {
     /// Canvas height
     #[arg(long, default_value_t = 500)]
     height: usize,
+    /// Where to put the log output
+    #[arg(long, short)]
+    log: Option<PathBuf>
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum, Debug)]
 enum Renderer {
     /// The LaTeX + tikz renderer.
     Latex,
-    /// The .svg format renderer.
+    /// The SVG format renderer.
     Svg,
+    /// The JSON (machine-readable) format renderer.
+    Json,
+    /// The raw (human-readable) format renderer.
+    Raw
 }
 
 fn main() {
@@ -73,6 +80,13 @@ fn main() {
             let diagnostic = Diagnostic::new(DiagnosticKind::Error, data, &args.input, &script);
 
             println!("{diagnostic}");
+
+            if let Some(path) = &args.log {
+                let mut log = File::create(path).unwrap_or_else(|_| panic!("Failed to create log file at {}", path.display()));
+
+                log.write_all("-1".as_bytes()).expect("Writing to log file failed.");
+            }
+
             process::exit(0);
         }
     };
@@ -115,6 +129,8 @@ fn main() {
     match args.renderer {
         Renderer::Latex => latex::draw(&args.output, canvas_size, &rendered),
         Renderer::Svg => svg::draw(&args.output, canvas_size, &rendered),
+        Renderer::Json => json::draw(&args.output, canvas_size, &rendered),
+        Renderer::Raw => raw::draw(&args.output, canvas_size, &rendered),
     }
 
     // for i in 1..=200 {
@@ -128,4 +144,11 @@ fn main() {
         gen.get_total_quality() * 100.0,
         duration.as_secs_f64()
     );
+
+    if let Some(path) = &args.log {
+        let mut log = File::create(path).unwrap_or_else(|_| panic!("Failed to create log file at {}", path.display()));
+
+        let full = format!("0\n{}\n{}", gen.get_total_quality(), duration.as_secs_f64());
+        log.write_all(full.as_bytes()).expect("Writing to log file failed.");
+    }
 }
