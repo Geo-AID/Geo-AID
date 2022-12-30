@@ -5,4 +5,5 @@ test.geo
 debug-output
 playground
 Cargo.lock
-tests
+testoutputs/*
+reports

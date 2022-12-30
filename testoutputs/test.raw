@@ -1,9 +1,0 @@
-canvas size: 200 by 200
-point: label of the point - "A", x and y coordinates of the point - (47.651, 49.496)
-point: label of the point - "B", x and y coordinates of the point - (10.000, 190.000)
-point: label of the point - "C", x and y coordinates of the point - (36.547, 10.000)
-point: label of the point - "D", x and y coordinates of the point - (112.833, 152.640)
-line: label of the line - "l", 
-                x and y coordinates of points defining the line - (0.000, 1.728) and (0.463, 0.000)
-line: label of the line - "k", 
-                x and y coordinates of points defining the line - (0.000, 2.430) and (0.358, 0.000)

@@ -1,4 +1,4 @@
-use std::{fs::File, io::Write, path::PathBuf};
+use std::{fs::File, io::Write, path::Path};
 
 use crate::{generator::Complex, projector::Rendered};
 
@@ -6,7 +6,7 @@ use crate::{generator::Complex, projector::Rendered};
 ///
 /// # Panics
 /// Panics when there are issues with writing to file.
-pub fn draw(target: &PathBuf, canvas_size: (usize, usize), rendered: &Vec<Rendered>) {
+pub fn draw(target: &Path, canvas_size: (usize, usize), rendered: &Vec<Rendered>) {
     let mut content = String::new();
     content += &format!(
         "<svg height=\"{}\" width=\"{}\" xmlns=\"http://www.w3.org/2000/svg\">",

@@ -14,4 +14,7 @@
 - Added angle support
 - Fixed draw signatures
 - Added benchmarking for generation
+
+## Version 0.2.1
 - Added testing environment for the projector and drawers
+- Added testing environment for Geo-AID in general.
