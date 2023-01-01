@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 from typing import List, Tuple
 import csv
+import time
 
 # First, we run all tests through Geo-AID to their respective directories.
 tests = []
@@ -33,14 +34,15 @@ total_time_old = 0
 total_time_new = 0
 
 for name in tests:
-    dir = os.path.join("reports", name)
+    dir = os.path.abspath(os.path.join("reports", name))
 
-    if os.path.isfile(os.path.join(dir, "log-pre.log")):
+    if os.path.exists(os.path.join(dir, "log-pre.log")):
         with open(os.path.join(dir, "log-pre.log")) as fp:
             lines = fp.readlines()
+            # print(lines)
             
-            old_quality = float(lines[1])
-            old_time = float(lines[2])
+            old_quality = float(lines[1].strip())
+            old_time = float(lines[2].strip())
     else:
         old_quality = 0
         old_time = 0
@@ -49,12 +51,13 @@ for name in tests:
     total_time_old += old_time
 
     with open(os.path.join(dir, "log.log")) as fp:
-        lines = list(map(lambda a: a.strip(), fp.readlines()))
+        lines = fp.readlines()
+        # print(lines)
         
-        if lines[0] == "0":
+        if lines[0].strip() == "0":
             new_result = "ok"
-            new_quality = float(lines[1])
-            new_time = float(lines[2])
+            new_quality = float(lines[1].strip())
+            new_time = float(lines[2].strip())
             total_time_new += new_time
             total_quality_new += new_quality
 

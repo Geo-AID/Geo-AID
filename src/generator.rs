@@ -40,13 +40,28 @@ impl Complex {
     pub fn mangitude(self) -> f64 {
         f64::sqrt(self.real.powi(2) + self.imaginary.powi(2))
     }
+
+    #[must_use]
+    pub fn conjugate(self) -> Complex {
+        Complex::new(self.real, -self.imaginary)
+    }
+
+    #[must_use]
+    pub fn partial_mul(self, other: Complex) -> Complex {
+        Complex::new(self.real * other.real, self.imaginary * other.imaginary)
+    }
+
+    #[must_use]
+    pub fn partial_div(self, other: Complex) -> Complex {
+        Complex::new(self.real / other.real, self.imaginary / other.imaginary)
+    }
 }
 
 impl Mul for Complex {
     type Output = Complex;
 
     fn mul(self, rhs: Complex) -> Self::Output {
-        Complex::new(self.real * rhs.real, self.imaginary * rhs.imaginary)
+        Complex::new(self.real * rhs.real - self.imaginary * rhs.imaginary, self.real * rhs.imaginary + rhs.real * self.imaginary)
     }
 }
 
@@ -86,7 +101,7 @@ impl Div for Complex {
     type Output = Complex;
 
     fn div(self, rhs: Complex) -> Self::Output {
-        Complex::new(self.real / rhs.real, self.imaginary / rhs.imaginary)
+        (self * rhs.conjugate()) / (rhs.real * rhs.real + rhs.imaginary * rhs.imaginary)
     }
 }
 
