@@ -124,6 +124,7 @@ pub fn register_dst_function(context: &mut CompileContext) {
                     params: vec![Type::Predefined(PredefinedType::Scalar(Some(
                         ComplexUnit::new(SimpleUnit::Distance),
                     )))],
+                    param_group: None
                 },
                 FunctionOverload {
                     returned_type: Type::Predefined(PredefinedType::Scalar(Some(
@@ -134,6 +135,7 @@ pub fn register_dst_function(context: &mut CompileContext) {
                     params: vec![Type::Predefined(PredefinedType::Scalar(Some(
                         ComplexUnit::new(SimpleUnit::Scalar),
                     )))],
+                    param_group: None
                 },
                 FunctionOverload {
                     returned_type: Type::Predefined(PredefinedType::Scalar(Some(
@@ -145,6 +147,7 @@ pub fn register_dst_function(context: &mut CompileContext) {
                         Type::Predefined(PredefinedType::Point),
                         Type::Predefined(PredefinedType::Point),
                     ],
+                    param_group: None
                 },
                 FunctionOverload {
                     returned_type: Type::Predefined(PredefinedType::Scalar(Some(
@@ -156,6 +159,7 @@ pub fn register_dst_function(context: &mut CompileContext) {
                         Type::Predefined(PredefinedType::Point),
                         Type::Predefined(PredefinedType::Line),
                     ],
+                    param_group: None
                 },
                 FunctionOverload {
                     returned_type: Type::Predefined(PredefinedType::Scalar(Some(
@@ -167,6 +171,7 @@ pub fn register_dst_function(context: &mut CompileContext) {
                         Type::Predefined(PredefinedType::Line),
                         Type::Predefined(PredefinedType::Point),
                     ],
+                    param_group: None
                 },
             ],
         },

@@ -94,6 +94,8 @@ pub struct FunctionOverload {
     pub definition_span: Option<Span>,
     /// The definition.
     pub definition: UnrolledExpression,
+    /// Possible parameter group
+    pub param_group: Option<Type>
 }
 
 /// A function.
@@ -102,14 +104,37 @@ pub struct Function {
     /// Function's name
     pub name: String,
     /// Function's overloads.
-    pub overloads: Vec<FunctionOverload>,
+    pub overloads: Vec<FunctionOverload>
 }
 
 impl Function {
     /// Checks if the given params can be converted into the expected params.
+    /// 
+    /// # Panics
+    /// Never. Shut up, clippy.
     #[must_use]
-    pub fn match_params(expected: &Vec<Type>, received: &Vec<Type>) -> bool {
-        if expected.len() == received.len() {
+    pub fn match_params(expected: &Vec<Type>, received: &Vec<Type>, param_group: Option<&Type>) -> bool {
+        if let Some(ty) = param_group {
+            if expected.len() < received.len() {
+                let mut received = received.iter();
+
+                for param in expected {
+                    if !received.next().unwrap().can_cast(param) {
+                        return false;
+                    }
+                }
+
+                for param in received {
+                    if !param.can_cast(ty) {
+                        return false;
+                    }
+                }
+    
+                true
+            } else {
+                false
+            }
+        } else if expected.len() == received.len() {
             for (i, param) in expected.iter().enumerate() {
                 if !received[i].can_cast(param) {
                     return false;
@@ -127,7 +152,7 @@ impl Function {
     pub fn get_overload(&self, params: &Vec<Type>) -> Option<&FunctionOverload> {
         self.overloads
             .iter()
-            .find(|x| Function::match_params(&x.params, params))
+            .find(|x| Function::match_params(&x.params, params, x.param_group.as_ref()))
     }
 
     #[must_use]
@@ -275,7 +300,7 @@ pub enum UnrolledRuleKind {
 #[derive(Debug, Clone)]
 pub enum UnrolledExpressionData {
     VariableAccess(Rc<Variable>),
-    PointCollection(Vec<Rc<Variable>>),
+    PointCollection(Vec<UnrolledExpression>),
     Number(f64),
     FreePoint,
     Boxed(UnrolledExpression),
@@ -292,6 +317,12 @@ pub enum UnrolledExpressionData {
     Divide(UnrolledExpression, UnrolledExpression),
     ThreePointAngle(UnrolledExpression, UnrolledExpression, UnrolledExpression),
     TwoLineAngle(UnrolledExpression, UnrolledExpression),
+    AngleBisector(UnrolledExpression, UnrolledExpression, UnrolledExpression),
+    Average(Vec<UnrolledExpression>),
+    UnrollParameterGroup(usize),
+    PerpendicularThrough(UnrolledExpression, UnrolledExpression), // Line, Point
+    ParallelThrough(UnrolledExpression, UnrolledExpression), // Line, Point
+    LineLineIntersection(UnrolledExpression, UnrolledExpression),
 }
 
 impl Display for UnrolledExpressionData {
@@ -302,7 +333,15 @@ impl Display for UnrolledExpressionData {
                 f,
                 "col({})",
                 col.iter()
-                    .map(|v| v.name.clone())
+                    .map(|v| format!("{v}"))
+                    .collect::<Vec<String>>()
+                    .join(", ")
+            ),
+            UnrolledExpressionData::Average(exprs) => write!(
+                f,
+                "average({})",
+                exprs.iter()
+                    .map(|v| format!("{v}"))
                     .collect::<Vec<String>>()
                     .join(", ")
             ),
@@ -312,6 +351,7 @@ impl Display for UnrolledExpressionData {
                 write!(f, "{expr}")
             }
             UnrolledExpressionData::Parameter(index) => write!(f, "${index}"),
+            UnrolledExpressionData::UnrollParameterGroup(index) => write!(f, "${index}..."),
             UnrolledExpressionData::IndexCollection(expr, index) => write!(f, "{expr}[{index}]"),
             UnrolledExpressionData::LineFromPoints(e1, e2) => write!(f, "line({e1}, {e2})"),
             UnrolledExpressionData::PointPointDistance(e1, e2)
@@ -325,6 +365,10 @@ impl Display for UnrolledExpressionData {
                 write!(f, "angle({e1}, {e2}, {e3})")
             }
             UnrolledExpressionData::TwoLineAngle(e1, e2) => write!(f, "angle({e1}, {e2})"),
+            UnrolledExpressionData::AngleBisector(e1, e2, e3) => write!(f, "angle-bisector({e1}, {e2}, {e3})"),
+            UnrolledExpressionData::PerpendicularThrough(l, p) => write!(f, "perpendicular-through({l}, {p})"),
+            UnrolledExpressionData::ParallelThrough(l, p) => write!(f, "parallel-through({l}, {p})"),
+            UnrolledExpressionData::LineLineIntersection(l1, l2) => write!(f, "intersection({l1}, {l2})"),
         }
     }
 }
@@ -377,8 +421,28 @@ fn construct_point_name(letter: char, primes: u8) -> String {
     String::from(letter) + &"'".repeat(primes as usize)
 }
 
+fn unroll_parameters_vec(
+    definition: &Vec<UnrolledExpression>,
+    params: &Vec<UnrolledExpression>,
+) -> Vec<UnrolledExpression> {
+    let mut result = Vec::new();
+    
+    for item in definition {
+        match item.data.as_ref() {
+            UnrolledExpressionData::UnrollParameterGroup(start_at) => {
+                result.extend(params.iter().skip(*start_at).cloned());
+            },
+            _ => result.push(unroll_parameters(item, params))
+        }
+    }
+
+    result
+}
+
 /// Replaces all Parameter unrolled expressions with the given parameters.
-fn unroll_parameters(
+#[allow(clippy::module_name_repetitions)]
+#[must_use]
+pub fn unroll_parameters(
     definition: &UnrolledExpression,
     params: &Vec<UnrolledExpression>,
 ) -> UnrolledExpression {
@@ -386,8 +450,11 @@ fn unroll_parameters(
         ty: definition.ty.clone(),
         span: definition.span,
         data: Rc::new(match definition.data.as_ref() {
-            UnrolledExpressionData::Boxed(expr) | UnrolledExpressionData::Negate(expr) => {
+            UnrolledExpressionData::Boxed(expr) => {
                 UnrolledExpressionData::Boxed(unroll_parameters(expr, params))
+            }
+            UnrolledExpressionData::Negate(expr) => {
+                UnrolledExpressionData::Negate(unroll_parameters(expr, params))
             }
             UnrolledExpressionData::Parameter(index) => {
                 UnrolledExpressionData::Boxed(params[*index].clone())
@@ -417,9 +484,16 @@ fn unroll_parameters(
                 )
             }
             UnrolledExpressionData::VariableAccess(_)
-            | UnrolledExpressionData::PointCollection(_)
             | UnrolledExpressionData::Number(_)
             | UnrolledExpressionData::FreePoint => definition.data.as_ref().clone(),
+            UnrolledExpressionData::Average(exprs) => {
+                UnrolledExpressionData::Average(
+                    unroll_parameters_vec(exprs, params)
+                )
+            },
+            UnrolledExpressionData::PointCollection(exprs) => UnrolledExpressionData::PointCollection(
+                unroll_parameters_vec(exprs, params)
+            ),
             UnrolledExpressionData::Add(e1, e2) => UnrolledExpressionData::Add(
                 unroll_parameters(e1, params),
                 unroll_parameters(e2, params),
@@ -447,6 +521,24 @@ fn unroll_parameters(
                 unroll_parameters(e1, params),
                 unroll_parameters(e2, params),
             ),
+            UnrolledExpressionData::AngleBisector(e1, e2, e3) => UnrolledExpressionData::AngleBisector(
+                unroll_parameters(e1, params),
+                unroll_parameters(e2, params),
+                unroll_parameters(e3, params),
+            ),
+            UnrolledExpressionData::PerpendicularThrough(e1, e2) => UnrolledExpressionData::PerpendicularThrough(
+                unroll_parameters(e1, params),
+                unroll_parameters(e2, params),
+            ),
+            UnrolledExpressionData::ParallelThrough(e1, e2) => UnrolledExpressionData::ParallelThrough(
+                unroll_parameters(e1, params),
+                unroll_parameters(e2, params),
+            ),
+            UnrolledExpressionData::LineLineIntersection(e1, e2) => UnrolledExpressionData::LineLineIntersection(
+                unroll_parameters(e1, params),
+                unroll_parameters(e2, params),
+            ),
+            UnrolledExpressionData::UnrollParameterGroup(_) => unreachable!("This should never be unrolled as parameter."),
         }),
     }
 }
@@ -608,6 +700,15 @@ fn unroll_conversion_to_scalar(
                 )?,
             )),
         }),
+        UnrolledExpressionData::Average(exprs) => Ok(UnrolledExpression {
+            ty: to.clone(),
+            span: expr.span,
+            data: Rc::new(UnrolledExpressionData::Average(
+                exprs.iter().map(
+                    |v| unroll_conversion_to_scalar(v, to)
+                ).collect::<Result<Vec<UnrolledExpression>, Error>>()?
+            )),
+        }),
         UnrolledExpressionData::VariableAccess(_)
         | UnrolledExpressionData::PointCollection(_)
         | UnrolledExpressionData::FreePoint
@@ -618,6 +719,11 @@ fn unroll_conversion_to_scalar(
         | UnrolledExpressionData::PointPointDistance(_, _)
         | UnrolledExpressionData::PointLineDistance(_, _)
         | UnrolledExpressionData::ThreePointAngle(_, _, _)
+        | UnrolledExpressionData::AngleBisector(_, _, _)
+        | UnrolledExpressionData::UnrollParameterGroup(_)
+        | UnrolledExpressionData::PerpendicularThrough(_, _)
+        | UnrolledExpressionData::ParallelThrough(_, _)
+        | UnrolledExpressionData::LineLineIntersection(_, _)
         | UnrolledExpressionData::TwoLineAngle(_, _) => unreachable!(
             "This data should not be of type scalar(none) and yet is: {:#?}",
             expr.data
@@ -676,6 +782,7 @@ fn unroll_implicit_conversion(
 }
 
 /// Unrolls the given expression based on the given iterator index. The index is assumed valid and an out-of-bounds access leads to a panic!().
+#[allow(clippy::too_many_lines)]
 fn unroll_simple(
     expr: &SimpleExpression,
     context: &CompileContext,
@@ -704,14 +811,20 @@ fn unroll_simple(
                         .iter()
                         .map(|(letter, primes)| {
                             match context.points.get(&construct_point_id(*letter, *primes)) {
-                                Some(var) => Ok(Rc::clone(var)),
+                                Some(var) => Ok(
+                                    UnrolledExpression {
+                                        data: Rc::new(UnrolledExpressionData::VariableAccess(Rc::clone(var))),
+                                        ty: ty::POINT,
+                                        span: col.span,
+                                    }
+                                ),
                                 None => Err(Error::UndefinedVariable {
                                     error_span: col.span,
                                     variable_name: construct_point_name(*letter, *primes),
                                 }),
                             }
                         })
-                        .collect::<Result<Vec<Rc<Variable>>, Error>>()?,
+                        .collect::<Result<Vec<UnrolledExpression>, Error>>()?,
                 )),
                 span: col.span,
             },
@@ -737,7 +850,15 @@ fn unroll_simple(
                     let params = params
                         .into_iter()
                         .enumerate()
-                        .map(|(i, param)| unroll_implicit_conversion(param, &overload.params[i]))
+                        .map(
+                            |(i, param)| {
+                                if i < overload.params.len() {
+                                    unroll_implicit_conversion(param, &overload.params[i])
+                                } else {
+                                    unroll_implicit_conversion(param, overload.param_group.as_ref().unwrap())
+                                }
+                            }
+                        )
                         .collect::<Result<Vec<UnrolledExpression>, Error>>()?;
 
                     UnrolledExpression {
@@ -1090,6 +1211,64 @@ fn create_variables(
     Ok((variables, rhs_type))
 }
 
+fn unroll_let_noiterator<I: Iterator<Item = Rc<Variable>>>(stat: &LetStatement, mut var_it: I, rhs_type: Type, context: &mut CompileContext, unrolled: &mut Vec<UnrolledRule>, max_iter_len: usize) -> Result<(), Error> {
+    // There is no iterator in lhs.
+    let lhs_unrolled = match stat.ident.get(0).unwrap() {
+        Ident::Named(named) => UnrolledExpression {
+            data: Rc::new(UnrolledExpressionData::VariableAccess(
+                var_it.next().unwrap(),
+            )),
+            ty: rhs_type,
+            span: named.span,
+        },
+        Ident::Collection(col) => UnrolledExpression {
+            ty: Type::Predefined(PredefinedType::PointCollection(col.len())),
+            span: col.span,
+            data: Rc::new(UnrolledExpressionData::PointCollection(
+                var_it.take(col.len()).map(
+                    |var| UnrolledExpression {
+                        data: Rc::new(UnrolledExpressionData::VariableAccess(Rc::clone(&var))),
+                        ty: ty::POINT,
+                        span: col.span,
+                    }
+                ).collect(),
+            )),
+        },
+    };
+
+    let mut max_iter_len = match max_iter_len {
+        1 => None,
+        l => Some((l, stat.ident.get_span())),
+    };
+
+    for (rule, expr) in &stat.rules {
+        match max_iter_len {
+            None => max_iter_len = check_expression_iterators(expr, stat.get_span())?,
+            Some((hint, hint_span)) => {
+                match_expression_iterators(expr, hint, hint_span, stat.get_span())?;
+            }
+        }
+
+        let l = match max_iter_len {
+            None => 1,
+            Some((hint, _)) => hint,
+        };
+
+        for i in 0..l {
+            unroll_rule(
+                lhs_unrolled.clone(),
+                rule,
+                unroll_expression(expr, context, i)?,
+                context,
+                unrolled,
+                stat.get_span(),
+            )?;
+        }
+    }
+
+    Ok(())
+}
+
 fn unroll_let(
     stat: &LetStatement,
     context: &mut CompileContext,
@@ -1120,53 +1299,7 @@ fn unroll_let(
     let mut var_it = variables.into_iter();
 
     if max_iter_len == 1 {
-        // There is no iterator in lhs.
-        let lhs_unrolled = match stat.ident.get(0).unwrap() {
-            Ident::Named(named) => UnrolledExpression {
-                data: Rc::new(UnrolledExpressionData::VariableAccess(
-                    var_it.next().unwrap(),
-                )),
-                ty: rhs_type,
-                span: named.span,
-            },
-            Ident::Collection(col) => UnrolledExpression {
-                ty: Type::Predefined(PredefinedType::PointCollection(col.len())),
-                span: col.span,
-                data: Rc::new(UnrolledExpressionData::PointCollection(
-                    var_it.take(col.len()).collect(),
-                )),
-            },
-        };
-
-        let mut max_iter_len = match max_iter_len {
-            1 => None,
-            l => Some((l, stat.ident.get_span())),
-        };
-
-        for (rule, expr) in &stat.rules {
-            match max_iter_len {
-                None => max_iter_len = check_expression_iterators(expr, stat.get_span())?,
-                Some((hint, hint_span)) => {
-                    match_expression_iterators(expr, hint, hint_span, stat.get_span())?;
-                }
-            }
-
-            let l = match max_iter_len {
-                None => 1,
-                Some((hint, _)) => hint,
-            };
-
-            for i in 0..l {
-                unroll_rule(
-                    lhs_unrolled.clone(),
-                    rule,
-                    unroll_expression(expr, context, i)?,
-                    context,
-                    unrolled,
-                    stat.get_span(),
-                )?;
-            }
-        }
+        unroll_let_noiterator(stat, var_it, rhs_type, context, unrolled, max_iter_len)?;
     } else {
         let var_it_ref = &mut var_it;
 
@@ -1184,7 +1317,13 @@ fn unroll_let(
                     ty: Type::Predefined(PredefinedType::PointCollection(col.len())),
                     span: col.span,
                     data: Rc::new(UnrolledExpressionData::PointCollection(
-                        var_it_ref.take(col.len()).collect(),
+                        var_it_ref.take(col.len()).map(
+                            |var| UnrolledExpression {
+                                data: Rc::new(UnrolledExpressionData::VariableAccess(Rc::clone(&var))),
+                                ty: ty::POINT,
+                                span: col.span,
+                            }
+                        ).collect(),
                     )),
                 },
             })
@@ -1614,6 +1753,11 @@ pub fn unroll(input: &str) -> Result<(Vec<UnrolledRule>, CompileContext), Error>
     builtins::angle::register_angle_function(&mut context); // angle()
     builtins::degrees::register_degrees_function(&mut context); // degrees()
     builtins::radians::register_radians_function(&mut context); // radians()
+    builtins::mid::register_mid_function(&mut context); // mid()
+    builtins::perpendicular::register_perpendicular_function(&mut context); // perpendicular_through()
+    builtins::parallel::register_parallel_function(&mut context); // parallel_through()
+    builtins::intersection::register_intersection_function(&mut context); // intersection()
+    builtins::bisector::register(&mut context); // bisector()
 
     let tokens = token::tokenize(input)?;
     let mut it = tokens.iter().peekable();

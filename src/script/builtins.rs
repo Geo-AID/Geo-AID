@@ -3,3 +3,8 @@ pub mod degrees;
 pub mod dst;
 pub mod point;
 pub mod radians;
+pub mod bisector;
+pub mod mid;
+pub mod perpendicular;
+pub mod parallel;
+pub mod intersection;

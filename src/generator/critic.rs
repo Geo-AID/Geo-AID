@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::{
     generator::geometry,
-    script::{ComplexUnit, Criteria, CriteriaKind, Expression, SimpleUnit, Weighed},
+    script::{ComplexUnit, Criteria, CriteriaKind, Expression, SimpleUnit, Weighed, unit},
 };
 
 use super::{Complex, EvaluationError, Logger};
@@ -166,7 +166,7 @@ fn evaluate_expression(
             weight_mult * expr.weight,
         )?,
         Expression::AnglePoint(p1, p2, p3) => {
-            // Evaluate the two points
+            // Evaluate the three points
             let p1 = evaluate_expression(p1, weights, points, logger, weight_mult * expr.weight)?;
             let p2 = evaluate_expression(p2, weights, points, logger, weight_mult * expr.weight)?;
             let p3 = evaluate_expression(p3, weights, points, logger, weight_mult * expr.weight)?;
@@ -188,7 +188,7 @@ fn evaluate_expression(
             (points[*p].0, ComplexUnit::new(SimpleUnit::Point))
         }
         Expression::Line(p1, p2) => {
-            // Evaluate the three points
+            // Evaluate the two points
             let p1 = evaluate_expression(p1, weights, points, logger, weight_mult * expr.weight)?;
             let p2 = evaluate_expression(p2, weights, points, logger, weight_mult * expr.weight)?;
 
@@ -200,7 +200,7 @@ fn evaluate_expression(
                 ComplexUnit::new(SimpleUnit::Line),
             )
         }
-        Expression::LineCrossing(l1, l2) => {
+        Expression::LineLineIntersection(l1, l2) => {
             // Evaluate the two lines
             let l1 = evaluate_expression(l1, weights, points, logger, weight_mult * expr.weight)?;
             let l2 = evaluate_expression(l2, weights, points, logger, weight_mult * expr.weight)?;
@@ -279,6 +279,84 @@ fn evaluate_expression(
                 ComplexUnit::new(SimpleUnit::Angle),
             )
         }
+        Expression::AngleBisector(p1, p2, p3) => {
+            // Evaluate the three points
+            let p1 = evaluate_expression(p1, weights, points, logger, weight_mult * expr.weight)?;
+            let p2 = evaluate_expression(p2, weights, points, logger, weight_mult * expr.weight)?;
+            let p3 = evaluate_expression(p3, weights, points, logger, weight_mult * expr.weight)?;
+
+            assert_eq!(p1.1, ComplexUnit::new(SimpleUnit::Point));
+            assert_eq!(p2.1, ComplexUnit::new(SimpleUnit::Point));
+            assert_eq!(p3.1, ComplexUnit::new(SimpleUnit::Point));
+
+            let angle = geometry::get_angle(p1.0, p2.0, p3.0) / 2.0;
+
+            (
+                geometry::rotate_around(p1.0, p2.0, angle),
+                unit::POINT
+            )
+        },
+        Expression::Average(exprs) => {
+            // Evaluate all
+            let exprs = exprs.iter().map(
+                |expr| evaluate_expression(expr, weights, points, logger, weight_mult * expr.weight)
+            ).collect::<Result<Vec<(Complex, ComplexUnit)>, EvaluationError>>()?;
+            
+            // Assume all types are valid. Typechecking should have already been done.
+
+            let mut sum = Complex::new(0.0, 0.0);
+
+            for expr in &exprs {
+                sum += expr.0;
+            }
+
+            #[allow(clippy::cast_precision_loss)]
+            (
+                sum / exprs.len() as f64,
+                exprs[0].1.clone()
+            )
+        }
+        Expression::PerpendicularThrough(l, p) => {
+            let l = evaluate_expression(l, weights, points, logger, weight_mult * l.weight)?;
+            let p = evaluate_expression(p, weights, points, logger, weight_mult * p.weight)?;
+
+            // Find the right a coefficient.
+            let a = if l.0.real.is_infinite() {
+                0.0 // vertical -> horizontal
+            } else if l.0.real.abs() <= 0.000_000_1 {
+                f64::INFINITY // horizontal -> vertical
+            } else {
+                - 1.0 / l.0.real
+            };
+
+            let b = if a.is_infinite() {
+                p.0.real // If vertical, simply adjust the x.
+            } else {
+                p.0.imaginary - a * p.0.real
+            };
+
+            (
+                Complex::new(a, b),
+                unit::LINE
+            )
+        },
+        Expression::ParallelThrough(l, p) => {
+            let l = evaluate_expression(l, weights, points, logger, weight_mult * l.weight)?;
+            let p = evaluate_expression(p, weights, points, logger, weight_mult * p.weight)?;
+
+            // Find the right a coefficient.
+            let a = l.0.real;
+            let b = if a.is_infinite() {
+                p.0.real // If vertical, simply adjust the x.
+            } else {
+                p.0.imaginary - a * p.0.real
+            };
+
+            (
+                Complex::new(a, b),
+                unit::LINE
+            )
+        },
     })
 }
 

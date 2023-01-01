@@ -377,20 +377,25 @@ pub mod unit {
     use super::{ComplexUnit, SimpleUnit};
 
     pub const DISTANCE: ComplexUnit = ComplexUnit::new(SimpleUnit::Distance);
-    pub const POINT: ComplexUnit = ComplexUnit::new(SimpleUnit::Distance);
-    pub const ANGLE: ComplexUnit = ComplexUnit::new(SimpleUnit::Distance);
-    pub const LINE: ComplexUnit = ComplexUnit::new(SimpleUnit::Distance);
-    pub const SCALAR: ComplexUnit = ComplexUnit::new(SimpleUnit::Distance);
+    pub const POINT: ComplexUnit = ComplexUnit::new(SimpleUnit::Point);
+    pub const ANGLE: ComplexUnit = ComplexUnit::new(SimpleUnit::Angle);
+    pub const LINE: ComplexUnit = ComplexUnit::new(SimpleUnit::Line);
+    pub const SCALAR: ComplexUnit = ComplexUnit::new(SimpleUnit::Scalar);
 }
 
 pub mod ty {
     use super::{parser::{Type, PredefinedType}, ComplexUnit, SimpleUnit};
 
     pub const DISTANCE: Type = Type::Predefined(PredefinedType::Scalar(Some(ComplexUnit::new(SimpleUnit::Distance))));
-    pub const POINT: Type = Type::Predefined(PredefinedType::Scalar(Some(ComplexUnit::new(SimpleUnit::Distance))));
-    pub const ANGLE: Type = Type::Predefined(PredefinedType::Scalar(Some(ComplexUnit::new(SimpleUnit::Distance))));
-    pub const LINE: Type = Type::Predefined(PredefinedType::Scalar(Some(ComplexUnit::new(SimpleUnit::Distance))));
-    pub const SCALAR: Type = Type::Predefined(PredefinedType::Scalar(Some(ComplexUnit::new(SimpleUnit::Distance))));
+    pub const POINT: Type = Type::Predefined(PredefinedType::Point);
+    pub const ANGLE: Type = Type::Predefined(PredefinedType::Scalar(Some(ComplexUnit::new(SimpleUnit::Angle))));
+    pub const LINE: Type = Type::Predefined(PredefinedType::Line);
+    pub const SCALAR: Type = Type::Predefined(PredefinedType::Scalar(Some(ComplexUnit::new(SimpleUnit::Scalar))));
+
+    #[must_use]
+    pub const fn collection(length: usize) -> Type {
+        Type::Predefined(PredefinedType::PointCollection(length))
+    }
 }
 
 impl ComplexUnit {
@@ -531,7 +536,7 @@ pub enum Expression {
     /// A line in euclidean space. defined by two points.
     Line(Arc<Weighed<Expression>>, Arc<Weighed<Expression>>),
     /// The point where two lines cross.
-    LineCrossing(Box<Weighed<Expression>>, Box<Weighed<Expression>>),
+    LineLineIntersection(Arc<Weighed<Expression>>, Arc<Weighed<Expression>>),
     /// Changes the unit
     SetUnit(Arc<Weighed<Expression>>, ComplexUnit),
     /// Adds two values
@@ -544,6 +549,18 @@ pub enum Expression {
     Quotient(Arc<Weighed<Expression>>, Arc<Weighed<Expression>>),
     /// Changes the sign
     Negation(Arc<Weighed<Expression>>),
+    /// An angle bisector.
+    AngleBisector(
+        Arc<Weighed<Expression>>,
+        Arc<Weighed<Expression>>,
+        Arc<Weighed<Expression>>,
+    ),
+    /// Takes the average value (arithmetic mean)
+    Average(Vec<Arc<Weighed<Expression>>>),
+    /// Generates a line perpendicular to $1 going through $2
+    PerpendicularThrough(Arc<Weighed<Expression>>, Arc<Weighed<Expression>>),
+    /// Generates a line parallel to $1 going through $2
+    ParallelThrough(Arc<Weighed<Expression>>, Arc<Weighed<Expression>>),
 }
 
 /// Defines the kind and information about criteria the figure must obey.
