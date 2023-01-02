@@ -254,6 +254,13 @@ impl Parse for ExprIterator {
             it: &mut Peekable<I>,
             context: &CompileContext,
         ) -> Result<Self, Error> {
+        let peeked = it.peek().cloned();
+
+        match peeked {
+            Some(Token::Dollar(_)) => Ok(Self::Explicit(ExplicitIterator {
+                
+            }))
+        }
         Ok(Self {
             exprs: Punctuated::parse(it, context)?,
             id: 0
