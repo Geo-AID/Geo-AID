@@ -206,6 +206,12 @@ pub struct Comma {
     pub span: Span,
 }
 
+/// A '$' token.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Dollar {
+    pub span: Span,
+}
+
 /// A 'let' token.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Let {
@@ -298,6 +304,7 @@ pub enum Token {
     Exclamation(Exclamation),
     Ident(Ident),
     Number(Number),
+    Dollar(Dollar)
 }
 
 impl Display for Token {
@@ -319,6 +326,7 @@ impl Display for Token {
             Token::Lteq(_) => write!(f, "<="),
             Token::Gteq(_) => write!(f, ">="),
             Token::Exclamation(_) => write!(f, "!"),
+            Token::Dollar(_) => write!(f, "$"),
             Token::Ident(ident) => write!(
                 f,
                 "{}",
@@ -367,6 +375,7 @@ impl Token {
             Token::Exclamation(v) => v.span,
             Token::Ident(v) => v.get_span(),
             Token::Number(v) => v.span,
+            Token::Dollar(v) => v.span,
         }
     }
 }

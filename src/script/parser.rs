@@ -9,7 +9,7 @@ use crate::span;
 use super::{
     token::{
         Asterisk, Comma, Eq, Exclamation, Gt, Gteq, Ident, LParen, Let, Lt, Lteq, Minus,
-        NamedIdent, Number, Plus, Position, RParen, Semi, Slash, Span, Token, Vertical,
+        NamedIdent, Number, Plus, Position, RParen, Semi, Slash, Span, Token, Vertical, Dollar,
     },
     unroll::{CompileContext, RuleOperatorDefinition},
     ComplexUnit, Error, SimpleUnit,
@@ -193,23 +193,101 @@ impl ToString for BinaryOperator {
     }
 }
 
-/// A parsed expression.
+/// An iterator of simple expresions, with an id.
 #[derive(Debug)]
-pub enum Expression {
-    /// An iterator of simple expressions
-    Simple(Punctuated<SimpleExpression, Vertical>),
-    /// A binary operator expression.
-    Binop(ExprBinop),
+pub enum ExprIterator {
+    Implicit(ImplicitIterator),
+    Explicit(ExplicitIterator)
 }
 
-impl Expression {
+/// Punctuated expressions.
+#[derive(Debug)]
+pub struct ImplicitIterator {
+    pub exprs: Punctuated<SimpleExpression, Comma>
+}
+
+/// $id(a, b, ...).
+#[derive(Debug)]
+pub struct ExplicitIterator {
+    pub exprs: Punctuated<SimpleExpression, Comma>,
+    pub id: Number,
+    pub dollar: Dollar,
+    pub left_paren: LParen,
+    pub right_paren: RParen
+}
+
+impl ExprIterator {
     #[must_use]
-    pub fn as_simple(&self) -> Option<&Punctuated<SimpleExpression, Vertical>> {
-        if let Self::Simple(v) = self {
-            Some(v)
+    pub fn len(&self) -> usize {
+        match self {
+            Self::Implicit(v) => v.exprs,
+            Self::Explicit(v) => v.exprs
+        }.len()
+    }
+
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        match self {
+            Self::Implicit(v) => v.exprs,
+            Self::Explicit(v) => v.exprs
+        }.is_empty()
+    }
+
+    #[must_use]
+    pub fn get(&self, index: usize) -> Option<&SimpleExpression> {
+        match self {
+            Self::Implicit(v) => v.exprs,
+            Self::Explicit(v) => v.exprs
+        }.get(index)
+    }
+}
+
+impl Parse for ExprIterator {
+    fn get_span(&self) -> Span {
+        match self {
+            Self::Implicit(v) => v.exprs.get_span(),
+            Self::Explicit(v) => v.dollar.span.join(v.right_paren.span)
+        }
+    }
+
+    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
+            it: &mut Peekable<I>,
+            context: &CompileContext,
+        ) -> Result<Self, Error> {
+        Ok(Self {
+            exprs: Punctuated::parse(it, context)?,
+            id: 0
+        })
+    }
+}
+
+/// A parsed expression.
+#[derive(Debug)]
+pub enum Expression<const ITER: bool> {
+    /// An iterator.
+    Iterator(ExprIterator),
+    /// A single simple expression
+    Single(Box<SimpleExpression>),
+    /// A binary operator expression.
+    Binop(ExprBinop<ITER>),
+}
+
+impl<const ITER: bool> Expression<ITER> {
+    #[must_use]
+    pub fn as_iterator(&self) -> Option<&ExprIterator> {
+        if let Self::Iterator(it) = self {
+            Some(it)
         } else {
             None
         }
+    }
+
+    /// Returns `true` if the expression is [`Single`].
+    ///
+    /// [`Single`]: Expression::Single
+    #[must_use]
+    pub fn is_single(&self) -> bool {
+        matches!(self, Self::Single(..))
     }
 }
 
@@ -249,7 +327,7 @@ pub struct ExprCall {
     /// The `)` token.
     pub rparen: RParen,
     /// Punctuated params. `None` if no params are given.
-    pub params: Option<Punctuated<Box<Expression>, Comma>>,
+    pub params: Option<Punctuated<Expression<false>, Comma>>,
 }
 
 /// A parsed parenthesed expression
@@ -260,7 +338,7 @@ pub struct ExprParenthised {
     /// The `)` token.
     pub rparen: RParen,
     /// The contained `Expression`.
-    pub content: Box<Expression>,
+    pub content: Box<Expression<true>>,
 }
 
 /// A parsed unary operator expression.
@@ -274,13 +352,13 @@ pub struct ExprUnop {
 
 /// A parsed binary operator expression.
 #[derive(Debug)]
-pub struct ExprBinop {
+pub struct ExprBinop<const ITER: bool> {
     /// The operator
     pub operator: BinaryOperator,
     /// Left hand side
-    pub lhs: Box<Expression>,
+    pub lhs: Box<Expression<ITER>>,
     /// Right hand side.
-    pub rhs: Box<Expression>,
+    pub rhs: Box<Expression<ITER>>,
 }
 
 /// A parsed raw number.
@@ -383,13 +461,13 @@ pub struct LetStatement {
     /// The `let` token.
     pub let_token: Let,
     /// The lhs ident iterator.
-    pub ident: Punctuated<Ident, Vertical>,
+    pub ident: Punctuated<Ident, Comma>,
     /// The `=` token.
     pub eq: Eq,
     /// The rhs expression.
-    pub expr: Expression,
+    pub expr: Expression<true>,
     /// The rules after the rhs expression.
-    pub rules: Vec<(RuleOperator, Expression)>,
+    pub rules: Vec<(RuleOperator, Expression<true>)>,
     /// The ending semicolon.
     pub semi: Semi,
 }
@@ -399,11 +477,11 @@ pub struct LetStatement {
 #[derive(Debug)]
 pub struct RuleStatement {
     /// Left hand side
-    pub lhs: Expression,
+    pub lhs: Expression<true>,
     /// Rule operator
     pub op: RuleOperator,
     /// Right hand side
-    pub rhs: Expression,
+    pub rhs: Expression<true>,
     /// The ending semicolon.
     pub semi: Semi,
 }
@@ -423,30 +501,42 @@ pub enum Statement {
 #[derive(Debug)]
 pub struct Punctuated<T, P> {
     /// The first parsed item.
-    pub first: T,
+    pub first: Box<T>,
     /// The next items with punctuators.
     pub collection: Vec<(P, T)>,
 }
 
 impl<T, P> Punctuated<T, P> {
+    /// Creates a new instance of `Punctuated`.
+    #[must_use]
+    pub fn new(first: T) -> Punctuated<T, P> {
+        Self {
+            first: Box::new(first),
+            collection: Vec::new()
+        }
+    }
+
     /// Turns the punctuated into an iterator on the items.
     pub fn iter(&self) -> impl Iterator<Item = &T> {
-        vec![&self.first]
+        vec![self.first.as_ref()]
             .into_iter()
             .chain(self.collection.iter().map(|x| &x.1))
     }
 
     /// Gets the item count.
+    #[must_use]
     pub fn len(&self) -> usize {
         self.collection.len() + 1
     }
 
     /// Checks if there are no items (always false).
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         false
     }
 
     /// Tries to get the element on `index`.
+    #[must_use]
     pub fn get(&self, index: usize) -> Option<&T> {
         match index {
             0 => Some(&self.first),
@@ -467,20 +557,6 @@ pub trait Parse: Sized {
 
     /// Gets the parsed item's span.
     fn get_span(&self) -> Span;
-}
-
-pub trait GetType {
-    /// Gets the type of self.
-    ///
-    /// # Errors
-    /// Some constructs can fail to determine type (inconsistent iterators).
-    fn get_type(&self, context: &CompileContext) -> Result<Type, Error>;
-
-    /// Tries to see if self's type matches t.
-    ///
-    /// # Errors
-    /// Raises an error if it doesn't.
-    fn match_type(&self, context: &CompileContext, t: &Type) -> Result<(), Error>;
 }
 
 impl Parse for ExprCall {
@@ -651,12 +727,23 @@ impl Parse for ExprNumber {
     }
 }
 
-impl Parse for Expression {
+impl<const ITER: bool> Parse for Expression<ITER> {
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
         it: &mut Peekable<I>,
         context: &CompileContext,
     ) -> Result<Self, Error> {
-        let mut expr = Expression::Simple(Punctuated::parse(it, context)?);
+        let mut expr = if ITER {
+            let punct = Punctuated::parse(it, context)?;
+            if punct.len() == 1 {
+                Expression::Single(punct.first)
+            } else {
+                // Implicit iterators have id of 0.
+                Expression::Iterator(ExprIterator { exprs: punct, id: 0 })
+            }
+        } else {
+            // We can only parse one expression.
+            Expression::Single(Box::new(SimpleExpression::parse(it, context)?))
+        };
 
         loop {
             let next = it.peek().copied();
@@ -676,7 +763,17 @@ impl Parse for Expression {
 
             it.next();
 
-            expr = dispatch_order(expr, op, Punctuated::parse(it, context)?);
+            let rhs = {
+                let punct = Punctuated::parse(it, context)?;
+                if punct.len() == 1 {
+                    Expression::Single(punct.first)
+                } else {
+                    // Implicit iterators have id of 0.
+                    Expression::Iterator(ExprIterator { exprs: punct, id: 0 })
+                }
+            };
+
+            expr = dispatch_order(expr, op, rhs);
         }
 
         Ok(expr)
@@ -684,7 +781,8 @@ impl Parse for Expression {
 
     fn get_span(&self) -> Span {
         match self {
-            Expression::Simple(s) => s.get_span(),
+            Expression::Iterator(it) => it.get_span(),
+            Expression::Single(expr) => expr.get_span(),
             Expression::Binop(e) => e.lhs.get_span().join(e.rhs.get_span()),
         }
     }
@@ -700,17 +798,19 @@ impl BinaryOperator {
 }
 
 /// Inserts an operator with an rhs into a operator series, considering the order of operations.
-fn dispatch_order(
-    lhs: Expression,
+fn dispatch_order<const ITER: bool>(
+    lhs: Expression<ITER>,
     op: BinaryOperator,
-    rhs: Punctuated<SimpleExpression, Vertical>,
-) -> Expression {
+    rhs: Expression<ITER>, // We have to trust, that it is a valid expression.
+) -> Expression<ITER> {
+    assert!(ITER || rhs.is_single());
+
     match lhs {
         // if lhs is simple, there is no order to consider.
-        Expression::Simple(s) => Expression::Binop(ExprBinop {
-            lhs: Box::new(Expression::Simple(s)),
+        lhs @ (Expression::Iterator(_)  | Expression::Single(_)) => Expression::Binop(ExprBinop {
+            lhs: Box::new(lhs),
             operator: op,
-            rhs: Box::new(Expression::Simple(rhs)),
+            rhs: Box::new(rhs),
         }),
         // Otherwise we compare indices of the operators and act accordingly.
         Expression::Binop(lhs) => {
@@ -724,7 +824,7 @@ fn dispatch_order(
                 Expression::Binop(ExprBinop {
                     lhs: Box::new(Expression::Binop(lhs)),
                     operator: op,
-                    rhs: Box::new(Expression::Simple(rhs)),
+                    rhs: Box::new(rhs),
                 })
             }
         }
@@ -808,7 +908,7 @@ impl<T: Parse, U: Parse> Parse for Punctuated<T, U> {
     ) -> Result<Self, Error> {
         let mut collection = Vec::new();
 
-        let first = T::parse(it, context)?;
+        let first = Box::parse(it, context)?;
 
         while let Some(punct) = Option::<U>::parse(it, context).unwrap() {
             collection.push((punct, T::parse(it, context)?));
@@ -1127,33 +1227,6 @@ impl<T: Parse> Parse for Box<T> {
     }
 }
 
-impl<T: GetType + Parse, U: Parse> GetType for Punctuated<T, U> {
-    fn get_type(&self, context: &CompileContext) -> Result<Type, Error> {
-        let t = self.first.get_type(context)?;
-
-        for (_, v) in &self.collection {
-            v.match_type(context, &t).map_err(|err| match err {
-                Error::InvalidType { expected, got } => Error::InconsistentTypes {
-                    expected: (expected, Box::new(self.first.get_span())),
-                    got: (got.0, Box::new(got.1)),
-                    error_span: Box::new(self.get_span()),
-                },
-                err => err,
-            })?;
-        }
-
-        Ok(t)
-    }
-
-    fn match_type(&self, context: &CompileContext, t: &Type) -> Result<(), Error> {
-        for v in self.iter() {
-            v.match_type(context, t)?;
-        }
-
-        Ok(())
-    }
-}
-
 /// A builtin type.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PredefinedType {
@@ -1272,77 +1345,3 @@ impl Type {
     }
 }
 
-impl GetType for Expression {
-    fn get_type(&self, context: &CompileContext) -> Result<Type, Error> {
-        match self {
-            Expression::Simple(s) => s.get_type(context),
-            Expression::Binop(b) => Ok(b
-                .operator
-                .get_returned(&b.lhs.get_type(context)?, &b.rhs.get_type(context)?)),
-        }
-    }
-
-    /// Checks if the type of the expression matches type `t`.
-    fn match_type(&self, context: &CompileContext, t: &Type) -> Result<(), Error> {
-        let vt = self.get_type(context)?;
-
-        if vt.can_cast(t) {
-            Ok(())
-        } else {
-            Err(Error::InvalidType {
-                expected: t.clone(),
-                got: (vt, self.get_span()),
-            })
-        }
-    }
-}
-
-impl GetType for SimpleExpression {
-    fn get_type(&self, context: &CompileContext) -> Result<Type, Error> {
-        Ok(match self {
-            SimpleExpression::Ident(ident) => match ident {
-                Ident::Named(named) => {
-                    if let Some(var) = context.variables.get(&named.ident) {
-                        var.get_type(context)?
-                    } else {
-                        Type::Undefined
-                    }
-                }
-                Ident::Collection(c) => Type::Predefined(PredefinedType::PointCollection(c.len())),
-            },
-            SimpleExpression::Number(_) => Type::Predefined(PredefinedType::Scalar(None)),
-            SimpleExpression::Call(c) => {
-                if let Some(f) = context.functions.get(&c.name.ident) {
-                    let params = c.params.as_ref().map_or_else(
-                        || Ok(Vec::new()),
-                        |x| {
-                            x.iter()
-                                .map(|v| v.get_type(context))
-                                .collect::<Result<Vec<Type>, Error>>()
-                        },
-                    )?;
-
-                    f.get_returned(&params)
-                } else {
-                    Type::Undefined
-                }
-            }
-            SimpleExpression::Unop(u) => u.operator.get_returned(&u.rhs.get_type(context)?),
-            SimpleExpression::Parenthised(p) => p.content.get_type(context)?,
-        })
-    }
-
-    /// Checks if the type of the expression matches type `t`.
-    fn match_type(&self, context: &CompileContext, t: &Type) -> Result<(), Error> {
-        let vt = self.get_type(context)?;
-
-        if vt.can_cast(t) {
-            Ok(())
-        } else {
-            Err(Error::InvalidType {
-                expected: t.clone(),
-                got: (vt, self.get_span()),
-            })
-        }
-    }
-}

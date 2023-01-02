@@ -38,15 +38,16 @@ pub enum Error {
         occured_length: usize,
         error_span: Span,
     },
+    IteratorWithSameIdIterator {
+        error_span: Span,
+        parent_span: Span,
+        contained_span: Span
+    },
     InconsistentTypes {
         // boxes here to reduce size
         expected: (Type, Box<Span>),
         got: (Type, Box<Span>),
         error_span: Box<Span>,
-    },
-    InvalidType {
-        expected: Type,
-        got: (Type, Span),
     },
     RedefinedVariable {
         defined_at: Span,
@@ -96,6 +97,11 @@ pub enum Error {
         var_span: Span,
         error_span: Span,
     },
+    LetStatMoreThanOneIterator {
+        error_span: Span,
+        first_span: Span,
+        second_span: Span
+    }
 }
 
 impl Error {
@@ -249,11 +255,6 @@ impl Error {
                     AnnotationKind::Note,
                     &format!("This expression is of type {}", got.0),
                 ),
-            Self::InvalidType { expected, got } => DiagnosticData::new(&format!(
-                "invalid type: `{expected}` expected, got `{}`",
-                got.0
-            ))
-            .add_span(got.1),
             Self::RedefinedVariable {
                 defined_at,
                 error_span,
@@ -328,6 +329,18 @@ impl Error {
                 DiagnosticData::new(&"unexpected iterator in right-hand side of `let` statement")
                     .add_span(error_span)
                     .add_annotation(var_span, AnnotationKind::Note, "There was no iterator of left-hand side, so the same is expected for the right.")
+            }
+            Self::IteratorWithSameIdIterator { error_span, parent_span, contained_span } => {
+                DiagnosticData::new(&"An iterator with an id of `x` must not contain an iterator with an id of `x`.")
+                    .add_span(error_span)
+                    .add_annotation(parent_span, AnnotationKind::Note, "Parent iterator here.")
+                    .add_annotation(contained_span, AnnotationKind::Note, "Child iterator here.")
+            }
+            Self::LetStatMoreThanOneIterator { error_span, first_span, second_span } => {
+                DiagnosticData::new(&"Right hand side of a let statement must contain at most a single level of iteration.")
+                    .add_span(error_span)
+                    .add_annotation(first_span, AnnotationKind::Note, "First iterator here.")
+                    .add_annotation(second_span, AnnotationKind::Note, "Second iterator here.")
             }
         }
     }
