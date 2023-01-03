@@ -8,7 +8,7 @@ use super::{
     builtins,
     parser::{
         BinaryOperator, Expression, LetStatement, Parse, PredefinedRuleOperator,
-        PredefinedType, RuleOperator, RuleStatement, SimpleExpression, Statement, Type, ExprIterator, Punctuated,
+        PredefinedType, RuleOperator, RuleStatement, SimpleExpression, Statement, Type, Punctuated, ImplicitIterator, ExplicitIterator,
     },
     token::{self, Ident, NamedIdent, PointCollection, Span},
     ComplexUnit, Error, SimpleUnit, ty,
@@ -132,6 +132,7 @@ pub struct CompileContext {
 }
 
 /// Represents complicated iterator structures.
+#[derive(Debug)]
 pub struct IterTree {
     pub variants: Vec<IterNode>,
     pub id: u8,
@@ -139,6 +140,7 @@ pub struct IterTree {
 }
 
 /// A single node of `IterTree`.
+#[derive(Debug)]
 pub struct IterNode(Vec<IterTree>);
 
 impl Deref for IterNode {
@@ -158,7 +160,7 @@ impl DerefMut for IterNode {
 impl<const ITER: bool> From<&Expression<ITER>> for IterNode {
     fn from(value: &Expression<ITER>) -> Self {
         match value {
-            Expression::Iterator(it) => IterNode::new(vec![it.into()]),
+            Expression::ImplicitIterator(it) => IterNode::new(vec![it.into()]),
             Expression::Single(expr) => expr.as_ref().into(),
             Expression::Binop(binop) => Self::from2(binop.lhs.as_ref(), binop.rhs.as_ref()),
         }
@@ -178,12 +180,23 @@ impl From<&SimpleExpression> for IterNode {
             },
             SimpleExpression::Unop(expr) => expr.rhs.as_ref().into(),
             SimpleExpression::Parenthised(expr) => expr.content.as_ref().into(),
+            SimpleExpression::ExplicitIterator(it) => IterNode::new(vec![it.into()])
         }
     }
 }
 
-impl From<&ExprIterator> for IterTree {
-    fn from(value: &ExprIterator) -> Self {
+impl From<&ImplicitIterator> for IterTree {
+    fn from(value: &ImplicitIterator) -> Self {
+        Self {
+            id: 0, // Implicit iterators have an id of 0.
+            variants: value.exprs.iter().map(IterNode::from).collect(),
+            span: value.get_span()
+        }
+    }
+}
+
+impl From<&ExplicitIterator> for IterTree {
+    fn from(value: &ExplicitIterator) -> Self {
         Self {
             id: value.id,
             variants: value.exprs.iter().map(IterNode::from).collect(),
@@ -258,6 +271,7 @@ impl IterNode {
 }
 
 /// A range-like iterator, except multidimensional.
+#[derive(Debug)]
 pub struct MultiRangeIterator {
     maxes: Vec<usize>,
     currents: Vec<usize>
@@ -299,10 +313,11 @@ impl MultiRangeIterator {
     }
 }
 
+#[derive(Debug)]
 pub struct IterTreeIterator<'r> {
     /// List of lists of parallel iterators with their ids, current indices and lengths.
     steps: Vec<(Vec<(&'r IterTree, usize)>, MultiRangeIterator)>,
-    currents: Option<[usize; 256]>
+    currents: Option<HashMap<u8, usize>>
 }
 
 impl<'r> IterTreeIterator<'r> {
@@ -310,7 +325,7 @@ impl<'r> IterTreeIterator<'r> {
     pub fn new(tree: &'r IterNode) -> Self {
         let mut this = Self {
             steps: Vec::new(),
-            currents: Some([0; 256])
+            currents: Some(HashMap::new())
         };
 
         this.add_node(tree);
@@ -360,7 +375,10 @@ impl<'r> IterTreeIterator<'r> {
         let currents = node.1.get_currents();
 
         for v in &node.0 {
-            self.currents.unwrap()[v.0.id as usize] = currents[v.1];
+            self.currents.as_mut().unwrap()
+                .entry(v.0.id)
+                .and_modify(|x| *x = currents[v.1])
+                .or_insert(currents[v.1]);
         }
     }
 
@@ -368,6 +386,8 @@ impl<'r> IterTreeIterator<'r> {
         while let Some(node) = self.steps.last_mut() {
             if node.1.increment().is_some() {
                 self.update_currents();
+                self.update_iterators();
+                return;
             }
 
             self.steps.pop();
@@ -377,7 +397,7 @@ impl<'r> IterTreeIterator<'r> {
     }
 
     #[must_use]
-    pub fn get_currents(&self) -> Option<&[usize; 256]> {
+    pub fn get_currents(&self) -> Option<&HashMap<u8, usize>> {
         self.currents.as_ref()
     }
 }
@@ -797,7 +817,7 @@ fn unroll_implicit_conversion(
 fn unroll_simple(
     expr: &SimpleExpression,
     context: &CompileContext,
-    it_index: &[usize; 256],
+    it_index: &HashMap<u8, usize>,
 ) -> Result<UnrolledExpression, Error> {
     Ok(match expr {
         SimpleExpression::Ident(i) => match i {
@@ -895,6 +915,7 @@ fn unroll_simple(
             }
         }
         SimpleExpression::Parenthised(expr) => unroll_expression(&expr.content, context, it_index)?,
+        SimpleExpression::ExplicitIterator(it) => unroll_expression(it.get(it_index[&it.id]).unwrap(), context, it_index)?
     })
 }
 
@@ -1027,7 +1048,7 @@ fn unroll_binop(
 fn unroll_expression<const ITER: bool>(
     expr: &Expression<ITER>,
     context: &CompileContext,
-    it_index: &[usize; 256],
+    it_index: &HashMap<u8, usize>,
 ) -> Result<UnrolledExpression, Error> {
     match expr {
         Expression::Single(simple) => unroll_simple(
@@ -1035,8 +1056,8 @@ fn unroll_expression<const ITER: bool>(
             context,
             it_index,
         ),
-        Expression::Iterator(it) => unroll_simple(
-            it.get(it_index[it.id as usize]).unwrap(),
+        Expression::ImplicitIterator(it) => unroll_simple(
+            it.get(it_index[&0]).unwrap(), // Implicit iterators always have an id of 0.
             context,
             it_index,
         ),
@@ -1232,7 +1253,7 @@ fn create_variables(
 
         None
     } else {
-        Some([0; 256])
+        Some(HashMap::new())
     };
 
     let mut it_index = IterTreeIterator::new(&tree);
@@ -1267,12 +1288,11 @@ fn unroll_let(
     create_variables(stat, context)?;
 
     // First, we construct an iterator out of lhs
-    let lhs: Expression<true> = Expression::Iterator(ExprIterator {
+    let lhs: Expression<true> = Expression::ImplicitIterator(ImplicitIterator {
         exprs: Punctuated {
             first: Box::new(SimpleExpression::Ident(stat.ident.first.as_ref().clone())),
             collection: stat.ident.collection.iter().map(|(p, i)| (*p, SimpleExpression::Ident(i.clone()))).collect()
-        },
-        id: 0
+        }
     });
 
     // Then, we run each rule through a tree iterator.

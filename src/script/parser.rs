@@ -193,86 +193,92 @@ impl ToString for BinaryOperator {
     }
 }
 
-/// An iterator of simple expresions, with an id.
-#[derive(Debug)]
-pub enum ExprIterator {
-    Implicit(ImplicitIterator),
-    Explicit(ExplicitIterator)
-}
-
 /// Punctuated expressions.
 #[derive(Debug)]
 pub struct ImplicitIterator {
     pub exprs: Punctuated<SimpleExpression, Comma>
 }
 
+impl ImplicitIterator {
+    #[must_use]
+    pub fn get(&self, index: usize) -> Option<&SimpleExpression> {
+        self.exprs.get(index)
+    }
+}
+
 /// $id(a, b, ...).
 #[derive(Debug)]
 pub struct ExplicitIterator {
-    pub exprs: Punctuated<SimpleExpression, Comma>,
-    pub id: Number,
+    pub exprs: Punctuated<Expression<false>, Comma>,
+    pub id_token: Number,
+    pub id: u8,
     pub dollar: Dollar,
     pub left_paren: LParen,
     pub right_paren: RParen
 }
 
-impl ExprIterator {
+impl ExplicitIterator {
     #[must_use]
-    pub fn len(&self) -> usize {
-        match self {
-            Self::Implicit(v) => v.exprs,
-            Self::Explicit(v) => v.exprs
-        }.len()
-    }
-
-    #[must_use]
-    pub fn is_empty(&self) -> bool {
-        match self {
-            Self::Implicit(v) => v.exprs,
-            Self::Explicit(v) => v.exprs
-        }.is_empty()
-    }
-
-    #[must_use]
-    pub fn get(&self, index: usize) -> Option<&SimpleExpression> {
-        match self {
-            Self::Implicit(v) => v.exprs,
-            Self::Explicit(v) => v.exprs
-        }.get(index)
+    pub fn get(&self, index: usize) -> Option<&Expression<false>> {
+        self.exprs.get(index)
     }
 }
 
-impl Parse for ExprIterator {
-    fn get_span(&self) -> Span {
-        match self {
-            Self::Implicit(v) => v.exprs.get_span(),
-            Self::Explicit(v) => v.dollar.span.join(v.right_paren.span)
-        }
-    }
-
+impl Parse for ImplicitIterator {
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
             it: &mut Peekable<I>,
             context: &CompileContext,
-        ) -> Result<Self, Error> {
-        let peeked = it.peek().cloned();
-
-        match peeked {
-            Some(Token::Dollar(_)) => Ok(Self::Explicit(ExplicitIterator {
-                
-            }))
-        }
-        Ok(Self {
-            exprs: Punctuated::parse(it, context)?,
-            id: 0
+    ) -> Result<Self, Error> {
+        Ok(ImplicitIterator {
+            exprs: Punctuated::parse(it, context)?
         })
+    }
+
+    fn get_span(&self) -> Span {
+        self.exprs.get_span()
+    }
+}
+
+impl Parse for ExplicitIterator {
+    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
+            it: &mut Peekable<I>,
+            context: &CompileContext,
+    ) -> Result<Self, Error> {
+        let dollar = Dollar::parse(it, context)?;
+        let id_token = ExprNumber::parse(it, context)?;
+
+        Ok(ExplicitIterator {
+            dollar,
+            id_token: id_token.token,
+            left_paren: LParen::parse(it, context)?,
+            exprs: Punctuated::parse(it, context)?,
+            right_paren: RParen::parse(it, context)?,
+            id: if id_token.token.dot.is_none() {
+                if id_token.token.integral < 256 {
+                    id_token.token.integral.try_into().unwrap()
+                } else {
+                    return Err(Error::IteratorIdExceeds255 {
+                        error_span: id_token.get_span()
+                    })
+                }
+            } else {
+                return Err(Error::IteratorIdMustBeAnInteger {
+                    error_span: id_token.get_span()
+                })
+            }
+        })  
+    }
+
+    fn get_span(&self) -> Span {
+        self.dollar.span.join(self.right_paren.span)
     }
 }
 
 /// A parsed expression.
 #[derive(Debug)]
 pub enum Expression<const ITER: bool> {
-    /// An iterator.
-    Iterator(ExprIterator),
+    /// Simple values separated by a comma.
+    ImplicitIterator(ImplicitIterator),
     /// A single simple expression
     Single(Box<SimpleExpression>),
     /// A binary operator expression.
@@ -280,15 +286,6 @@ pub enum Expression<const ITER: bool> {
 }
 
 impl<const ITER: bool> Expression<ITER> {
-    #[must_use]
-    pub fn as_iterator(&self) -> Option<&ExprIterator> {
-        if let Self::Iterator(it) = self {
-            Some(it)
-        } else {
-            None
-        }
-    }
-
     /// Returns `true` if the expression is [`Single`].
     ///
     /// [`Single`]: Expression::Single
@@ -311,6 +308,8 @@ pub enum SimpleExpression {
     Unop(ExprUnop),
     /// An expression inside parentheses.
     Parenthised(ExprParenthised),
+    /// An explicit iterator.
+    ExplicitIterator(ExplicitIterator)
 }
 
 impl SimpleExpression {
@@ -745,7 +744,7 @@ impl<const ITER: bool> Parse for Expression<ITER> {
                 Expression::Single(punct.first)
             } else {
                 // Implicit iterators have id of 0.
-                Expression::Iterator(ExprIterator { exprs: punct, id: 0 })
+                Expression::ImplicitIterator(ImplicitIterator { exprs: punct })
             }
         } else {
             // We can only parse one expression.
@@ -776,7 +775,7 @@ impl<const ITER: bool> Parse for Expression<ITER> {
                     Expression::Single(punct.first)
                 } else {
                     // Implicit iterators have id of 0.
-                    Expression::Iterator(ExprIterator { exprs: punct, id: 0 })
+                    Expression::ImplicitIterator(ImplicitIterator { exprs: punct })
                 }
             };
 
@@ -788,7 +787,7 @@ impl<const ITER: bool> Parse for Expression<ITER> {
 
     fn get_span(&self) -> Span {
         match self {
-            Expression::Iterator(it) => it.get_span(),
+            Expression::ImplicitIterator(it) => it.get_span(),
             Expression::Single(expr) => expr.get_span(),
             Expression::Binop(e) => e.lhs.get_span().join(e.rhs.get_span()),
         }
@@ -814,7 +813,7 @@ fn dispatch_order<const ITER: bool>(
 
     match lhs {
         // if lhs is simple, there is no order to consider.
-        lhs @ (Expression::Iterator(_)  | Expression::Single(_)) => Expression::Binop(ExprBinop {
+        lhs @ (Expression::ImplicitIterator(_)  | Expression::Single(_)) => Expression::Binop(ExprBinop {
             lhs: Box::new(lhs),
             operator: op,
             rhs: Box::new(rhs),
@@ -887,6 +886,9 @@ impl Parse for SimpleExpression {
                 Token::LParen(_) => {
                     SimpleExpression::Parenthised(ExprParenthised::parse(it, context)?)
                 }
+                Token::Dollar(_) => {
+                    SimpleExpression::ExplicitIterator(ExplicitIterator::parse(it, context)?)
+                }
                 tok => return Err(Error::invalid_token(tok.clone())),
             },
             None => return Err(Error::end_of_input()),
@@ -904,6 +906,7 @@ impl Parse for SimpleExpression {
                 UnaryOperator::Neg(v) => v.minus.span,
             }),
             SimpleExpression::Parenthised(v) => v.get_span(),
+            Self::ExplicitIterator(v) => v.get_span()
         }
     }
 }
@@ -1038,6 +1041,23 @@ impl Parse for Vertical {
     ) -> Result<Self, Error> {
         match it.next() {
             Some(Token::Vertical(tok)) => Ok(*tok),
+            Some(t) => Err(Error::invalid_token(t.clone())),
+            None => Err(Error::end_of_input()),
+        }
+    }
+
+    fn get_span(&self) -> Span {
+        self.span
+    }
+}
+
+impl Parse for Dollar {
+    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
+        it: &mut Peekable<I>,
+        _context: &CompileContext,
+    ) -> Result<Self, Error> {
+        match it.next() {
+            Some(Token::Dollar(tok)) => Ok(*tok),
             Some(t) => Err(Error::invalid_token(t.clone())),
             None => Err(Error::end_of_input()),
         }

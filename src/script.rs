@@ -27,6 +27,12 @@ pub enum Error {
         character: char,
         error_span: Span,
     },
+    IteratorIdMustBeAnInteger {
+        error_span: Span
+    },
+    IteratorIdExceeds255 {
+        error_span: Span
+    },
     EndOfInput,
     UndefinedRuleOperator {
         operator: NamedIdent,
@@ -341,6 +347,14 @@ impl Error {
                     .add_span(error_span)
                     .add_annotation(first_span, AnnotationKind::Note, "First iterator here.")
                     .add_annotation(second_span, AnnotationKind::Note, "Second iterator here.")
+            }
+            Self::IteratorIdMustBeAnInteger { error_span } => {
+                DiagnosticData::new(&"Iterator id must be an integer.")
+                    .add_span(error_span)
+            }
+            Self::IteratorIdExceeds255 { error_span } => {
+                DiagnosticData::new(&"Iterator id must be smaller than 256.")
+                    .add_span(error_span)
             }
         }
     }
