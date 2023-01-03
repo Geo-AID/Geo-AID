@@ -28,10 +28,13 @@ pub enum Error {
         error_span: Span,
     },
     IteratorIdMustBeAnInteger {
-        error_span: Span
+        error_span: Span,
     },
     IteratorIdExceeds255 {
-        error_span: Span
+        error_span: Span,
+    },
+    SingleVariantExplicitIterator {
+        error_span: Span,
     },
     EndOfInput,
     UndefinedRuleOperator {
@@ -47,7 +50,7 @@ pub enum Error {
     IteratorWithSameIdIterator {
         error_span: Span,
         parent_span: Span,
-        contained_span: Span
+        contained_span: Span,
     },
     InconsistentTypes {
         // boxes here to reduce size
@@ -106,8 +109,8 @@ pub enum Error {
     LetStatMoreThanOneIterator {
         error_span: Span,
         first_span: Span,
-        second_span: Span
-    }
+        second_span: Span,
+    },
 }
 
 impl Error {
@@ -356,6 +359,10 @@ impl Error {
                 DiagnosticData::new(&"Iterator id must be smaller than 256.")
                     .add_span(error_span)
             }
+            Self::SingleVariantExplicitIterator { error_span } => {
+                DiagnosticData::new(&"Explicit iterators must have at least two variants.")
+                    .add_span(error_span)
+            }
         }
     }
 }
@@ -411,13 +418,26 @@ pub mod unit {
 }
 
 pub mod ty {
-    use super::{parser::{Type, PredefinedType}, ComplexUnit, SimpleUnit};
+    use super::{
+        parser::{PredefinedType, Type},
+        ComplexUnit, SimpleUnit,
+    };
 
-    pub const DISTANCE: Type = Type::Predefined(PredefinedType::Scalar(Some(ComplexUnit::new(SimpleUnit::Distance))));
-    pub const POINT: Type = Type::Predefined(PredefinedType::Scalar(Some(ComplexUnit::new(SimpleUnit::Distance))));
-    pub const ANGLE: Type = Type::Predefined(PredefinedType::Scalar(Some(ComplexUnit::new(SimpleUnit::Distance))));
-    pub const LINE: Type = Type::Predefined(PredefinedType::Scalar(Some(ComplexUnit::new(SimpleUnit::Distance))));
-    pub const SCALAR: Type = Type::Predefined(PredefinedType::Scalar(Some(ComplexUnit::new(SimpleUnit::Distance))));
+    pub const DISTANCE: Type = Type::Predefined(PredefinedType::Scalar(Some(ComplexUnit::new(
+        SimpleUnit::Distance,
+    ))));
+    pub const POINT: Type = Type::Predefined(PredefinedType::Scalar(Some(ComplexUnit::new(
+        SimpleUnit::Distance,
+    ))));
+    pub const ANGLE: Type = Type::Predefined(PredefinedType::Scalar(Some(ComplexUnit::new(
+        SimpleUnit::Distance,
+    ))));
+    pub const LINE: Type = Type::Predefined(PredefinedType::Scalar(Some(ComplexUnit::new(
+        SimpleUnit::Distance,
+    ))));
+    pub const SCALAR: Type = Type::Predefined(PredefinedType::Scalar(Some(ComplexUnit::new(
+        SimpleUnit::Distance,
+    ))));
 }
 
 impl ComplexUnit {

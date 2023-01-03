@@ -31,7 +31,7 @@ number := digit, {digit}, ['.', digit, {digit}];
 ```
 
 ## Iterators
-An iterator is a syntatic sugar for compressing multiple lines of code into one. It is done by creating variants of the specified statement by separating the variating parts with a '|' symbol. For example:
+An iterator is a syntatic sugar for compressing multiple lines of code into one. One way to do it is to create variants of the specified statement by separating the variating parts with a ',' symbol. For example:
 
 ```
 AB < 2.0;
@@ -39,12 +39,42 @@ BC < 2.0;
 
 # Becomes
 
-AB | BC < 2.0;
+AB, BC < 2.0;
 ```
 
 ```
-iterator<T> := T, {'|', T};
+implicit-iterator<T> := T, {',', T};
 ```
+
+This iterator, however, cannot appear in functions or explicit iterators. It also only supports one level of iteration. For those cases, GeoScript supports creating explicit iterators using the following syntax:
+
+```
+AB < 2.0;
+BC < 2.0;
+
+# Becomes
+
+$0(AB, BC) < 2.0;
+```
+
+An explicit iterator starts with the `$` symbol followed by an id and then by the iterator variants in parentheses. The id of an iterator must be ab integer smaller than 256. Implicit iterators always have an id of 0. Iterators with varying ids allow creating more levels of iteration. For example:
+
+```
+$1(AB, BC) < $2(CD, DE);
+
+
+# becomes
+AB < CD;
+AB < DE;
+BC < CD;
+BC < DE;
+```
+
+```
+explicit-iterator<T> := '$', digit, {digit}, '(', T, {',', T}, ')';
+```
+
+All iterators must have at least two variants.
 
 ## Expressions
 Expressions allow to join values with certain operations to alter them.
@@ -59,11 +89,11 @@ angle(ABC)
 unop := unary-operator, simple-expr;
 identexpr := ident;
 numberexpr := number;
-call := ident, '(', [expr, {',', expr}], ')';
+call := ident, '(', [expr(no implicit iterators), {',', expr(no implicit iterators)}], ')';
 parenthised := '(', expr, ')';
-simple-expr := unop | identexpr | numberexpr | call | parenthised;
+simple-expr := unop | identexpr | numberexpr | call | parenthised | explicit-iterator<expr(no implicit iterators)>;
 binop := expr, binary-operator, expr;
-expr := iterator<simple-expr> | binop;
+expr := implicit-iterator<simple-expr> | simple-expr | binop;
 ```
 
 ## Operators

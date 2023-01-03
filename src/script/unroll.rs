@@ -1,17 +1,19 @@
 use std::{
     collections::{hash_map::Entry, HashMap},
     fmt::Display,
-    rc::Rc, ops::{Deref, DerefMut},
+    ops::{Deref, DerefMut},
+    rc::Rc,
 };
 
 use super::{
     builtins,
     parser::{
-        BinaryOperator, Expression, LetStatement, Parse, PredefinedRuleOperator,
-        PredefinedType, RuleOperator, RuleStatement, SimpleExpression, Statement, Type, Punctuated, ImplicitIterator, ExplicitIterator,
+        BinaryOperator, ExplicitIterator, Expression, ImplicitIterator, LetStatement, Parse,
+        PredefinedRuleOperator, PredefinedType, Punctuated, RuleOperator, RuleStatement,
+        SimpleExpression, Statement, Type,
     },
     token::{self, Ident, NamedIdent, PointCollection, Span},
-    ComplexUnit, Error, SimpleUnit, ty,
+    ty, ComplexUnit, Error, SimpleUnit,
 };
 
 /// A definition for a user-defined rule operator.
@@ -136,7 +138,7 @@ pub struct CompileContext {
 pub struct IterTree {
     pub variants: Vec<IterNode>,
     pub id: u8,
-    pub span: Span
+    pub span: Span,
 }
 
 /// A single node of `IterTree`.
@@ -170,17 +172,19 @@ impl<const ITER: bool> From<&Expression<ITER>> for IterNode {
 impl From<&SimpleExpression> for IterNode {
     fn from(value: &SimpleExpression) -> Self {
         match value {
-            SimpleExpression::Ident(_)
-            | SimpleExpression::Number(_) => IterNode::new(Vec::new()),
+            SimpleExpression::Ident(_) | SimpleExpression::Number(_) => IterNode::new(Vec::new()),
             SimpleExpression::Call(expr) => match &expr.params {
-                Some(params) => IterNode::new(params.iter().flat_map(
-                    |v| IterNode::from(v).0.into_iter()
-                ).collect()),
-                None => IterNode::new(Vec::new())
+                Some(params) => IterNode::new(
+                    params
+                        .iter()
+                        .flat_map(|v| IterNode::from(v).0.into_iter())
+                        .collect(),
+                ),
+                None => IterNode::new(Vec::new()),
             },
             SimpleExpression::Unop(expr) => expr.rhs.as_ref().into(),
             SimpleExpression::Parenthised(expr) => expr.content.as_ref().into(),
-            SimpleExpression::ExplicitIterator(it) => IterNode::new(vec![it.into()])
+            SimpleExpression::ExplicitIterator(it) => IterNode::new(vec![it.into()]),
         }
     }
 }
@@ -190,7 +194,7 @@ impl From<&ImplicitIterator> for IterTree {
         Self {
             id: 0, // Implicit iterators have an id of 0.
             variants: value.exprs.iter().map(IterNode::from).collect(),
-            span: value.get_span()
+            span: value.get_span(),
         }
     }
 }
@@ -200,7 +204,7 @@ impl From<&ExplicitIterator> for IterTree {
         Self {
             id: value.id,
             variants: value.exprs.iter().map(IterNode::from).collect(),
-            span: value.get_span()
+            span: value.get_span(),
         }
     }
 }
@@ -209,7 +213,11 @@ impl IterTree {
     /// # Errors
     /// Returns an error when there is an inconsistency in among iterators (same id, different lengths)
     /// or when an iterator with id x contains an iterator with id x.
-    pub fn get_iter_lengths(&self, lengths: &mut HashMap<u8, (usize, Span, Option<Span>)>, full_span: Span) -> Result<(), Error> {
+    pub fn get_iter_lengths(
+        &self,
+        lengths: &mut HashMap<u8, (usize, Span, Option<Span>)>,
+        full_span: Span,
+    ) -> Result<(), Error> {
         for variant in &self.variants {
             variant.get_iter_lengths(lengths, full_span)?;
         }
@@ -225,7 +233,10 @@ impl IterNode {
     }
 
     #[must_use]
-    pub fn from2<const ITER1: bool, const ITER2: bool>(e1: &Expression<ITER1>, e2: &Expression<ITER2>) -> Self {
+    pub fn from2<const ITER1: bool, const ITER2: bool>(
+        e1: &Expression<ITER1>,
+        e2: &Expression<ITER2>,
+    ) -> Self {
         let mut node = Self::from(e1);
         node.extend(Self::from(e2).0.into_iter());
         node
@@ -233,32 +244,38 @@ impl IterNode {
 
     /// # Panics
     /// Never.
-    /// 
+    ///
     /// # Errors
     /// Returns an error when there is an inconsistency in among iterators (same id, different lengths)
     /// or when an iterator with id x contains an iterator with id x.
-    pub fn get_iter_lengths(&self, lengths: &mut HashMap<u8, (usize, Span, Option<Span>)>, full_span: Span) -> Result<(), Error> {
+    pub fn get_iter_lengths(
+        &self,
+        lengths: &mut HashMap<u8, (usize, Span, Option<Span>)>,
+        full_span: Span,
+    ) -> Result<(), Error> {
         for iter in &self.0 {
             match lengths.entry(iter.id) {
                 Entry::Vacant(entry) => {
                     entry.insert((iter.variants.len(), iter.span, Some(iter.span)));
                 }
-                Entry::Occupied(mut entry) => if entry.get().0 != iter.variants.len() {
-                    return Err(Error::InconsistentIterators {
-                        first_span: entry.get().1,
-                        first_length: entry.get().0,
-                        occured_span: iter.span,
-                        occured_length: iter.variants.len(),
-                        error_span: full_span
-                    })
-                } else if let Some(parent) =  entry.get().2 {
-                    return Err(Error::IteratorWithSameIdIterator {
-                        error_span: full_span,
-                        parent_span: parent,
-                        contained_span: iter.span
-                    })
-                } else {
-                    entry.get_mut().2 = Some(iter.span);
+                Entry::Occupied(mut entry) => {
+                    if entry.get().0 != iter.variants.len() {
+                        return Err(Error::InconsistentIterators {
+                            first_span: entry.get().1,
+                            first_length: entry.get().0,
+                            occured_span: iter.span,
+                            occured_length: iter.variants.len(),
+                            error_span: full_span,
+                        });
+                    } else if let Some(parent) = entry.get().2 {
+                        return Err(Error::IteratorWithSameIdIterator {
+                            error_span: full_span,
+                            parent_span: parent,
+                            contained_span: iter.span,
+                        });
+                    } else {
+                        entry.get_mut().2 = Some(iter.span);
+                    }
                 }
             }
 
@@ -274,7 +291,7 @@ impl IterNode {
 #[derive(Debug)]
 pub struct MultiRangeIterator {
     maxes: Vec<usize>,
-    currents: Vec<usize>
+    currents: Vec<usize>,
 }
 
 impl MultiRangeIterator {
@@ -284,7 +301,7 @@ impl MultiRangeIterator {
 
         Self {
             maxes,
-            currents: vec![0].repeat(l)
+            currents: vec![0].repeat(l),
         }
     }
 
@@ -294,13 +311,13 @@ impl MultiRangeIterator {
 
     fn increment_place(&mut self, at: usize) -> Option<&Vec<usize>> {
         self.currents[at] += 1;
-        
+
         if self.currents[at] == self.maxes[at] {
             self.currents[at] = 0;
             if at == 0 {
                 None
             } else {
-                self.increment_place(at-1)
+                self.increment_place(at - 1)
             }
         } else {
             Some(&self.currents)
@@ -317,7 +334,7 @@ impl MultiRangeIterator {
 pub struct IterTreeIterator<'r> {
     /// List of lists of parallel iterators with their ids, current indices and lengths.
     steps: Vec<(Vec<(&'r IterTree, usize)>, MultiRangeIterator)>,
-    currents: Option<HashMap<u8, usize>>
+    currents: Option<HashMap<u8, usize>>,
 }
 
 impl<'r> IterTreeIterator<'r> {
@@ -325,7 +342,7 @@ impl<'r> IterTreeIterator<'r> {
     pub fn new(tree: &'r IterNode) -> Self {
         let mut this = Self {
             steps: Vec::new(),
-            currents: Some(HashMap::new())
+            currents: Some(HashMap::new()),
         };
 
         this.add_node(tree);
@@ -347,8 +364,20 @@ impl<'r> IterTreeIterator<'r> {
 
             self.steps.push((
                 // `visited` will be in order. We can use that.
-                node.iter().map(|v| (v, visited.iter().enumerate().find(|(_, x)| **x == v.id).unwrap().0)).collect(),
-                MultiRangeIterator::new(lengths)
+                node.iter()
+                    .map(|v| {
+                        (
+                            v,
+                            visited
+                                .iter()
+                                .enumerate()
+                                .find(|(_, x)| **x == v.id)
+                                .unwrap()
+                                .0,
+                        )
+                    })
+                    .collect(),
+                MultiRangeIterator::new(lengths),
             ));
             self.update_currents();
 
@@ -358,9 +387,10 @@ impl<'r> IterTreeIterator<'r> {
 
     fn update_iterators(&mut self) {
         let nodes = if let Some(node) = self.steps.last() {
-            node.0.iter().map(
-                |iter| &iter.0.variants[node.1.get_currents()[iter.1]]
-            ).collect()
+            node.0
+                .iter()
+                .map(|iter| &iter.0.variants[node.1.get_currents()[iter.1]])
+                .collect()
         } else {
             Vec::new()
         };
@@ -375,7 +405,9 @@ impl<'r> IterTreeIterator<'r> {
         let currents = node.1.get_currents();
 
         for v in &node.0 {
-            self.currents.as_mut().unwrap()
+            self.currents
+                .as_mut()
+                .unwrap()
                 .entry(v.0.id)
                 .and_modify(|x| *x = currents[v.1])
                 .or_insert(currents[v.1]);
@@ -611,64 +643,70 @@ fn unroll_pc_conversion(
                 ))
             }
         }
-        2 => {
-            match to  {
-                Type::Predefined(pre) => match pre {
-                    PredefinedType::Line => Ok(UnrolledExpression {
-                        data: Rc::new(UnrolledExpressionData::LineFromPoints(
-                            UnrolledExpression {
-                                data: Rc::new(UnrolledExpressionData::IndexCollection(expr.clone(), 0)),
-                                ty: Type::Predefined(PredefinedType::Point),
-                                span: expr.span,
-                            },
-                            UnrolledExpression {
-                                data: Rc::new(UnrolledExpressionData::IndexCollection(expr.clone(), 1)),
-                                ty: Type::Predefined(PredefinedType::Point),
-                                span: expr.span,
-                            },
-                        )),
-                        ty: Type::Predefined(PredefinedType::Line),
-                        span: expr.span,
-                    }),
-                    PredefinedType::Scalar(unit) => {
-                        if unit == &Some(ComplexUnit::new(SimpleUnit::Distance)) {
-                            Ok(UnrolledExpression {
-                                data: Rc::new(UnrolledExpressionData::PointPointDistance(
-                                    UnrolledExpression {
-                                        data: Rc::new(UnrolledExpressionData::IndexCollection(expr.clone(), 0)),
-                                        ty: Type::Predefined(PredefinedType::Point),
-                                        span: expr.span,
-                                    },
-                                    UnrolledExpression {
-                                        data: Rc::new(UnrolledExpressionData::IndexCollection(expr.clone(), 1)),
-                                        ty: Type::Predefined(PredefinedType::Point),
-                                        span: expr.span,
-                                    },
-                                )),
-                                ty: Type::Predefined(PredefinedType::Scalar(Some(ComplexUnit::new(SimpleUnit::Distance)))),
-                                span: expr.span,
-                            })
-                        } else {
-                            Err(Error::implicit_conversion_does_not_exist(
-                                expr.span,
-                                expr.ty.clone(),
-                                to.clone(),
-                            ))
-                        }
-                    },
-                    _ => Err(Error::implicit_conversion_does_not_exist(
-                        expr.span,
-                        expr.ty.clone(),
-                        to.clone(),
-                    ))
-                },
+        2 => match to {
+            Type::Predefined(pre) => match pre {
+                PredefinedType::Line => Ok(UnrolledExpression {
+                    data: Rc::new(UnrolledExpressionData::LineFromPoints(
+                        UnrolledExpression {
+                            data: Rc::new(UnrolledExpressionData::IndexCollection(expr.clone(), 0)),
+                            ty: Type::Predefined(PredefinedType::Point),
+                            span: expr.span,
+                        },
+                        UnrolledExpression {
+                            data: Rc::new(UnrolledExpressionData::IndexCollection(expr.clone(), 1)),
+                            ty: Type::Predefined(PredefinedType::Point),
+                            span: expr.span,
+                        },
+                    )),
+                    ty: Type::Predefined(PredefinedType::Line),
+                    span: expr.span,
+                }),
+                PredefinedType::Scalar(unit) => {
+                    if unit == &Some(ComplexUnit::new(SimpleUnit::Distance)) {
+                        Ok(UnrolledExpression {
+                            data: Rc::new(UnrolledExpressionData::PointPointDistance(
+                                UnrolledExpression {
+                                    data: Rc::new(UnrolledExpressionData::IndexCollection(
+                                        expr.clone(),
+                                        0,
+                                    )),
+                                    ty: Type::Predefined(PredefinedType::Point),
+                                    span: expr.span,
+                                },
+                                UnrolledExpression {
+                                    data: Rc::new(UnrolledExpressionData::IndexCollection(
+                                        expr.clone(),
+                                        1,
+                                    )),
+                                    ty: Type::Predefined(PredefinedType::Point),
+                                    span: expr.span,
+                                },
+                            )),
+                            ty: Type::Predefined(PredefinedType::Scalar(Some(ComplexUnit::new(
+                                SimpleUnit::Distance,
+                            )))),
+                            span: expr.span,
+                        })
+                    } else {
+                        Err(Error::implicit_conversion_does_not_exist(
+                            expr.span,
+                            expr.ty.clone(),
+                            to.clone(),
+                        ))
+                    }
+                }
                 _ => Err(Error::implicit_conversion_does_not_exist(
                     expr.span,
                     expr.ty.clone(),
                     to.clone(),
-                ))
-            }
-        }
+                )),
+            },
+            _ => Err(Error::implicit_conversion_does_not_exist(
+                expr.span,
+                expr.ty.clone(),
+                to.clone(),
+            )),
+        },
         _ => Err(Error::implicit_conversion_does_not_exist(
             expr.span,
             expr.ty.clone(),
@@ -915,7 +953,9 @@ fn unroll_simple(
             }
         }
         SimpleExpression::Parenthised(expr) => unroll_expression(&expr.content, context, it_index)?,
-        SimpleExpression::ExplicitIterator(it) => unroll_expression(it.get(it_index[&it.id]).unwrap(), context, it_index)?
+        SimpleExpression::ExplicitIterator(it) => {
+            unroll_expression(it.get(it_index[&it.id]).unwrap(), context, it_index)?
+        }
     })
 }
 
@@ -945,10 +985,7 @@ fn unroll_binop(
     let lhs = match &lhs.ty {
         Type::Predefined(pre) => match pre {
             PredefinedType::Scalar(_) => lhs,
-            PredefinedType::PointCollection(2) => unroll_implicit_conversion(
-                lhs,
-                &ty::DISTANCE,
-            )?,
+            PredefinedType::PointCollection(2) => unroll_implicit_conversion(lhs, &ty::DISTANCE)?,
             _ => {
                 return Err(Error::InvalidOperandType {
                     error_span: lhs.span.join(rhs.span),
@@ -1051,11 +1088,7 @@ fn unroll_expression<const ITER: bool>(
     it_index: &HashMap<u8, usize>,
 ) -> Result<UnrolledExpression, Error> {
     match expr {
-        Expression::Single(simple) => unroll_simple(
-            simple.as_ref(),
-            context,
-            it_index,
-        ),
+        Expression::Single(simple) => unroll_simple(simple.as_ref(), context, it_index),
         Expression::ImplicitIterator(it) => unroll_simple(
             it.get(it_index[&0]).unwrap(), // Implicit iterators always have an id of 0.
             context,
@@ -1222,8 +1255,8 @@ fn create_variables(
                 return Err(Error::LetStatMoreThanOneIterator {
                     error_span: stat.expr.get_span(),
                     first_span: iter.span,
-                    second_span: it.span
-                })
+                    second_span: it.span,
+                });
             }
 
             for variant in &it.variants {
@@ -1231,8 +1264,8 @@ fn create_variables(
                     return Err(Error::LetStatMoreThanOneIterator {
                         error_span: stat.expr.get_span(),
                         first_span: iter.span,
-                        second_span: it2.span
-                    })
+                        second_span: it2.span,
+                    });
                 }
             }
         }
@@ -1247,7 +1280,7 @@ fn create_variables(
                 first_length: stat.ident.len(),
                 occured_span: entry.1,
                 occured_length: entry.0,
-                error_span: stat.get_span()
+                error_span: stat.get_span(),
             });
         }
 
@@ -1260,17 +1293,18 @@ fn create_variables(
 
     // Iterate over each identifier.
     for ident in stat.ident.iter() {
-        let rhs_unrolled = unroll_expression(&stat.expr, context, ind.as_ref().unwrap_or_else(|| it_index.get_currents().unwrap()))?;
+        let rhs_unrolled = unroll_expression(
+            &stat.expr,
+            context,
+            ind.as_ref()
+                .unwrap_or_else(|| it_index.get_currents().unwrap()),
+        )?;
         it_index.next();
 
         match ident {
-            Ident::Named(named) => create_variable_named(
-                stat,
-                context,
-                named,
-                rhs_unrolled,
-                &mut variables,
-            )?,
+            Ident::Named(named) => {
+                create_variable_named(stat, context, named, rhs_unrolled, &mut variables)?
+            }
             Ident::Collection(col) => {
                 create_variable_collection(stat, context, col, rhs_unrolled, &mut variables)?;
             }
@@ -1291,8 +1325,13 @@ fn unroll_let(
     let lhs: Expression<true> = Expression::ImplicitIterator(ImplicitIterator {
         exprs: Punctuated {
             first: Box::new(SimpleExpression::Ident(stat.ident.first.as_ref().clone())),
-            collection: stat.ident.collection.iter().map(|(p, i)| (*p, SimpleExpression::Ident(i.clone()))).collect()
-        }
+            collection: stat
+                .ident
+                .collection
+                .iter()
+                .map(|(p, i)| (*p, SimpleExpression::Ident(i.clone())))
+                .collect(),
+        },
     });
 
     // Then, we run each rule through a tree iterator.
@@ -1301,7 +1340,7 @@ fn unroll_let(
 
         // Check the lengths
         tree.get_iter_lengths(&mut HashMap::new(), stat.get_span())?;
-        
+
         // And create the index
         let mut index = IterTreeIterator::new(&tree);
 
@@ -1314,7 +1353,7 @@ fn unroll_let(
                 unrolled,
                 stat.get_span(),
             )?;
-            
+
             index.next();
         }
     }
@@ -1656,7 +1695,7 @@ fn unroll_rulestat(
             unroll_expression(&rule.rhs, context, index)?,
             context,
             unrolled,
-            rule.get_span()
+            rule.get_span(),
         )?;
 
         it_index.next();
@@ -1664,7 +1703,6 @@ fn unroll_rulestat(
 
     Ok(())
 }
-
 
 /// Unrolls the given script. All iterators are expanded and all conversions applied. The output can be immediately compiled.
 ///
@@ -1703,6 +1741,6 @@ pub fn unroll(input: &str) -> Result<(Vec<UnrolledRule>, CompileContext), Error>
 
         next = it.peek().is_some();
     }
-    
+
     Ok((unrolled, context))
 }

@@ -504,12 +504,12 @@ impl<'r> Display for Diagnostic<'r> {
                             lines.next().unwrap()
                         )?,
                         diff => {
-                            for _ in 0..(diff-1) {
+                            for _ in 0..(diff - 1) {
                                 lines.next();
                             }
 
                             writeln!(f, "{:indent$}{}", "", "...".blue().bold())?;
-                        },
+                        }
                     }
                 }
             }

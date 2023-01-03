@@ -304,7 +304,7 @@ pub enum Token {
     Exclamation(Exclamation),
     Ident(Ident),
     Number(Number),
-    Dollar(Dollar)
+    Dollar(Dollar),
 }
 
 impl Display for Token {

@@ -10,7 +10,10 @@ use std::{
 
 use clap::{Parser, ValueEnum};
 use crossterm::{cursor, terminal, ExecutableCommand, QueueableCommand};
-use geo_aid::{cli::{Diagnostic, DiagnosticKind}, drawer::{json, raw}};
+use geo_aid::{
+    cli::{Diagnostic, DiagnosticKind},
+    drawer::{json, raw},
+};
 use geo_aid::{
     drawer::{latex, svg},
     generator::{Complex, Generator},
@@ -51,7 +54,7 @@ struct Args {
     height: usize,
     /// Where to put the log output
     #[arg(long, short)]
-    log: Option<PathBuf>
+    log: Option<PathBuf>,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum, Debug)]
@@ -63,7 +66,7 @@ enum Renderer {
     /// The JSON (machine-readable) format renderer.
     Json,
     /// The raw (human-readable) format renderer.
-    Raw
+    Raw,
 }
 
 fn main() {
@@ -82,9 +85,11 @@ fn main() {
             println!("{diagnostic}");
 
             if let Some(path) = &args.log {
-                let mut log = File::create(path).unwrap_or_else(|_| panic!("Failed to create log file at {}", path.display()));
+                let mut log = File::create(path)
+                    .unwrap_or_else(|_| panic!("Failed to create log file at {}", path.display()));
 
-                log.write_all("-1".as_bytes()).expect("Writing to log file failed.");
+                log.write_all("-1".as_bytes())
+                    .expect("Writing to log file failed.");
             }
 
             process::exit(0);
@@ -146,9 +151,11 @@ fn main() {
     );
 
     if let Some(path) = &args.log {
-        let mut log = File::create(path).unwrap_or_else(|_| panic!("Failed to create log file at {}", path.display()));
+        let mut log = File::create(path)
+            .unwrap_or_else(|_| panic!("Failed to create log file at {}", path.display()));
 
         let full = format!("0\n{}\n{}", gen.get_total_quality(), duration.as_secs_f64());
-        log.write_all(full.as_bytes()).expect("Writing to log file failed.");
+        log.write_all(full.as_bytes())
+            .expect("Writing to log file failed.");
     }
 }

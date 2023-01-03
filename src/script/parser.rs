@@ -8,8 +8,8 @@ use crate::span;
 
 use super::{
     token::{
-        Asterisk, Comma, Eq, Exclamation, Gt, Gteq, Ident, LParen, Let, Lt, Lteq, Minus,
-        NamedIdent, Number, Plus, Position, RParen, Semi, Slash, Span, Token, Vertical, Dollar,
+        Asterisk, Comma, Dollar, Eq, Exclamation, Gt, Gteq, Ident, LParen, Let, Lt, Lteq, Minus,
+        NamedIdent, Number, Plus, Position, RParen, Semi, Slash, Span, Token, Vertical,
     },
     unroll::{CompileContext, RuleOperatorDefinition},
     ComplexUnit, Error, SimpleUnit,
@@ -196,7 +196,7 @@ impl ToString for BinaryOperator {
 /// Punctuated expressions.
 #[derive(Debug)]
 pub struct ImplicitIterator {
-    pub exprs: Punctuated<SimpleExpression, Comma>
+    pub exprs: Punctuated<SimpleExpression, Comma>,
 }
 
 impl ImplicitIterator {
@@ -214,7 +214,7 @@ pub struct ExplicitIterator {
     pub id: u8,
     pub dollar: Dollar,
     pub left_paren: LParen,
-    pub right_paren: RParen
+    pub right_paren: RParen,
 }
 
 impl ExplicitIterator {
@@ -226,11 +226,11 @@ impl ExplicitIterator {
 
 impl Parse for ImplicitIterator {
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-            it: &mut Peekable<I>,
-            context: &CompileContext,
+        it: &mut Peekable<I>,
+        context: &CompileContext,
     ) -> Result<Self, Error> {
         Ok(ImplicitIterator {
-            exprs: Punctuated::parse(it, context)?
+            exprs: Punctuated::parse(it, context)?,
         })
     }
 
@@ -241,32 +241,41 @@ impl Parse for ImplicitIterator {
 
 impl Parse for ExplicitIterator {
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-            it: &mut Peekable<I>,
-            context: &CompileContext,
+        it: &mut Peekable<I>,
+        context: &CompileContext,
     ) -> Result<Self, Error> {
         let dollar = Dollar::parse(it, context)?;
         let id_token = ExprNumber::parse(it, context)?;
+        let left_paren = LParen::parse(it, context)?;
+        let exprs = Punctuated::parse(it, context)?;
+        let right_paren = RParen::parse(it, context)?;
+
+        if exprs.len() == 1 {
+            return Err(Error::SingleVariantExplicitIterator {
+                error_span: dollar.span.join(right_paren.span),
+            });
+        }
 
         Ok(ExplicitIterator {
             dollar,
             id_token: id_token.token,
-            left_paren: LParen::parse(it, context)?,
-            exprs: Punctuated::parse(it, context)?,
-            right_paren: RParen::parse(it, context)?,
+            left_paren,
+            exprs,
+            right_paren,
             id: if id_token.token.dot.is_none() {
                 if id_token.token.integral < 256 {
                     id_token.token.integral.try_into().unwrap()
                 } else {
                     return Err(Error::IteratorIdExceeds255 {
-                        error_span: id_token.get_span()
-                    })
+                        error_span: id_token.get_span(),
+                    });
                 }
             } else {
                 return Err(Error::IteratorIdMustBeAnInteger {
-                    error_span: id_token.get_span()
-                })
-            }
-        })  
+                    error_span: id_token.get_span(),
+                });
+            },
+        })
     }
 
     fn get_span(&self) -> Span {
@@ -309,7 +318,7 @@ pub enum SimpleExpression {
     /// An expression inside parentheses.
     Parenthised(ExprParenthised),
     /// An explicit iterator.
-    ExplicitIterator(ExplicitIterator)
+    ExplicitIterator(ExplicitIterator),
 }
 
 impl SimpleExpression {
@@ -518,7 +527,7 @@ impl<T, P> Punctuated<T, P> {
     pub fn new(first: T) -> Punctuated<T, P> {
         Self {
             first: Box::new(first),
-            collection: Vec::new()
+            collection: Vec::new(),
         }
     }
 
@@ -813,11 +822,13 @@ fn dispatch_order<const ITER: bool>(
 
     match lhs {
         // if lhs is simple, there is no order to consider.
-        lhs @ (Expression::ImplicitIterator(_)  | Expression::Single(_)) => Expression::Binop(ExprBinop {
-            lhs: Box::new(lhs),
-            operator: op,
-            rhs: Box::new(rhs),
-        }),
+        lhs @ (Expression::ImplicitIterator(_) | Expression::Single(_)) => {
+            Expression::Binop(ExprBinop {
+                lhs: Box::new(lhs),
+                operator: op,
+                rhs: Box::new(rhs),
+            })
+        }
         // Otherwise we compare indices of the operators and act accordingly.
         Expression::Binop(lhs) => {
             if op.index() > lhs.operator.index() {
@@ -906,7 +917,7 @@ impl Parse for SimpleExpression {
                 UnaryOperator::Neg(v) => v.minus.span,
             }),
             SimpleExpression::Parenthised(v) => v.get_span(),
-            Self::ExplicitIterator(v) => v.get_span()
+            Self::ExplicitIterator(v) => v.get_span(),
         }
     }
 }
@@ -1371,4 +1382,3 @@ impl Type {
         }
     }
 }
-
