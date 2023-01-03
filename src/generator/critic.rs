@@ -40,7 +40,7 @@ enum Quality {
     /// Absolute zero, cannot be inverted. Used with evaluation errors.
     Zero,
     /// An actual value that can be manipulated.
-    Some(f64)
+    Some(f64),
 }
 
 impl PartialEq for Quality {
@@ -49,9 +49,7 @@ impl PartialEq for Quality {
     }
 }
 
-impl Eq for Quality {
-
-}
+impl Eq for Quality {}
 
 impl PartialOrd for Quality {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
@@ -64,7 +62,7 @@ impl Quality {
     pub fn as_f64(&self) -> f64 {
         match self {
             Self::Zero => 0.0,
-            Self::Some(v) => *v
+            Self::Some(v) => *v,
         }
     }
 }
@@ -283,7 +281,11 @@ fn evaluate_expression(
 }
 
 /// Evaluates a single rule in terms of quality.
-fn evaluate_single(crit: &CriteriaKind, points: &PointVec, logger: &mut Logger) -> (Quality, Vec<f64>) {
+fn evaluate_single(
+    crit: &CriteriaKind,
+    points: &PointVec,
+    logger: &mut Logger,
+) -> (Quality, Vec<f64>) {
     let mut weights = Vec::new();
     weights.resize(points.len(), 0.0);
 
