@@ -438,6 +438,11 @@ pub mod ty {
     pub const SCALAR: Type = Type::Predefined(PredefinedType::Scalar(Some(ComplexUnit::new(
         SimpleUnit::Distance,
     ))));
+
+    #[must_use]
+    pub const fn collection(length: usize) -> Type {
+        Type::Predefined(PredefinedType::PointCollection(length))
+    }
 }
 
 impl ComplexUnit {

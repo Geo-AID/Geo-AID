@@ -299,7 +299,7 @@ impl IterNode {
                             contained_span: iter.span,
                         });
                     }
-                    
+
                     entry.get_mut().2 = Some(iter.span);
                 }
             }
@@ -1424,7 +1424,7 @@ fn create_variables(
 
         match ident {
             Ident::Named(named) => {
-                create_variable_named(stat, context, named, rhs_unrolled, &mut variables)?
+                create_variable_named(stat, context, named, rhs_unrolled, &mut variables)?;
             }
             Ident::Collection(col) => {
                 create_variable_collection(stat, context, col, rhs_unrolled, &mut variables)?;
