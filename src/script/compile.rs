@@ -230,8 +230,9 @@ fn get_line_definition(expr: &Expression) -> LineDefinition {
             Box::new(get_point_definition(&p1.object)),
             Box::new(get_point_definition(&p2.object)),
         ),
-        Expression::ParallelThrough(_, _) => todo!(),
-        Expression::PerpendicularThrough(_, _) => todo!(),
+        Expression::AngleBisector(_, _, _) => todo!("On hold, waiting until #43."),
+        Expression::ParallelThrough(_, _) => todo!("On hold, waiting until #43."),
+        Expression::PerpendicularThrough(_, _) => todo!("On hold, waiting until #43."),
         _ => unreachable!("Value of type line should not be achievable this way."),
     }
 }

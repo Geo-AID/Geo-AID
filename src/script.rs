@@ -426,17 +426,13 @@ pub mod ty {
     pub const DISTANCE: Type = Type::Predefined(PredefinedType::Scalar(Some(ComplexUnit::new(
         SimpleUnit::Distance,
     ))));
-    pub const POINT: Type = Type::Predefined(PredefinedType::Scalar(Some(ComplexUnit::new(
-        SimpleUnit::Distance,
-    ))));
+    pub const POINT: Type = Type::Predefined(PredefinedType::Point);
     pub const ANGLE: Type = Type::Predefined(PredefinedType::Scalar(Some(ComplexUnit::new(
-        SimpleUnit::Distance,
+        SimpleUnit::Angle,
     ))));
-    pub const LINE: Type = Type::Predefined(PredefinedType::Scalar(Some(ComplexUnit::new(
-        SimpleUnit::Distance,
-    ))));
+    pub const LINE: Type = Type::Predefined(PredefinedType::Line);
     pub const SCALAR: Type = Type::Predefined(PredefinedType::Scalar(Some(ComplexUnit::new(
-        SimpleUnit::Distance,
+        SimpleUnit::Scalar,
     ))));
 
     #[must_use]

@@ -42,7 +42,7 @@ pub fn point_line() -> UnrolledExpression {
         UnrolledExpression {
             ty: ty::POINT,
             span: span!(0, 0, 0, 0),
-            data: Rc::new(UnrolledExpressionData::Parameter(2))
+            data: Rc::new(UnrolledExpressionData::Parameter(0))
         },
     ])
 }

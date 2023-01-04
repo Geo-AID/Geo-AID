@@ -1,4 +1,4 @@
-let A | B | C = Point();
+let A, B, C = Point();
 
 let l = perpendicular_through(AB, C);
 let D = intersection(AB, l);

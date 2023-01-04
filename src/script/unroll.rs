@@ -543,6 +543,10 @@ impl Display for UnrolledExpressionData {
     }
 }
 
+pub fn display_vec<T: Display>(v: &[T]) -> String {
+    v.iter().map(|x| format!("{x}")).collect::<Vec<String>>().join(", ")
+}
+
 #[derive(Debug, Clone)]
 pub struct UnrolledExpression {
     pub data: Rc<UnrolledExpressionData>,

@@ -80,7 +80,7 @@ pub fn point_point_point() -> UnrolledExpression {
 
 /// bisector(pc<2>) - bisector of a segment.
 pub fn pc2() -> UnrolledExpression {
-    unroll_parameters(&point_point_point(), &vec![
+    unroll_parameters(&point_point(), &vec![
         UnrolledExpression {
             ty: ty::POINT,
             span: span!(0, 0, 0, 0),
@@ -113,6 +113,22 @@ pub fn point_point() -> UnrolledExpression {
     unroll_parameters(
         &super::perpendicular::line_point(),
         &vec![
+            UnrolledExpression {
+                ty: ty::LINE,
+                span: span!(0, 0, 0, 0),
+                data: Rc::new(UnrolledExpressionData::LineFromPoints(
+                    UnrolledExpression {
+                        ty: ty::POINT,
+                        span: span!(0, 0, 0, 0),
+                        data: Rc::new(UnrolledExpressionData::Parameter(0)),
+                    },
+                    UnrolledExpression {
+                        ty: ty::POINT,
+                        span: span!(0, 0, 0, 0),
+                        data: Rc::new(UnrolledExpressionData::Parameter(1)),
+                    },
+                ))
+            },
             unroll_parameters(
                 &super::mid::mid_function_point(),
                 &vec![
