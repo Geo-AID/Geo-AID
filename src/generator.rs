@@ -61,7 +61,10 @@ impl Mul for Complex {
     type Output = Complex;
 
     fn mul(self, rhs: Complex) -> Self::Output {
-        Complex::new(self.real * rhs.real - self.imaginary * rhs.imaginary, self.real * rhs.imaginary + rhs.real * self.imaginary)
+        Complex::new(
+            self.real * rhs.real - self.imaginary * rhs.imaginary,
+            self.real * rhs.imaginary + rhs.real * self.imaginary,
+        )
     }
 }
 

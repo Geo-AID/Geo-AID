@@ -3,10 +3,10 @@ use std::rc::Rc;
 use crate::{
     script::{
         token::{Position, Span},
-        unroll::{
-            CompileContext, Function, FunctionOverload, UnrolledExpression, UnrolledExpressionData
-        },
         ty,
+        unroll::{
+            CompileContext, Function, FunctionOverload, UnrolledExpression, UnrolledExpressionData,
+        },
     },
     span,
 };
@@ -20,14 +20,14 @@ fn intersection_function_line_line() -> UnrolledExpression {
             UnrolledExpression {
                 ty: ty::LINE,
                 span: span!(0, 0, 0, 0),
-                data: Rc::new(UnrolledExpressionData::Parameter(0))
+                data: Rc::new(UnrolledExpressionData::Parameter(0)),
             },
             UnrolledExpression {
                 ty: ty::LINE,
                 span: span!(0, 0, 0, 0),
-                data: Rc::new(UnrolledExpressionData::Parameter(1))
+                data: Rc::new(UnrolledExpressionData::Parameter(1)),
             },
-        ))
+        )),
     }
 }
 
@@ -36,15 +36,13 @@ pub fn register_intersection_function(context: &mut CompileContext) {
         String::from("intersection"),
         Function {
             name: String::from("intersection"),
-            overloads: vec![
-                FunctionOverload {
-                    returned_type: ty::POINT,
-                    definition_span: None,
-                    definition: intersection_function_line_line(),
-                    params: vec![ty::LINE, ty::LINE],
-                    param_group: None
-                },
-            ],
+            overloads: vec![FunctionOverload {
+                returned_type: ty::POINT,
+                definition_span: None,
+                definition: intersection_function_line_line(),
+                params: vec![ty::LINE, ty::LINE],
+                param_group: None,
+            }],
         },
     );
 }

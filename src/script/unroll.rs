@@ -78,7 +78,7 @@ pub struct FunctionOverload {
     /// The definition.
     pub definition: UnrolledExpression,
     /// Possible parameter group
-    pub param_group: Option<Type>
+    pub param_group: Option<Type>,
 }
 
 /// A function.
@@ -87,16 +87,20 @@ pub struct Function {
     /// Function's name
     pub name: String,
     /// Function's overloads.
-    pub overloads: Vec<FunctionOverload>
+    pub overloads: Vec<FunctionOverload>,
 }
 
 impl Function {
     /// Checks if the given params can be converted into the expected params.
-    /// 
+    ///
     /// # Panics
     /// Never. Shut up, clippy.
     #[must_use]
-    pub fn match_params(expected: &Vec<Type>, received: &Vec<Type>, param_group: Option<&Type>) -> bool {
+    pub fn match_params(
+        expected: &Vec<Type>,
+        received: &Vec<Type>,
+        param_group: Option<&Type>,
+    ) -> bool {
         if let Some(ty) = param_group {
             if expected.len() < received.len() {
                 let mut received = received.iter();
@@ -112,7 +116,7 @@ impl Function {
                         return false;
                     }
                 }
-    
+
                 true
             } else {
                 false
@@ -210,6 +214,12 @@ impl From<&SimpleExpression> for IterNode {
             SimpleExpression::Unop(expr) => expr.rhs.as_ref().into(),
             SimpleExpression::Parenthised(expr) => expr.content.as_ref().into(),
             SimpleExpression::ExplicitIterator(it) => IterNode::new(vec![it.into()]),
+            SimpleExpression::PointCollection(col) => IterNode::new(
+                col.points
+                    .iter()
+                    .flat_map(|v| IterNode::from(v).0.into_iter())
+                    .collect(),
+            ),
         }
     }
 }
@@ -491,7 +501,7 @@ pub enum UnrolledExpressionData {
     Average(Vec<UnrolledExpression>),
     UnrollParameterGroup(usize),
     PerpendicularThrough(UnrolledExpression, UnrolledExpression), // Line, Point
-    ParallelThrough(UnrolledExpression, UnrolledExpression), // Line, Point
+    ParallelThrough(UnrolledExpression, UnrolledExpression),      // Line, Point
     LineLineIntersection(UnrolledExpression, UnrolledExpression),
 }
 
@@ -510,7 +520,8 @@ impl Display for UnrolledExpressionData {
             UnrolledExpressionData::Average(exprs) => write!(
                 f,
                 "average({})",
-                exprs.iter()
+                exprs
+                    .iter()
                     .map(|v| format!("{v}"))
                     .collect::<Vec<String>>()
                     .join(", ")
@@ -535,16 +546,27 @@ impl Display for UnrolledExpressionData {
                 write!(f, "angle({e1}, {e2}, {e3})")
             }
             UnrolledExpressionData::TwoLineAngle(e1, e2) => write!(f, "angle({e1}, {e2})"),
-            UnrolledExpressionData::AngleBisector(e1, e2, e3) => write!(f, "angle-bisector({e1}, {e2}, {e3})"),
-            UnrolledExpressionData::PerpendicularThrough(l, p) => write!(f, "perpendicular-through({l}, {p})"),
-            UnrolledExpressionData::ParallelThrough(l, p) => write!(f, "parallel-through({l}, {p})"),
-            UnrolledExpressionData::LineLineIntersection(l1, l2) => write!(f, "intersection({l1}, {l2})"),
+            UnrolledExpressionData::AngleBisector(e1, e2, e3) => {
+                write!(f, "angle-bisector({e1}, {e2}, {e3})")
+            }
+            UnrolledExpressionData::PerpendicularThrough(l, p) => {
+                write!(f, "perpendicular-through({l}, {p})")
+            }
+            UnrolledExpressionData::ParallelThrough(l, p) => {
+                write!(f, "parallel-through({l}, {p})")
+            }
+            UnrolledExpressionData::LineLineIntersection(l1, l2) => {
+                write!(f, "intersection({l1}, {l2})")
+            }
         }
     }
 }
 
 pub fn display_vec<T: Display>(v: &[T]) -> String {
-    v.iter().map(|x| format!("{x}")).collect::<Vec<String>>().join(", ")
+    v.iter()
+        .map(|x| format!("{x}"))
+        .collect::<Vec<String>>()
+        .join(", ")
 }
 
 #[derive(Debug, Clone)]
@@ -600,13 +622,13 @@ fn unroll_parameters_vec(
     params: &Vec<UnrolledExpression>,
 ) -> Vec<UnrolledExpression> {
     let mut result = Vec::new();
-    
+
     for item in definition {
         match item.data.as_ref() {
             UnrolledExpressionData::UnrollParameterGroup(start_at) => {
                 result.extend(params.iter().skip(*start_at).cloned());
-            },
-            _ => result.push(unroll_parameters(item, params))
+            }
+            _ => result.push(unroll_parameters(item, params)),
         }
     }
 
@@ -661,13 +683,11 @@ pub fn unroll_parameters(
             | UnrolledExpressionData::Number(_)
             | UnrolledExpressionData::FreePoint => definition.data.as_ref().clone(),
             UnrolledExpressionData::Average(exprs) => {
-                UnrolledExpressionData::Average(
-                    unroll_parameters_vec(exprs, params)
-                )
-            },
-            UnrolledExpressionData::PointCollection(exprs) => UnrolledExpressionData::PointCollection(
-                unroll_parameters_vec(exprs, params)
-            ),
+                UnrolledExpressionData::Average(unroll_parameters_vec(exprs, params))
+            }
+            UnrolledExpressionData::PointCollection(exprs) => {
+                UnrolledExpressionData::PointCollection(unroll_parameters_vec(exprs, params))
+            }
             UnrolledExpressionData::Add(e1, e2) => UnrolledExpressionData::Add(
                 unroll_parameters(e1, params),
                 unroll_parameters(e2, params),
@@ -695,24 +715,34 @@ pub fn unroll_parameters(
                 unroll_parameters(e1, params),
                 unroll_parameters(e2, params),
             ),
-            UnrolledExpressionData::AngleBisector(e1, e2, e3) => UnrolledExpressionData::AngleBisector(
-                unroll_parameters(e1, params),
-                unroll_parameters(e2, params),
-                unroll_parameters(e3, params),
-            ),
-            UnrolledExpressionData::PerpendicularThrough(e1, e2) => UnrolledExpressionData::PerpendicularThrough(
-                unroll_parameters(e1, params),
-                unroll_parameters(e2, params),
-            ),
-            UnrolledExpressionData::ParallelThrough(e1, e2) => UnrolledExpressionData::ParallelThrough(
-                unroll_parameters(e1, params),
-                unroll_parameters(e2, params),
-            ),
-            UnrolledExpressionData::LineLineIntersection(e1, e2) => UnrolledExpressionData::LineLineIntersection(
-                unroll_parameters(e1, params),
-                unroll_parameters(e2, params),
-            ),
-            UnrolledExpressionData::UnrollParameterGroup(_) => unreachable!("This should never be unrolled as parameter."),
+            UnrolledExpressionData::AngleBisector(e1, e2, e3) => {
+                UnrolledExpressionData::AngleBisector(
+                    unroll_parameters(e1, params),
+                    unroll_parameters(e2, params),
+                    unroll_parameters(e3, params),
+                )
+            }
+            UnrolledExpressionData::PerpendicularThrough(e1, e2) => {
+                UnrolledExpressionData::PerpendicularThrough(
+                    unroll_parameters(e1, params),
+                    unroll_parameters(e2, params),
+                )
+            }
+            UnrolledExpressionData::ParallelThrough(e1, e2) => {
+                UnrolledExpressionData::ParallelThrough(
+                    unroll_parameters(e1, params),
+                    unroll_parameters(e2, params),
+                )
+            }
+            UnrolledExpressionData::LineLineIntersection(e1, e2) => {
+                UnrolledExpressionData::LineLineIntersection(
+                    unroll_parameters(e1, params),
+                    unroll_parameters(e2, params),
+                )
+            }
+            UnrolledExpressionData::UnrollParameterGroup(_) => {
+                unreachable!("This should never be unrolled as parameter.")
+            }
         }),
     }
 }
@@ -884,9 +914,10 @@ fn unroll_conversion_to_scalar(
             ty: to.clone(),
             span: expr.span,
             data: Rc::new(UnrolledExpressionData::Average(
-                exprs.iter().map(
-                    |v| unroll_conversion_to_scalar(v, to)
-                ).collect::<Result<Vec<UnrolledExpression>, Error>>()?
+                exprs
+                    .iter()
+                    .map(|v| unroll_conversion_to_scalar(v, to))
+                    .collect::<Result<Vec<UnrolledExpression>, Error>>()?,
             )),
         }),
         UnrolledExpressionData::VariableAccess(_)
@@ -991,13 +1022,13 @@ fn unroll_simple(
                         .iter()
                         .map(|(letter, primes)| {
                             match context.points.get(&construct_point_id(*letter, *primes)) {
-                                Some(var) => Ok(
-                                    UnrolledExpression {
-                                        data: Rc::new(UnrolledExpressionData::VariableAccess(Rc::clone(var))),
-                                        ty: ty::POINT,
-                                        span: col.span,
-                                    }
-                                ),
+                                Some(var) => Ok(UnrolledExpression {
+                                    data: Rc::new(UnrolledExpressionData::VariableAccess(
+                                        Rc::clone(var),
+                                    )),
+                                    ty: ty::POINT,
+                                    span: col.span,
+                                }),
                                 None => Err(Error::UndefinedVariable {
                                     error_span: col.span,
                                     variable_name: construct_point_name(*letter, *primes),
@@ -1030,15 +1061,16 @@ fn unroll_simple(
                     let params = params
                         .into_iter()
                         .enumerate()
-                        .map(
-                            |(i, param)| {
-                                if i < overload.params.len() {
-                                    unroll_implicit_conversion(param, &overload.params[i])
-                                } else {
-                                    unroll_implicit_conversion(param, overload.param_group.as_ref().unwrap())
-                                }
+                        .map(|(i, param)| {
+                            if i < overload.params.len() {
+                                unroll_implicit_conversion(param, &overload.params[i])
+                            } else {
+                                unroll_implicit_conversion(
+                                    param,
+                                    overload.param_group.as_ref().unwrap(),
+                                )
                             }
-                        )
+                        })
                         .collect::<Result<Vec<UnrolledExpression>, Error>>()?;
 
                     UnrolledExpression {
@@ -1081,6 +1113,27 @@ fn unroll_simple(
         SimpleExpression::ExplicitIterator(it) => {
             unroll_expression(it.get(it_index[&it.id]).unwrap(), context, it_index)?
         }
+        SimpleExpression::PointCollection(col) => UnrolledExpression {
+            ty: ty::collection(col.points.len()),
+            span: col.get_span(),
+            data: Rc::new(UnrolledExpressionData::PointCollection(
+                col.points
+                    .iter()
+                    .map(|expr| {
+                        let unrolled = unroll_expression(expr, context, it_index)?;
+
+                        if unrolled.ty.can_cast(&ty::POINT) {
+                            Ok(unroll_implicit_conversion(unrolled, &ty::POINT)?)
+                        } else {
+                            Err(Error::NonPointInPointCollection {
+                                error_span: col.get_span(),
+                                received: (unrolled.span, unrolled.ty),
+                            })
+                        }
+                    })
+                    .collect::<Result<Vec<UnrolledExpression>, Error>>()?,
+            )),
+        },
     })
 }
 

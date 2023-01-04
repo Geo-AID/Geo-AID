@@ -284,6 +284,12 @@ pub struct Exclamation {
     pub span: Span,
 }
 
+/// A '&' token.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Ampersant {
+    pub span: Span,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Token {
     Semi(Semi),
@@ -305,6 +311,7 @@ pub enum Token {
     Ident(Ident),
     Number(Number),
     Dollar(Dollar),
+    Ampersant(Ampersant),
 }
 
 impl Display for Token {
@@ -327,6 +334,7 @@ impl Display for Token {
             Token::Gteq(_) => write!(f, ">="),
             Token::Exclamation(_) => write!(f, "!"),
             Token::Dollar(_) => write!(f, "$"),
+            Token::Ampersant(_) => write!(f, "&"),
             Token::Ident(ident) => write!(
                 f,
                 "{}",
@@ -376,6 +384,7 @@ impl Token {
             Token::Ident(v) => v.get_span(),
             Token::Number(v) => v.span,
             Token::Dollar(v) => v.span,
+            Token::Ampersant(v) => v.span,
         }
     }
 }
@@ -625,6 +634,8 @@ fn tokenize_special<I: Iterator<Item = char>>(
             '<' => Token::Lt(Lt { span: sp }),
             '>' => Token::Gt(Gt { span: sp }),
             '!' => Token::Exclamation(Exclamation { span: sp }),
+            '$' => Token::Dollar(Dollar { span: sp }),
+            '&' => Token::Ampersant(Ampersant { span: sp }),
             _ => return Err(Error::invalid_character(c, sp)),
         });
     }

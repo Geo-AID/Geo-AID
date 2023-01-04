@@ -22,6 +22,26 @@ A
 ident := [a-zA-Z_], {[a-zA-Z0-9_\']};
 ```
 
+**Point collections** can also be constructed using the following syntax:
+
+```
+ABC
+
+# Becomes
+
+&(A, B, C)
+```
+
+These expressions allow creating point collections from other expressions, such as
+
+```
+&(A, intersection(BC, DE))
+```
+
+```
+collection-constructor := '&', '(', expr(no implicit iterators), {',', expr(no implicit iterators)}, ')';
+```
+
 ## Numbers
 Numbers are series of digits possibly separated with a period token. They can define integers or rationals.
 

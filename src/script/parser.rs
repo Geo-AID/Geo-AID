@@ -8,8 +8,9 @@ use crate::span;
 
 use super::{
     token::{
-        Asterisk, Comma, Dollar, Eq, Exclamation, Gt, Gteq, Ident, LParen, Let, Lt, Lteq, Minus,
-        NamedIdent, Number, Plus, Position, RParen, Semi, Slash, Span, Token, Vertical,
+        Ampersant, Asterisk, Comma, Dollar, Eq, Exclamation, Gt, Gteq, Ident, LParen, Let, Lt,
+        Lteq, Minus, NamedIdent, Number, Plus, Position, RParen, Semi, Slash, Span, Token,
+        Vertical,
     },
     unroll::{CompileContext, RuleOperatorDefinition},
     ComplexUnit, Error, SimpleUnit,
@@ -193,6 +194,32 @@ impl ToString for BinaryOperator {
     }
 }
 
+#[derive(Debug)]
+pub struct PointCollectionConstructor {
+    pub ampersant: Ampersant,
+    pub left_paren: LParen,
+    pub points: Punctuated<Expression<false>, Comma>,
+    pub right_paren: RParen,
+}
+
+impl Parse for PointCollectionConstructor {
+    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
+        it: &mut Peekable<I>,
+        context: &CompileContext,
+    ) -> Result<Self, Error> {
+        Ok(Self {
+            ampersant: Ampersant::parse(it, context)?,
+            left_paren: LParen::parse(it, context)?,
+            points: Punctuated::parse(it, context)?,
+            right_paren: RParen::parse(it, context)?,
+        })
+    }
+
+    fn get_span(&self) -> Span {
+        self.ampersant.span.join(self.right_paren.span)
+    }
+}
+
 /// Punctuated expressions.
 #[derive(Debug)]
 pub struct ImplicitIterator {
@@ -319,6 +346,8 @@ pub enum SimpleExpression {
     Parenthised(ExprParenthised),
     /// An explicit iterator.
     ExplicitIterator(ExplicitIterator),
+    /// A point collection construction
+    PointCollection(PointCollectionConstructor),
 }
 
 impl SimpleExpression {
@@ -900,6 +929,9 @@ impl Parse for SimpleExpression {
                 Token::Dollar(_) => {
                     SimpleExpression::ExplicitIterator(ExplicitIterator::parse(it, context)?)
                 }
+                Token::Ampersant(_) => SimpleExpression::PointCollection(
+                    PointCollectionConstructor::parse(it, context)?,
+                ),
                 tok => return Err(Error::invalid_token(tok.clone())),
             },
             None => return Err(Error::end_of_input()),
@@ -918,6 +950,7 @@ impl Parse for SimpleExpression {
             }),
             SimpleExpression::Parenthised(v) => v.get_span(),
             Self::ExplicitIterator(v) => v.get_span(),
+            Self::PointCollection(v) => v.get_span(),
         }
     }
 }
@@ -1086,6 +1119,23 @@ impl Parse for Comma {
     ) -> Result<Self, Error> {
         match it.next() {
             Some(Token::Comma(tok)) => Ok(*tok),
+            Some(t) => Err(Error::invalid_token(t.clone())),
+            None => Err(Error::end_of_input()),
+        }
+    }
+
+    fn get_span(&self) -> Span {
+        self.span
+    }
+}
+
+impl Parse for Ampersant {
+    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
+        it: &mut Peekable<I>,
+        _context: &CompileContext,
+    ) -> Result<Self, Error> {
+        match it.next() {
+            Some(Token::Ampersant(tok)) => Ok(*tok),
             Some(t) => Err(Error::invalid_token(t.clone())),
             None => Err(Error::end_of_input()),
         }

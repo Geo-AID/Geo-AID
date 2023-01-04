@@ -122,7 +122,7 @@ pub fn register_angle_function(context: &mut CompileContext) {
                     definition_span: None,
                     definition: angle_function_pc3(),
                     params: vec![Type::Predefined(PredefinedType::PointCollection(3))],
-                    param_group: None
+                    param_group: None,
                 },
                 FunctionOverload {
                     returned_type: Type::Predefined(PredefinedType::Scalar(Some(
@@ -135,7 +135,7 @@ pub fn register_angle_function(context: &mut CompileContext) {
                         Type::Predefined(PredefinedType::Point),
                         Type::Predefined(PredefinedType::Point),
                     ],
-                    param_group: None
+                    param_group: None,
                 },
                 FunctionOverload {
                     returned_type: Type::Predefined(PredefinedType::Scalar(Some(
@@ -147,7 +147,7 @@ pub fn register_angle_function(context: &mut CompileContext) {
                         Type::Predefined(PredefinedType::Line),
                         Type::Predefined(PredefinedType::Line),
                     ],
-                    param_group: None
+                    param_group: None,
                 },
             ],
         },

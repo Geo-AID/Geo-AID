@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::{
     generator::geometry,
-    script::{ComplexUnit, Criteria, CriteriaKind, Expression, SimpleUnit, Weighed, unit},
+    script::{unit, ComplexUnit, Criteria, CriteriaKind, Expression, SimpleUnit, Weighed},
 };
 
 use super::{Complex, EvaluationError, Logger};
@@ -289,17 +289,17 @@ fn evaluate_expression(
 
             let angle = geometry::get_angle(p1.0, p2.0, p3.0) / 2.0;
 
-            (
-                geometry::rotate_around(p1.0, p2.0, angle),
-                unit::POINT
-            )
-        },
+            (geometry::rotate_around(p1.0, p2.0, angle), unit::POINT)
+        }
         Expression::Average(exprs) => {
             // Evaluate all
-            let exprs = exprs.iter().map(
-                |expr| evaluate_expression(expr, weights, points, logger, weight_mult * expr.weight)
-            ).collect::<Result<Vec<(Complex, ComplexUnit)>, EvaluationError>>()?;
-            
+            let exprs = exprs
+                .iter()
+                .map(|expr| {
+                    evaluate_expression(expr, weights, points, logger, weight_mult * expr.weight)
+                })
+                .collect::<Result<Vec<(Complex, ComplexUnit)>, EvaluationError>>()?;
+
             // Assume all types are valid. Typechecking should have already been done.
 
             let mut sum = Complex::new(0.0, 0.0);
@@ -309,10 +309,7 @@ fn evaluate_expression(
             }
 
             #[allow(clippy::cast_precision_loss)]
-            (
-                sum / exprs.len() as f64,
-                exprs[0].1.clone()
-            )
+            (sum / exprs.len() as f64, exprs[0].1.clone())
         }
         Expression::PerpendicularThrough(l, p) => {
             let l = evaluate_expression(l, weights, points, logger, weight_mult * l.weight)?;
@@ -324,7 +321,7 @@ fn evaluate_expression(
             } else if l.0.real.abs() <= 0.000_000_1 {
                 f64::INFINITY // horizontal -> vertical
             } else {
-                - 1.0 / l.0.real
+                -1.0 / l.0.real
             };
 
             let b = if a.is_infinite() {
@@ -333,11 +330,8 @@ fn evaluate_expression(
                 p.0.imaginary - a * p.0.real
             };
 
-            (
-                Complex::new(a, b),
-                unit::LINE
-            )
-        },
+            (Complex::new(a, b), unit::LINE)
+        }
         Expression::ParallelThrough(l, p) => {
             let l = evaluate_expression(l, weights, points, logger, weight_mult * l.weight)?;
             let p = evaluate_expression(p, weights, points, logger, weight_mult * p.weight)?;
@@ -350,11 +344,8 @@ fn evaluate_expression(
                 p.0.imaginary - a * p.0.real
             };
 
-            (
-                Complex::new(a, b),
-                unit::LINE
-            )
-        },
+            (Complex::new(a, b), unit::LINE)
+        }
     })
 }
 
