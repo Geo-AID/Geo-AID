@@ -3,10 +3,11 @@ use std::rc::Rc;
 use crate::{
     script::{
         token::{Position, Span},
-        unroll::{
-            CompileContext, Function, FunctionOverload, UnrolledExpression, UnrolledExpressionData, unroll_parameters,
-        },
         ty,
+        unroll::{
+            unroll_parameters, CompileContext, Function, FunctionOverload, UnrolledExpression,
+            UnrolledExpressionData,
+        },
     },
     span,
 };
@@ -20,31 +21,34 @@ fn parallel_function_line_point() -> UnrolledExpression {
             UnrolledExpression {
                 ty: ty::LINE,
                 span: span!(0, 0, 0, 0),
-                data: Rc::new(UnrolledExpressionData::Parameter(0))
+                data: Rc::new(UnrolledExpressionData::Parameter(0)),
             },
             UnrolledExpression {
                 ty: ty::POINT,
                 span: span!(0, 0, 0, 0),
-                data: Rc::new(UnrolledExpressionData::Parameter(1))
+                data: Rc::new(UnrolledExpressionData::Parameter(1)),
             },
-        ))
+        )),
     }
 }
 
 /// `parallel_through(point, line)` - same as previous, just with swapped arguments.
 fn parallel_function_point_line() -> UnrolledExpression {
-    unroll_parameters(&parallel_function_line_point(), &vec![
-        UnrolledExpression {
-            ty: ty::LINE,
-            span: span!(0, 0, 0, 0),
-            data: Rc::new(UnrolledExpressionData::Parameter(1))
-        },
-        UnrolledExpression {
-            ty: ty::POINT,
-            span: span!(0, 0, 0, 0),
-            data: Rc::new(UnrolledExpressionData::Parameter(0))
-        },
-    ])
+    unroll_parameters(
+        &parallel_function_line_point(),
+        &vec![
+            UnrolledExpression {
+                ty: ty::LINE,
+                span: span!(0, 0, 0, 0),
+                data: Rc::new(UnrolledExpressionData::Parameter(1)),
+            },
+            UnrolledExpression {
+                ty: ty::POINT,
+                span: span!(0, 0, 0, 0),
+                data: Rc::new(UnrolledExpressionData::Parameter(0)),
+            },
+        ],
+    )
 }
 
 pub fn register_parallel_function(context: &mut CompileContext) {
@@ -58,17 +62,14 @@ pub fn register_parallel_function(context: &mut CompileContext) {
                     definition_span: None,
                     definition: parallel_function_point_line(),
                     params: vec![ty::POINT, ty::LINE],
-                    param_group: None
+                    param_group: None,
                 },
                 FunctionOverload {
                     returned_type: ty::LINE,
                     definition_span: None,
                     definition: parallel_function_line_point(),
-                    params: vec![
-                        ty::LINE,
-                        ty::POINT,
-                    ],
-                    param_group: None
+                    params: vec![ty::LINE, ty::POINT],
+                    param_group: None,
                 },
             ],
         },

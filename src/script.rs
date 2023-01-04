@@ -111,6 +111,10 @@ pub enum Error {
         first_span: Span,
         second_span: Span,
     },
+    NonPointInPointCollection {
+        error_span: Span,
+        received: (Span, Type),
+    },
 }
 
 impl Error {
@@ -362,6 +366,11 @@ impl Error {
             Self::SingleVariantExplicitIterator { error_span } => {
                 DiagnosticData::new(&"Explicit iterators must have at least two variants.")
                     .add_span(error_span)
+            }
+            Self::NonPointInPointCollection { error_span, received } => {
+                DiagnosticData::new(&"All values in a point collection constructor must be points.")
+                    .add_span(error_span)
+                    .add_annotation(received.0, AnnotationKind::Note, &format!("Value should be a point, received {}.", received.1))
             }
         }
     }

@@ -3,54 +3,58 @@ use std::rc::Rc;
 use crate::{
     script::{
         token::{Position, Span},
-        unroll::{
-            CompileContext, Function, FunctionOverload, UnrolledExpression, UnrolledExpressionData, unroll_parameters,
-        },
         ty,
+        unroll::{
+            unroll_parameters, CompileContext, Function, FunctionOverload, UnrolledExpression,
+            UnrolledExpressionData,
+        },
     },
     span,
 };
 
 /// bisector(pc<3>) - angle bisector.
 pub fn pc3() -> UnrolledExpression {
-    unroll_parameters(&point_point_point(), &vec![
-        UnrolledExpression {
-            ty: ty::POINT,
-            span: span!(0, 0, 0, 0),
-            data: Rc::new(UnrolledExpressionData::IndexCollection(
-                UnrolledExpression {
-                    ty: ty::collection(3),
-                    span: span!(0, 0, 0, 0),
-                    data: Rc::new(UnrolledExpressionData::Parameter(0)),
-                },
-                0
-            )),
-        },
-        UnrolledExpression {
-            ty: ty::POINT,
-            span: span!(0, 0, 0, 0),
-            data: Rc::new(UnrolledExpressionData::IndexCollection(
-                UnrolledExpression {
-                    ty: ty::collection(3),
-                    span: span!(0, 0, 0, 0),
-                    data: Rc::new(UnrolledExpressionData::Parameter(0)),
-                },
-                1
-            )),
-        },
-        UnrolledExpression {
-            ty: ty::POINT,
-            span: span!(0, 0, 0, 0),
-            data: Rc::new(UnrolledExpressionData::IndexCollection(
-                UnrolledExpression {
-                    ty: ty::collection(3),
-                    span: span!(0, 0, 0, 0),
-                    data: Rc::new(UnrolledExpressionData::Parameter(0)),
-                },
-                2
-            )),
-        }
-    ])
+    unroll_parameters(
+        &point_point_point(),
+        &vec![
+            UnrolledExpression {
+                ty: ty::POINT,
+                span: span!(0, 0, 0, 0),
+                data: Rc::new(UnrolledExpressionData::IndexCollection(
+                    UnrolledExpression {
+                        ty: ty::collection(3),
+                        span: span!(0, 0, 0, 0),
+                        data: Rc::new(UnrolledExpressionData::Parameter(0)),
+                    },
+                    0,
+                )),
+            },
+            UnrolledExpression {
+                ty: ty::POINT,
+                span: span!(0, 0, 0, 0),
+                data: Rc::new(UnrolledExpressionData::IndexCollection(
+                    UnrolledExpression {
+                        ty: ty::collection(3),
+                        span: span!(0, 0, 0, 0),
+                        data: Rc::new(UnrolledExpressionData::Parameter(0)),
+                    },
+                    1,
+                )),
+            },
+            UnrolledExpression {
+                ty: ty::POINT,
+                span: span!(0, 0, 0, 0),
+                data: Rc::new(UnrolledExpressionData::IndexCollection(
+                    UnrolledExpression {
+                        ty: ty::collection(3),
+                        span: span!(0, 0, 0, 0),
+                        data: Rc::new(UnrolledExpressionData::Parameter(0)),
+                    },
+                    2,
+                )),
+            },
+        ],
+    )
 }
 
 /// bisector(point, point, point) - angle bisector.
@@ -80,32 +84,35 @@ pub fn point_point_point() -> UnrolledExpression {
 
 /// bisector(pc<2>) - bisector of a segment.
 pub fn pc2() -> UnrolledExpression {
-    unroll_parameters(&point_point(), &vec![
-        UnrolledExpression {
-            ty: ty::POINT,
-            span: span!(0, 0, 0, 0),
-            data: Rc::new(UnrolledExpressionData::IndexCollection(
-                UnrolledExpression {
-                    ty: ty::collection(3),
-                    span: span!(0, 0, 0, 0),
-                    data: Rc::new(UnrolledExpressionData::Parameter(0)),
-                },
-                0
-            )),
-        },
-        UnrolledExpression {
-            ty: ty::POINT,
-            span: span!(0, 0, 0, 0),
-            data: Rc::new(UnrolledExpressionData::IndexCollection(
-                UnrolledExpression {
-                    ty: ty::collection(3),
-                    span: span!(0, 0, 0, 0),
-                    data: Rc::new(UnrolledExpressionData::Parameter(0)),
-                },
-                1
-            )),
-        },
-    ])
+    unroll_parameters(
+        &point_point(),
+        &vec![
+            UnrolledExpression {
+                ty: ty::POINT,
+                span: span!(0, 0, 0, 0),
+                data: Rc::new(UnrolledExpressionData::IndexCollection(
+                    UnrolledExpression {
+                        ty: ty::collection(3),
+                        span: span!(0, 0, 0, 0),
+                        data: Rc::new(UnrolledExpressionData::Parameter(0)),
+                    },
+                    0,
+                )),
+            },
+            UnrolledExpression {
+                ty: ty::POINT,
+                span: span!(0, 0, 0, 0),
+                data: Rc::new(UnrolledExpressionData::IndexCollection(
+                    UnrolledExpression {
+                        ty: ty::collection(3),
+                        span: span!(0, 0, 0, 0),
+                        data: Rc::new(UnrolledExpressionData::Parameter(0)),
+                    },
+                    1,
+                )),
+            },
+        ],
+    )
 }
 
 /// bisector(point, point) - bisector of a segment.
@@ -127,7 +134,7 @@ pub fn point_point() -> UnrolledExpression {
                         span: span!(0, 0, 0, 0),
                         data: Rc::new(UnrolledExpressionData::Parameter(1)),
                     },
-                ))
+                )),
             },
             unroll_parameters(
                 &super::mid::mid_function_point(),
@@ -142,9 +149,9 @@ pub fn point_point() -> UnrolledExpression {
                         span: span!(0, 0, 0, 0),
                         data: Rc::new(UnrolledExpressionData::Parameter(1)),
                     },
-                ]
-            )
-        ]
+                ],
+            ),
+        ],
     )
 }
 
@@ -159,28 +166,28 @@ pub fn register(context: &mut CompileContext) {
                     definition_span: None,
                     definition: pc3(),
                     params: vec![ty::collection(3)],
-                    param_group: None
+                    param_group: None,
                 },
                 FunctionOverload {
                     returned_type: ty::LINE,
                     definition_span: None,
                     definition: point_point_point(),
                     params: vec![ty::POINT, ty::POINT, ty::POINT],
-                    param_group: None
+                    param_group: None,
                 },
                 FunctionOverload {
                     returned_type: ty::LINE,
                     definition_span: None,
                     definition: pc2(),
                     params: vec![ty::collection(2)],
-                    param_group: None
+                    param_group: None,
                 },
                 FunctionOverload {
                     returned_type: ty::LINE,
                     definition_span: None,
                     definition: point_point(),
                     params: vec![ty::POINT, ty::POINT],
-                    param_group: None
+                    param_group: None,
                 },
             ],
         },

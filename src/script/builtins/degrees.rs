@@ -61,7 +61,7 @@ pub fn register_degrees_function(context: &mut CompileContext) {
                 params: vec![Type::Predefined(PredefinedType::Scalar(Some(
                     ComplexUnit::new(SimpleUnit::Scalar),
                 )))],
-                param_group: None
+                param_group: None,
             }],
         },
     );

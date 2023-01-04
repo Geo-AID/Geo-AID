@@ -45,7 +45,9 @@ fn compile_expression(
         UnrolledExpressionData::PointCollection(_) => {
             unreachable!("PointCollection should never be compiled.")
         }
-        UnrolledExpressionData::UnrollParameterGroup(_) => unreachable!("UnrollParameterGroup should never be compiled."),
+        UnrolledExpressionData::UnrollParameterGroup(_) => {
+            unreachable!("UnrollParameterGroup should never be compiled.")
+        }
         UnrolledExpressionData::Number(v) => Arc::new(Weighed::one(Expression::Literal(
             *v,
             // Essentially, just copy the unit.
@@ -80,14 +82,18 @@ fn compile_expression(
             compile_expression(p1, variables, expressions, point_index),
             compile_expression(p2, variables, expressions, point_index),
         ))),
-        UnrolledExpressionData::ParallelThrough(p1, p2) => Arc::new(Weighed::one(Expression::ParallelThrough(
-            compile_expression(p1, variables, expressions, point_index),
-            compile_expression(p2, variables, expressions, point_index),
-        ))),
-        UnrolledExpressionData::PerpendicularThrough(p1, p2) => Arc::new(Weighed::one(Expression::PerpendicularThrough(
-            compile_expression(p1, variables, expressions, point_index),
-            compile_expression(p2, variables, expressions, point_index),
-        ))),
+        UnrolledExpressionData::ParallelThrough(p1, p2) => {
+            Arc::new(Weighed::one(Expression::ParallelThrough(
+                compile_expression(p1, variables, expressions, point_index),
+                compile_expression(p2, variables, expressions, point_index),
+            )))
+        }
+        UnrolledExpressionData::PerpendicularThrough(p1, p2) => {
+            Arc::new(Weighed::one(Expression::PerpendicularThrough(
+                compile_expression(p1, variables, expressions, point_index),
+                compile_expression(p2, variables, expressions, point_index),
+            )))
+        }
         UnrolledExpressionData::SetUnit(expr, unit) => Arc::new(Weighed::one(Expression::SetUnit(
             compile_expression(expr, variables, expressions, point_index),
             unit.clone(),
@@ -149,13 +155,12 @@ fn compile_expression(
                 compile_expression(v2, variables, expressions, point_index),
             )))
         }
-        UnrolledExpressionData::Average(exprs) => {
-            Arc::new(Weighed::one(Expression::Average(
-                exprs.iter().map(
-                    |expr| compile_expression(expr, variables, expressions, point_index)
-                ).collect()
-            )))
-        },
+        UnrolledExpressionData::Average(exprs) => Arc::new(Weighed::one(Expression::Average(
+            exprs
+                .iter()
+                .map(|expr| compile_expression(expr, variables, expressions, point_index))
+                .collect(),
+        ))),
     };
 
     // We insert for memory.
