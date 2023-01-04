@@ -13,12 +13,13 @@ use super::{
 fn index_collection(expr: &UnrolledExpression, index: usize) -> &UnrolledExpression {
     match expr.data.as_ref() {
         UnrolledExpressionData::VariableAccess(var) => index_collection(&var.definition, index),
-        UnrolledExpressionData::PointCollection(col) => &col.get(index).unwrap().definition,
+        UnrolledExpressionData::PointCollection(col) => col.get(index).unwrap(),
         UnrolledExpressionData::Boxed(expr) => index_collection(expr, index),
         _ => unreachable!("PointCollection should never be achievable by this expression."),
     }
 }
 
+#[allow(clippy::too_many_lines)]
 fn compile_expression(
     expr: &UnrolledExpression,
     variables: &mut HashMap<HashableRc<Variable>, CompiledVariable>,
@@ -44,6 +45,7 @@ fn compile_expression(
         UnrolledExpressionData::PointCollection(_) => {
             unreachable!("PointCollection should never be compiled.")
         }
+        UnrolledExpressionData::UnrollParameterGroup(_) => unreachable!("UnrollParameterGroup should never be compiled."),
         UnrolledExpressionData::Number(v) => Arc::new(Weighed::one(Expression::Literal(
             *v,
             // Essentially, just copy the unit.
@@ -75,6 +77,14 @@ fn compile_expression(
             point_index,
         ),
         UnrolledExpressionData::LineFromPoints(p1, p2) => Arc::new(Weighed::one(Expression::Line(
+            compile_expression(p1, variables, expressions, point_index),
+            compile_expression(p2, variables, expressions, point_index),
+        ))),
+        UnrolledExpressionData::ParallelThrough(p1, p2) => Arc::new(Weighed::one(Expression::ParallelThrough(
+            compile_expression(p1, variables, expressions, point_index),
+            compile_expression(p2, variables, expressions, point_index),
+        ))),
+        UnrolledExpressionData::PerpendicularThrough(p1, p2) => Arc::new(Weighed::one(Expression::PerpendicularThrough(
             compile_expression(p1, variables, expressions, point_index),
             compile_expression(p2, variables, expressions, point_index),
         ))),
@@ -120,12 +130,32 @@ fn compile_expression(
                 compile_expression(v3, variables, expressions, point_index),
             )))
         }
+        UnrolledExpressionData::AngleBisector(v1, v2, v3) => {
+            Arc::new(Weighed::one(Expression::AngleBisector(
+                compile_expression(v1, variables, expressions, point_index),
+                compile_expression(v2, variables, expressions, point_index),
+                compile_expression(v3, variables, expressions, point_index),
+            )))
+        }
         UnrolledExpressionData::TwoLineAngle(v1, v2) => {
             Arc::new(Weighed::one(Expression::AngleLine(
                 compile_expression(v1, variables, expressions, point_index),
                 compile_expression(v2, variables, expressions, point_index),
             )))
         }
+        UnrolledExpressionData::LineLineIntersection(v1, v2) => {
+            Arc::new(Weighed::one(Expression::LineLineIntersection(
+                compile_expression(v1, variables, expressions, point_index),
+                compile_expression(v2, variables, expressions, point_index),
+            )))
+        }
+        UnrolledExpressionData::Average(exprs) => {
+            Arc::new(Weighed::one(Expression::Average(
+                exprs.iter().map(
+                    |expr| compile_expression(expr, variables, expressions, point_index)
+                ).collect()
+            )))
+        },
     };
 
     // We insert for memory.
@@ -200,6 +230,9 @@ fn get_line_definition(expr: &Expression) -> LineDefinition {
             Box::new(get_point_definition(&p1.object)),
             Box::new(get_point_definition(&p2.object)),
         ),
+        Expression::AngleBisector(_, _, _) => todo!("On hold, waiting until #43."),
+        Expression::ParallelThrough(_, _) => todo!("On hold, waiting until #43."),
+        Expression::PerpendicularThrough(_, _) => todo!("On hold, waiting until #43."),
         _ => unreachable!("Value of type line should not be achievable this way."),
     }
 }
@@ -208,10 +241,11 @@ fn get_line_definition(expr: &Expression) -> LineDefinition {
 fn get_point_definition(expr: &Expression) -> PointDefinition {
     match expr {
         Expression::FreePoint(index) => PointDefinition::Indexed(*index),
-        Expression::LineCrossing(l1, l2) => PointDefinition::Crossing(
+        Expression::LineLineIntersection(l1, l2) => PointDefinition::Crossing(
             get_line_definition(&l1.object),
             get_line_definition(&l2.object),
         ),
+        Expression::Average(_) => todo!(),
         _ => unreachable!("Value of type point should not be achieveable this way."),
     }
 }

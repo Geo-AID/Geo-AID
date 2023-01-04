@@ -30,7 +30,8 @@ pub fn register_point_function(context: &mut CompileContext) {
                 returned_type: Type::Predefined(PredefinedType::Point),
                 definition_span: None,
                 definition: point_function(),
-            }],
+                param_group: None
+            }]
         },
     );
 }

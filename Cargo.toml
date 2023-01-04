@@ -4,6 +4,7 @@ description = "A tool designed to generate geometrical figures based on given ru
 version = "0.2.1"
 edition = "2021"
 license = "MIT"
+repository = "https://www.github.com/DragonGamesStudios/Geo-AID"
 
 [dependencies]
 rand = "0.8.5"

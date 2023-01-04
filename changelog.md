@@ -18,3 +18,8 @@
 ## Version 0.2.1
 - Added testing environment for the projector and drawers
 - Added testing environment for Geo-AID in general.
+- Added support for multiple iteration levels in iterators
+- Changed implicit iterators from being separated with `|` to being separated with `,`.
+- Fixed faulty display of multiline error messages.
+- Added command line options for JSON and raw drawers.
+- Added builtin functions: bisector, mid (average), parallel, perpendicular, intersection

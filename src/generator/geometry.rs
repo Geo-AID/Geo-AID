@@ -60,3 +60,9 @@ pub fn get_angle(arm1: Complex, origin: Complex, arm2: Complex) -> f64 {
     // Get the angle
     f64::acos(dot_product / (arm1_vec.mangitude() * arm2_vec.mangitude()))
 }
+
+// Rotates p around origin by angle.
+#[must_use]
+pub fn rotate_around(p: Complex, origin: Complex, angle: f64) -> Complex {
+    (p - origin) * Complex::new(angle.cos(), angle.sin()) + origin
+}
