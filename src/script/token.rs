@@ -200,15 +200,39 @@ pub struct RParen {
     pub span: Span,
 }
 
+/// A '{' token.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LBrace {
+    pub span: Span,
+}
+
+/// A '}' token.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RBrace {
+    pub span: Span,
+}
+
 /// A ',' token.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Comma {
     pub span: Span,
 }
 
+/// A ':' token.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Colon {
+    pub span: Span,
+}
+
 /// A '$' token.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Dollar {
+    pub span: Span,
+}
+
+/// A '@' token.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct At {
     pub span: Span,
 }
 
@@ -312,6 +336,10 @@ pub enum Token {
     Number(Number),
     Dollar(Dollar),
     Ampersant(Ampersant),
+    LBrace(LBrace),
+    RBrace(RBrace),
+    At(At),
+    Colon(Colon),
 }
 
 impl Display for Token {
@@ -335,6 +363,10 @@ impl Display for Token {
             Token::Exclamation(_) => write!(f, "!"),
             Token::Dollar(_) => write!(f, "$"),
             Token::Ampersant(_) => write!(f, "&"),
+            Token::At(_) => write!(f, "@"),
+            Token::LBrace(_) => write!(f, "{{"),
+            Token::RBrace(_) => write!(f, "}}"),
+            Token::Colon(_) => write!(f, ":"),
             Token::Ident(ident) => write!(
                 f,
                 "{}",
@@ -384,7 +416,11 @@ impl Token {
             Token::Ident(v) => v.get_span(),
             Token::Number(v) => v.span,
             Token::Dollar(v) => v.span,
+            Token::At(v) => v.span,
+            Token::LBrace(v) => v.span,
+            Token::RBrace(v) => v.span,
             Token::Ampersant(v) => v.span,
+            Token::Colon(v) => v.span,
         }
     }
 }
@@ -636,6 +672,10 @@ fn tokenize_special<I: Iterator<Item = char>>(
             '!' => Token::Exclamation(Exclamation { span: sp }),
             '$' => Token::Dollar(Dollar { span: sp }),
             '&' => Token::Ampersant(Ampersant { span: sp }),
+            '@' => Token::At(At { span: sp }),
+            '{' => Token::LBrace(LBrace { span: sp }),
+            '}' => Token::RBrace(RBrace { span: sp }),
+            ':' => Token::Colon(Colon { span: sp }),
             _ => return Err(Error::invalid_character(c, sp)),
         });
     }

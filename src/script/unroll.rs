@@ -637,6 +637,7 @@ fn unroll_parameters_vec(
 
 /// Replaces all Parameter unrolled expressions with the given parameters.
 #[allow(clippy::module_name_repetitions)]
+#[allow(clippy::too_many_lines)]
 #[must_use]
 pub fn unroll_parameters(
     definition: &UnrolledExpression,

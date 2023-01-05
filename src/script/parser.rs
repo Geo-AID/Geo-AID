@@ -10,11 +10,32 @@ use super::{
     token::{
         Ampersant, Asterisk, Comma, Dollar, Eq, Exclamation, Gt, Gteq, Ident, LParen, Let, Lt,
         Lteq, Minus, NamedIdent, Number, Plus, Position, RParen, Semi, Slash, Span, Token,
-        Vertical,
+        Vertical, Colon, At, LBrace, RBrace,
     },
     unroll::{CompileContext, RuleOperatorDefinition},
     ComplexUnit, Error, SimpleUnit,
 };
+
+macro_rules! impl_token_parse {
+    ($token:ident) => {  
+        impl Parse for $token {
+            fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
+                it: &mut Peekable<I>,
+                _context: &CompileContext,
+            ) -> Result<Self, Error> {
+                match it.next() {
+                    Some(Token::$token(tok)) => Ok(*tok),
+                    Some(t) => Err(Error::invalid_token(t.clone())),
+                    None => Err(Error::end_of_input()),
+                }
+            }
+
+            fn get_span(&self) -> Span {
+                self.span
+            }
+        }
+    };
+}
 
 /// A unary operator, like `-`.
 #[derive(Debug)]
@@ -496,6 +517,71 @@ pub struct InvertedRuleOperator {
     pub exlamation: Exclamation,
     /// The operator.
     pub operator: Box<RuleOperator>,
+}
+
+/// Defines the first half of a flag statement.
+#[derive(Debug)]
+pub struct FlagName {
+    pub at: At,
+    pub name: NamedIdent,
+    pub colon: Colon
+}
+
+impl Parse for FlagName {
+    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
+            it: &mut Peekable<I>,
+            context: &CompileContext,
+        ) -> Result<Self, Error> {
+        Ok(Self {
+            at: At::parse(it, context)?,
+            name: NamedIdent::parse(it, context)?,
+            colon: Color::parse(it, context)?
+        })
+    }
+}
+
+/// An identifier flag.
+#[derive(Debug)]
+pub struct IdentFlag {
+    pub value: NamedIdent
+}
+
+/// A set of flags.
+#[derive(Debug)]
+pub struct FlagSet {
+    pub lbrace: LBrace,
+    pub flags: Vec<FlagStatement>,
+    pub rbrace: RBrace
+}
+
+/// Defines the second half of a flag statement.
+#[derive(Debug)]
+pub enum FlagValue {
+    Ident(IdentFlag),
+    Set(FlagSet)
+}
+
+/// Defines a compiler flag or flagset.
+#[derive(Debug)]
+pub struct FlagStatement {
+    pub name: FlagName,
+    pub value: FlagValue
+}
+
+impl Parse for FlagStatement {
+    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
+            it: &mut Peekable<I>,
+            context: &CompileContext,
+        ) -> Result<Self, Error> {
+        Ok(Self {
+            name: FlagName::parse(it, context)?,
+            value: FlagValue::parse(it, context)?
+        })
+    }
+
+    fn get_span(&self) -> Span {
+        self.name.get_span().join(self.value.get_span())
+    }
 }
 
 /// `let <something> = <something else>`.
@@ -1095,6 +1181,10 @@ impl Parse for Vertical {
     }
 }
 
+impl_token_parse!{At}
+impl_token_parse!{LBrace}
+impl_token_parse!{RBrace}
+
 impl Parse for Dollar {
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
         it: &mut Peekable<I>,
@@ -1255,6 +1345,23 @@ impl Parse for RParen {
     ) -> Result<Self, Error> {
         match it.next() {
             Some(Token::RParen(tok)) => Ok(*tok),
+            Some(t) => Err(Error::invalid_token(t.clone())),
+            None => Err(Error::end_of_input()),
+        }
+    }
+
+    fn get_span(&self) -> Span {
+        self.span
+    }
+}
+
+impl Parse for NamedIdent {
+    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
+            it: &mut Peekable<I>,
+            context: &CompileContext,
+        ) -> Result<Self, Error> {
+        match it.next() {
+            Some(Token::Ident(Ident::Named(named))) => Ok(named.clone()),
             Some(t) => Err(Error::invalid_token(t.clone())),
             None => Err(Error::end_of_input()),
         }
