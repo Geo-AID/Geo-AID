@@ -26,7 +26,7 @@ macro_rules! impl_token_parse {
                 match it.next() {
                     Some(Token::$token(tok)) => Ok(*tok),
                     Some(t) => Err(Error::invalid_token(t.clone())),
-                    None => Err(Error::end_of_input()),
+                    None => Err(Error::EndOfInput),
                 }
             }
 
@@ -535,15 +535,13 @@ impl Parse for FlagName {
         Ok(Self {
             at: At::parse(it, context)?,
             name: NamedIdent::parse(it, context)?,
-            colon: Color::parse(it, context)?
+            colon: Colon::parse(it, context)?
         })
     }
-}
 
-/// An identifier flag.
-#[derive(Debug)]
-pub struct IdentFlag {
-    pub value: NamedIdent
+    fn get_span(&self) -> Span {
+        self.at.span.join(self.colon.span)
+    }
 }
 
 /// A set of flags.
@@ -554,11 +552,63 @@ pub struct FlagSet {
     pub rbrace: RBrace
 }
 
+impl Parse for FlagSet {
+    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
+            it: &mut Peekable<I>,
+            context: &CompileContext,
+        ) -> Result<Self, Error> {
+        let mut flags = Vec::new();
+
+        let lbrace = LBrace::parse(it, context)?;
+
+        while let Some(Token::At(_)) = it.peek().copied() {
+            flags.push(FlagStatement::parse(it, context)?);
+        }
+
+        Ok(Self {
+            lbrace,
+            flags,
+            rbrace: RBrace::parse(it, context)?
+        })
+    }
+
+    fn get_span(&self) -> Span {
+        self.lbrace.span.join(self.rbrace.span)
+    }
+}
+
+
 /// Defines the second half of a flag statement.
 #[derive(Debug)]
 pub enum FlagValue {
-    Ident(IdentFlag),
-    Set(FlagSet)
+    Ident(NamedIdent),
+    Set(FlagSet),
+    Number(Number)
+}
+
+impl Parse for FlagValue {
+    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
+            it: &mut Peekable<I>,
+            context: &CompileContext,
+        ) -> Result<Self, Error> {
+        let peeked = it.peek().copied();
+
+        Ok(match peeked {
+            Some(Token::Ident(Ident::Named(_))) => FlagValue::Ident(NamedIdent::parse(it, context)?),
+            Some(Token::LBrace(_)) => FlagValue::Set(FlagSet::parse(it, context)?),
+            Some(Token::Number(_)) => FlagValue::Number(Number::parse(it, context)?),
+            Some(t) => return Err(Error::InvalidToken { token: t.clone() }),
+            None => return Err(Error::EndOfInput)
+        })
+    }
+
+    fn get_span(&self) -> Span {
+        match self {
+            FlagValue::Ident(v) => v.span,
+            FlagValue::Set(v) => v.get_span(),
+            FlagValue::Number(v) => v.span,
+        }
+    }
 }
 
 /// Defines a compiler flag or flagset.
@@ -625,6 +675,19 @@ pub enum Statement {
     Let(LetStatement),
     /// rule
     Rule(RuleStatement),
+    /// Flag
+    Flag(FlagStatement)
+}
+
+impl Statement {
+    #[must_use]
+    pub fn as_flag(&self) -> Option<&FlagStatement> {
+        if let Self::Flag(v) = self {
+            Some(v)
+        } else {
+            None
+        }
+    }
 }
 
 /// A utility struct for collections of parsed items with punctuators between them.
@@ -712,6 +775,7 @@ impl Parse for Statement {
         Ok(match tok {
             Token::Let(_) => Statement::Let(LetStatement::parse(it, context)?),
             Token::Semi(_) => Statement::Noop(Noop::parse(it, context)?),
+            Token::At(_) => Statement::Flag(FlagStatement::parse(it, context)?),
             _ => Statement::Rule(RuleStatement::parse(it, context)?),
         })
     }
@@ -721,6 +785,7 @@ impl Parse for Statement {
             Statement::Noop(v) => v.get_span(),
             Statement::Let(v) => v.get_span(),
             Statement::Rule(v) => v.get_span(),
+            Statement::Flag(v) => v.get_span()
         }
     }
 }
@@ -737,40 +802,6 @@ impl Parse for Noop {
 
     fn get_span(&self) -> Span {
         self.semi.get_span()
-    }
-}
-
-impl Parse for Let {
-    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-        it: &mut Peekable<I>,
-        _context: &CompileContext,
-    ) -> Result<Self, Error> {
-        match it.next() {
-            Some(Token::Let(tok)) => Ok(*tok),
-            Some(t) => Err(Error::invalid_token(t.clone())),
-            None => Err(Error::end_of_input()),
-        }
-    }
-
-    fn get_span(&self) -> Span {
-        self.span
-    }
-}
-
-impl Parse for Semi {
-    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-        it: &mut Peekable<I>,
-        _context: &CompileContext,
-    ) -> Result<Self, Error> {
-        match it.next() {
-            Some(Token::Semi(tok)) => Ok(*tok),
-            Some(t) => Err(Error::invalid_token(t.clone())),
-            None => Err(Error::end_of_input()),
-        }
-    }
-
-    fn get_span(&self) -> Span {
-        self.span
     }
 }
 
@@ -813,7 +844,7 @@ impl Parse for LetStatement {
                     RuleOperator::parse(it, context)?,
                     Expression::parse(it, context)?,
                 )),
-                None => return Err(Error::end_of_input()),
+                None => return Err(Error::EndOfInput),
             };
         }
 
@@ -848,7 +879,7 @@ impl Parse for ExprNumber {
                 token: *num,
             }),
             Some(t) => Err(Error::invalid_token(t.clone())),
-            None => Err(Error::end_of_input()),
+            None => Err(Error::EndOfInput),
         }
     }
 
@@ -1020,7 +1051,7 @@ impl Parse for SimpleExpression {
                 ),
                 tok => return Err(Error::invalid_token(tok.clone())),
             },
-            None => return Err(Error::end_of_input()),
+            None => return Err(Error::EndOfInput),
         };
 
         Ok(expr)
@@ -1145,7 +1176,7 @@ impl Parse for RuleOperator {
                 })),
                 t => Err(Error::invalid_token(t.clone())),
             },
-            None => Err(Error::end_of_input()),
+            None => Err(Error::EndOfInput),
         }
     }
 
@@ -1164,206 +1195,35 @@ impl Parse for RuleOperator {
     }
 }
 
-impl Parse for Vertical {
-    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-        it: &mut Peekable<I>,
-        _context: &CompileContext,
-    ) -> Result<Self, Error> {
-        match it.next() {
-            Some(Token::Vertical(tok)) => Ok(*tok),
-            Some(t) => Err(Error::invalid_token(t.clone())),
-            None => Err(Error::end_of_input()),
-        }
-    }
-
-    fn get_span(&self) -> Span {
-        self.span
-    }
-}
-
 impl_token_parse!{At}
 impl_token_parse!{LBrace}
 impl_token_parse!{RBrace}
-
-impl Parse for Dollar {
-    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-        it: &mut Peekable<I>,
-        _context: &CompileContext,
-    ) -> Result<Self, Error> {
-        match it.next() {
-            Some(Token::Dollar(tok)) => Ok(*tok),
-            Some(t) => Err(Error::invalid_token(t.clone())),
-            None => Err(Error::end_of_input()),
-        }
-    }
-
-    fn get_span(&self) -> Span {
-        self.span
-    }
-}
-
-impl Parse for Comma {
-    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-        it: &mut Peekable<I>,
-        _context: &CompileContext,
-    ) -> Result<Self, Error> {
-        match it.next() {
-            Some(Token::Comma(tok)) => Ok(*tok),
-            Some(t) => Err(Error::invalid_token(t.clone())),
-            None => Err(Error::end_of_input()),
-        }
-    }
-
-    fn get_span(&self) -> Span {
-        self.span
-    }
-}
-
-impl Parse for Ampersant {
-    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-        it: &mut Peekable<I>,
-        _context: &CompileContext,
-    ) -> Result<Self, Error> {
-        match it.next() {
-            Some(Token::Ampersant(tok)) => Ok(*tok),
-            Some(t) => Err(Error::invalid_token(t.clone())),
-            None => Err(Error::end_of_input()),
-        }
-    }
-
-    fn get_span(&self) -> Span {
-        self.span
-    }
-}
-
-impl Parse for Lt {
-    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-        it: &mut Peekable<I>,
-        _context: &CompileContext,
-    ) -> Result<Self, Error> {
-        match it.next() {
-            Some(Token::Lt(tok)) => Ok(*tok),
-            Some(t) => Err(Error::invalid_token(t.clone())),
-            None => Err(Error::end_of_input()),
-        }
-    }
-
-    fn get_span(&self) -> Span {
-        self.span
-    }
-}
-
-impl Parse for Gt {
-    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-        it: &mut Peekable<I>,
-        _context: &CompileContext,
-    ) -> Result<Self, Error> {
-        match it.next() {
-            Some(Token::Gt(tok)) => Ok(*tok),
-            Some(t) => Err(Error::invalid_token(t.clone())),
-            None => Err(Error::end_of_input()),
-        }
-    }
-
-    fn get_span(&self) -> Span {
-        self.span
-    }
-}
-
-impl Parse for Lteq {
-    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-        it: &mut Peekable<I>,
-        _context: &CompileContext,
-    ) -> Result<Self, Error> {
-        match it.next() {
-            Some(Token::Lteq(tok)) => Ok(*tok),
-            Some(t) => Err(Error::invalid_token(t.clone())),
-            None => Err(Error::end_of_input()),
-        }
-    }
-
-    fn get_span(&self) -> Span {
-        self.span
-    }
-}
-
-impl Parse for Gteq {
-    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-        it: &mut Peekable<I>,
-        _context: &CompileContext,
-    ) -> Result<Self, Error> {
-        match it.next() {
-            Some(Token::Gteq(tok)) => Ok(*tok),
-            Some(t) => Err(Error::invalid_token(t.clone())),
-            None => Err(Error::end_of_input()),
-        }
-    }
-
-    fn get_span(&self) -> Span {
-        self.span
-    }
-}
-
-impl Parse for Exclamation {
-    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-        it: &mut Peekable<I>,
-        _context: &CompileContext,
-    ) -> Result<Self, Error> {
-        match it.next() {
-            Some(Token::Exclamation(tok)) => Ok(*tok),
-            Some(t) => Err(Error::invalid_token(t.clone())),
-            None => Err(Error::end_of_input()),
-        }
-    }
-
-    fn get_span(&self) -> Span {
-        self.span
-    }
-}
-
-impl Parse for LParen {
-    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-        it: &mut Peekable<I>,
-        _context: &CompileContext,
-    ) -> Result<Self, Error> {
-        match it.next() {
-            Some(Token::LParen(tok)) => Ok(*tok),
-            Some(t) => Err(Error::invalid_token(t.clone())),
-            None => Err(Error::end_of_input()),
-        }
-    }
-
-    fn get_span(&self) -> Span {
-        self.span
-    }
-}
-
-impl Parse for RParen {
-    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-        it: &mut Peekable<I>,
-        _context: &CompileContext,
-    ) -> Result<Self, Error> {
-        match it.next() {
-            Some(Token::RParen(tok)) => Ok(*tok),
-            Some(t) => Err(Error::invalid_token(t.clone())),
-            None => Err(Error::end_of_input()),
-        }
-    }
-
-    fn get_span(&self) -> Span {
-        self.span
-    }
-}
+impl_token_parse!{Dollar}
+impl_token_parse!{Vertical}
+impl_token_parse!{Semi}
+impl_token_parse!{Comma}
+impl_token_parse!{Ampersant}
+impl_token_parse!{Lt}
+impl_token_parse!{Gt}
+impl_token_parse!{Lteq}
+impl_token_parse!{Gteq}
+impl_token_parse!{Eq}
+impl_token_parse!{LParen}
+impl_token_parse!{RParen}
+impl_token_parse!{Let}
+impl_token_parse!{Colon}
+impl_token_parse!{Exclamation}
+impl_token_parse!{Number}
 
 impl Parse for NamedIdent {
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
             it: &mut Peekable<I>,
-            context: &CompileContext,
+            _context: &CompileContext,
         ) -> Result<Self, Error> {
         match it.next() {
             Some(Token::Ident(Ident::Named(named))) => Ok(named.clone()),
             Some(t) => Err(Error::invalid_token(t.clone())),
-            None => Err(Error::end_of_input()),
+            None => Err(Error::EndOfInput),
         }
     }
 
@@ -1380,7 +1240,7 @@ impl Parse for Ident {
         match it.next() {
             Some(Token::Ident(ident)) => Ok(ident.clone()),
             Some(t) => Err(Error::invalid_token(t.clone())),
-            None => Err(Error::end_of_input()),
+            None => Err(Error::EndOfInput),
         }
     }
 
@@ -1389,23 +1249,6 @@ impl Parse for Ident {
             Ident::Named(n) => n.span,
             Ident::Collection(c) => c.span,
         }
-    }
-}
-
-impl Parse for Eq {
-    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-        it: &mut Peekable<I>,
-        _context: &CompileContext,
-    ) -> Result<Self, Error> {
-        match it.next() {
-            Some(Token::Eq(tok)) => Ok(*tok),
-            Some(t) => Err(Error::invalid_token(t.clone())),
-            None => Err(Error::end_of_input()),
-        }
-    }
-
-    fn get_span(&self) -> Span {
-        self.span
     }
 }
 
