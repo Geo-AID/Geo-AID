@@ -69,10 +69,12 @@ pub enum Error {
     UndefinedVariable {
         error_span: Span,
         variable_name: String,
+        suggested: Option<String>
     },
     UndefinedFunction {
         error_span: Span,
         function_name: String,
+        suggested: Option<String>
     },
     FetureNotSupported {
         error_span: Span,
@@ -115,23 +117,29 @@ pub enum Error {
         error_span: Span,
         received: (Span, Type),
     },
+    FlagDoesNotExist {
+        flag_name: String,
+        flag_span: Span,
+        error_span: Span,
+        suggested: Option<String>
+    },
+    FlagSetExpected {
+        error_span: Span
+    },
+    FlagStringExpected {
+        error_span: Span
+    },
+    FlagBooleanExpected {
+        error_span: Span
+    },
+    RedefinedFlag {
+        error_span: Span,
+        first_defined: Span,
+        flag_name: String
+    }
 }
 
 impl Error {
-    #[must_use]
-    pub fn inconsistent_iterators_get_span(&self) -> Option<Span> {
-        match self {
-            Self::InconsistentIterators {
-                first_span: _,
-                first_length: _,
-                occured_span,
-                occured_length: _,
-                error_span: _,
-            } => Some(*occured_span),
-            _ => None,
-        }
-    }
-
     #[must_use]
     pub fn invalid_token(token: Token) -> Self {
         Self::InvalidToken { token }
@@ -143,11 +151,6 @@ impl Error {
             character,
             error_span,
         }
-    }
-
-    #[must_use]
-    pub fn end_of_input() -> Self {
-        Self::EndOfInput
     }
 
     #[must_use]
@@ -170,27 +173,10 @@ impl Error {
     }
 
     #[must_use]
-    pub fn undefined_function(error_span: Span, function_name: String) -> Self {
-        Self::UndefinedFunction {
-            error_span,
-            function_name,
-        }
-    }
-
-    #[must_use]
     pub fn feature_not_supported(error_span: Span, feature_name: &'static str) -> Self {
         Self::FetureNotSupported {
             error_span,
             feature_name,
-        }
-    }
-
-    #[must_use]
-    pub fn invalid_argument_count(error_span: Span, expected: &'static [u8], got: u8) -> Self {
-        Self::InvalidArgumentCount {
-            error_span,
-            expected,
-            got,
         }
     }
 
@@ -274,8 +260,7 @@ impl Error {
                 variable_name,
             } => DiagnosticData::new(&format!("redefined variable: `{variable_name}`"))
                 .add_span(error_span)
-                .add_annotation(defined_at, AnnotationKind::Note, "First defined here.")
-                .add_annotation(error_span, AnnotationKind::Note, "Then redefined here."),
+                .add_annotation(defined_at, AnnotationKind::Note, "First defined here."),
             Self::UndefinedTypeVariable { definition } => {
                 DiagnosticData::new("variable of undefined type")
                     .add_span(definition)
@@ -284,13 +269,23 @@ impl Error {
             Self::UndefinedVariable {
                 error_span,
                 variable_name,
-            } => DiagnosticData::new(&format!("undefined variable: `{variable_name}`"))
-                .add_span(error_span),
+                suggested
+            } => {
+                let message = suggested.map(|v| format!("Did you mean: `{v}`?"));
+                DiagnosticData::new(&format!("undefined variable: `{variable_name}`"))
+                    .add_span(error_span)
+                    .add_annotation_opt(error_span, AnnotationKind::Help, message.as_ref())
+            }
             Self::UndefinedFunction {
                 error_span,
                 function_name,
-            } => DiagnosticData::new(&format!("undefined function: `{function_name}`"))
-                .add_span(error_span),
+                suggested
+            } => {
+                let message = suggested.map(|v| format!("Did you mean: `{v}`?"));
+                DiagnosticData::new(&format!("undefined function: `{function_name}`"))
+                    .add_span(error_span)
+                    .add_annotation_opt(error_span, AnnotationKind::Help, message.as_ref())
+            }
             Self::FetureNotSupported {
                 error_span,
                 feature_name,
@@ -372,6 +367,32 @@ impl Error {
                     .add_span(error_span)
                     .add_annotation(received.0, AnnotationKind::Note, &format!("Value should be a point, received {}.", received.1))
             }
+            Self::FlagDoesNotExist { flag_name, flag_span, error_span, suggested } => {
+                let message = suggested.map(|v| format!("Did you mean: `{v}`?"));
+                DiagnosticData::new(&format!("Compiler flag `{flag_name}` does not exist."))
+                    .add_span(error_span)
+                    .add_annotation(flag_span, AnnotationKind::Note, &"This does not exist.")
+                    .add_annotation_opt(flag_span, AnnotationKind::Help, message.as_ref())
+            }
+            Self::FlagSetExpected { error_span } => {
+                DiagnosticData::new(&"Expected a flag set ({...}).")
+                    .add_span(error_span)
+            }
+            Self::FlagStringExpected { error_span } => {
+                DiagnosticData::new(&"Expected a string (identifier).")
+                    .add_span(error_span)
+            }
+            Self::FlagBooleanExpected { error_span } => {
+                DiagnosticData::new(&"Expected a boolean value (enabled, disabled, on, off, true, false, 1 or 0).")
+                    .add_span(error_span)
+            }
+            Self::RedefinedFlag {
+                first_defined,
+                error_span,
+                flag_name,
+            } => DiagnosticData::new(&format!("redefined flag: `{flag_name}`"))
+                .add_span(error_span)
+                .add_annotation(first_defined, AnnotationKind::Note, "First defined here.")
         }
     }
 }

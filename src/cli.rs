@@ -100,6 +100,23 @@ impl DiagnosticData {
         });
         self
     }
+
+    #[must_use]
+    pub fn add_annotation_opt<S: ToString + ?Sized>(
+        mut self,
+        at: Span,
+        kind: AnnotationKind,
+        message: Option<&S>,
+    ) -> Self {
+        if let Some(message) = message {
+            self.annotations.push(Annotation {
+                kind,
+                message: message.to_string(),
+                at,
+            });
+        }
+        self
+    }
 }
 
 impl<'r> Diagnostic<'r> {

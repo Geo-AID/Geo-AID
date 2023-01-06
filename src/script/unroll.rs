@@ -10,7 +10,7 @@ use super::{
     parser::{
         BinaryOperator, ExplicitIterator, Expression, ImplicitIterator, LetStatement, Parse,
         PredefinedRuleOperator, PredefinedType, Punctuated, RuleOperator, RuleStatement,
-        SimpleExpression, Statement, Type,
+        SimpleExpression, Statement, Type, FlagStatement,
     },
     token::{self, Ident, NamedIdent, PointCollection, Span},
     ty, ComplexUnit, Error, SimpleUnit,
@@ -64,6 +64,120 @@ pub struct Variable {
     pub definition: UnrolledExpression,
     /// Variable's metadata.
     pub meta: VariableMeta,
+}
+
+pub type FlagSet = HashMap<String, Flag>;
+
+pub struct FlagSetConstructor {
+    pub flags: Vec<(String, Flag)>
+}
+
+impl FlagSetConstructor {
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            flags: Vec::new()
+        }
+    }
+
+    #[must_use]
+    pub fn add_ident<S: ToString>(mut self, name: &S) -> Self {
+        self.flags.push((name.to_string(), Flag {
+            name: name.to_string(),
+            kind: FlagKind::Setting(FlagSetting::Unset),
+            ty: FlagType::String
+        }));
+
+        self
+    }
+
+    #[must_use]
+    pub fn add_ident_def<S: ToString>(mut self, name: &S, default: &S) -> Self {
+        self.flags.push((name.to_string(), Flag {
+            name: name.to_string(),
+            kind: FlagKind::Setting(FlagSetting::Default(FlagValue::String(default.to_string()))),
+            ty: FlagType::String
+        }));
+
+        self
+    }
+
+
+    #[must_use]
+    pub fn add_bool<S: ToString>(mut self, name: &S) -> Self {
+        self.flags.push((name.to_string(), Flag {
+            name: name.to_string(),
+            kind: FlagKind::Setting(FlagSetting::Unset),
+            ty: FlagType::Boolean
+        }));
+
+        self
+    }
+
+    #[must_use]
+    pub fn add_bool_def<S: ToString>(mut self, name: &S, default: bool) -> Self {
+        self.flags.push((name.to_string(), Flag {
+            name: name.to_string(),
+            kind: FlagKind::Setting(FlagSetting::Default(FlagValue::Bool(default))),
+            ty: FlagType::Boolean
+        }));
+
+        self
+    }
+
+    #[must_use]
+    pub fn add_set<S: ToString>(mut self, name: &S, set: FlagSetConstructor) -> Self {
+        self.flags.push((name.to_string(), Flag {
+            name: name.to_string(),
+            kind: FlagKind::Set(set.finish()),
+            ty: FlagType::Set
+        }));
+
+        self
+    }
+
+    #[must_use]
+    pub fn finish(self) -> FlagSet {
+        self.flags.into_iter().collect()
+    }
+}
+
+impl Default for FlagSetConstructor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// A compiler flag.
+pub struct Flag {
+    pub name: String,
+    pub kind: FlagKind,
+    pub ty: FlagType
+}
+
+pub enum FlagType {
+    Set,
+    Boolean,
+    String
+}
+
+/// A compiler flag.
+pub enum FlagKind {
+    Setting(FlagSetting),
+    Set(FlagSet)
+}
+
+/// A compiler flag value.
+pub enum FlagSetting {
+    Default(FlagValue),
+    Unset,
+    Set(FlagValue, Span)
+}
+
+/// A compiler flag value.
+pub enum FlagValue {
+    String(String),
+    Bool(bool)
 }
 
 /// An overload of a function in `GeoScript`.
@@ -637,6 +751,7 @@ fn unroll_parameters_vec(
 
 /// Replaces all Parameter unrolled expressions with the given parameters.
 #[allow(clippy::module_name_repetitions)]
+#[allow(clippy::too_many_lines)]
 #[must_use]
 pub fn unroll_parameters(
     definition: &UnrolledExpression,
@@ -1003,9 +1118,15 @@ fn unroll_simple(
         SimpleExpression::Ident(i) => match i {
             Ident::Named(named) => {
                 let var = context.variables.get(&named.ident).ok_or_else(|| {
+                    #[allow(clippy::cast_possible_truncation)]
+                    let suggested = context.variables.iter().max_by_key(
+                        |v| (strsim::jaro(v.0, &named.ident) * 1000.0).floor() as i64
+                    ).map(|x| x.0).cloned();
+
                     Error::UndefinedVariable {
                         error_span: expr.get_span(),
                         variable_name: named.ident.clone(),
+                        suggested
                     }
                 })?;
 
@@ -1032,6 +1153,7 @@ fn unroll_simple(
                                 None => Err(Error::UndefinedVariable {
                                     error_span: col.span,
                                     variable_name: construct_point_name(*letter, *primes),
+                                    suggested: None // Pretty much every single-letter point could be considered similar, so no suggestions.
                                 }),
                             }
                         })
@@ -1089,7 +1211,16 @@ fn unroll_simple(
                     ));
                 }
             } else {
-                return Err(Error::undefined_function(e.name.span, e.name.ident.clone()));
+                #[allow(clippy::cast_possible_truncation)]
+                let suggested = context.functions.iter().max_by_key(
+                    |v| (strsim::jaro(v.0, &e.name.ident) * 1000.0).floor() as i64
+                ).map(|x| x.0).cloned();
+
+                return Err(Error::UndefinedFunction {
+                    error_span: e.name.span,
+                    function_name: e.name.ident.clone(),
+                    suggested
+                });
             }
         }
         SimpleExpression::Unop(op) => {
@@ -1882,6 +2013,126 @@ fn unroll_rulestat(
     Ok(())
 }
 
+fn set_flag_bool(v: &mut Flag, flag: &FlagStatement) -> Result<(), Error> {
+    match &flag.value {
+        super::parser::FlagValue::Set(_) => return Err(Error::FlagBooleanExpected {
+            error_span: flag.get_span()
+        }),
+        super::parser::FlagValue::Ident(ident) => match &mut v.kind {
+            FlagKind::Setting(s) => {
+                match s {
+                    FlagSetting::Default(_)
+                    | FlagSetting::Unset => {
+                        *s = FlagSetting::Set(FlagValue::Bool(match ident.ident.as_str() {
+                            "enabled" | "on" | "true" => true,
+                            "disabled" | "off" | "false" => false,
+                            _ => return Err(Error::FlagBooleanExpected {
+                                error_span: flag.get_span()
+                            })
+                        }), flag.get_span());
+                    },
+                    FlagSetting::Set(_, sp) => return Err(Error::RedefinedFlag {
+                        error_span: flag.get_span(),
+                        first_defined: *sp,
+                        flag_name: flag.name.name.ident.clone()
+                    }),
+                }
+            },
+            FlagKind::Set(_) => unreachable!(),
+        },
+        super::parser::FlagValue::Number(num) =>  match &mut v.kind {
+            FlagKind::Setting(s) => {
+                match s {
+                    FlagSetting::Default(_)
+                    | FlagSetting::Unset => {
+                        if num.dot.is_none() {
+                            *s = FlagSetting::Set(FlagValue::Bool(match num.integral {
+                                1 => true,
+                                0 => false,
+                                _ => return Err(Error::FlagBooleanExpected {
+                                    error_span: flag.get_span()
+                                })
+                            }), flag.get_span());
+                        } else {
+                            return Err(Error::FlagBooleanExpected {
+                                error_span: flag.get_span()
+                            })
+                        }
+                    },
+                    FlagSetting::Set(_, sp) => return Err(Error::RedefinedFlag {
+                        error_span: flag.get_span(),
+                        first_defined: *sp,
+                        flag_name: flag.name.name.ident.clone()
+                    }),
+                }
+            },
+            FlagKind::Set(_) => unreachable!(),
+        },
+    }
+
+    Ok(())
+}
+
+fn set_flag(set: &mut FlagSet, flag: &FlagStatement) -> Result<(), Error> {
+    if let Some(v) = set.get_mut(&flag.name.name.ident) {
+        match v.ty {
+            FlagType::Set => match &flag.value {
+                super::parser::FlagValue::Set(set) => match &mut v.kind {
+                    FlagKind::Setting(_) => unreachable!(),
+                    FlagKind::Set(s) => {
+                        for stat in &set.flags {
+                            set_flag(s, stat)?;
+                        }
+                    },
+                },
+                super::parser::FlagValue::Ident(_)
+                | super::parser::FlagValue::Number(_) => return Err(Error::FlagSetExpected {
+                    error_span: flag.get_span()
+                }),
+            },
+            FlagType::Boolean => set_flag_bool(v, flag)?,
+            FlagType::String => match &flag.value {
+                super::parser::FlagValue::Number(_)
+                | super::parser::FlagValue::Set(_) => return Err(Error::FlagStringExpected {
+                    error_span: flag.get_span()
+                }),
+                super::parser::FlagValue::Ident(ident) => match &mut v.kind {
+                    FlagKind::Setting(s) => {
+                        match s {
+                            FlagSetting::Default(_)
+                            | FlagSetting::Unset => {
+                                *s = FlagSetting::Set(FlagValue::String(ident.ident.clone()), flag.get_span());
+                            },
+                            FlagSetting::Set(_, sp) => return Err(Error::RedefinedFlag {
+                                error_span: flag.get_span(),
+                                first_defined: *sp,
+                                flag_name: flag.name.name.ident.clone()
+                            }),
+                        }
+                    },
+                    FlagKind::Set(_) => unreachable!(),
+                }
+            },
+        }
+
+        Ok(())
+    } else {
+        let flag_name = flag.name.name.ident.clone();
+
+        #[allow(clippy::cast_possible_truncation)]
+        let suggested = set.iter().max_by_key(
+            |v| (strsim::jaro(v.0, &flag_name) * 1000.0).floor() as i64
+        ).map(|x| x.0).cloned();
+
+        Err(Error::FlagDoesNotExist {
+            flag_name,
+            flag_span: flag.name.get_span(),
+            error_span: flag.get_span(),
+            suggested
+        })
+    }
+}
+
 /// Unrolls the given script. All iterators are expanded and all conversions applied. The output can be immediately compiled.
 ///
 /// # Errors
@@ -1894,6 +2145,14 @@ pub fn unroll(input: &str) -> Result<(Vec<UnrolledRule>, CompileContext), Error>
         points: HashMap::new(),
         functions: HashMap::new(),
     };
+
+    let mut flags = FlagSetConstructor::new()
+        .add_set(
+            &"optimizations",
+            FlagSetConstructor::new()
+                .add_bool_def(&"identical_expressions", true)
+        )
+        .finish();
 
     builtins::point::register_point_function(&mut context); // Point()
     builtins::dst::register_dst_function(&mut context); // dst()
@@ -1911,18 +2170,23 @@ pub fn unroll(input: &str) -> Result<(Vec<UnrolledRule>, CompileContext), Error>
 
     let mut unrolled = Vec::new();
 
-    let mut next = it.peek().is_some();
-    while next {
-        let stat = Statement::parse(&mut it, &context)?;
+    let mut statements = Vec::new();
 
+    while it.peek().is_some() {
+        statements.push(Statement::parse(&mut it, &context)?);
+    }
+
+    for flag in statements.iter().filter_map(Statement::as_flag) {
+        set_flag(&mut flags, flag)?;
+    }
+
+    for stat in statements {
         // Unroll the statement
         match stat {
-            Statement::Noop(_) => (),
+            Statement::Noop(_) | Statement::Flag(_) => (),
             Statement::Let(stat) => unroll_let(&stat, &mut context, &mut unrolled)?,
             Statement::Rule(stat) => unroll_rulestat(&stat, &mut context, &mut unrolled)?,
         }
-
-        next = it.peek().is_some();
     }
 
     Ok((unrolled, context))

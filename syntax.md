@@ -141,7 +141,7 @@ Geoscript is a statement-based language. As of the current version, there are th
 
 ### Let statement
 ```
-letstat := 'let', iterator<ident>, '=', expr, {rule-operator, expr}, ';';
+letstat := 'let', implicit-iterator<ident>, '=', expr, {rule-operator, expr}, ';';
 ```
 
 A let statement defines a variable based on the right hand expression. After the expression there can be rules to be defined immediately on the created variable as a syntatic sugar. Let statements support iterators. All iterators must have uniform length and if the left hand side of the statement has no iterators, the expression defining the variable also must have no iterators.
@@ -149,7 +149,7 @@ A let statement defines a variable based on the right hand expression. After the
 If the left hand side of the statement is a point collection, the defining expression will be unpacked onto the collection if possible.
 
 ```
-let A | |BC = Point() on DE | EF | DF;
+let A, B, C = Point() on DE, EF, DF;
 ```
 
 ### Rule statement
@@ -163,6 +163,31 @@ A rule statement defines a rule - a criteria that must be met by the figure. All
 ```
 noop := ';';
 ```
+
+### Compiler flags
+Compiler flags alter the behavior of compiler and generator. They can enable or disable certain optimizations, change how a specific operation is treated and toggle certain features. They can be expressed using the following syntax:
+
+```
+@flag_name: flag_value
+```
+
+Flag value can either be a literal value or a flag set, allowing to group flags into categories. A literal value is either an identifier or a number. And a flag set is a list of flag statements like the following.
+
+```
+@flag_set1: {
+    @flag: value,
+    @flagset2: {
+        ...
+    }
+}
+```
+
+```
+flagvalue := ident | (digit, {digit}) | ('{', {flagstat}, '}'); 
+flagstat := '@', ident, ':', flag-value;
+```
+
+Most flags require certain types. String flags accept identifiers, though sometimes there may be very limited options as to what strings exactly are allowed. Number flags sometimes want integers, sometimes floats and boolean flags can accept "on", "enabled", "true" and "1" as true and "off", "disabled", "false" and "0" as false.
 
 ### Statement
 stat := letstat | rulestat | noop;
@@ -178,7 +203,7 @@ GeoScript has implicit conversions defined for some types:
 - A point collection of length 1 can be automatically converted into a point.
 - A point collection of length 2 can be automatically converted into a line.
 - A point collection of length 2 can be automatically converted into the distance between two points.
-- A scalar with no specified type can be automatically converted into a scalar of any type.
+- A scalar with no specified type can be automatically converted into a scalar of any type, except for angles.
 
 ## Scalars
 Scalars are real numbers with a defined or not defined unit. Any number literal is by default a unitless scalar (not a dimensionless). Only unitless scalars can be freely converted into any other unit (except angless to avoid confusing radians with degrees). The units of GeoScript are:

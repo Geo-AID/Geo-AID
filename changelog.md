@@ -23,4 +23,5 @@
 - Fixed faulty display of multiline error messages.
 - Added command line options for JSON and raw drawers.
 - Added builtin functions: bisector, mid (average), parallel, perpendicular, intersection
-- Added point collectin constructors.
+- Added point collection constructors.
+- Added parser support for compiler flags.
