@@ -1,11 +1,11 @@
-use std::sync::Arc;
+use std::{sync::Arc, cell::RefCell, collections::HashMap};
 
 use crate::{
     generator::geometry,
-    script::{unit, ComplexUnit, Criteria, CriteriaKind, Expression, SimpleUnit, Weighed},
+    script::{unit, ComplexUnit, Criteria, CriteriaKind, Expression, SimpleUnit, Weighed, HashableWeakArc},
 };
 
-use super::{Complex, EvaluationError, Logger};
+use super::{Complex, EvaluationError, Logger, Flags};
 
 type PointVec = Vec<(Complex, f64)>;
 
@@ -76,17 +76,24 @@ fn invert(q: Quality) -> Quality {
     }
 }
 
+struct EvaluationArgs<'r> {
+    logger: &'r mut Logger,
+    points: &'r PointVec,
+    weights: RefCell<Vec<f64>>,
+    generation: u64,
+    flags: &'r Arc<Flags>,
+    record: &'r RefCell<HashMap<HashableWeakArc<Weighed<Expression>>, (Complex, ComplexUnit, u64)>>
+}
+
 fn evaluate_point_point_distance(
-    p1: &Weighed<Expression>,
-    p2: &Weighed<Expression>,
-    weights: &mut Vec<f64>,
-    points: &PointVec,
-    logger: &mut Logger,
+    p1: &Arc<Weighed<Expression>>,
+    p2: &Arc<Weighed<Expression>>,
     weight_mult: f64,
+    args: &EvaluationArgs
 ) -> Result<(Complex, ComplexUnit), EvaluationError> {
     // Evaluate the two points
-    let p1 = evaluate_expression(p1, weights, points, logger, weight_mult)?;
-    let p2 = evaluate_expression(p2, weights, points, logger, weight_mult)?;
+    let p1 = evaluate_expression(p1, weight_mult * p1.weight, args)?;
+    let p2 = evaluate_expression(p2, weight_mult * p2.weight, args)?;
 
     assert_eq!(p1.1, ComplexUnit::new(SimpleUnit::Point));
     assert_eq!(p2.1, ComplexUnit::new(SimpleUnit::Point));
@@ -100,16 +107,14 @@ fn evaluate_point_point_distance(
 }
 
 fn evaluate_point_line_distance(
-    point: &Weighed<Expression>,
-    line: &Weighed<Expression>,
-    weights: &mut Vec<f64>,
-    points: &PointVec,
-    logger: &mut Logger,
+    point: &Arc<Weighed<Expression>>,
+    line: &Arc<Weighed<Expression>>,
     weight_mult: f64,
+    args: &EvaluationArgs
 ) -> Result<(Complex, ComplexUnit), EvaluationError> {
     // Evaluate the line and the point
-    let point = evaluate_expression(point, weights, points, logger, weight_mult)?;
-    let line = evaluate_expression(line, weights, points, logger, weight_mult)?;
+    let point = evaluate_expression(point, weight_mult * point.weight, args)?;
+    let line = evaluate_expression(line, weight_mult * line.weight, args)?;
 
     assert_eq!(point.1, ComplexUnit::new(SimpleUnit::Point));
     assert_eq!(line.1, ComplexUnit::new(SimpleUnit::Line));
@@ -140,34 +145,34 @@ fn evaluate_point_line_distance(
 
 #[allow(clippy::too_many_lines)]
 fn evaluate_expression(
-    expr: &Weighed<Expression>,
-    weights: &mut Vec<f64>,
-    points: &PointVec,
-    logger: &mut Logger,
+    expr: &Arc<Weighed<Expression>>,
     weight_mult: f64,
+    args: &EvaluationArgs
 ) -> Result<(Complex, ComplexUnit), EvaluationError> {
+    // If the flag is on, check if this expression has already been calculated in this generation. If so, return that value.
+    if args.flags.optimizations.identical_expressions && Arc::strong_count(expr) > 1 {
+        let key = HashableWeakArc::new(Arc::downgrade(expr));
+
+    }
+
     Ok(match &expr.object {
         Expression::PointPointDistance(p1, p2) => evaluate_point_point_distance(
             p1,
             p2,
-            weights,
-            points,
-            logger,
-            weight_mult * expr.weight,
+            weight_mult,
+            args
         )?,
         Expression::PointLineDistance(point, line) => evaluate_point_line_distance(
             point,
             line,
-            weights,
-            points,
-            logger,
-            weight_mult * expr.weight,
+            weight_mult,
+            args
         )?,
         Expression::AnglePoint(p1, p2, p3) => {
             // Evaluate the three points
-            let p1 = evaluate_expression(p1, weights, points, logger, weight_mult * expr.weight)?;
-            let p2 = evaluate_expression(p2, weights, points, logger, weight_mult * expr.weight)?;
-            let p3 = evaluate_expression(p3, weights, points, logger, weight_mult * expr.weight)?;
+            let p1 = evaluate_expression(p1, weight_mult * p1.weight, args)?;
+            let p2 = evaluate_expression(p2, weight_mult * p2.weight, args)?;
+            let p3 = evaluate_expression(p3, weight_mult * p3.weight, args)?;
 
             assert_eq!(p1.1, ComplexUnit::new(SimpleUnit::Point));
             assert_eq!(p2.1, ComplexUnit::new(SimpleUnit::Point));
@@ -181,14 +186,14 @@ fn evaluate_expression(
         }
         Expression::Literal(v, unit) => (Complex::new(*v, 0.0), unit.clone()),
         Expression::FreePoint(p) => {
-            weights[*p] += expr.weight * weight_mult;
+            args.weights.borrow_mut()[*p] += expr.weight * weight_mult;
 
-            (points[*p].0, ComplexUnit::new(SimpleUnit::Point))
+            (args.points[*p].0, ComplexUnit::new(SimpleUnit::Point))
         }
         Expression::Line(p1, p2) => {
             // Evaluate the two points
-            let p1 = evaluate_expression(p1, weights, points, logger, weight_mult * expr.weight)?;
-            let p2 = evaluate_expression(p2, weights, points, logger, weight_mult * expr.weight)?;
+            let p1 = evaluate_expression(p1, weight_mult * p1.weight, args)?;
+            let p2 = evaluate_expression(p2, weight_mult * p2.weight, args)?;
 
             assert_eq!(p1.1, ComplexUnit::new(SimpleUnit::Point));
             assert_eq!(p2.1, ComplexUnit::new(SimpleUnit::Point));
@@ -200,8 +205,8 @@ fn evaluate_expression(
         }
         Expression::LineLineIntersection(l1, l2) => {
             // Evaluate the two lines
-            let l1 = evaluate_expression(l1, weights, points, logger, weight_mult * expr.weight)?;
-            let l2 = evaluate_expression(l2, weights, points, logger, weight_mult * expr.weight)?;
+            let l1 = evaluate_expression(l1, weight_mult * l1.weight, args)?;
+            let l2 = evaluate_expression(l2, weight_mult * l2.weight, args)?;
 
             assert_eq!(l1.1, ComplexUnit::new(SimpleUnit::Line));
             assert_eq!(l2.1, ComplexUnit::new(SimpleUnit::Line));
@@ -213,47 +218,47 @@ fn evaluate_expression(
         }
         Expression::SetUnit(e, unit) => {
             // Evaluate e
-            let e = evaluate_expression(e, weights, points, logger, weight_mult * e.weight)?;
+            let e = evaluate_expression(e, weight_mult * e.weight, args)?;
 
             (e.0, unit.clone())
         }
         Expression::Sum(e1, e2) => {
-            let v1 = evaluate_expression(e1, weights, points, logger, weight_mult * e1.weight)?;
-            let v2 = evaluate_expression(e2, weights, points, logger, weight_mult * e2.weight)?;
+            let v1 = evaluate_expression(e1, weight_mult * e1.weight, args)?;
+            let v2 = evaluate_expression(e2, weight_mult * e2.weight, args)?;
 
             assert_eq!(v1.1, v2.1);
 
             (v1.0 + v2.0, v1.1)
         }
         Expression::Difference(e1, e2) => {
-            let v1 = evaluate_expression(e1, weights, points, logger, weight_mult * e1.weight)?;
-            let v2 = evaluate_expression(e2, weights, points, logger, weight_mult * e2.weight)?;
+            let v1 = evaluate_expression(e1, weight_mult * e1.weight, args)?;
+            let v2 = evaluate_expression(e2, weight_mult * e2.weight, args)?;
 
             assert_eq!(v1.1, v2.1);
 
             (v1.0 - v2.0, v1.1)
         }
         Expression::Product(e1, e2) => {
-            let v1 = evaluate_expression(e1, weights, points, logger, weight_mult * e1.weight)?;
-            let v2 = evaluate_expression(e2, weights, points, logger, weight_mult * e2.weight)?;
+            let v1 = evaluate_expression(e1, weight_mult * e1.weight, args)?;
+            let v2 = evaluate_expression(e2, weight_mult * e2.weight, args)?;
 
             (v1.0 * v2.0, v1.1 * v2.1)
         }
         Expression::Quotient(e1, e2) => {
-            let v1 = evaluate_expression(e1, weights, points, logger, weight_mult * e1.weight)?;
-            let v2 = evaluate_expression(e2, weights, points, logger, weight_mult * e2.weight)?;
+            let v1 = evaluate_expression(e1, weight_mult * e1.weight, args)?;
+            let v2 = evaluate_expression(e2, weight_mult * e2.weight, args)?;
 
             (v1.0 / v2.0, v1.1 / v2.1)
         }
         Expression::Negation(expr) => {
-            let v = evaluate_expression(expr, weights, points, logger, weight_mult * expr.weight)?;
+            let v = evaluate_expression(expr, weight_mult * expr.weight, args)?;
 
             (-v.0, v.1)
         }
         Expression::AngleLine(l1, l2) => {
             // Evaluate the two lines
-            let l1 = evaluate_expression(l1, weights, points, logger, weight_mult * expr.weight)?;
-            let l2 = evaluate_expression(l2, weights, points, logger, weight_mult * expr.weight)?;
+            let l1 = evaluate_expression(l1, weight_mult * l1.weight, args)?;
+            let l2 = evaluate_expression(l2, weight_mult * l2.weight, args)?;
 
             assert_eq!(l1.1, ComplexUnit::new(SimpleUnit::Line));
             assert_eq!(l2.1, ComplexUnit::new(SimpleUnit::Line));
@@ -279,9 +284,9 @@ fn evaluate_expression(
         }
         Expression::AngleBisector(p1, p2, p3) => {
             // Evaluate the three points
-            let p1 = evaluate_expression(p1, weights, points, logger, weight_mult * expr.weight)?;
-            let p2 = evaluate_expression(p2, weights, points, logger, weight_mult * expr.weight)?;
-            let p3 = evaluate_expression(p3, weights, points, logger, weight_mult * expr.weight)?;
+            let p1 = evaluate_expression(p1, weight_mult * p1.weight, args)?;
+            let p2 = evaluate_expression(p2, weight_mult * p2.weight, args)?;
+            let p3 = evaluate_expression(p3, weight_mult * p3.weight, args)?;
 
             assert_eq!(p1.1, ComplexUnit::new(SimpleUnit::Point));
             assert_eq!(p2.1, ComplexUnit::new(SimpleUnit::Point));
@@ -296,7 +301,7 @@ fn evaluate_expression(
             let exprs = exprs
                 .iter()
                 .map(|expr| {
-                    evaluate_expression(expr, weights, points, logger, weight_mult * expr.weight)
+                    evaluate_expression(expr, weight_mult * expr.weight, args)
                 })
                 .collect::<Result<Vec<(Complex, ComplexUnit)>, EvaluationError>>()?;
 
@@ -312,8 +317,8 @@ fn evaluate_expression(
             (sum / exprs.len() as f64, exprs[0].1.clone())
         }
         Expression::PerpendicularThrough(l, p) => {
-            let l = evaluate_expression(l, weights, points, logger, weight_mult * l.weight)?;
-            let p = evaluate_expression(p, weights, points, logger, weight_mult * p.weight)?;
+            let l = evaluate_expression(l, weight_mult * l.weight, args)?;
+            let p = evaluate_expression(p, weight_mult * p.weight, args)?;
 
             // Find the right a coefficient.
             let a = if l.0.real.is_infinite() {
@@ -333,8 +338,8 @@ fn evaluate_expression(
             (Complex::new(a, b), unit::LINE)
         }
         Expression::ParallelThrough(l, p) => {
-            let l = evaluate_expression(l, weights, points, logger, weight_mult * l.weight)?;
-            let p = evaluate_expression(p, weights, points, logger, weight_mult * p.weight)?;
+            let l = evaluate_expression(l, weight_mult * l.weight, args)?;
+            let p = evaluate_expression(p, weight_mult * p.weight, args)?;
 
             // Find the right a coefficient.
             let a = l.0.real;
@@ -354,14 +359,26 @@ fn evaluate_single(
     crit: &CriteriaKind,
     points: &PointVec,
     logger: &mut Logger,
+    generation: u64,
+    flags: &Arc<Flags>,
+    record: &RefCell<HashMap<HashableWeakArc<Weighed<Expression>>, (Complex, ComplexUnit, u64)>>
 ) -> (Quality, Vec<f64>) {
     let mut weights = Vec::new();
     weights.resize(points.len(), 0.0);
 
+    let mut args = EvaluationArgs {
+        logger,
+        points,
+        weights: RefCell::new(weights),
+        generation,
+        flags,
+        record
+    };
+
     let quality = match crit {
         CriteriaKind::Equal(e1, e2) => {
-            let v1 = evaluate_expression(e1, &mut weights, points, logger, 1.0);
-            let v2 = evaluate_expression(e2, &mut weights, points, logger, 1.0);
+            let v1 = evaluate_expression(e1, 1.0, &args);
+            let v2 = evaluate_expression(e2, 1.0, &args);
 
             if let (Ok(v1), Ok(v2)) = (v1, v2) {
                 assert_eq!(v1.1, v2.1);
@@ -375,8 +392,8 @@ fn evaluate_single(
             }
         }
         CriteriaKind::Less(e1, e2) => {
-            let v1 = evaluate_expression(e1, &mut weights, points, logger, 1.0);
-            let v2 = evaluate_expression(e2, &mut weights, points, logger, 1.0);
+            let v1 = evaluate_expression(e1, 1.0, &args);
+            let v2 = evaluate_expression(e2, 1.0, &args);
 
             if let (Ok(v1), Ok(v2)) = (v1, v2) {
                 assert_eq!(v1.1, v2.1);
@@ -396,8 +413,8 @@ fn evaluate_single(
             }
         }
         CriteriaKind::Greater(e1, e2) => {
-            let v1 = evaluate_expression(e1, &mut weights, points, logger, 1.0);
-            let v2 = evaluate_expression(e2, &mut weights, points, logger, 1.0);
+            let v1 = evaluate_expression(e1, 1.0, &args);
+            let v2 = evaluate_expression(e2, 1.0, &args);
 
             if let (Ok(v1), Ok(v2)) = (v1, v2) {
                 assert_eq!(v1.1, v2.1);
@@ -416,23 +433,23 @@ fn evaluate_single(
         }
         // There's a problem here: if there is an evaluation error, the inverse is treated as 100% met, which might lead to some problems in some edge cases.
         CriteriaKind::Inverse(kind) => {
-            let (quality, ws) = evaluate_single(kind, points, logger);
-            weights = ws;
+            let (quality, ws) = evaluate_single(kind, points, args.logger, generation, flags, record);
+            args.weights = RefCell::new(ws);
             invert(quality)
         }
     };
 
-    (quality, weights)
+    (quality, args.weights.take())
 }
 
 /// Evaluates all rules in terms of quality
-pub fn evaluate(points: &PointVec, criteria: &Arc<Vec<Criteria>>, logger: &mut Logger) -> PointVec {
+pub fn evaluate(points: &PointVec, criteria: &Arc<Vec<Criteria>>, logger: &mut Logger, generation: u64, flags: &Arc<Flags>) -> PointVec {
     let mut point_evaluation = Vec::new();
     point_evaluation.resize(points.len(), Vec::new());
 
     for crit in criteria.iter() {
         // println!("Evaluating criteria {:#?}", crit);
-        let (quality, weights) = evaluate_single(&crit.object, points, logger);
+        let (quality, weights) = evaluate_single(&crit.object, points, logger, generation, flags);
 
         // println!("Evaluation result: {quality}, {:?}", weights);
 

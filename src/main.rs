@@ -76,7 +76,7 @@ fn main() {
 
     let result = compile::compile(&script, canvas_size);
 
-    let (criteria, figure, point_count) = match result {
+    let (criteria, figure, point_count, flags) = match result {
         Ok(v) => v,
         Err(err) => {
             let data = err.diagnostic();
@@ -96,7 +96,7 @@ fn main() {
         }
     };
 
-    let mut gen = Generator::new(point_count, args.count_of_workers, &Arc::new(criteria));
+    let mut gen = Generator::new(point_count, args.count_of_workers, &Arc::new(criteria), &Arc::new(flags));
 
     let mut stdout = io::stdout();
 
