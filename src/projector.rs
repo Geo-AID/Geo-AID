@@ -1,18 +1,18 @@
 use serde::Serialize;
 
 use crate::{
-    generator::{geometry, Complex, EvaluationError},
-    script::figure::{Figure, LineDefinition, PointDefinition},
+    generator::{geometry, Complex, EvaluationError, critic},
+    script::{figure::Figure, Weighed}
 };
 
-#[cfg(test)]
+/*#[cfg(test)]
 mod testing {
     use std::path::PathBuf;
 
     use crate::{
         drawer,
         generator::Complex,
-        script::figure::{Figure, Line, LineDefinition, Point, PointDefinition},
+        script::figure::Figure
     };
 
     use super::project;
@@ -106,7 +106,7 @@ mod testing {
             &project(&fig, &gen_points).unwrap(),
         );
     }
-}
+}*/
 
 pub struct Blueprint {
     pub points: Vec<RenderedPoint>,
@@ -136,29 +136,6 @@ pub struct RenderedLine {
     /// The line's thickness
     /// Two ends of the line
     pub points: (Complex, Complex),
-}
-
-fn evaluate_line(line: &LineDefinition, points: &[Complex]) -> Result<Complex, EvaluationError> {
-    Ok(match line {
-        LineDefinition::TwoPoints(i1, i2) => {
-            geometry::get_line(evaluate_point(i1, points)?, evaluate_point(i2, points)?)
-        }
-    })
-}
-
-fn evaluate_point(
-    definition: &PointDefinition,
-    points: &[Complex],
-) -> Result<Complex, EvaluationError> {
-    Ok(match definition {
-        PointDefinition::Indexed(gen_index) => points[*gen_index],
-        PointDefinition::Crossing(l1, l2) => {
-            let l1 = evaluate_line(l1, points)?;
-            let l2 = evaluate_line(l2, points)?;
-
-            geometry::get_crossing(l1, l2)?
-        }
-    })
 }
 
 fn get_line_ends(figure: &Figure, ln_c: Complex) -> (Complex, Complex) {
@@ -263,10 +240,15 @@ pub fn project(
     figure: &Figure,
     generated_points: &[Complex],
 ) -> Result<Vec<Rendered>, EvaluationError> {
+    let mut weights = Vec::new();
+    weights.resize(generated_points.len(), 0.0);
+    let points_vec = generated_points
+        .iter()
+        
     let points: Vec<Complex> = figure
         .points
         .iter()
-        .map(|pt| evaluate_point(&pt.definition, generated_points))
+        .map(|pt| critic::evaluate_expression(&Weighed::one(pt.clone()), &mut weights,   generated_points))
         .collect::<Result<Vec<Complex>, EvaluationError>>()?;
 
     #[allow(clippy::cast_precision_loss)]

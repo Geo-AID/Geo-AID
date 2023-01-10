@@ -398,7 +398,7 @@ impl Error {
 }
 
 /// Defines an object with assigned weight
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Weighed<T> {
     pub object: T,
     pub weight: f64,
@@ -588,7 +588,7 @@ impl DerefMut for ComplexUnit {
 }
 
 /// Defines an expression.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Expression {
     /// Euclidean distance between two points.
     PointPointDistance(Arc<Weighed<Expression>>, Arc<Weighed<Expression>>),

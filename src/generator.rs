@@ -17,7 +17,7 @@ pub enum EvaluationError {
     ParallelLines,
 }
 
-mod critic;
+pub mod critic;
 pub mod geometry;
 mod magic_box;
 
