@@ -1,7 +1,9 @@
+use std::cell::RefCell;
+
 use serde::Serialize;
 
 use crate::{
-    generator::{geometry, Complex, EvaluationError, critic},
+    generator::{geometry, Complex, EvaluationError, critic::{self, EvaluationArgs}},
     script::{figure::Figure, Weighed}
 };
 
@@ -242,8 +244,19 @@ pub fn project(
 ) -> Result<Vec<Rendered>, EvaluationError> {
     let mut weights = Vec::new();
     weights.resize(generated_points.len(), 0.0);
+    let logger = Vec::new();
     let points_vec = generated_points
         .iter()
+        .map(|v| (*v, 1.0))
+        .collect();
+    let ev_args = EvaluationArgs {
+        logger: &mut logger, 
+        points: &points_vec,
+        weights: RefCell::new(weights),
+        generation: 0,
+        flags: todo!(),
+        record: todo!(),
+    };
         
     let points: Vec<Complex> = figure
         .points

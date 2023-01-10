@@ -76,7 +76,7 @@ fn invert(q: Quality) -> Quality {
     }
 }
 
-struct EvaluationArgs<'r> {
+pub struct EvaluationArgs<'r> {
     logger: &'r mut Logger,
     points: &'r PointVec,
     weights: RefCell<Vec<f64>>,
