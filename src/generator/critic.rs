@@ -5,7 +5,7 @@ use crate::{
     script::{unit, ComplexUnit, Criteria, CriteriaKind, Expression, SimpleUnit, Weighed, HashableWeakArc},
 };
 
-use super::{Complex, EvaluationError, Logger, Flags};
+use super::{Complex, EvaluationError, Logger, Flags, ExprCache};
 
 type PointVec = Vec<(Complex, f64)>;
 
@@ -82,7 +82,7 @@ struct EvaluationArgs<'r> {
     weights: RefCell<Vec<f64>>,
     generation: u64,
     flags: &'r Arc<Flags>,
-    record: &'r RefCell<HashMap<HashableWeakArc<Weighed<Expression>>, (Complex, ComplexUnit, u64)>>
+    record: &'r RefCell<HashMap<HashableWeakArc<Weighed<Expression>>, ExprCache>>
 }
 
 fn evaluate_point_point_distance(
@@ -152,10 +152,16 @@ fn evaluate_expression(
     // If the flag is on, check if this expression has already been calculated in this generation. If so, return that value.
     if args.flags.optimizations.identical_expressions && Arc::strong_count(expr) > 1 {
         let key = HashableWeakArc::new(Arc::downgrade(expr));
+        let mut borrowed = args.record.borrow_mut();
+        let v = borrowed.get_mut(&key).unwrap();
 
+        if v.generation == args.generation {
+            return Ok((v.value, v.unit.clone()));
+        }
     }
 
-    Ok(match &expr.object {
+    // If no flag is on or no value is cached yet, compute.
+    let computed = match &expr.object {
         Expression::PointPointDistance(p1, p2) => evaluate_point_point_distance(
             p1,
             p2,
@@ -351,7 +357,20 @@ fn evaluate_expression(
 
             (Complex::new(a, b), unit::LINE)
         }
-    })
+    };
+
+    // If the flag is on, and the expr has not been cached, cache it.
+    if args.flags.optimizations.identical_expressions && Arc::strong_count(expr) > 1 {
+        let key = HashableWeakArc::new(Arc::downgrade(expr));
+        let mut borrowed = args.record.borrow_mut();
+        let v = borrowed.get_mut(&key).unwrap();
+
+        v.generation = args.generation;
+        v.value = computed.0;
+        v.unit = computed.1.clone();
+    }
+
+    Ok(computed)
 }
 
 /// Evaluates a single rule in terms of quality.
@@ -361,7 +380,7 @@ fn evaluate_single(
     logger: &mut Logger,
     generation: u64,
     flags: &Arc<Flags>,
-    record: &RefCell<HashMap<HashableWeakArc<Weighed<Expression>>, (Complex, ComplexUnit, u64)>>
+    record: &RefCell<HashMap<HashableWeakArc<Weighed<Expression>>, ExprCache>>
 ) -> (Quality, Vec<f64>) {
     let mut weights = Vec::new();
     weights.resize(points.len(), 0.0);
@@ -443,13 +462,14 @@ fn evaluate_single(
 }
 
 /// Evaluates all rules in terms of quality
-pub fn evaluate(points: &PointVec, criteria: &Arc<Vec<Criteria>>, logger: &mut Logger, generation: u64, flags: &Arc<Flags>) -> PointVec {
+pub fn evaluate(points: &PointVec, criteria: &Arc<Vec<Criteria>>, logger: &mut Logger, generation: u64, flags: &Arc<Flags>,
+    record: &RefCell<HashMap<HashableWeakArc<Weighed<Expression>>, ExprCache>>) -> PointVec {
     let mut point_evaluation = Vec::new();
     point_evaluation.resize(points.len(), Vec::new());
 
     for crit in criteria.iter() {
         // println!("Evaluating criteria {:#?}", crit);
-        let (quality, weights) = evaluate_single(&crit.object, points, logger, generation, flags);
+        let (quality, weights) = evaluate_single(&crit.object, points, logger, generation, flags, record);
 
         // println!("Evaluation result: {quality}, {:?}", weights);
 
