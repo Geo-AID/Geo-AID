@@ -149,12 +149,32 @@ impl Default for FlagSetConstructor {
 }
 
 /// A compiler flag.
+#[derive(Debug)]
 pub struct Flag {
     pub name: String,
     pub kind: FlagKind,
     pub ty: FlagType
 }
 
+impl Flag {
+    #[must_use]
+    pub fn as_set(&self) -> Option<&FlagSet> {
+        match &self.kind {
+            FlagKind::Setting(_) => None,
+            FlagKind::Set(set) => Some(set),
+        }
+    }
+
+    #[must_use]
+    pub fn as_bool(&self) -> Option<bool> {
+        match &self.kind {
+            FlagKind::Setting(setting) => setting.get_value().and_then(FlagValue::as_bool).copied(),
+            FlagKind::Set(_) => None,
+        }
+    }
+}
+
+#[derive(Debug)]
 pub enum FlagType {
     Set,
     Boolean,
@@ -162,22 +182,47 @@ pub enum FlagType {
 }
 
 /// A compiler flag.
+#[derive(Debug)]
 pub enum FlagKind {
     Setting(FlagSetting),
     Set(FlagSet)
 }
 
 /// A compiler flag value.
+#[derive(Debug)]
 pub enum FlagSetting {
     Default(FlagValue),
     Unset,
     Set(FlagValue, Span)
 }
 
+impl FlagSetting {
+    #[must_use]
+    pub fn get_value(&self) -> Option<&FlagValue> {
+        match self {
+            FlagSetting::Default(v)
+            | FlagSetting::Set(v, _)=> Some(v),
+            FlagSetting::Unset => None,
+        }
+    }
+}
+
 /// A compiler flag value.
+#[derive(Debug)]
 pub enum FlagValue {
     String(String),
     Bool(bool)
+}
+
+impl FlagValue {
+    #[must_use]
+    pub fn as_bool(&self) -> Option<&bool> {
+        if let Self::Bool(v) = self {
+            Some(v)
+        } else {
+            None
+        }
+    }
 }
 
 /// An overload of a function in `GeoScript`.
@@ -274,6 +319,8 @@ pub struct CompileContext {
     pub points: HashMap<u64, Rc<Variable>>,
     /// Functions
     pub functions: HashMap<String, Function>,
+    /// Flags
+    pub flags: FlagSet
 }
 
 /// Represents complicated iterator structures.
@@ -2144,15 +2191,14 @@ pub fn unroll(input: &str) -> Result<(Vec<UnrolledRule>, CompileContext), Error>
         variables: HashMap::new(),
         points: HashMap::new(),
         functions: HashMap::new(),
+        flags: FlagSetConstructor::new()
+            .add_set(
+                &"optimizations",
+                FlagSetConstructor::new()
+                    .add_bool_def(&"identical_expressions", true)
+            )
+            .finish()
     };
-
-    let mut flags = FlagSetConstructor::new()
-        .add_set(
-            &"optimizations",
-            FlagSetConstructor::new()
-                .add_bool_def(&"identical_expressions", true)
-        )
-        .finish();
 
     builtins::point::register_point_function(&mut context); // Point()
     builtins::dst::register_dst_function(&mut context); // dst()
@@ -2177,7 +2223,7 @@ pub fn unroll(input: &str) -> Result<(Vec<UnrolledRule>, CompileContext), Error>
     }
 
     for flag in statements.iter().filter_map(Statement::as_flag) {
-        set_flag(&mut flags, flag)?;
+        set_flag(&mut context.flags, flag)?;
     }
 
     for stat in statements {

@@ -1,5 +1,7 @@
 use std::{collections::HashMap, rc::Rc, sync::Arc};
 
+use crate::generator;
+
 use super::{
     figure::{Figure, LineDefinition, Point, PointDefinition},
     parser::{PredefinedType, Type},
@@ -289,10 +291,13 @@ fn compile_rules(
 ///
 /// # Errors
 /// Exact descriptions of errors are in `ScriptError` documentation.
+/// 
+/// # Panics
+/// Never
 pub fn compile(
     input: &str,
     canvas_size: (usize, usize),
-) -> Result<(Vec<Criteria>, Figure, usize), Error> {
+) -> Result<(Vec<Criteria>, Figure, usize, generator::Flags), Error> {
     // First, we have to unroll the script.
     let (unrolled, context) = unroll::unroll(input)?;
 
@@ -334,5 +339,11 @@ pub fn compile(
         canvas_size,
     };
 
-    Ok((criteria, figure, point_index))
+    let flags = generator::Flags {
+        optimizations: generator::Optimizations {
+            identical_expressions: context.flags["optimizations"].as_set().unwrap()["identical_expressions"].as_bool().unwrap()
+        }
+    };
+
+    Ok((criteria, figure, point_index, flags))
 }

@@ -85,3 +85,10 @@ The converted input as an angle.
 
 **Returns**
 The converted input as an angle.
+
+## Flags
+
+### `optimizations`
+
+**`identical_expressions`**
+A boolean flag, telling the generator whether or not to cache expression values for the generation. Only performed if an expression appears more than once to decrease performance cost of checking.

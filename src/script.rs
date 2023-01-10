@@ -3,7 +3,7 @@ use std::{
     hash::Hash,
     ops::{Deref, DerefMut, Div, Mul},
     rc::Rc,
-    sync::Arc,
+    sync::{Arc, self},
 };
 
 use crate::cli::{AnnotationKind, DiagnosticData};
@@ -636,6 +636,51 @@ pub enum Expression {
     ParallelThrough(Arc<Weighed<Expression>>, Arc<Weighed<Expression>>),
 }
 
+impl Expression {
+    pub fn collect<'r>(&'r self, into: &mut Vec<&'r Arc<Weighed<Expression>>>) {
+        match self {
+            Expression::PointPointDistance(e1, e2)
+            | Expression::AngleLine(e1, e2)
+            | Expression::Line(e1, e2)
+            | Expression::LineLineIntersection(e1, e2)
+            | Expression::Sum(e1, e2)
+            | Expression::Difference(e1, e2)
+            | Expression::Product(e1, e2)
+            | Expression::Quotient(e1, e2)
+            | Expression::PerpendicularThrough(e1, e2)
+            | Expression::ParallelThrough(e1, e2)
+            | Expression::PointLineDistance(e1, e2) => {
+                into.push(e1);
+                e1.object.collect(into);
+                into.push(e2);
+                e2.object.collect(into);
+            }
+            Expression::AnglePoint(e1, e2, e3)
+            | Expression::AngleBisector(e1, e2, e3) => {
+                into.push(e1);
+                e1.object.collect(into);
+                into.push(e2);
+                e2.object.collect(into);
+                into.push(e3);
+                e3.object.collect(into);
+            },
+            Expression::Literal(_, _)
+            | Expression::FreePoint(_) => (),
+            Expression::SetUnit(e, _)
+            | Expression::Negation(e) => {
+                into.push(e);
+                e.object.collect(into);
+            }
+            Expression::Average(v) => {
+                for e in v {
+                    into.push(e);
+                    e.object.collect(into);
+                }
+            }
+        }
+    }
+}
+
 /// Defines the kind and information about criteria the figure must obey.
 #[derive(Debug)]
 pub enum CriteriaKind {
@@ -647,6 +692,22 @@ pub enum CriteriaKind {
     Greater(Arc<Weighed<Expression>>, Arc<Weighed<Expression>>),
     /// Inverts the criteria. The quality is calculated as 1 - the quality of the inverted criteria.
     Inverse(Box<CriteriaKind>),
+}
+
+impl CriteriaKind {
+    pub fn collect<'r>(&'r self, into: &mut Vec<&'r Arc<Weighed<Expression>>>) {
+        match self {
+            CriteriaKind::Equal(e1, e2)
+            | CriteriaKind::Less(e1, e2)
+            | CriteriaKind::Greater(e1, e2) => {
+                into.push(e1);
+                e1.object.collect(into);
+                into.push(e2);
+                e2.object.collect(into);
+            }
+            CriteriaKind::Inverse(c) => c.collect(into),
+        }
+    }
 }
 
 /// Defines a weighed piece of criteria the figure must obey.
@@ -708,4 +769,29 @@ impl<T: ?Sized> Deref for HashableRc<T> {
     fn deref(&self) -> &Self::Target {
         &self.0
     }
+}
+
+pub struct HashableWeakArc<T>(sync::Weak<T>);
+
+impl<T> HashableWeakArc<T> {
+    #[must_use]
+    pub fn new(content: sync::Weak<T>) -> Self {
+        Self(content)
+    }
+}
+
+impl<T> Hash for HashableWeakArc<T> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        sync::Weak::as_ptr(&self.0).hash(state);
+    }
+}
+
+impl<T> PartialEq for HashableWeakArc<T> {
+    fn eq(&self, other: &Self) -> bool {
+        sync::Weak::as_ptr(&self.0) == sync::Weak::as_ptr(&other.0)
+    }
+}
+
+impl<T> Eq for HashableWeakArc<T> {
+    fn assert_receiver_is_total_eq(&self) {}
 }
