@@ -5,9 +5,9 @@ use crate::{
     script::{unit, ComplexUnit, Criteria, CriteriaKind, Expression, SimpleUnit, Weighed, HashableWeakArc},
 };
 
-use super::{Complex, EvaluationError, Logger, Flags, ExprCache};
+use super::{Complex, EvaluationError, Logger, Flags, ExprCache, Adjustable};
 
-type PointVec = Vec<(Complex, f64)>;
+type AdjustableVec = Vec<(Adjustable, f64)>;
 
 /// That's the infamous sigma function. It packs a [0, +inf) range into [0, 1).
 fn smooth_0_inf(x: f64) -> f64 {
@@ -78,7 +78,7 @@ fn invert(q: Quality) -> Quality {
 
 struct EvaluationArgs<'r> {
     logger: &'r mut Logger,
-    points: &'r PointVec,
+    adjustables: &'r AdjustableVec,
     weights: RefCell<Vec<f64>>,
     generation: u64,
     flags: &'r Arc<Flags>,
@@ -180,10 +180,6 @@ fn evaluate_expression(
             let p2 = evaluate_expression(p2, weight_mult * p2.weight, args)?;
             let p3 = evaluate_expression(p3, weight_mult * p3.weight, args)?;
 
-            assert_eq!(p1.1, ComplexUnit::new(SimpleUnit::Point));
-            assert_eq!(p2.1, ComplexUnit::new(SimpleUnit::Point));
-            assert_eq!(p3.1, ComplexUnit::new(SimpleUnit::Point));
-
             let (arm1, origin, arm2) = (p1.0, p2.0, p3.0);
             (
                 Complex::new(geometry::get_angle(arm1, origin, arm2), 0.0),
@@ -194,7 +190,7 @@ fn evaluate_expression(
         Expression::FreePoint(p) => {
             args.weights.borrow_mut()[*p] += expr.weight * weight_mult;
 
-            (args.points[*p].0, ComplexUnit::new(SimpleUnit::Point))
+            (*args.adjustables[*p].0.as_point().unwrap(), ComplexUnit::new(SimpleUnit::Point))
         }
         Expression::Line(p1, p2) => {
             // Evaluate the two points
@@ -376,7 +372,7 @@ fn evaluate_expression(
 /// Evaluates a single rule in terms of quality.
 fn evaluate_single(
     crit: &CriteriaKind,
-    points: &PointVec,
+    points: &AdjustableVec,
     logger: &mut Logger,
     generation: u64,
     flags: &Arc<Flags>,
@@ -387,7 +383,7 @@ fn evaluate_single(
 
     let mut args = EvaluationArgs {
         logger,
-        points,
+        adjustables: points,
         weights: RefCell::new(weights),
         generation,
         flags,
@@ -462,8 +458,8 @@ fn evaluate_single(
 }
 
 /// Evaluates all rules in terms of quality
-pub fn evaluate(points: &PointVec, criteria: &Arc<Vec<Criteria>>, logger: &mut Logger, generation: u64, flags: &Arc<Flags>,
-    record: &RefCell<HashMap<HashableWeakArc<Weighed<Expression>>, ExprCache>>) -> PointVec {
+pub fn evaluate(points: &AdjustableVec, criteria: &Arc<Vec<Criteria>>, logger: &mut Logger, generation: u64, flags: &Arc<Flags>,
+    record: &RefCell<HashMap<HashableWeakArc<Weighed<Expression>>, ExprCache>>) -> AdjustableVec {
     let mut point_evaluation = Vec::new();
     point_evaluation.resize(points.len(), Vec::new());
 
@@ -488,7 +484,7 @@ pub fn evaluate(points: &PointVec, criteria: &Arc<Vec<Criteria>>, logger: &mut L
         .enumerate()
         .map(|(i, eval)| {
             (
-                points[i].0,
+                points[i].0.clone(),
                 if eval.is_empty() {
                     1.0
                 } else {
