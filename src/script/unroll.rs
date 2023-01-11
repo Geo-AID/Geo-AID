@@ -53,6 +53,16 @@ pub enum VariableMeta {
     Properties,
 }
 
+impl VariableMeta {
+    pub fn as_point(&self) -> Option<&Point> {
+        if let Self::Point(v) = self {
+            Some(v)
+        } else {
+            None
+        }
+    }
+}
+
 /// A variable created with a let statement.
 #[derive(Debug)]
 pub struct Variable {
