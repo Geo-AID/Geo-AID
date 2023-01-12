@@ -1,12 +1,12 @@
 use std::{collections::HashMap, rc::Rc, sync::Arc};
 
-use crate::generator::{self, AdjustableTemplate};
+use crate::generator::{self, AdjustableTemplate, Flags, DistanceLiterals, Optimizations};
 
 use super::{
     figure::{Figure, LineDefinition, Point, PointDefinition},
     parser::{PredefinedType, Type},
     unroll::{
-        self, UnrolledExpression, UnrolledExpressionData, UnrolledRule, UnrolledRuleKind, Variable,
+        self, UnrolledExpression, UnrolledExpressionData, UnrolledRule, UnrolledRuleKind, Variable, Flag,
     },
     ComplexUnit, Criteria, CriteriaKind, Error, Expression, HashableRc, SimpleUnit, Weighed,
 };
@@ -287,6 +287,25 @@ fn compile_rules(
         .collect()
 }
 
+fn read_flags(flags: &HashMap<String, Flag>) -> Result<Flags, Error> {
+    let distance_literals = flags["distance_literals"];
+    
+    Ok(Flags {
+            optimizations: Optimizations {
+                identical_expressions: flags["optimizations"].as_set().unwrap()["identical_expressions"].as_bool().unwrap()
+            },
+            distance_literals: match flags["distance_literals"].as_ident().unwrap().as_str() {
+                "none" => DistanceLiterals::None,
+                "adjust" => DistanceLiterals::Adjust,
+                "solve" => DistanceLiterals::Solve,
+                &_ => return Err(Error::FlagEnumInvalidValue {
+                    error_span: 
+                })
+            }
+        }
+    )
+}
+
 /// Compiles the given script.
 ///
 /// # Errors
@@ -342,6 +361,14 @@ pub fn compile(
     let flags = generator::Flags {
         optimizations: generator::Optimizations {
             identical_expressions: context.flags["optimizations"].as_set().unwrap()["identical_expressions"].as_bool().unwrap()
+        },
+        distance_literals: match context.flags["distance_literals"].as_ident().unwrap().as_str() {
+            "none" => generator::DistanceLiterals::None,
+            "adjust" => generator::DistanceLiterals::Adjust,
+            "solve" => generator::DistanceLiterals::Solve,
+            &_ => return Err(Error::FlagEnumInvalidValue {
+                error_span: 
+            })
         }
     };
 

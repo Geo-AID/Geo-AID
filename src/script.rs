@@ -136,7 +136,12 @@ pub enum Error {
         error_span: Span,
         first_defined: Span,
         flag_name: String
-    }
+    },
+    FlagEnumInvalidValue {
+        error_span: Span,
+        available_values: &'static [&'static str],
+        received_value: String
+    },
 }
 
 impl Error {
@@ -392,7 +397,14 @@ impl Error {
                 flag_name,
             } => DiagnosticData::new(&format!("redefined flag: `{flag_name}`"))
                 .add_span(error_span)
-                .add_annotation(first_defined, AnnotationKind::Note, "First defined here.")
+                .add_annotation(first_defined, AnnotationKind::Note, "First defined here."),
+            Self::FlagEnumInvalidValue { error_span, available_values, received_value } => {
+                DiagnosticData::new(&format!("Invalid value for an enum flag: `{received_value}`"))
+                    .add_span(error_span)
+                    .add_annotation(error_span, AnnotationKind::Help, &format!("Supported values: {}", available_values.iter().map(
+                        |v| format!("`{v}`")
+                    ).collect::<Vec<String>>().join(", ")))
+            }
         }
     }
 }
