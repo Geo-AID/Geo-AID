@@ -8,16 +8,16 @@ use crate::span;
 
 use super::{
     token::{
-        Ampersant, Asterisk, Comma, Dollar, Eq, Exclamation, Gt, Gteq, Ident, LParen, Let, Lt,
-        Lteq, Minus, NamedIdent, Number, Plus, Position, RParen, Semi, Slash, Span, Token,
-        Vertical, Colon, At, LBrace, RBrace,
+        Ampersant, Asterisk, At, Colon, Comma, Dollar, Eq, Exclamation, Gt, Gteq, Ident, LBrace,
+        LParen, Let, Lt, Lteq, Minus, NamedIdent, Number, Plus, Position, RBrace, RParen, Semi,
+        Slash, Span, Token, Vertical,
     },
     unroll::{CompileContext, RuleOperatorDefinition},
     ComplexUnit, Error, SimpleUnit,
 };
 
 macro_rules! impl_token_parse {
-    ($token:ident) => {  
+    ($token:ident) => {
         impl Parse for $token {
             fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
                 it: &mut Peekable<I>,
@@ -524,18 +524,18 @@ pub struct InvertedRuleOperator {
 pub struct FlagName {
     pub at: At,
     pub name: NamedIdent,
-    pub colon: Colon
+    pub colon: Colon,
 }
 
 impl Parse for FlagName {
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-            it: &mut Peekable<I>,
-            context: &CompileContext,
-        ) -> Result<Self, Error> {
+        it: &mut Peekable<I>,
+        context: &CompileContext,
+    ) -> Result<Self, Error> {
         Ok(Self {
             at: At::parse(it, context)?,
             name: NamedIdent::parse(it, context)?,
-            colon: Colon::parse(it, context)?
+            colon: Colon::parse(it, context)?,
         })
     }
 
@@ -549,14 +549,14 @@ impl Parse for FlagName {
 pub struct FlagSet {
     pub lbrace: LBrace,
     pub flags: Vec<FlagStatement>,
-    pub rbrace: RBrace
+    pub rbrace: RBrace,
 }
 
 impl Parse for FlagSet {
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-            it: &mut Peekable<I>,
-            context: &CompileContext,
-        ) -> Result<Self, Error> {
+        it: &mut Peekable<I>,
+        context: &CompileContext,
+    ) -> Result<Self, Error> {
         let mut flags = Vec::new();
 
         let lbrace = LBrace::parse(it, context)?;
@@ -568,7 +568,7 @@ impl Parse for FlagSet {
         Ok(Self {
             lbrace,
             flags,
-            rbrace: RBrace::parse(it, context)?
+            rbrace: RBrace::parse(it, context)?,
         })
     }
 
@@ -577,28 +577,29 @@ impl Parse for FlagSet {
     }
 }
 
-
 /// Defines the second half of a flag statement.
 #[derive(Debug)]
 pub enum FlagValue {
     Ident(NamedIdent),
     Set(FlagSet),
-    Number(Number)
+    Number(Number),
 }
 
 impl Parse for FlagValue {
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-            it: &mut Peekable<I>,
-            context: &CompileContext,
-        ) -> Result<Self, Error> {
+        it: &mut Peekable<I>,
+        context: &CompileContext,
+    ) -> Result<Self, Error> {
         let peeked = it.peek().copied();
 
         Ok(match peeked {
-            Some(Token::Ident(Ident::Named(_))) => FlagValue::Ident(NamedIdent::parse(it, context)?),
+            Some(Token::Ident(Ident::Named(_))) => {
+                FlagValue::Ident(NamedIdent::parse(it, context)?)
+            }
             Some(Token::LBrace(_)) => FlagValue::Set(FlagSet::parse(it, context)?),
             Some(Token::Number(_)) => FlagValue::Number(Number::parse(it, context)?),
             Some(t) => return Err(Error::InvalidToken { token: t.clone() }),
-            None => return Err(Error::EndOfInput)
+            None => return Err(Error::EndOfInput),
         })
     }
 
@@ -615,17 +616,17 @@ impl Parse for FlagValue {
 #[derive(Debug)]
 pub struct FlagStatement {
     pub name: FlagName,
-    pub value: FlagValue
+    pub value: FlagValue,
 }
 
 impl Parse for FlagStatement {
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-            it: &mut Peekable<I>,
-            context: &CompileContext,
-        ) -> Result<Self, Error> {
+        it: &mut Peekable<I>,
+        context: &CompileContext,
+    ) -> Result<Self, Error> {
         Ok(Self {
             name: FlagName::parse(it, context)?,
-            value: FlagValue::parse(it, context)?
+            value: FlagValue::parse(it, context)?,
         })
     }
 
@@ -676,7 +677,7 @@ pub enum Statement {
     /// rule
     Rule(RuleStatement),
     /// Flag
-    Flag(FlagStatement)
+    Flag(FlagStatement),
 }
 
 impl Statement {
@@ -785,7 +786,7 @@ impl Parse for Statement {
             Statement::Noop(v) => v.get_span(),
             Statement::Let(v) => v.get_span(),
             Statement::Rule(v) => v.get_span(),
-            Statement::Flag(v) => v.get_span()
+            Statement::Flag(v) => v.get_span(),
         }
     }
 }
@@ -1195,31 +1196,31 @@ impl Parse for RuleOperator {
     }
 }
 
-impl_token_parse!{At}
-impl_token_parse!{LBrace}
-impl_token_parse!{RBrace}
-impl_token_parse!{Dollar}
-impl_token_parse!{Vertical}
-impl_token_parse!{Semi}
-impl_token_parse!{Comma}
-impl_token_parse!{Ampersant}
-impl_token_parse!{Lt}
-impl_token_parse!{Gt}
-impl_token_parse!{Lteq}
-impl_token_parse!{Gteq}
-impl_token_parse!{Eq}
-impl_token_parse!{LParen}
-impl_token_parse!{RParen}
-impl_token_parse!{Let}
-impl_token_parse!{Colon}
-impl_token_parse!{Exclamation}
-impl_token_parse!{Number}
+impl_token_parse! {At}
+impl_token_parse! {LBrace}
+impl_token_parse! {RBrace}
+impl_token_parse! {Dollar}
+impl_token_parse! {Vertical}
+impl_token_parse! {Semi}
+impl_token_parse! {Comma}
+impl_token_parse! {Ampersant}
+impl_token_parse! {Lt}
+impl_token_parse! {Gt}
+impl_token_parse! {Lteq}
+impl_token_parse! {Gteq}
+impl_token_parse! {Eq}
+impl_token_parse! {LParen}
+impl_token_parse! {RParen}
+impl_token_parse! {Let}
+impl_token_parse! {Colon}
+impl_token_parse! {Exclamation}
+impl_token_parse! {Number}
 
 impl Parse for NamedIdent {
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-            it: &mut Peekable<I>,
-            _context: &CompileContext,
-        ) -> Result<Self, Error> {
+        it: &mut Peekable<I>,
+        _context: &CompileContext,
+    ) -> Result<Self, Error> {
         match it.next() {
             Some(Token::Ident(Ident::Named(named))) => Ok(named.clone()),
             Some(t) => Err(Error::invalid_token(t.clone())),

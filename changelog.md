@@ -26,3 +26,4 @@
 - Added point collection constructors.
 - Added parser support for compiler flags.
 - Added identical_expressions optimization flag, allowing to optimise for calculating identical expressions.
+- Improved generator-projector pipeline.

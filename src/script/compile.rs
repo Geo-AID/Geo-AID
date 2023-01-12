@@ -6,7 +6,8 @@ use super::{
     figure::Figure,
     parser::{PredefinedType, Type},
     unroll::{
-        self, UnrolledExpression, UnrolledExpressionData, UnrolledRule, UnrolledRuleKind, Variable, PointMeta,
+        self, PointMeta, UnrolledExpression, UnrolledExpressionData, UnrolledRule,
+        UnrolledRuleKind, Variable,
     },
     ComplexUnit, Criteria, CriteriaKind, Error, Expression, HashableRc, SimpleUnit, Weighed,
 };
@@ -264,7 +265,7 @@ fn compile_rules(
 ///
 /// # Errors
 /// Exact descriptions of errors are in `ScriptError` documentation.
-/// 
+///
 /// # Panics
 /// Never
 pub fn compile(
@@ -296,14 +297,21 @@ pub fn compile(
                     Type::Predefined(PredefinedType::PointCollection(1) | PredefinedType::Point)
                 )
             })
-            .map(|(key, def)| (
-                def.assume_compiled().unwrap(),
-                key.meta.as_point().unwrap().meta.unwrap_or(PointMeta {
-                    letter: 'P',
-                    primes: 0,
-                    index: None
-                })
-            ))
+            .map(|(key, def)| {
+                (
+                    def.assume_compiled().unwrap(),
+                    key.meta
+                        .as_point()
+                        .unwrap()
+                        .meta
+                        .clone()
+                        .unwrap_or(PointMeta {
+                            letter: 'P',
+                            primes: 0,
+                            index: None,
+                        }),
+                )
+            })
             .collect(),
         lines: Vec::new(),
         canvas_size,
@@ -311,8 +319,11 @@ pub fn compile(
 
     let flags = generator::Flags {
         optimizations: generator::Optimizations {
-            identical_expressions: context.flags["optimizations"].as_set().unwrap()["identical_expressions"].as_bool().unwrap()
-        }
+            identical_expressions: context.flags["optimizations"].as_set().unwrap()
+                ["identical_expressions"]
+                .as_bool()
+                .unwrap(),
+        },
     };
 
     Ok((criteria, figure, point_index, flags))

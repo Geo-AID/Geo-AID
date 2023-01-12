@@ -8,9 +8,9 @@ use std::{
 use super::{
     builtins,
     parser::{
-        BinaryOperator, ExplicitIterator, Expression, ImplicitIterator, LetStatement, Parse,
-        PredefinedRuleOperator, PredefinedType, Punctuated, RuleOperator, RuleStatement,
-        SimpleExpression, Statement, Type, FlagStatement,
+        BinaryOperator, ExplicitIterator, Expression, FlagStatement, ImplicitIterator,
+        LetStatement, Parse, PredefinedRuleOperator, PredefinedType, Punctuated, RuleOperator,
+        RuleStatement, SimpleExpression, Statement, Type,
     },
     token::{self, Ident, NamedIdent, PointCollection, Span},
     ty, ComplexUnit, Error, SimpleUnit,
@@ -24,7 +24,7 @@ pub struct RuleOperatorDefinition {
 }
 
 /// Meta info about a point.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct PointMeta {
     /// The letter of a point.
     pub letter: char,
@@ -79,69 +79,83 @@ pub struct Variable {
 pub type FlagSet = HashMap<String, Flag>;
 
 pub struct FlagSetConstructor {
-    pub flags: Vec<(String, Flag)>
+    pub flags: Vec<(String, Flag)>,
 }
 
 impl FlagSetConstructor {
     #[must_use]
     pub fn new() -> Self {
-        Self {
-            flags: Vec::new()
-        }
+        Self { flags: Vec::new() }
     }
 
     #[must_use]
     pub fn add_ident<S: ToString>(mut self, name: &S) -> Self {
-        self.flags.push((name.to_string(), Flag {
-            name: name.to_string(),
-            kind: FlagKind::Setting(FlagSetting::Unset),
-            ty: FlagType::String
-        }));
+        self.flags.push((
+            name.to_string(),
+            Flag {
+                name: name.to_string(),
+                kind: FlagKind::Setting(FlagSetting::Unset),
+                ty: FlagType::String,
+            },
+        ));
 
         self
     }
 
     #[must_use]
     pub fn add_ident_def<S: ToString>(mut self, name: &S, default: &S) -> Self {
-        self.flags.push((name.to_string(), Flag {
-            name: name.to_string(),
-            kind: FlagKind::Setting(FlagSetting::Default(FlagValue::String(default.to_string()))),
-            ty: FlagType::String
-        }));
+        self.flags.push((
+            name.to_string(),
+            Flag {
+                name: name.to_string(),
+                kind: FlagKind::Setting(FlagSetting::Default(FlagValue::String(
+                    default.to_string(),
+                ))),
+                ty: FlagType::String,
+            },
+        ));
 
         self
     }
 
-
     #[must_use]
     pub fn add_bool<S: ToString>(mut self, name: &S) -> Self {
-        self.flags.push((name.to_string(), Flag {
-            name: name.to_string(),
-            kind: FlagKind::Setting(FlagSetting::Unset),
-            ty: FlagType::Boolean
-        }));
+        self.flags.push((
+            name.to_string(),
+            Flag {
+                name: name.to_string(),
+                kind: FlagKind::Setting(FlagSetting::Unset),
+                ty: FlagType::Boolean,
+            },
+        ));
 
         self
     }
 
     #[must_use]
     pub fn add_bool_def<S: ToString>(mut self, name: &S, default: bool) -> Self {
-        self.flags.push((name.to_string(), Flag {
-            name: name.to_string(),
-            kind: FlagKind::Setting(FlagSetting::Default(FlagValue::Bool(default))),
-            ty: FlagType::Boolean
-        }));
+        self.flags.push((
+            name.to_string(),
+            Flag {
+                name: name.to_string(),
+                kind: FlagKind::Setting(FlagSetting::Default(FlagValue::Bool(default))),
+                ty: FlagType::Boolean,
+            },
+        ));
 
         self
     }
 
     #[must_use]
     pub fn add_set<S: ToString>(mut self, name: &S, set: FlagSetConstructor) -> Self {
-        self.flags.push((name.to_string(), Flag {
-            name: name.to_string(),
-            kind: FlagKind::Set(set.finish()),
-            ty: FlagType::Set
-        }));
+        self.flags.push((
+            name.to_string(),
+            Flag {
+                name: name.to_string(),
+                kind: FlagKind::Set(set.finish()),
+                ty: FlagType::Set,
+            },
+        ));
 
         self
     }
@@ -163,7 +177,7 @@ impl Default for FlagSetConstructor {
 pub struct Flag {
     pub name: String,
     pub kind: FlagKind,
-    pub ty: FlagType
+    pub ty: FlagType,
 }
 
 impl Flag {
@@ -188,14 +202,14 @@ impl Flag {
 pub enum FlagType {
     Set,
     Boolean,
-    String
+    String,
 }
 
 /// A compiler flag.
 #[derive(Debug)]
 pub enum FlagKind {
     Setting(FlagSetting),
-    Set(FlagSet)
+    Set(FlagSet),
 }
 
 /// A compiler flag value.
@@ -203,15 +217,14 @@ pub enum FlagKind {
 pub enum FlagSetting {
     Default(FlagValue),
     Unset,
-    Set(FlagValue, Span)
+    Set(FlagValue, Span),
 }
 
 impl FlagSetting {
     #[must_use]
     pub fn get_value(&self) -> Option<&FlagValue> {
         match self {
-            FlagSetting::Default(v)
-            | FlagSetting::Set(v, _)=> Some(v),
+            FlagSetting::Default(v) | FlagSetting::Set(v, _) => Some(v),
             FlagSetting::Unset => None,
         }
     }
@@ -221,7 +234,7 @@ impl FlagSetting {
 #[derive(Debug)]
 pub enum FlagValue {
     String(String),
-    Bool(bool)
+    Bool(bool),
 }
 
 impl FlagValue {
@@ -330,7 +343,7 @@ pub struct CompileContext {
     /// Functions
     pub functions: HashMap<String, Function>,
     /// Flags
-    pub flags: FlagSet
+    pub flags: FlagSet,
 }
 
 /// Represents complicated iterator structures.
@@ -784,7 +797,7 @@ fn construct_point_id(letter: char, primes: u8) -> u64 {
 }
 
 /// Constructs the point name based on the letter and the primes.
-fn construct_point_name(letter: char, primes: u8) -> String {
+pub fn construct_point_name(letter: char, primes: u8) -> String {
     String::from(letter) + &"'".repeat(primes as usize)
 }
 
@@ -1176,14 +1189,17 @@ fn unroll_simple(
             Ident::Named(named) => {
                 let var = context.variables.get(&named.ident).ok_or_else(|| {
                     #[allow(clippy::cast_possible_truncation)]
-                    let suggested = context.variables.iter().max_by_key(
-                        |v| (strsim::jaro(v.0, &named.ident) * 1000.0).floor() as i64
-                    ).map(|x| x.0).cloned();
+                    let suggested = context
+                        .variables
+                        .iter()
+                        .max_by_key(|v| (strsim::jaro(v.0, &named.ident) * 1000.0).floor() as i64)
+                        .map(|x| x.0)
+                        .cloned();
 
                     Error::UndefinedVariable {
                         error_span: expr.get_span(),
                         variable_name: named.ident.clone(),
-                        suggested
+                        suggested,
                     }
                 })?;
 
@@ -1210,7 +1226,7 @@ fn unroll_simple(
                                 None => Err(Error::UndefinedVariable {
                                     error_span: col.span,
                                     variable_name: construct_point_name(*letter, *primes),
-                                    suggested: None // Pretty much every single-letter point could be considered similar, so no suggestions.
+                                    suggested: None, // Pretty much every single-letter point could be considered similar, so no suggestions.
                                 }),
                             }
                         })
@@ -1269,14 +1285,17 @@ fn unroll_simple(
                 }
             } else {
                 #[allow(clippy::cast_possible_truncation)]
-                let suggested = context.functions.iter().max_by_key(
-                    |v| (strsim::jaro(v.0, &e.name.ident) * 1000.0).floor() as i64
-                ).map(|x| x.0).cloned();
+                let suggested = context
+                    .functions
+                    .iter()
+                    .max_by_key(|v| (strsim::jaro(v.0, &e.name.ident) * 1000.0).floor() as i64)
+                    .map(|x| x.0)
+                    .cloned();
 
                 return Err(Error::UndefinedFunction {
                     error_span: e.name.span,
                     function_name: e.name.ident.clone(),
-                    suggested
+                    suggested,
                 });
             }
         }
@@ -2072,55 +2091,65 @@ fn unroll_rulestat(
 
 fn set_flag_bool(v: &mut Flag, flag: &FlagStatement) -> Result<(), Error> {
     match &flag.value {
-        super::parser::FlagValue::Set(_) => return Err(Error::FlagBooleanExpected {
-            error_span: flag.get_span()
-        }),
+        super::parser::FlagValue::Set(_) => {
+            return Err(Error::FlagBooleanExpected {
+                error_span: flag.get_span(),
+            })
+        }
         super::parser::FlagValue::Ident(ident) => match &mut v.kind {
-            FlagKind::Setting(s) => {
-                match s {
-                    FlagSetting::Default(_)
-                    | FlagSetting::Unset => {
-                        *s = FlagSetting::Set(FlagValue::Bool(match ident.ident.as_str() {
+            FlagKind::Setting(s) => match s {
+                FlagSetting::Default(_) | FlagSetting::Unset => {
+                    *s = FlagSetting::Set(
+                        FlagValue::Bool(match ident.ident.as_str() {
                             "enabled" | "on" | "true" => true,
                             "disabled" | "off" | "false" => false,
-                            _ => return Err(Error::FlagBooleanExpected {
-                                error_span: flag.get_span()
-                            })
-                        }), flag.get_span());
-                    },
-                    FlagSetting::Set(_, sp) => return Err(Error::RedefinedFlag {
+                            _ => {
+                                return Err(Error::FlagBooleanExpected {
+                                    error_span: flag.get_span(),
+                                })
+                            }
+                        }),
+                        flag.get_span(),
+                    );
+                }
+                FlagSetting::Set(_, sp) => {
+                    return Err(Error::RedefinedFlag {
                         error_span: flag.get_span(),
                         first_defined: *sp,
-                        flag_name: flag.name.name.ident.clone()
-                    }),
+                        flag_name: flag.name.name.ident.clone(),
+                    })
                 }
             },
             FlagKind::Set(_) => unreachable!(),
         },
-        super::parser::FlagValue::Number(num) =>  match &mut v.kind {
-            FlagKind::Setting(s) => {
-                match s {
-                    FlagSetting::Default(_)
-                    | FlagSetting::Unset => {
-                        if num.dot.is_none() {
-                            *s = FlagSetting::Set(FlagValue::Bool(match num.integral {
+        super::parser::FlagValue::Number(num) => match &mut v.kind {
+            FlagKind::Setting(s) => match s {
+                FlagSetting::Default(_) | FlagSetting::Unset => {
+                    if num.dot.is_none() {
+                        *s = FlagSetting::Set(
+                            FlagValue::Bool(match num.integral {
                                 1 => true,
                                 0 => false,
-                                _ => return Err(Error::FlagBooleanExpected {
-                                    error_span: flag.get_span()
-                                })
-                            }), flag.get_span());
-                        } else {
-                            return Err(Error::FlagBooleanExpected {
-                                error_span: flag.get_span()
-                            })
-                        }
-                    },
-                    FlagSetting::Set(_, sp) => return Err(Error::RedefinedFlag {
+                                _ => {
+                                    return Err(Error::FlagBooleanExpected {
+                                        error_span: flag.get_span(),
+                                    })
+                                }
+                            }),
+                            flag.get_span(),
+                        );
+                    } else {
+                        return Err(Error::FlagBooleanExpected {
+                            error_span: flag.get_span(),
+                        });
+                    }
+                }
+                FlagSetting::Set(_, sp) => {
+                    return Err(Error::RedefinedFlag {
                         error_span: flag.get_span(),
                         first_defined: *sp,
-                        flag_name: flag.name.name.ident.clone()
-                    }),
+                        flag_name: flag.name.name.ident.clone(),
+                    })
                 }
             },
             FlagKind::Set(_) => unreachable!(),
@@ -2140,35 +2169,39 @@ fn set_flag(set: &mut FlagSet, flag: &FlagStatement) -> Result<(), Error> {
                         for stat in &set.flags {
                             set_flag(s, stat)?;
                         }
-                    },
+                    }
                 },
-                super::parser::FlagValue::Ident(_)
-                | super::parser::FlagValue::Number(_) => return Err(Error::FlagSetExpected {
-                    error_span: flag.get_span()
-                }),
+                super::parser::FlagValue::Ident(_) | super::parser::FlagValue::Number(_) => {
+                    return Err(Error::FlagSetExpected {
+                        error_span: flag.get_span(),
+                    })
+                }
             },
             FlagType::Boolean => set_flag_bool(v, flag)?,
             FlagType::String => match &flag.value {
-                super::parser::FlagValue::Number(_)
-                | super::parser::FlagValue::Set(_) => return Err(Error::FlagStringExpected {
-                    error_span: flag.get_span()
-                }),
+                super::parser::FlagValue::Number(_) | super::parser::FlagValue::Set(_) => {
+                    return Err(Error::FlagStringExpected {
+                        error_span: flag.get_span(),
+                    })
+                }
                 super::parser::FlagValue::Ident(ident) => match &mut v.kind {
-                    FlagKind::Setting(s) => {
-                        match s {
-                            FlagSetting::Default(_)
-                            | FlagSetting::Unset => {
-                                *s = FlagSetting::Set(FlagValue::String(ident.ident.clone()), flag.get_span());
-                            },
-                            FlagSetting::Set(_, sp) => return Err(Error::RedefinedFlag {
+                    FlagKind::Setting(s) => match s {
+                        FlagSetting::Default(_) | FlagSetting::Unset => {
+                            *s = FlagSetting::Set(
+                                FlagValue::String(ident.ident.clone()),
+                                flag.get_span(),
+                            );
+                        }
+                        FlagSetting::Set(_, sp) => {
+                            return Err(Error::RedefinedFlag {
                                 error_span: flag.get_span(),
                                 first_defined: *sp,
-                                flag_name: flag.name.name.ident.clone()
-                            }),
+                                flag_name: flag.name.name.ident.clone(),
+                            })
                         }
                     },
                     FlagKind::Set(_) => unreachable!(),
-                }
+                },
             },
         }
 
@@ -2177,15 +2210,17 @@ fn set_flag(set: &mut FlagSet, flag: &FlagStatement) -> Result<(), Error> {
         let flag_name = flag.name.name.ident.clone();
 
         #[allow(clippy::cast_possible_truncation)]
-        let suggested = set.iter().max_by_key(
-            |v| (strsim::jaro(v.0, &flag_name) * 1000.0).floor() as i64
-        ).map(|x| x.0).cloned();
+        let suggested = set
+            .iter()
+            .max_by_key(|v| (strsim::jaro(v.0, &flag_name) * 1000.0).floor() as i64)
+            .map(|x| x.0)
+            .cloned();
 
         Err(Error::FlagDoesNotExist {
             flag_name,
             flag_span: flag.name.get_span(),
             error_span: flag.get_span(),
-            suggested
+            suggested,
         })
     }
 }
@@ -2204,10 +2239,9 @@ pub fn unroll(input: &str) -> Result<(Vec<UnrolledRule>, CompileContext), Error>
         flags: FlagSetConstructor::new()
             .add_set(
                 &"optimizations",
-                FlagSetConstructor::new()
-                    .add_bool_def(&"identical_expressions", true)
+                FlagSetConstructor::new().add_bool_def(&"identical_expressions", true),
             )
-            .finish()
+            .finish(),
     };
 
     builtins::point::register_point_function(&mut context); // Point()

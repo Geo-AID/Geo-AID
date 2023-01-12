@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use super::{Expression, unroll::PointMeta, Weighed};
+use super::{unroll::PointMeta, Expression, Weighed};
 
 /// Defines the visual data of the figure.
 #[derive(Debug)]
@@ -12,5 +12,3 @@ pub struct Figure {
     /// The canvas size.
     pub canvas_size: (usize, usize),
 }
-
-

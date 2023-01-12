@@ -1,11 +1,13 @@
-use std::{sync::Arc, cell::RefCell, collections::HashMap};
+use std::{cell::RefCell, collections::HashMap, sync::Arc};
 
 use crate::{
     generator::geometry,
-    script::{unit, ComplexUnit, Criteria, CriteriaKind, Expression, SimpleUnit, Weighed, HashableWeakArc},
+    script::{
+        unit, ComplexUnit, Criteria, CriteriaKind, Expression, HashableWeakArc, SimpleUnit, Weighed,
+    },
 };
 
-use super::{Complex, EvaluationError, Logger, Flags, ExprCache};
+use super::{Complex, EvaluationError, ExprCache, Flags, Logger};
 
 type PointVec = Vec<(Complex, f64)>;
 
@@ -82,14 +84,14 @@ pub struct EvaluationArgs<'r> {
     weights: RefCell<Vec<f64>>,
     generation: u64,
     flags: &'r Arc<Flags>,
-    record: &'r RefCell<HashMap<HashableWeakArc<Weighed<Expression>>, ExprCache>>
+    record: &'r RefCell<HashMap<HashableWeakArc<Weighed<Expression>>, ExprCache>>,
 }
 
 fn evaluate_point_point_distance(
     p1: &Arc<Weighed<Expression>>,
     p2: &Arc<Weighed<Expression>>,
     weight_mult: f64,
-    args: &EvaluationArgs
+    args: &EvaluationArgs,
 ) -> Result<(Complex, ComplexUnit), EvaluationError> {
     // Evaluate the two points
     let p1 = evaluate_expression(p1, weight_mult * p1.weight, args)?;
@@ -110,7 +112,7 @@ fn evaluate_point_line_distance(
     point: &Arc<Weighed<Expression>>,
     line: &Arc<Weighed<Expression>>,
     weight_mult: f64,
-    args: &EvaluationArgs
+    args: &EvaluationArgs,
 ) -> Result<(Complex, ComplexUnit), EvaluationError> {
     // Evaluate the line and the point
     let point = evaluate_expression(point, weight_mult * point.weight, args)?;
@@ -147,7 +149,7 @@ fn evaluate_point_line_distance(
 fn evaluate_expression(
     expr: &Arc<Weighed<Expression>>,
     weight_mult: f64,
-    args: &EvaluationArgs
+    args: &EvaluationArgs,
 ) -> Result<(Complex, ComplexUnit), EvaluationError> {
     // If the flag is on, check if this expression has already been calculated in this generation. If so, return that value.
     if args.flags.optimizations.identical_expressions && Arc::strong_count(expr) > 1 {
@@ -162,18 +164,12 @@ fn evaluate_expression(
 
     // If no flag is on or no value is cached yet, compute.
     let computed = match &expr.object {
-        Expression::PointPointDistance(p1, p2) => evaluate_point_point_distance(
-            p1,
-            p2,
-            weight_mult,
-            args
-        )?,
-        Expression::PointLineDistance(point, line) => evaluate_point_line_distance(
-            point,
-            line,
-            weight_mult,
-            args
-        )?,
+        Expression::PointPointDistance(p1, p2) => {
+            evaluate_point_point_distance(p1, p2, weight_mult, args)?
+        }
+        Expression::PointLineDistance(point, line) => {
+            evaluate_point_line_distance(point, line, weight_mult, args)?
+        }
         Expression::AnglePoint(p1, p2, p3) => {
             // Evaluate the three points
             let p1 = evaluate_expression(p1, weight_mult * p1.weight, args)?;
@@ -306,9 +302,7 @@ fn evaluate_expression(
             // Evaluate all
             let exprs = exprs
                 .iter()
-                .map(|expr| {
-                    evaluate_expression(expr, weight_mult * expr.weight, args)
-                })
+                .map(|expr| evaluate_expression(expr, weight_mult * expr.weight, args))
                 .collect::<Result<Vec<(Complex, ComplexUnit)>, EvaluationError>>()?;
 
             // Assume all types are valid. Typechecking should have already been done.
@@ -374,7 +368,10 @@ fn evaluate_expression(
 }
 
 #[allow(clippy::too_many_lines)]
-pub fn evaluate_expression_simple(expr: &Arc<Weighed<Expression>>, generated_points: &[Complex]) -> Result<(Complex, ComplexUnit), EvaluationError> {
+pub fn evaluate_expression_simple(
+    expr: &Arc<Weighed<Expression>>,
+    generated_points: &[Complex],
+) -> Result<(Complex, ComplexUnit), EvaluationError> {
     Ok(match &expr.object {
         Expression::PointPointDistance(p1, p2) => {
             let p1 = evaluate_expression_simple(p1, generated_points)?;
@@ -386,7 +383,7 @@ pub fn evaluate_expression_simple(expr: &Arc<Weighed<Expression>>, generated_poi
                 Complex::new(distance, 0.0),
                 ComplexUnit::new(SimpleUnit::Distance),
             )
-        },
+        }
         Expression::PointLineDistance(point, line) => {
             // Evaluate the line and the point
             let point = evaluate_expression_simple(point, generated_points)?;
@@ -407,14 +404,15 @@ pub fn evaluate_expression_simple(expr: &Arc<Weighed<Expression>>, generated_poi
                 let c = line.0.imaginary;
 
                 // And the magical formula
-                f64::abs(a * point.0.real + b * point.0.imaginary + c) / f64::sqrt(a.powi(2) + b.powi(2))
+                f64::abs(a * point.0.real + b * point.0.imaginary + c)
+                    / f64::sqrt(a.powi(2) + b.powi(2))
             };
 
             (
                 Complex::new(distance, 0.0),
                 ComplexUnit::new(SimpleUnit::Distance),
             )
-        },
+        }
         Expression::AnglePoint(p1, p2, p3) => {
             // Evaluate the three points
             let p1 = evaluate_expression_simple(p1, generated_points)?;
@@ -428,9 +426,7 @@ pub fn evaluate_expression_simple(expr: &Arc<Weighed<Expression>>, generated_poi
             )
         }
         Expression::Literal(v, unit) => (Complex::new(*v, 0.0), unit.clone()),
-        Expression::FreePoint(p) => {
-            (generated_points[*p], ComplexUnit::new(SimpleUnit::Point))
-        }
+        Expression::FreePoint(p) => (generated_points[*p], ComplexUnit::new(SimpleUnit::Point)),
         Expression::Line(p1, p2) => {
             // Evaluate the two points
             let p1 = evaluate_expression_simple(p1, generated_points)?;
@@ -528,9 +524,7 @@ pub fn evaluate_expression_simple(expr: &Arc<Weighed<Expression>>, generated_poi
             // Evaluate all
             let exprs = exprs
                 .iter()
-                .map(|expr| {
-                    evaluate_expression_simple(expr, generated_points)
-                })
+                .map(|expr| evaluate_expression_simple(expr, generated_points))
                 .collect::<Result<Vec<(Complex, ComplexUnit)>, EvaluationError>>()?;
 
             // Assume all types are valid. Typechecking should have already been done.
@@ -589,7 +583,7 @@ fn evaluate_single(
     logger: &mut Logger,
     generation: u64,
     flags: &Arc<Flags>,
-    record: &RefCell<HashMap<HashableWeakArc<Weighed<Expression>>, ExprCache>>
+    record: &RefCell<HashMap<HashableWeakArc<Weighed<Expression>>, ExprCache>>,
 ) -> (Quality, Vec<f64>) {
     let mut weights = Vec::new();
     weights.resize(points.len(), 0.0);
@@ -600,7 +594,7 @@ fn evaluate_single(
         weights: RefCell::new(weights),
         generation,
         flags,
-        record
+        record,
     };
 
     let quality = match crit {
@@ -661,7 +655,8 @@ fn evaluate_single(
         }
         // There's a problem here: if there is an evaluation error, the inverse is treated as 100% met, which might lead to some problems in some edge cases.
         CriteriaKind::Inverse(kind) => {
-            let (quality, ws) = evaluate_single(kind, points, args.logger, generation, flags, record);
+            let (quality, ws) =
+                evaluate_single(kind, points, args.logger, generation, flags, record);
             args.weights = RefCell::new(ws);
             invert(quality)
         }
@@ -671,14 +666,21 @@ fn evaluate_single(
 }
 
 /// Evaluates all rules in terms of quality
-pub fn evaluate(points: &PointVec, criteria: &Arc<Vec<Criteria>>, logger: &mut Logger, generation: u64, flags: &Arc<Flags>,
-    record: &RefCell<HashMap<HashableWeakArc<Weighed<Expression>>, ExprCache>>) -> PointVec {
+pub fn evaluate(
+    points: &PointVec,
+    criteria: &Arc<Vec<Criteria>>,
+    logger: &mut Logger,
+    generation: u64,
+    flags: &Arc<Flags>,
+    record: &RefCell<HashMap<HashableWeakArc<Weighed<Expression>>, ExprCache>>,
+) -> PointVec {
     let mut point_evaluation = Vec::new();
     point_evaluation.resize(points.len(), Vec::new());
 
     for crit in criteria.iter() {
         // println!("Evaluating criteria {:#?}", crit);
-        let (quality, weights) = evaluate_single(&crit.object, points, logger, generation, flags, record);
+        let (quality, weights) =
+            evaluate_single(&crit.object, points, logger, generation, flags, record);
 
         // println!("Evaluation result: {quality}, {:?}", weights);
 

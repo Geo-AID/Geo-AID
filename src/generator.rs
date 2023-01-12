@@ -1,16 +1,17 @@
 use std::{
-    collections::{VecDeque, HashMap},
+    cell::RefCell,
+    collections::{HashMap, VecDeque},
     fmt::Display,
     mem,
     ops::{Add, AddAssign, Div, Mul, Neg, Sub, SubAssign},
     sync::{mpsc, Arc},
     thread::{self, JoinHandle},
-    time::{Duration, Instant}, cell::RefCell,
+    time::{Duration, Instant},
 };
 
 use serde::Serialize;
 
-use crate::script::{Criteria, HashableWeakArc, ComplexUnit, unit};
+use crate::script::{unit, ComplexUnit, Criteria, HashableWeakArc};
 
 #[derive(Debug)]
 pub enum EvaluationError {
@@ -169,14 +170,14 @@ pub enum Message {
 pub struct ExprCache {
     pub value: Complex,
     pub unit: ComplexUnit,
-    pub generation: u64
+    pub generation: u64,
 }
 
 fn generation_cycle(
     receiver: &mpsc::Receiver<Message>,
     sender: &mpsc::Sender<(Vec<(Complex, f64)>, Logger)>,
     criteria: &Arc<Vec<Criteria>>,
-    flags: &Arc<Flags>
+    flags: &Arc<Flags>,
 ) {
     // Create the expression record
     let mut record = HashMap::new();
@@ -188,11 +189,13 @@ fn generation_cycle(
 
             for expr in exprs.into_iter().filter(|x| Arc::strong_count(x) > 1) {
                 // We use weak to not mess with the strong count.
-                record.entry(HashableWeakArc::new(Arc::downgrade(expr))).or_insert(ExprCache {
-                    value: Complex::new(0.0, 0.0),
-                    unit: unit::SCALAR,
-                    generation: 0
-                });
+                record
+                    .entry(HashableWeakArc::new(Arc::downgrade(expr)))
+                    .or_insert(ExprCache {
+                        value: Complex::new(0.0, 0.0),
+                        unit: unit::SCALAR,
+                        generation: 0,
+                    });
             }
         }
     }
@@ -205,7 +208,8 @@ fn generation_cycle(
             Message::Generate(adjustment, points) => {
                 let mut logger = points.1;
                 let points = magic_box::adjust(points.0, adjustment);
-                let points = critic::evaluate(&points, criteria, &mut logger, generation, flags, &record);
+                let points =
+                    critic::evaluate(&points, criteria, &mut logger, generation, flags, &record);
 
                 // println!("Adjustment + critic = {:#?}", points);
 
@@ -231,7 +235,7 @@ pub struct Generator {
     /// Total quality of the points - the arithmetic mean of their qualities.
     total_quality: f64,
     /// A delta of the qualities in comparison to previous generation.
-    delta: f64
+    delta: f64,
 }
 
 impl Generator {
@@ -240,7 +244,7 @@ impl Generator {
         point_count: usize,
         cycles_per_generation: usize,
         criteria: &Arc<Vec<Criteria>>,
-        flags: &Arc<Flags>
+        flags: &Arc<Flags>,
     ) -> Self {
         let (input_senders, input_receivers): (
             Vec<mpsc::Sender<Message>>,
@@ -265,7 +269,7 @@ impl Generator {
             senders: input_senders,
             receiver: output_receiver,
             total_quality: 0.0,
-            delta: 0.0
+            delta: 0.0,
         }
     }
 
@@ -409,10 +413,10 @@ impl Drop for Generator {
 
 #[derive(Debug)]
 pub struct Optimizations {
-    pub identical_expressions: bool
+    pub identical_expressions: bool,
 }
 
 #[derive(Debug)]
 pub struct Flags {
-    pub optimizations: Optimizations
+    pub optimizations: Optimizations,
 }
