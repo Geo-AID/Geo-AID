@@ -197,6 +197,14 @@ impl Flag {
             FlagKind::Set(_) => None,
         }
     }
+
+    #[must_use]
+    pub fn as_ident(&self) -> Option<&String> {
+        match &self.kind {
+            FlagKind::Setting(setting) => setting.get_value().and_then(FlagValue::as_string),
+            FlagKind::Set(_) => None,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -242,6 +250,15 @@ impl FlagValue {
     #[must_use]
     pub fn as_bool(&self) -> Option<&bool> {
         if let Self::Bool(v) = self {
+            Some(v)
+        } else {
+            None
+        }
+    }
+
+    #[must_use]
+    pub fn as_string(&self) -> Option<&String> {
+        if let Self::String(v) = self {
             Some(v)
         } else {
             None
@@ -2243,7 +2260,8 @@ pub fn unroll(input: &str) -> Result<(Vec<UnrolledRule>, CompileContext), Error>
                 &"optimizations",
                 FlagSetConstructor::new().add_bool_def(&"identical_expressions", true),
             )
-            .finish(),
+            .add_ident_def(&"distance_literals", &"none")
+            .finish()
     };
 
     builtins::point::register_point_function(&mut context); // Point()

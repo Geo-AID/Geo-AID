@@ -460,6 +460,21 @@ pub struct Optimizations {
 }
 
 #[derive(Debug)]
+pub enum DistanceLiterals {
+    Adjust,
+    Solve,
+    None
+}
+
+#[derive(Debug)]
+pub enum DistanceLiterals {
+    Adjust,
+    Solve,
+    None
+}
+
+#[derive(Debug)]
 pub struct Flags {
     pub optimizations: Optimizations,
+    pub distance_literals: DistanceLiterals
 }
