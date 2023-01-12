@@ -3,7 +3,7 @@ use std::{
     hash::Hash,
     ops::{Deref, DerefMut, Div, Mul},
     rc::Rc,
-    sync::{Arc, self},
+    sync::{self, Arc},
 };
 
 use crate::cli::{AnnotationKind, DiagnosticData};
@@ -69,12 +69,12 @@ pub enum Error {
     UndefinedVariable {
         error_span: Span,
         variable_name: String,
-        suggested: Option<String>
+        suggested: Option<String>,
     },
     UndefinedFunction {
         error_span: Span,
         function_name: String,
-        suggested: Option<String>
+        suggested: Option<String>,
     },
     FetureNotSupported {
         error_span: Span,
@@ -121,22 +121,22 @@ pub enum Error {
         flag_name: String,
         flag_span: Span,
         error_span: Span,
-        suggested: Option<String>
+        suggested: Option<String>,
     },
     FlagSetExpected {
-        error_span: Span
+        error_span: Span,
     },
     FlagStringExpected {
-        error_span: Span
+        error_span: Span,
     },
     FlagBooleanExpected {
-        error_span: Span
+        error_span: Span,
     },
     RedefinedFlag {
         error_span: Span,
         first_defined: Span,
-        flag_name: String
-    }
+        flag_name: String,
+    },
 }
 
 impl Error {
@@ -398,7 +398,7 @@ impl Error {
 }
 
 /// Defines an object with assigned weight
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Weighed<T> {
     pub object: T,
     pub weight: f64,
@@ -588,7 +588,7 @@ impl DerefMut for ComplexUnit {
 }
 
 /// Defines an expression.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Expression {
     /// Euclidean distance between two points.
     PointPointDistance(Arc<Weighed<Expression>>, Arc<Weighed<Expression>>),
@@ -655,19 +655,16 @@ impl Expression {
                 into.push(e2);
                 e2.object.collect(into);
             }
-            Expression::AnglePoint(e1, e2, e3)
-            | Expression::AngleBisector(e1, e2, e3) => {
+            Expression::AnglePoint(e1, e2, e3) | Expression::AngleBisector(e1, e2, e3) => {
                 into.push(e1);
                 e1.object.collect(into);
                 into.push(e2);
                 e2.object.collect(into);
                 into.push(e3);
                 e3.object.collect(into);
-            },
-            Expression::Literal(_, _)
-            | Expression::FreePoint(_) => (),
-            Expression::SetUnit(e, _)
-            | Expression::Negation(e) => {
+            }
+            Expression::Literal(_, _) | Expression::FreePoint(_) => (),
+            Expression::SetUnit(e, _) | Expression::Negation(e) => {
                 into.push(e);
                 e.object.collect(into);
             }

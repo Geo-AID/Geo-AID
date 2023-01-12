@@ -3,10 +3,11 @@ use std::{collections::HashMap, rc::Rc, sync::Arc};
 use crate::generator;
 
 use super::{
-    figure::{Figure, LineDefinition, Point, PointDefinition},
+    figure::Figure,
     parser::{PredefinedType, Type},
     unroll::{
-        self, UnrolledExpression, UnrolledExpressionData, UnrolledRule, UnrolledRuleKind, Variable,
+        self, PointMeta, UnrolledExpression, UnrolledExpressionData, UnrolledRule,
+        UnrolledRuleKind, Variable,
     },
     ComplexUnit, Criteria, CriteriaKind, Error, Expression, HashableRc, SimpleUnit, Weighed,
 };
@@ -230,33 +231,6 @@ impl CompiledVariable {
     }
 }
 
-/// Converts an expression into a `LineDefinition` understandable for the projector.
-fn get_line_definition(expr: &Expression) -> LineDefinition {
-    match expr {
-        Expression::Line(p1, p2) => LineDefinition::TwoPoints(
-            Box::new(get_point_definition(&p1.object)),
-            Box::new(get_point_definition(&p2.object)),
-        ),
-        Expression::AngleBisector(_, _, _) => todo!("On hold, waiting until #43."),
-        Expression::ParallelThrough(_, _) => todo!("On hold, waiting until #43."),
-        Expression::PerpendicularThrough(_, _) => todo!("On hold, waiting until #43."),
-        _ => unreachable!("Value of type line should not be achievable this way."),
-    }
-}
-
-/// Converts an expression into a `PointDefinition` understandable for the projector.
-fn get_point_definition(expr: &Expression) -> PointDefinition {
-    match expr {
-        Expression::FreePoint(index) => PointDefinition::Indexed(*index),
-        Expression::LineLineIntersection(l1, l2) => PointDefinition::Crossing(
-            get_line_definition(&l1.object),
-            get_line_definition(&l2.object),
-        ),
-        Expression::Average(_) => todo!(),
-        _ => unreachable!("Value of type point should not be achieveable this way."),
-    }
-}
-
 fn compile_rules(
     unrolled: Vec<UnrolledRule>,
     variables: &mut HashMap<HashableRc<Variable>, CompiledVariable>,
@@ -291,7 +265,7 @@ fn compile_rules(
 ///
 /// # Errors
 /// Exact descriptions of errors are in `ScriptError` documentation.
-/// 
+///
 /// # Panics
 /// Never
 pub fn compile(
@@ -323,26 +297,33 @@ pub fn compile(
                     Type::Predefined(PredefinedType::PointCollection(1) | PredefinedType::Point)
                 )
             })
-            .map(|(key, def)| Point {
-                label: key.name.clone(),
-                definition: get_point_definition(
-                    &match def {
-                        CompiledVariable::Compiled(cmp) => cmp,
-                        CompiledVariable::Unrolled(_) => unreachable!(),
-                    }
-                    .object,
-                ),
+            .map(|(key, def)| {
+                (
+                    def.assume_compiled().unwrap(),
+                    key.meta
+                        .as_point()
+                        .unwrap()
+                        .meta
+                        .clone()
+                        .unwrap_or(PointMeta {
+                            letter: 'P',
+                            primes: 0,
+                            index: None,
+                        }),
+                )
             })
             .collect(),
         lines: Vec::new(),
-        segments: Vec::new(),
         canvas_size,
     };
 
     let flags = generator::Flags {
         optimizations: generator::Optimizations {
-            identical_expressions: context.flags["optimizations"].as_set().unwrap()["identical_expressions"].as_bool().unwrap()
-        }
+            identical_expressions: context.flags["optimizations"].as_set().unwrap()
+                ["identical_expressions"]
+                .as_bool()
+                .unwrap(),
+        },
     };
 
     Ok((criteria, figure, point_index, flags))

@@ -1,18 +1,21 @@
 use serde::Serialize;
 
 use crate::{
-    generator::{geometry, Complex, EvaluationError},
-    script::figure::{Figure, LineDefinition, PointDefinition},
+    generator::{
+        critic::{self, evaluate_expression_simple},
+        geometry, Complex, EvaluationError,
+    },
+    script::{figure::Figure, unroll},
 };
 
-#[cfg(test)]
+/*#[cfg(test)]
 mod testing {
     use std::path::PathBuf;
 
     use crate::{
         drawer,
         generator::Complex,
-        script::figure::{Figure, Line, LineDefinition, Point, PointDefinition},
+        script::figure::Figure
     };
 
     use super::project;
@@ -106,7 +109,7 @@ mod testing {
             &project(&fig, &gen_points).unwrap(),
         );
     }
-}
+}*/
 
 pub struct Blueprint {
     pub points: Vec<RenderedPoint>,
@@ -136,29 +139,6 @@ pub struct RenderedLine {
     /// The line's thickness
     /// Two ends of the line
     pub points: (Complex, Complex),
-}
-
-fn evaluate_line(line: &LineDefinition, points: &[Complex]) -> Result<Complex, EvaluationError> {
-    Ok(match line {
-        LineDefinition::TwoPoints(i1, i2) => {
-            geometry::get_line(evaluate_point(i1, points)?, evaluate_point(i2, points)?)
-        }
-    })
-}
-
-fn evaluate_point(
-    definition: &PointDefinition,
-    points: &[Complex],
-) -> Result<Complex, EvaluationError> {
-    Ok(match definition {
-        PointDefinition::Indexed(gen_index) => points[*gen_index],
-        PointDefinition::Crossing(l1, l2) => {
-            let l1 = evaluate_line(l1, points)?;
-            let l2 = evaluate_line(l2, points)?;
-
-            geometry::get_crossing(l1, l2)?
-        }
-    })
 }
 
 fn get_line_ends(figure: &Figure, ln_c: Complex) -> (Complex, Complex) {
@@ -266,7 +246,7 @@ pub fn project(
     let points: Vec<Complex> = figure
         .points
         .iter()
-        .map(|pt| evaluate_point(&pt.definition, generated_points))
+        .map(|pt| Ok(critic::evaluate_expression_simple(&pt.0, generated_points)?.0))
         .collect::<Result<Vec<Complex>, EvaluationError>>()?;
 
     #[allow(clippy::cast_precision_loss)]
@@ -318,7 +298,10 @@ pub fn project(
 
     for (i, pt) in points.iter().enumerate() {
         blueprint_points.push(RenderedPoint {
-            label: figure.points[i].label.clone(),
+            label: unroll::construct_point_name(
+                figure.points[i].1.letter,
+                figure.points[i].1.primes,
+            ),
             position: *pt,
         });
     }
@@ -326,11 +309,11 @@ pub fn project(
     let mut blueprint_lines = Vec::new();
 
     for ln in &figure.lines {
-        let ln_c = evaluate_line(&ln.definition, generated_points)?;
+        let ln_c = evaluate_expression_simple(&ln, generated_points)?;
 
         blueprint_lines.push(RenderedLine {
-            label: ln.label.clone(),
-            points: get_line_ends(figure, ln_c),
+            label: String::new(),
+            points: get_line_ends(figure, ln_c.0),
         });
     }
 

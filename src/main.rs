@@ -96,7 +96,12 @@ fn main() {
         }
     };
 
-    let mut gen = Generator::new(point_count, args.count_of_workers, &Arc::new(criteria), &Arc::new(flags));
+    let mut gen = Generator::new(
+        point_count,
+        args.count_of_workers,
+        &Arc::new(criteria),
+        &Arc::new(flags),
+    );
 
     let mut stdout = io::stdout();
 
