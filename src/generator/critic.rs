@@ -290,13 +290,12 @@ fn evaluate_expression(
             let p2 = evaluate_expression(p2, weight_mult * p2.weight, args)?;
             let p3 = evaluate_expression(p3, weight_mult * p3.weight, args)?;
 
-            assert_eq!(p1.1, ComplexUnit::new(SimpleUnit::Point));
-            assert_eq!(p2.1, ComplexUnit::new(SimpleUnit::Point));
-            assert_eq!(p3.1, ComplexUnit::new(SimpleUnit::Point));
-
             let angle = geometry::get_angle(p1.0, p2.0, p3.0) / 2.0;
 
-            (geometry::rotate_around(p1.0, p2.0, angle), unit::POINT)
+            (
+                geometry::get_line(p2.0, geometry::rotate_around(p1.0, p2.0, angle)),
+                unit::LINE,
+            )
         }
         Expression::Average(exprs) => {
             // Evaluate all
@@ -367,6 +366,11 @@ fn evaluate_expression(
     Ok(computed)
 }
 
+/// # Panics
+/// Never.
+///
+/// # Errors
+/// On evaluation errors.
 #[allow(clippy::too_many_lines)]
 pub fn evaluate_expression_simple(
     expr: &Arc<Weighed<Expression>>,
@@ -518,7 +522,10 @@ pub fn evaluate_expression_simple(
 
             let angle = geometry::get_angle(p1.0, p2.0, p3.0) / 2.0;
 
-            (geometry::rotate_around(p1.0, p2.0, angle), unit::POINT)
+            (
+                geometry::get_line(p2.0, geometry::rotate_around(p1.0, p2.0, angle)),
+                unit::POINT,
+            )
         }
         Expression::Average(exprs) => {
             // Evaluate all
@@ -665,6 +672,7 @@ fn evaluate_single(
     (quality, args.weights.take())
 }
 
+#[allow(clippy::implicit_hasher)]
 /// Evaluates all rules in terms of quality
 pub fn evaluate(
     points: &PointVec,

@@ -54,6 +54,7 @@ pub enum VariableMeta {
 }
 
 impl VariableMeta {
+    #[must_use]
     pub fn as_point(&self) -> Option<&Point> {
         if let Self::Point(v) = self {
             Some(v)
@@ -797,6 +798,7 @@ fn construct_point_id(letter: char, primes: u8) -> u64 {
 }
 
 /// Constructs the point name based on the letter and the primes.
+#[must_use]
 pub fn construct_point_name(letter: char, primes: u8) -> String {
     String::from(letter) + &"'".repeat(primes as usize)
 }
@@ -2278,6 +2280,14 @@ pub fn unroll(input: &str) -> Result<(Vec<UnrolledRule>, CompileContext), Error>
             Statement::Rule(stat) => unroll_rulestat(&stat, &mut context, &mut unrolled)?,
         }
     }
+
+    // for v in context.variables.values() {
+    //     println!("let {} = {}", v.name, v.definition);
+    // }
+
+    // for x in &unrolled {
+    //     println!("{x}");
+    // }
 
     Ok((unrolled, context))
 }

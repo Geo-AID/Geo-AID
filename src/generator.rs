@@ -56,6 +56,11 @@ impl Complex {
     pub fn partial_div(self, other: Complex) -> Complex {
         Complex::new(self.real / other.real, self.imaginary / other.imaginary)
     }
+
+    #[must_use]
+    pub fn arg(self) -> f64 {
+        f64::atan2(self.imaginary, self.real)
+    }
 }
 
 impl Mul for Complex {
