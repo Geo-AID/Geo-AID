@@ -92,7 +92,7 @@ pub fn pc2() -> UnrolledExpression {
                 span: span!(0, 0, 0, 0),
                 data: Rc::new(UnrolledExpressionData::IndexCollection(
                     UnrolledExpression {
-                        ty: ty::collection(3),
+                        ty: ty::collection(2),
                         span: span!(0, 0, 0, 0),
                         data: Rc::new(UnrolledExpressionData::Parameter(0)),
                     },
@@ -104,7 +104,7 @@ pub fn pc2() -> UnrolledExpression {
                 span: span!(0, 0, 0, 0),
                 data: Rc::new(UnrolledExpressionData::IndexCollection(
                     UnrolledExpression {
-                        ty: ty::collection(3),
+                        ty: ty::collection(2),
                         span: span!(0, 0, 0, 0),
                         data: Rc::new(UnrolledExpressionData::Parameter(0)),
                     },

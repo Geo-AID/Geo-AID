@@ -309,7 +309,7 @@ pub fn project(
     let mut blueprint_lines = Vec::new();
 
     for ln in &figure.lines {
-        let ln_c = evaluate_expression_simple(&ln, generated_points)?;
+        let ln_c = evaluate_expression_simple(ln, generated_points)?;
 
         blueprint_lines.push(RenderedLine {
             label: String::new(),

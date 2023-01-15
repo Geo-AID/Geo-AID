@@ -96,6 +96,8 @@ fn main() {
         }
     };
 
+    // println!("{criteria:#?}");
+
     let mut gen = Generator::new(
         point_count,
         args.count_of_workers,
