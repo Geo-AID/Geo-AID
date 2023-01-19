@@ -7,7 +7,7 @@ use super::{
     parser::{PredefinedType, Type},
     unroll::{
         self, PointMeta, UnrolledExpression, UnrolledExpressionData, UnrolledRule,
-        UnrolledRuleKind, Variable, Flag,
+        UnrolledRuleKind, Variable, Flag
     },
     ComplexUnit, Criteria, CriteriaKind, Error, Expression, HashableRc, SimpleUnit, Weighed,
 };
