@@ -12,11 +12,11 @@ use clap::{Parser, ValueEnum};
 use crossterm::{cursor, terminal, ExecutableCommand, QueueableCommand};
 use geo_aid::{
     cli::{Diagnostic, DiagnosticKind},
-    drawer::{json, raw},
+    drawer::{json, raw}, generator::Adjustable,
 };
 use geo_aid::{
     drawer::{latex, svg},
-    generator::{Complex, Generator},
+    generator::Generator,
     projector,
     script::compile,
 };
@@ -127,7 +127,7 @@ fn main() {
         &gen.get_state()
             .iter()
             .map(|x| x.0.clone())
-            .collect::<Vec<Complex>>(),
+            .collect::<Vec<Adjustable>>(),
     )
     .unwrap();
 

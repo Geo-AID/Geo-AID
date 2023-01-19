@@ -702,6 +702,7 @@ pub enum UnrolledExpressionData {
     PointCollection(Vec<UnrolledExpression>),
     Number(f64),
     FreePoint,
+    FreeReal,
     Boxed(UnrolledExpression),
     Parameter(usize),
     IndexCollection(UnrolledExpression, usize),
@@ -747,6 +748,7 @@ impl Display for UnrolledExpressionData {
             ),
             UnrolledExpressionData::Number(num) => write!(f, "{num}"),
             UnrolledExpressionData::FreePoint => write!(f, "Point"),
+            UnrolledExpressionData::FreeReal => write!(f, "Real"),
             UnrolledExpressionData::Boxed(expr) | UnrolledExpressionData::SetUnit(expr, _) => {
                 write!(f, "{expr}")
             }
@@ -781,6 +783,39 @@ impl Display for UnrolledExpressionData {
     }
 }
 
+impl UnrolledExpressionData {
+    #[must_use]
+    pub fn has_distance_literal(&self) -> bool {
+        match self {
+            UnrolledExpressionData::VariableAccess(_)
+            | UnrolledExpressionData::Number(_)
+            | UnrolledExpressionData::Parameter(_)
+            | UnrolledExpressionData::FreePoint
+            | UnrolledExpressionData::FreeReal => false,
+            UnrolledExpressionData::PointCollection(v) => v.iter().any(UnrolledExpression::has_distance_literal),
+            UnrolledExpressionData::Boxed(v)
+            | UnrolledExpressionData::Negate(v) => v.has_distance_literal(),
+            UnrolledExpressionData::IndexCollection(_, _) => todo!(),
+            UnrolledExpressionData::SetUnit(v, u) => v.has_distance_literal() | (u.0[SimpleUnit::Distance as usize] != 0),
+            UnrolledExpressionData::PointPointDistance(_, _)
+            | UnrolledExpressionData::PointLineDistance(_, _) => true,
+            UnrolledExpressionData::Add(v1, v2)
+            | UnrolledExpressionData::LineFromPoints(v1, v2)
+            | UnrolledExpressionData::ParallelThrough(v1, v2)
+            | UnrolledExpressionData::PerpendicularThrough(v1, v2)
+            | UnrolledExpressionData::LineLineIntersection(v1, v2)
+            | UnrolledExpressionData::TwoLineAngle(v1, v2)
+            | UnrolledExpressionData::Subtract(v1, v2)
+            | UnrolledExpressionData::Multiply(v1, v2)
+            | UnrolledExpressionData::Divide(v1, v2) => v1.has_distance_literal() | v2.has_distance_literal(),
+            UnrolledExpressionData::ThreePointAngle(v1, v2, v3)
+            | UnrolledExpressionData::AngleBisector(v1, v2, v3) => todo!(),
+            UnrolledExpressionData::Average(_) => todo!(),
+            UnrolledExpressionData::UnrollParameterGroup(_) => false,
+        }
+    }
+}
+
 pub fn display_vec<T: Display>(v: &[T]) -> String {
     v.iter()
         .map(|x| format!("{x}"))
@@ -798,6 +833,13 @@ pub struct UnrolledExpression {
 impl Display for UnrolledExpression {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.data.fmt(f)
+    }
+}
+
+impl UnrolledExpression {
+    #[must_use]
+    pub fn has_distance_literal(&self) -> bool {
+        self.data.has_distance_literal()
     }
 }
 
@@ -902,6 +944,7 @@ pub fn unroll_parameters(
             }
             UnrolledExpressionData::VariableAccess(_)
             | UnrolledExpressionData::Number(_)
+            | UnrolledExpressionData::FreeReal
             | UnrolledExpressionData::FreePoint => definition.data.as_ref().clone(),
             UnrolledExpressionData::Average(exprs) => {
                 UnrolledExpressionData::Average(unroll_parameters_vec(exprs, params))
@@ -1144,6 +1187,7 @@ fn unroll_conversion_to_scalar(
         UnrolledExpressionData::VariableAccess(_)
         | UnrolledExpressionData::PointCollection(_)
         | UnrolledExpressionData::FreePoint
+        | UnrolledExpressionData::FreeReal
         | UnrolledExpressionData::Parameter(_)
         | UnrolledExpressionData::IndexCollection(_, _)
         | UnrolledExpressionData::LineFromPoints(_, _)

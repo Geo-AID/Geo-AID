@@ -69,6 +69,12 @@ fn compile_expression(
 
             Arc::new(Weighed::one(Expression::FreePoint(index)))
         }
+        UnrolledExpressionData::FreeReal => {
+            let index = template.len();
+            template.push(AdjustableTemplate::Real);
+
+            Arc::new(Weighed::one(Expression::FreePoint(index)))
+        }
         UnrolledExpressionData::Boxed(expr) => {
             compile_expression(expr, variables, expressions, template)
         }
@@ -296,6 +302,10 @@ pub fn compile(
     // First, we have to unroll the script.
     let (unrolled, context) = unroll::unroll(input)?;
 
+    let flags = read_flags(&context.flags)?;
+
+    // Check if there's a distance literal
+
     let mut variables = HashMap::new();
     let mut expressions = HashMap::new();
     let mut template = Vec::new();
@@ -307,8 +317,6 @@ pub fn compile(
 
     // And compile the rules
     let criteria = compile_rules(unrolled, &mut variables, &mut expressions, &mut template);
-
-    let flags = read_flags(&context.flags)?;
 
     let figure = Figure {
         // We're displaying every variable of type Point
@@ -339,8 +347,6 @@ pub fn compile(
         lines: Vec::new(),
         canvas_size,
     };
-
-    // Check if there's a distance literal
 
     Ok((criteria, figure, template, flags))
 }

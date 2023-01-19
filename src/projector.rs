@@ -3,7 +3,7 @@ use serde::Serialize;
 use crate::{
     generator::{
         critic::{self, evaluate_expression_simple},
-        geometry, Complex, EvaluationError,
+        geometry, Complex, EvaluationError, Adjustable,
     },
     script::{figure::Figure, unroll},
 };
@@ -241,7 +241,7 @@ fn get_line_ends(figure: &Figure, ln_c: Complex) -> (Complex, Complex) {
 /// Returns an error if there is a problem with evaluating constructs (e. g. intersection of two parallel lines).
 pub fn project(
     figure: &Figure,
-    generated_points: &[Complex],
+    generated_points: &[Adjustable],
 ) -> Result<Vec<Rendered>, EvaluationError> {
     let points: Vec<Complex> = figure
         .points

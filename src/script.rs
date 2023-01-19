@@ -646,6 +646,8 @@ pub enum Expression {
     PerpendicularThrough(Arc<Weighed<Expression>>, Arc<Weighed<Expression>>),
     /// Generates a line parallel to $1 going through $2
     ParallelThrough(Arc<Weighed<Expression>>, Arc<Weighed<Expression>>),
+    /// An adjusted real value
+    Real(usize)
 }
 
 impl Expression {
@@ -675,7 +677,7 @@ impl Expression {
                 into.push(e3);
                 e3.object.collect(into);
             }
-            Expression::Literal(_, _) | Expression::FreePoint(_) => (),
+            Expression::Literal(_, _) | Expression::FreePoint(_) | Expression::Real(_) => (),
             Expression::SetUnit(e, _) | Expression::Negation(e) => {
                 into.push(e);
                 e.object.collect(into);

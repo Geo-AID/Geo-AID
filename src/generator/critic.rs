@@ -346,6 +346,11 @@ fn evaluate_expression(
 
             (Complex::new(a, b), unit::LINE)
         }
+        Expression::Real(index) => {
+            args.weights.borrow_mut()[*index] += expr.weight * weight_mult;
+
+            (Complex::new(*args.adjustables[*index].0.as_real().unwrap(), 0.0), unit::SCALAR)
+        },
     };
 
     // If the flag is on, and the expr has not been cached, cache it.
@@ -370,7 +375,7 @@ fn evaluate_expression(
 #[allow(clippy::too_many_lines)]
 pub fn evaluate_expression_simple(
     expr: &Arc<Weighed<Expression>>,
-    generated_points: &[Complex],
+    generated_points: &[Adjustable],
 ) -> Result<(Complex, ComplexUnit), EvaluationError> {
     Ok(match &expr.object {
         Expression::PointPointDistance(p1, p2) => {
@@ -426,7 +431,7 @@ pub fn evaluate_expression_simple(
             )
         }
         Expression::Literal(v, unit) => (Complex::new(*v, 0.0), unit.clone()),
-        Expression::FreePoint(p) => (generated_points[*p], ComplexUnit::new(SimpleUnit::Point)),
+        Expression::FreePoint(p) => (*generated_points[*p].as_point().unwrap(), ComplexUnit::new(SimpleUnit::Point)),
         Expression::Line(p1, p2) => {
             // Evaluate the two points
             let p1 = evaluate_expression_simple(p1, generated_points)?;
@@ -576,6 +581,7 @@ pub fn evaluate_expression_simple(
 
             (Complex::new(a, b), unit::LINE)
         }
+        Expression::Real(index) =>(Complex::new(*generated_points[*index].as_real().unwrap(), 0.0), unit::SCALAR),
     })
 }
 
