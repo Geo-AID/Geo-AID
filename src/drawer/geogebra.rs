@@ -1,5 +1,5 @@
-use std::path::Path;
-
+use std::{fs::File, io::Write, path::Path};
+use zip::{write::FileOptions, ZipWriter};
 use crate::projector::Rendered;
 
 fn draw(target: &Path, canvas_size: (usize, usize), rendered: &Vec<Rendered>) {
@@ -77,7 +77,7 @@ fn draw(target: &Path, canvas_size: (usize, usize), rendered: &Vec<Rendered>) {
                 <pointSize val=\"5\"/>
                 <pointStyle val=\"0\"/>
                 <coords x=\"{}\" y=\"{}\" z=\"1\"/>
-            </element>",
+                </element>",
                     pt.label, pt.position.real, pt.position.imaginary
                 );
             }
@@ -94,9 +94,17 @@ fn draw(target: &Path, canvas_size: (usize, usize), rendered: &Vec<Rendered>) {
                 <labelMode val=\"0\"/>
                 <lineStyle thickness=\"5\" type=\"0\" typeHidden=\"1\" opacity=\"204\"/>
                 <eqnStyle style=\"explicit\"/>
-                <coords x=\"{}\" y=\"{}\" z=\"-5.1618\"/>
-            </element>", ln.label, ln.label);
+                <coords x=\"{}\" y=\"{}\" z=\"{}\"/>
+            </element>", ln.label, );
             }
         }
     }
+
+    let mut file = File::create(target).unwrap();
+    let mut writer = ZipWriter::new(&file);
+    writer
+        .start_file("geo.xml", FileOptions::default())
+        .unwrap();
+    writer.write(content.as_bytes());
+    writer.finish().unwrap();
 }
