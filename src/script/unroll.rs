@@ -205,6 +205,14 @@ impl Flag {
             FlagKind::Set(_) => None,
         }
     }
+
+    #[must_use]
+    pub fn get_span(&self) -> Option<Span> {
+        match &self.kind {
+            FlagKind::Setting(setting) => setting.get_span(),
+            FlagKind::Set(_) => None,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -235,6 +243,15 @@ impl FlagSetting {
         match self {
             FlagSetting::Default(v) | FlagSetting::Set(v, _) => Some(v),
             FlagSetting::Unset => None,
+        }
+    }
+
+    #[must_use]
+    pub fn get_span(&self) -> Option<Span> {
+        match self {
+            FlagSetting::Default(_)
+            | FlagSetting::Unset => None,
+            FlagSetting::Set(_, sp) => Some(*sp),
         }
     }
 }

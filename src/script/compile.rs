@@ -262,18 +262,20 @@ fn compile_rules(
 }
 
 fn read_flags(flags: &HashMap<String, Flag>) -> Result<Flags, Error> {
-    let distance_literals = flags["distance_literals"];
+    let distance_literals = &flags["distance_literals"];
     
     Ok(Flags {
             optimizations: Optimizations {
                 identical_expressions: flags["optimizations"].as_set().unwrap()["identical_expressions"].as_bool().unwrap()
             },
-            distance_literals: match flags["distance_literals"].as_ident().unwrap().as_str() {
+            distance_literals: match distance_literals.as_ident().unwrap().as_str() {
                 "none" => DistanceLiterals::None,
                 "adjust" => DistanceLiterals::Adjust,
                 "solve" => DistanceLiterals::Solve,
-                &_ => return Err(Error::FlagEnumInvalidValue {
-                    error_span: 
+                t => return Err(Error::FlagEnumInvalidValue {
+                    error_span: distance_literals.get_span().unwrap(),
+                    available_values: &["none", "adjust", "solve"],
+                    received_value: t.to_string()
                 })
             }
         }
@@ -306,6 +308,8 @@ pub fn compile(
     // And compile the rules
     let criteria = compile_rules(unrolled, &mut variables, &mut expressions, &mut template);
 
+    let flags = read_flags(&context.flags)?;
+
     let figure = Figure {
         // We're displaying every variable of type Point
         points: variables
@@ -336,19 +340,7 @@ pub fn compile(
         canvas_size,
     };
 
-    let flags = generator::Flags {
-        optimizations: generator::Optimizations {
-            identical_expressions: context.flags["optimizations"].as_set().unwrap()["identical_expressions"].as_bool().unwrap()
-        },
-        distance_literals: match context.flags["distance_literals"].as_ident().unwrap().as_str() {
-            "none" => generator::DistanceLiterals::None,
-            "adjust" => generator::DistanceLiterals::Adjust,
-            "solve" => generator::DistanceLiterals::Solve,
-            &_ => return Err(Error::FlagEnumInvalidValue {
-                error_span: 
-            })
-        }
-    };
+    // Check if there's a distance literal
 
     Ok((criteria, figure, template, flags))
 }
