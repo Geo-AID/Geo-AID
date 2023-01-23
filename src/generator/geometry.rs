@@ -6,7 +6,7 @@ use super::EvaluationError;
 mod tests {
     use crate::generator::Complex;
 
-    use super::{get_angle, get_line, rotate_around};
+    use super::{get_angle_directed, get_line, rotate_around};
 
     #[test]
     fn bisector() {
@@ -14,7 +14,7 @@ mod tests {
         let p2 = Complex::new(0.0, 0.0);
         let p1 = Complex::new(-1.0, 1.0);
 
-        let angle = get_angle(p1, p2, p3) / 2.0;
+        let angle = get_angle_directed(p1, p2, p3) / 2.0;
 
         let line = get_line(p2, rotate_around(p1, p2, angle));
 
@@ -73,6 +73,20 @@ pub fn get_crossing(l1: Complex, l2: Complex) -> Result<Complex, EvaluationError
 /// Gets the angle between two arms and the origin
 #[must_use]
 pub fn get_angle(arm1: Complex, origin: Complex, arm2: Complex) -> f64 {
+    // Get the vectors to calculate the angle between them.
+    let arm1_vec = arm1 - origin;
+    let arm2_vec = arm2 - origin;
+
+    // Get the dot product
+    let dot_product = arm1_vec.real * arm2_vec.real + arm1_vec.imaginary * arm2_vec.imaginary;
+
+    // Get the argument
+    f64::acos(dot_product / (arm1_vec.mangitude()  * arm2_vec.mangitude()))
+}
+
+/// Gets the directed angle between two arms and the origin
+#[must_use]
+pub fn get_angle_directed(arm1: Complex, origin: Complex, arm2: Complex) -> f64 {
     // Get the vectors to calculate the angle between them.
     let arm1_vec = arm1 - origin;
     let arm2_vec = arm2 - origin;

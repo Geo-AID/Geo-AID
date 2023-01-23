@@ -142,6 +142,12 @@ pub enum Error {
         available_values: &'static [&'static str],
         received_value: String
     },
+    RequiredFlagNotSet {
+        flag_name: &'static str,
+        required_because: Span,
+        flagdef_span: Option<Span>,
+        available_values: &'static [&'static str]
+    }
 }
 
 impl Error {
@@ -279,7 +285,7 @@ impl Error {
                 let message = suggested.map(|v| format!("Did you mean: `{v}`?"));
                 DiagnosticData::new(&format!("undefined variable: `{variable_name}`"))
                     .add_span(error_span)
-                    .add_annotation_opt(error_span, AnnotationKind::Help, message.as_ref())
+                    .add_annotation_opt_msg(error_span, AnnotationKind::Help, message.as_ref())
             }
             Self::UndefinedFunction {
                 error_span,
@@ -289,7 +295,7 @@ impl Error {
                 let message = suggested.map(|v| format!("Did you mean: `{v}`?"));
                 DiagnosticData::new(&format!("undefined function: `{function_name}`"))
                     .add_span(error_span)
-                    .add_annotation_opt(error_span, AnnotationKind::Help, message.as_ref())
+                    .add_annotation_opt_msg(error_span, AnnotationKind::Help, message.as_ref())
             }
             Self::FetureNotSupported {
                 error_span,
@@ -377,7 +383,7 @@ impl Error {
                 DiagnosticData::new(&format!("Compiler flag `{flag_name}` does not exist."))
                     .add_span(error_span)
                     .add_annotation(flag_span, AnnotationKind::Note, &"This does not exist.")
-                    .add_annotation_opt(flag_span, AnnotationKind::Help, message.as_ref())
+                    .add_annotation_opt_msg(flag_span, AnnotationKind::Help, message.as_ref())
             }
             Self::FlagSetExpected { error_span } => {
                 DiagnosticData::new(&"Expected a flag set ({...}).")
@@ -404,6 +410,14 @@ impl Error {
                     .add_annotation(error_span, AnnotationKind::Help, &format!("Supported values: {}", available_values.iter().map(
                         |v| format!("`{v}`")
                     ).collect::<Vec<String>>().join(", ")))
+            }
+            Self::RequiredFlagNotSet { flag_name, required_because, flagdef_span, available_values } => {
+                DiagnosticData::new(&format!("You must set a value for flag `{flag_name}`."))
+                    .add_annotation(required_because, AnnotationKind::Note, &"Required because of this line.")
+                    .add_annotation(required_because, AnnotationKind::Help, &format!("Possible values: {}", available_values.iter().map(
+                        |v| format!("`{v}`")
+                    ).collect::<Vec<String>>().join(", ")))
+                    .add_annotation_opt_span(flagdef_span, AnnotationKind::Note, &"Flag defined here")
             }
         }
     }

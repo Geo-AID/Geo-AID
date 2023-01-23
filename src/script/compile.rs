@@ -1,15 +1,15 @@
 use std::{collections::HashMap, rc::Rc, sync::Arc};
 
-use crate::generator::{self, AdjustableTemplate, Flags, DistanceLiterals, Optimizations};
+use crate::{generator::{self, AdjustableTemplate, Flags, DistanceLiterals, Optimizations}, span};
 
 use super::{
     figure::Figure,
     parser::{PredefinedType, Type},
     unroll::{
         self, PointMeta, UnrolledExpression, UnrolledExpressionData, UnrolledRule,
-        UnrolledRuleKind, Variable, Flag
+        UnrolledRuleKind, Variable, Flag, VariableMeta
     },
-    ComplexUnit, Criteria, CriteriaKind, Error, Expression, HashableRc, SimpleUnit, Weighed,
+    ComplexUnit, Criteria, CriteriaKind, Error, Expression, HashableRc, SimpleUnit, Weighed, token::{Span, Position}, ty,
 };
 
 /// Takes the unrolled expression of type `PointCollection` and takes the point at `index`, isolating it out of the entire expression.
@@ -288,6 +288,151 @@ fn read_flags(flags: &HashMap<String, Flag>) -> Result<Flags, Error> {
     )
 }
 
+#[allow(clippy::too_many_lines)]
+fn fix_distances(expr: &UnrolledExpression, dst: &Rc<Variable>) -> UnrolledExpression {
+    UnrolledExpression {
+        ty: expr.ty.clone(),
+        span: expr.span,
+        data: Rc::new(match expr.data.as_ref() {
+            d @ (
+                UnrolledExpressionData::VariableAccess(_)
+                | UnrolledExpressionData::FreePoint
+                | UnrolledExpressionData::FreeReal
+                | UnrolledExpressionData::Number(_)
+                | UnrolledExpressionData::Parameter(_)
+                | UnrolledExpressionData::UnrollParameterGroup(_)
+            ) => d.clone(),
+            UnrolledExpressionData::PointCollection(v) => UnrolledExpressionData::PointCollection(
+                v.iter().map(|expr| fix_distances(expr, dst)).collect()
+            ),
+            UnrolledExpressionData::Boxed(expr) => UnrolledExpressionData::Boxed(expr.clone()),
+            UnrolledExpressionData::IndexCollection(expr, i) => UnrolledExpressionData::IndexCollection(expr.clone(), *i),
+            UnrolledExpressionData::LineFromPoints(e1, e2) => UnrolledExpressionData::LineFromPoints(
+                fix_distances(e1, dst),
+                fix_distances(e2, dst)
+            ),
+            UnrolledExpressionData::SetUnit(_, unit) => {
+                let mut e = expr.clone();
+                let mut dst_power = unit.0[SimpleUnit::Distance as usize];
+
+                if dst_power < 1 {
+                    while dst_power < 1 {
+                        e = UnrolledExpression {
+                            span: expr.span,
+                            ty: Type::Predefined(PredefinedType::Scalar(Some(unit.clone()))),
+                            data: Rc::new(UnrolledExpressionData::Divide(
+                                e,
+                                UnrolledExpression {
+                                    span: expr.span,
+                                    ty: ty::SCALAR,
+                                    data: Rc::new(UnrolledExpressionData::VariableAccess(Rc::clone(dst)))
+                                }
+                            ))
+                        };
+
+                        dst_power += 1;
+                    }
+                } else {
+                    while dst_power > 1 {
+                        e = UnrolledExpression {
+                            span: expr.span,
+                            ty: Type::Predefined(PredefinedType::Scalar(Some(unit.clone()))),
+                            data: Rc::new(UnrolledExpressionData::Multiply(
+                                e,
+                                UnrolledExpression {
+                                    span: expr.span,
+                                    ty: ty::SCALAR,
+                                    data: Rc::new(UnrolledExpressionData::VariableAccess(Rc::clone(dst)))
+                                }
+                            ))
+                        };
+
+                        dst_power -= 1;
+                    }
+                }
+
+                e.data.as_ref().clone()
+            },
+            UnrolledExpressionData::PointPointDistance(e1, e2) => UnrolledExpressionData::Multiply(
+                UnrolledExpression {
+                    data: Rc::new(UnrolledExpressionData::PointPointDistance(
+                        fix_distances(e1, dst),
+                        fix_distances(e2, dst)
+                    )),
+                    ty: ty::DISTANCE,
+                    span: expr.span,
+                },
+                UnrolledExpression {
+                    span: expr.span,
+                    ty: ty::SCALAR,
+                    data: Rc::new(UnrolledExpressionData::VariableAccess(Rc::clone(dst)))
+                }
+            ),
+            UnrolledExpressionData::PointLineDistance(e1, e2) => UnrolledExpressionData::Multiply(
+                UnrolledExpression {
+                    data: Rc::new(UnrolledExpressionData::PointLineDistance(
+                        fix_distances(e1, dst),
+                        fix_distances(e2, dst)
+                    )),
+                    ty: ty::DISTANCE,
+                    span: expr.span,
+                },
+                UnrolledExpression {
+                    span: expr.span,
+                    ty: ty::SCALAR,
+                    data: Rc::new(UnrolledExpressionData::VariableAccess(Rc::clone(dst)))
+                }
+            ),
+            UnrolledExpressionData::Negate(expr) => UnrolledExpressionData::Negate(expr.clone()),
+            UnrolledExpressionData::Add(e1, e2) => UnrolledExpressionData::Add(
+                fix_distances(e1, dst),
+                fix_distances(e2, dst)
+            ),
+            UnrolledExpressionData::Subtract(e1, e2) => UnrolledExpressionData::Subtract(
+                fix_distances(e1, dst),
+                fix_distances(e2, dst)
+            ),
+            UnrolledExpressionData::Multiply(e1, e2) => UnrolledExpressionData::Multiply(
+                fix_distances(e1, dst),
+                fix_distances(e2, dst)
+            ),
+            UnrolledExpressionData::Divide(e1, e2) => UnrolledExpressionData::Divide(
+                fix_distances(e1, dst),
+                fix_distances(e2, dst)
+            ),
+            UnrolledExpressionData::ThreePointAngle(e1, e2, e3) => UnrolledExpressionData::ThreePointAngle(
+                fix_distances(e1, dst),
+                fix_distances(e2, dst),
+                fix_distances(e3, dst)
+            ),
+            UnrolledExpressionData::TwoLineAngle(e1, e2) => UnrolledExpressionData::TwoLineAngle(
+                fix_distances(e1, dst),
+                fix_distances(e2, dst)
+            ),
+            UnrolledExpressionData::AngleBisector(e1, e2, e3) => UnrolledExpressionData::AngleBisector(
+                fix_distances(e1, dst),
+                fix_distances(e2, dst),
+                fix_distances(e3, dst)
+            ),
+            UnrolledExpressionData::Average(v) => UnrolledExpressionData::Average(
+                v.iter().map(|expr| fix_distances(expr, dst)).collect()
+            ),
+            UnrolledExpressionData::PerpendicularThrough(e1, e2) => UnrolledExpressionData::PerpendicularThrough(
+                fix_distances(e1, dst),
+                fix_distances(e2, dst)
+            ),
+            UnrolledExpressionData::ParallelThrough(e1, e2) => UnrolledExpressionData::ParallelThrough(
+                fix_distances(e1, dst),
+                fix_distances(e2, dst)
+            ),
+            UnrolledExpressionData::LineLineIntersection(e1, e2) => UnrolledExpressionData::LineLineIntersection(
+                fix_distances(e1, dst),
+                fix_distances(e2, dst)
+            ),
+        })
+    }
+}
+
 /// Compiles the given script.
 ///
 /// # Errors
@@ -300,11 +445,50 @@ pub fn compile(
     canvas_size: (usize, usize),
 ) -> Result<(Vec<Criteria>, Figure, Vec<AdjustableTemplate>, generator::Flags), Error> {
     // First, we have to unroll the script.
-    let (unrolled, context) = unroll::unroll(input)?;
+    let (unrolled, mut context) = unroll::unroll(input)?;
 
     let flags = read_flags(&context.flags)?;
 
-    // Check if there's a distance literal
+    // Check if there's a distance literal in variables or rules.
+    // In variables
+    let are_literals_present = {
+        context.variables.values().map(|var| var.definition.has_distance_literal()).find(Option::is_some).flatten()
+            .or_else(|| unrolled.iter()
+                .map(|rule| rule.lhs.has_distance_literal().or_else(|| rule.rhs.has_distance_literal()))
+                .find(Option::is_some).flatten())
+    };
+
+    if let Some(at) = are_literals_present {
+        let var = match flags.distance_literals {
+            DistanceLiterals::Adjust => {
+                // To handle adjusted distance, we create a new adjustable variable that will pretend to be the scale.
+                Rc::clone(context.variables.entry(String::from("@distance")).or_insert_with(|| Rc::new(Variable {
+                    name: String::from("@distance"),
+                    definition_span: span!(0, 0, 0, 0),
+                    definition: UnrolledExpression {
+                        data: Rc::new(UnrolledExpressionData::FreeReal),
+                        ty: ty::SCALAR,
+                        span: span!(0, 0, 0, 0),
+                    },
+                    meta: VariableMeta::Scalar,
+                })))
+            },
+            DistanceLiterals::Solve => todo!(),
+            DistanceLiterals::None => return Err(Error::RequiredFlagNotSet {
+                flag_name: "distance_literals",
+                required_because: at,
+                flagdef_span: None,
+                available_values: &["adjust", "some"],
+            }),
+        };
+
+        context.variables = context.variables.into_iter().map(|(key, v)| (key, Rc::new(Variable {
+            name: key.clone(),
+            definition_span: v.definition_span,
+            definition: fix_distances(&v.definition, var),
+            meta: todo!(),
+        })))
+    }
 
     let mut variables = HashMap::new();
     let mut expressions = HashMap::new();
