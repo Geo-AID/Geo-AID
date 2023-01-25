@@ -85,6 +85,7 @@ pub struct EvaluationArgs<'r> {
     generation: u64,
     flags: &'r Arc<Flags>,
     record: &'r RefCell<HashMap<HashableWeakArc<Weighed<Expression>>, ExprCache>>,
+    dst_expression: Option<Arc<Weighed<Expression>>>
 }
 
 fn evaluate_point_point_distance(
@@ -96,9 +97,6 @@ fn evaluate_point_point_distance(
     // Evaluate the two points
     let p1 = evaluate_expression(p1, weight_mult * p1.weight, args)?;
     let p2 = evaluate_expression(p2, weight_mult * p2.weight, args)?;
-
-    assert_eq!(p1.1, ComplexUnit::new(SimpleUnit::Point));
-    assert_eq!(p2.1, ComplexUnit::new(SimpleUnit::Point));
 
     // Pythagorean theorem
     let distance = (p1.0 - p2.0).mangitude();
@@ -117,9 +115,6 @@ fn evaluate_point_line_distance(
     // Evaluate the line and the point
     let point = evaluate_expression(point, weight_mult * point.weight, args)?;
     let line = evaluate_expression(line, weight_mult * line.weight, args)?;
-
-    assert_eq!(point.1, ComplexUnit::new(SimpleUnit::Point));
-    assert_eq!(line.1, ComplexUnit::new(SimpleUnit::Line));
 
     // If the line's vertical (slope is NaN), the question's easy
     let distance = if line.0.real.is_infinite() {
@@ -593,6 +588,7 @@ fn evaluate_single(
     generation: u64,
     flags: &Arc<Flags>,
     record: &RefCell<HashMap<HashableWeakArc<Weighed<Expression>>, ExprCache>>,
+    dst_expression: Option<&Arc<Weighed<Expression>>>
 ) -> (Quality, Vec<f64>) {
     let mut weights = Vec::new();
     weights.resize(points.len(), 0.0);
@@ -604,6 +600,7 @@ fn evaluate_single(
         generation,
         flags,
         record,
+        dst_expression: dst_expression.map(Arc::clone)
     };
 
     let quality = match crit {
@@ -612,8 +609,6 @@ fn evaluate_single(
             let v2 = evaluate_expression(e2, 1.0, &args);
 
             if let (Ok(v1), Ok(v2)) = (v1, v2) {
-                assert_eq!(v1.1, v2.1);
-
                 let diff = (v1.0 - v2.0).mangitude();
                 // Interestingly, it's easier to calculate the quality function for != and then invert it.
                 invert(Quality::Some(smooth_0_inf(1130.0 * diff.powi(2))))
@@ -628,9 +623,6 @@ fn evaluate_single(
 
             if let (Ok(v1), Ok(v2)) = (v1, v2) {
                 assert_eq!(v1.1, v2.1);
-
-                assert_eq!(v1.1[SimpleUnit::Point as usize], 0);
-                assert_eq!(v1.1[SimpleUnit::Line as usize], 0);
 
                 // Note that the difference is not the same as with equality. This time we have to be prepared for negative diffs.
                 let diff = (v1.0.real - v2.0.real) / v1.0.real;
@@ -648,11 +640,6 @@ fn evaluate_single(
             let v2 = evaluate_expression(e2, 1.0, &args);
 
             if let (Ok(v1), Ok(v2)) = (v1, v2) {
-                assert_eq!(v1.1, v2.1);
-
-                assert_eq!(v1.1[SimpleUnit::Point as usize], 0);
-                assert_eq!(v1.1[SimpleUnit::Line as usize], 0);
-
                 // Note that the difference is not the same as with equality. This time we have to be prepared for negative diffs.
                 let diff = (v1.0.real - v2.0.real) / v1.0.real;
                 // Interestingly, it's easier to calculate the quality function for != and then invert it.
@@ -665,7 +652,7 @@ fn evaluate_single(
         // There's a problem here: if there is an evaluation error, the inverse is treated as 100% met, which might lead to some problems in some edge cases.
         CriteriaKind::Inverse(kind) => {
             let (quality, ws) =
-                evaluate_single(kind, points, args.logger, generation, flags, record);
+                evaluate_single(kind, points, args.logger, generation, flags, record, dst_expression);
             args.weights = RefCell::new(ws);
             invert(quality)
         }
@@ -677,14 +664,14 @@ fn evaluate_single(
 #[allow(clippy::implicit_hasher)]
 /// Evaluates all rules in terms of quality
 pub fn evaluate(points: &AdjustableVec, criteria: &Arc<Vec<Criteria>>, logger: &mut Logger, generation: u64, flags: &Arc<Flags>,
-    record: &RefCell<HashMap<HashableWeakArc<Weighed<Expression>>, ExprCache>>) -> AdjustableVec {
+    record: &RefCell<HashMap<HashableWeakArc<Weighed<Expression>>, ExprCache>>, dst_expression: Option<&Arc<Weighed<Expression>>>) -> AdjustableVec {
     let mut point_evaluation = Vec::new();
     point_evaluation.resize(points.len(), Vec::new());
 
     for crit in criteria.iter() {
         // println!("Evaluating criteria {:#?}", crit);
         let (quality, weights) =
-            evaluate_single(&crit.object, points, logger, generation, flags, record);
+            evaluate_single(&crit.object, points, logger, generation, flags, record, dst_expression);
 
         // println!("Evaluation result: {quality}, {:?}", weights);
 

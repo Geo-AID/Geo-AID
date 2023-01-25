@@ -11,7 +11,7 @@ use std::{
 
 use serde::Serialize;
 
-use crate::script::{unit, ComplexUnit, Criteria, HashableWeakArc};
+use crate::script::{unit, ComplexUnit, Criteria, HashableWeakArc, Weighed, Expression};
 
 #[derive(Debug)]
 pub enum EvaluationError {
@@ -204,17 +204,22 @@ pub struct ExprCache {
     pub generation: u64,
 }
 
+pub struct GenerationArgs {
+    criteria: Arc<Vec<Criteria>>,
+    dst_expression: Option<Arc<Weighed<Expression>>>
+}
+
 fn generation_cycle(
     receiver: &mpsc::Receiver<Message>,
     sender: &mpsc::Sender<(Vec<(Adjustable, f64)>, Logger)>,
-    criteria: &Arc<Vec<Criteria>>,
+    args: &GenerationArgs,
     flags: &Arc<Flags>,
 ) {
     // Create the expression record
     let mut record = HashMap::new();
 
     if flags.optimizations.identical_expressions {
-        for crit in criteria.as_ref() {
+        for crit in args.criteria.as_ref() {
             let mut exprs = Vec::new();
             crit.object.collect(&mut exprs);
 
@@ -229,6 +234,17 @@ fn generation_cycle(
                     });
             }
         }
+
+        // Finally, we add a record for the distance expression.
+        if let Some(expr) = &args.dst_expression {
+            record
+                .entry(HashableWeakArc::new(Arc::downgrade(expr)))
+                .or_insert(ExprCache {
+                    value: Complex::new(0.0, 0.0),
+                    unit: unit::SCALAR,
+                    generation: 0,
+                });
+        }
     }
 
     let mut generation = 1;
@@ -238,7 +254,7 @@ fn generation_cycle(
         match receiver.recv().unwrap() {
             Message::Generate(adjustment, points, mut logger) => {
                 let points = magic_box::adjust(points, adjustment);
-                let points = critic::evaluate(&points, criteria, &mut logger, generation, flags, &record);
+                let points = critic::evaluate(&points, &args.criteria, &mut logger, generation, flags, &record, args.dst_expression.as_ref());
 
                 // println!("Adjustment + critic = {:#?}", points);
 
@@ -277,7 +293,7 @@ impl Generator {
     pub fn new(
         template: &[AdjustableTemplate],
         cycles_per_generation: usize,
-        criteria: &Arc<Vec<Criteria>>,
+        args: &GenerationArgs,
         flags: &Arc<Flags>,
     ) -> Self {
         let (input_senders, input_receivers): (
@@ -303,9 +319,8 @@ impl Generator {
                 .into_iter()
                 .map(|rec| {
                     let sender = mpsc::Sender::clone(&output_sender);
-                    let criteria = Arc::clone(criteria);
                     let flags = Arc::clone(flags);
-                    thread::spawn(move || generation_cycle(&rec, &sender, &criteria, &flags))
+                    thread::spawn(move || generation_cycle(&rec, &sender, &args, &flags))
                 })
                 .collect(),
             senders: input_senders,
