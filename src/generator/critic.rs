@@ -367,6 +367,9 @@ fn evaluate_expression(
     Ok(computed)
 }
 
+///# Panics
+///# Errors
+
 #[allow(clippy::too_many_lines)]
 pub fn evaluate_expression_simple(
     expr: &Arc<Weighed<Expression>>,

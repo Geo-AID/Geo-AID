@@ -314,6 +314,7 @@ pub fn compile(
             })
             .collect(),
         lines: Vec::new(),
+        angles: Vec::new(),
         canvas_size,
     };
 
