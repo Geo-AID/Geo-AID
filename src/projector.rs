@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use serde::Serialize;
 
 use crate::{
@@ -5,7 +7,7 @@ use crate::{
         critic::{self, evaluate_expression_simple},
         geometry, Complex, EvaluationError, Adjustable,
     },
-    script::{figure::Figure, unroll},
+    script::{figure::Figure, unroll, Expression, Weighed},
 };
 
 /*#[cfg(test)]
@@ -114,6 +116,7 @@ mod testing {
 pub struct Blueprint {
     pub points: Vec<RenderedPoint>,
     pub lines: Vec<RenderedLine>,
+    pub angles: Vec<RenderedAngle>
 }
 
 #[derive(Serialize)]
@@ -122,6 +125,7 @@ pub struct Blueprint {
 pub enum Rendered {
     Point(RenderedPoint),
     Line(RenderedLine),
+    Angle(RenderedAngle),
 }
 
 #[derive(Debug, Serialize)]
@@ -139,6 +143,49 @@ pub struct RenderedLine {
     /// The line's thickness
     /// Two ends of the line
     pub points: (Complex, Complex),
+}
+
+#[derive(Serialize)]
+pub struct RenderedAngle {
+    /// The angle's label
+    pub label: String,
+    /// Points defining the angle
+    pub points: (Complex, Complex, Complex),
+}
+
+
+
+fn get_angle_points(angle: &Arc<Weighed<Expression>>, generated_points: &[Complex]) -> (Complex, Complex, Complex) {
+    match &angle.object {
+        Expression::AnglePoint(p1, p2, p3) => {
+            let arm1 = evaluate_expression_simple(p1, generated_points).unwrap();
+            let origin = evaluate_expression_simple(p2, generated_points).unwrap();
+            let arm2 = evaluate_expression_simple(p3, generated_points).unwrap();
+
+            (arm1.0, origin.0, arm2.0)
+        }
+        Expression::AngleLine(ln1, ln2) => {
+            let ev_ln1 = evaluate_expression_simple(ln1, generated_points).unwrap();
+            let ev_ln2 = evaluate_expression_simple(ln2, generated_points).unwrap();
+
+            let origin = geometry::get_crossing(ev_ln1.0, ev_ln2.0).unwrap();
+
+            if ev_ln1.0.imaginary == 0.0 {
+                let arm1 = Complex::new(origin.real, origin.imaginary + 2.0);
+                let arm2 = Complex::new(origin.real +2.0, ev_ln2.0.real * (origin.real + 2.0) + ev_ln2.0.imaginary);
+                (arm1, origin, arm2)
+            } else if ev_ln2.0.imaginary == 0.0 {
+                let arm1 = Complex::new(origin.real + 2.0, ev_ln1.0.real * (origin.real + 2.0) + ev_ln1.0.imaginary);
+                let arm2 = Complex::new(origin.real, origin.imaginary + 2.0);
+                (arm1, origin, arm2)
+            } else {
+                let arm1 = Complex::new(origin.real + 2.0, ev_ln1.0.real * (origin.real + 2.0) + ev_ln1.0.imaginary);
+                let arm2 = Complex::new(origin.real +2.0, ev_ln2.0.real * (origin.real + 2.0) + ev_ln2.0.imaginary);
+                (arm1, origin, arm2)
+            }
+        }
+        _ => unreachable!(),
+    }
 }
 
 fn get_line_ends(figure: &Figure, ln_c: Complex) -> (Complex, Complex) {
@@ -317,11 +364,21 @@ pub fn project(
         });
     }
 
+    let mut blueprint_angles = Vec::new();
+
+    for ang in &figure.angles {
+        blueprint_angles.push(RenderedAngle {
+            label: String::new(),
+            points: get_angle_points(ang, generated_points),
+        });
+    }
+
     // println!("{:#?}", blueprint_points);
 
     Ok(blueprint_points
         .into_iter()
         .map(Rendered::Point)
         .chain(blueprint_lines.into_iter().map(Rendered::Line))
+        .chain(blueprint_angles.into_iter().map(Rendered::Angle))
         .collect())
 }

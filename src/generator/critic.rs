@@ -280,7 +280,9 @@ fn evaluate_expression(
             let p2 = evaluate_expression(p2, weight_mult * p2.weight, args)?;
             let p3 = evaluate_expression(p3, weight_mult * p3.weight, args)?;
 
-            let angle = geometry::get_angle_directed(p1.0, p2.0, p3.0) / 2.0;
+            assert_eq!(p1.1, ComplexUnit::new(SimpleUnit::Point));
+            assert_eq!(p2.1, ComplexUnit::new(SimpleUnit::Point));
+            assert_eq!(p3.1, ComplexUnit::new(SimpleUnit::Point));
 
             (
                 geometry::get_line(p2.0, geometry::rotate_around(p1.0, p2.0, angle)),
