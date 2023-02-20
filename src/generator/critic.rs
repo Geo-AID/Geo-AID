@@ -84,8 +84,7 @@ pub struct EvaluationArgs<'r> {
     weights: RefCell<Vec<f64>>,
     generation: u64,
     flags: &'r Arc<Flags>,
-    record: &'r RefCell<HashMap<HashableWeakArc<Weighed<Expression>>, ExprCache>>,
-    dst_expression: Option<Arc<Weighed<Expression>>>
+    record: &'r RefCell<HashMap<HashableWeakArc<Weighed<Expression>>, ExprCache>>
 }
 
 fn evaluate_point_point_distance(
@@ -587,8 +586,7 @@ fn evaluate_single(
     logger: &mut Logger,
     generation: u64,
     flags: &Arc<Flags>,
-    record: &RefCell<HashMap<HashableWeakArc<Weighed<Expression>>, ExprCache>>,
-    dst_expression: Option<&Arc<Weighed<Expression>>>
+    record: &RefCell<HashMap<HashableWeakArc<Weighed<Expression>>, ExprCache>>
 ) -> (Quality, Vec<f64>) {
     let mut weights = Vec::new();
     weights.resize(points.len(), 0.0);
@@ -600,7 +598,6 @@ fn evaluate_single(
         generation,
         flags,
         record,
-        dst_expression: dst_expression.map(Arc::clone)
     };
 
     let quality = match crit {
@@ -652,7 +649,7 @@ fn evaluate_single(
         // There's a problem here: if there is an evaluation error, the inverse is treated as 100% met, which might lead to some problems in some edge cases.
         CriteriaKind::Inverse(kind) => {
             let (quality, ws) =
-                evaluate_single(kind, points, args.logger, generation, flags, record, dst_expression);
+                evaluate_single(kind, points, args.logger, generation, flags, record);
             args.weights = RefCell::new(ws);
             invert(quality)
         }
@@ -664,14 +661,14 @@ fn evaluate_single(
 #[allow(clippy::implicit_hasher)]
 /// Evaluates all rules in terms of quality
 pub fn evaluate(points: &AdjustableVec, criteria: &Arc<Vec<Criteria>>, logger: &mut Logger, generation: u64, flags: &Arc<Flags>,
-    record: &RefCell<HashMap<HashableWeakArc<Weighed<Expression>>, ExprCache>>, dst_expression: Option<&Arc<Weighed<Expression>>>) -> AdjustableVec {
+    record: &RefCell<HashMap<HashableWeakArc<Weighed<Expression>>, ExprCache>>) -> AdjustableVec {
     let mut point_evaluation = Vec::new();
     point_evaluation.resize(points.len(), Vec::new());
 
     for crit in criteria.iter() {
         // println!("Evaluating criteria {:#?}", crit);
         let (quality, weights) =
-            evaluate_single(&crit.object, points, logger, generation, flags, record, dst_expression);
+            evaluate_single(&crit.object, points, logger, generation, flags, record);
 
         // println!("Evaluation result: {quality}, {:?}", weights);
 

@@ -12,7 +12,7 @@ use clap::{Parser, ValueEnum};
 use crossterm::{cursor, terminal, ExecutableCommand, QueueableCommand};
 use geo_aid::{
     cli::{Diagnostic, DiagnosticKind},
-    drawer::{json, raw}, generator::Adjustable,
+    drawer::{json, raw}, generator::{Adjustable, GenerationArgs},
 };
 use geo_aid::{
     drawer::{latex, svg},
@@ -96,7 +96,9 @@ fn main() {
         }
     };
 
-    let mut gen = Generator::new(&template, args.count_of_workers, &Arc::new(criteria), &Arc::new(flags));
+    let mut gen = Generator::new(&template, args.count_of_workers, &GenerationArgs {
+        criteria: Arc::new(criteria)
+    }, &Arc::new(flags));
 
     let mut stdout = io::stdout();
 
