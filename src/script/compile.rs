@@ -1,15 +1,15 @@
 use std::{collections::HashMap, rc::Rc, sync::Arc};
 
-use crate::generator;
+use crate::{generator::{self, AdjustableTemplate, Flags, DistanceLiterals, Optimizations}, span};
 
 use super::{
     figure::Figure,
     parser::{PredefinedType, Type},
     unroll::{
         self, PointMeta, UnrolledExpression, UnrolledExpressionData, UnrolledRule,
-        UnrolledRuleKind, Variable,
+        UnrolledRuleKind, Variable, Flag, VariableMeta
     },
-    ComplexUnit, Criteria, CriteriaKind, Error, Expression, HashableRc, SimpleUnit, Weighed,
+    Criteria, CriteriaKind, Error, Expression, HashableRc, SimpleUnit, Weighed, token::{Span, Position}, ty, unit,
 };
 
 /// Takes the unrolled expression of type `PointCollection` and takes the point at `index`, isolating it out of the entire expression.
@@ -22,12 +22,47 @@ fn index_collection(expr: &UnrolledExpression, index: usize) -> &UnrolledExpress
     }
 }
 
+#[must_use]
+pub fn fix_distance(expr: UnrolledExpression, power: i8, dst_var: &Rc<Variable>) -> UnrolledExpression {
+    let sp = expr.span;
+    let t = expr.ty.clone();
+
+    match power.cmp(&0) {
+        std::cmp::Ordering::Less => UnrolledExpression {
+            data: Rc::new(UnrolledExpressionData::Divide(
+                fix_distance(expr, power + 1, dst_var),
+                UnrolledExpression {
+                    ty: ty::SCALAR,
+                    span: sp,
+                    data: Rc::new(UnrolledExpressionData::VariableAccess(Rc::clone(dst_var)))
+                }
+            )),
+            ty: t,
+            span: sp,
+        },
+        std::cmp::Ordering::Equal => expr,
+        std::cmp::Ordering::Greater => UnrolledExpression {
+            data: Rc::new(UnrolledExpressionData::Multiply(
+                fix_distance(expr, power - 1, dst_var),
+                UnrolledExpression {
+                    ty: ty::SCALAR,
+                    span: sp,
+                    data: Rc::new(UnrolledExpressionData::VariableAccess(Rc::clone(dst_var)))
+                }
+            )),
+            ty: t,
+            span: sp,
+        },
+    }
+}
+
 #[allow(clippy::too_many_lines)]
 fn compile_expression(
     expr: &UnrolledExpression,
     variables: &mut HashMap<HashableRc<Variable>, CompiledVariable>,
     expressions: &mut HashMap<HashableRc<UnrolledExpressionData>, Arc<Weighed<Expression>>>,
-    point_index: &mut usize,
+    template: &mut Vec<AdjustableTemplate>,
+    dst_var: &Option<Rc<Variable>>
 ) -> Arc<Weighed<Expression>> {
     // First we have to check if this expression has been compiled already.
     let key = HashableRc::new(Rc::clone(&expr.data));
@@ -40,7 +75,7 @@ fn compile_expression(
     // Otherwise we compile.
     let compiled = match expr.data.as_ref() {
         UnrolledExpressionData::VariableAccess(var) => {
-            compile_variable(var, variables, expressions, point_index)
+            compile_variable(var, variables, expressions, template, dst_var)
                 .assume_compiled()
                 .unwrap()
         }
@@ -51,26 +86,49 @@ fn compile_expression(
         UnrolledExpressionData::UnrollParameterGroup(_) => {
             unreachable!("UnrollParameterGroup should never be compiled.")
         }
-        UnrolledExpressionData::Number(v) => Arc::new(Weighed::one(Expression::Literal(
-            *v,
-            // Essentially, just copy the unit.
-            expr.ty
-                .as_predefined()
-                .unwrap()
-                .as_scalar()
-                .unwrap()
-                .as_ref()
-                .unwrap_or(&ComplexUnit::new(SimpleUnit::Scalar))
-                .clone(),
-        ))),
+        UnrolledExpressionData::Number(v) => {
+            if expr.ty == ty::SCALAR {
+                // If a scalar, we treat it as a standard literal.
+                Arc::new(Weighed::one(Expression::Literal(
+                    *v,
+                    unit::SCALAR
+                )))
+            } else {
+                // Otherwise we pretend it's a scalar literal inside a SetUnit.
+                compile_expression(
+                    &UnrolledExpression {
+                        ty: expr.ty.clone(),
+                        span: expr.span,
+                        data: Rc::new(UnrolledExpressionData::SetUnit(
+                            UnrolledExpression {
+                                ty: ty::SCALAR,
+                                span: expr.span,
+                                data: expr.data.clone()
+                            },
+                            expr.ty.as_predefined().unwrap().as_scalar().unwrap().as_ref().unwrap().clone()
+                        ))
+                    },
+                    variables,
+                    expressions,
+                    template,
+                    dst_var
+                )
+            }
+        }
         UnrolledExpressionData::FreePoint => {
-            let index = *point_index;
-            *point_index += 1;
+            let index = template.len();
+            template.push(AdjustableTemplate::Point);
 
             Arc::new(Weighed::one(Expression::FreePoint(index)))
         }
+        UnrolledExpressionData::FreeReal => {
+            let index = template.len();
+            template.push(AdjustableTemplate::Real);
+
+            Arc::new(Weighed::one(Expression::Real(index)))
+        }
         UnrolledExpressionData::Boxed(expr) => {
-            compile_expression(expr, variables, expressions, point_index)
+            compile_expression(expr, variables, expressions, template, dst_var)
         }
         UnrolledExpressionData::Parameter(_) => {
             unreachable!("Parameters should never appear in unroll() output.")
@@ -79,89 +137,99 @@ fn compile_expression(
             index_collection(expr, *index),
             variables,
             expressions,
-            point_index,
+            template,
+            dst_var
         ),
         UnrolledExpressionData::LineFromPoints(p1, p2) => Arc::new(Weighed::one(Expression::Line(
-            compile_expression(p1, variables, expressions, point_index),
-            compile_expression(p2, variables, expressions, point_index),
+            compile_expression(p1, variables, expressions, template, dst_var),
+            compile_expression(p2, variables, expressions, template, dst_var),
         ))),
         UnrolledExpressionData::ParallelThrough(p1, p2) => {
             Arc::new(Weighed::one(Expression::ParallelThrough(
-                compile_expression(p1, variables, expressions, point_index),
-                compile_expression(p2, variables, expressions, point_index),
+                compile_expression(p1, variables, expressions, template, dst_var),
+                compile_expression(p2, variables, expressions, template, dst_var),
             )))
         }
         UnrolledExpressionData::PerpendicularThrough(p1, p2) => {
             Arc::new(Weighed::one(Expression::PerpendicularThrough(
-                compile_expression(p1, variables, expressions, point_index),
-                compile_expression(p2, variables, expressions, point_index),
+                compile_expression(p1, variables, expressions, template, dst_var),
+                compile_expression(p2, variables, expressions, template, dst_var),
             )))
         }
         UnrolledExpressionData::SetUnit(expr, unit) => Arc::new(Weighed::one(Expression::SetUnit(
-            compile_expression(expr, variables, expressions, point_index),
+            compile_expression(
+                &fix_distance(expr.clone(), unit[SimpleUnit::Distance as usize] - match expr.ty.as_predefined().unwrap().as_scalar().unwrap() {
+                    Some(unit) => unit[SimpleUnit::Distance as usize],
+                    None => 0
+                }, dst_var.as_ref().unwrap()),
+                variables,
+                expressions,
+                template,
+                dst_var
+            ),
             unit.clone(),
         ))),
         UnrolledExpressionData::PointPointDistance(p1, p2) => {
             Arc::new(Weighed::one(Expression::PointPointDistance(
-                compile_expression(p1, variables, expressions, point_index),
-                compile_expression(p2, variables, expressions, point_index),
+                compile_expression(p1, variables, expressions, template, dst_var),
+                compile_expression(p2, variables, expressions, template, dst_var),
             )))
         }
         UnrolledExpressionData::PointLineDistance(p, l) => {
             Arc::new(Weighed::one(Expression::PointLineDistance(
-                compile_expression(p, variables, expressions, point_index),
-                compile_expression(l, variables, expressions, point_index),
+                compile_expression(p, variables, expressions, template, dst_var),
+                compile_expression(l, variables, expressions, template, dst_var),
             )))
         }
         UnrolledExpressionData::Negate(expr) => Arc::new(Weighed::one(Expression::Negation(
-            compile_expression(expr, variables, expressions, point_index),
+            compile_expression(expr, variables, expressions, template, dst_var),
         ))),
         UnrolledExpressionData::Add(v1, v2) => Arc::new(Weighed::one(Expression::Sum(
-            compile_expression(v1, variables, expressions, point_index),
-            compile_expression(v2, variables, expressions, point_index),
+            compile_expression(v1, variables, expressions, template, dst_var),
+            compile_expression(v2, variables, expressions, template, dst_var),
         ))),
         UnrolledExpressionData::Subtract(v1, v2) => Arc::new(Weighed::one(Expression::Difference(
-            compile_expression(v1, variables, expressions, point_index),
-            compile_expression(v2, variables, expressions, point_index),
+            compile_expression(v1, variables, expressions, template, dst_var),
+            compile_expression(v2, variables, expressions, template, dst_var),
         ))),
         UnrolledExpressionData::Multiply(v1, v2) => Arc::new(Weighed::one(Expression::Product(
-            compile_expression(v1, variables, expressions, point_index),
-            compile_expression(v2, variables, expressions, point_index),
+            compile_expression(v1, variables, expressions, template, dst_var),
+            compile_expression(v2, variables, expressions, template, dst_var),
         ))),
         UnrolledExpressionData::Divide(v1, v2) => Arc::new(Weighed::one(Expression::Quotient(
-            compile_expression(v1, variables, expressions, point_index),
-            compile_expression(v2, variables, expressions, point_index),
+            compile_expression(v1, variables, expressions, template, dst_var),
+            compile_expression(v2, variables, expressions, template, dst_var),
         ))),
         UnrolledExpressionData::ThreePointAngle(v1, v2, v3) => {
             Arc::new(Weighed::one(Expression::AnglePoint(
-                compile_expression(v1, variables, expressions, point_index),
-                compile_expression(v2, variables, expressions, point_index),
-                compile_expression(v3, variables, expressions, point_index),
+                compile_expression(v1, variables, expressions, template, dst_var),
+                compile_expression(v2, variables, expressions, template, dst_var),
+                compile_expression(v3, variables, expressions, template, dst_var),
             )))
         }
         UnrolledExpressionData::AngleBisector(v1, v2, v3) => {
             Arc::new(Weighed::one(Expression::AngleBisector(
-                compile_expression(v1, variables, expressions, point_index),
-                compile_expression(v2, variables, expressions, point_index),
-                compile_expression(v3, variables, expressions, point_index),
+                compile_expression(v1, variables, expressions, template, dst_var),
+                compile_expression(v2, variables, expressions, template, dst_var),
+                compile_expression(v3, variables, expressions, template, dst_var),
             )))
         }
         UnrolledExpressionData::TwoLineAngle(v1, v2) => {
             Arc::new(Weighed::one(Expression::AngleLine(
-                compile_expression(v1, variables, expressions, point_index),
-                compile_expression(v2, variables, expressions, point_index),
+                compile_expression(v1, variables, expressions, template, dst_var),
+                compile_expression(v2, variables, expressions, template, dst_var),
             )))
         }
         UnrolledExpressionData::LineLineIntersection(v1, v2) => {
             Arc::new(Weighed::one(Expression::LineLineIntersection(
-                compile_expression(v1, variables, expressions, point_index),
-                compile_expression(v2, variables, expressions, point_index),
+                compile_expression(v1, variables, expressions, template, dst_var),
+                compile_expression(v2, variables, expressions, template, dst_var),
             )))
         }
         UnrolledExpressionData::Average(exprs) => Arc::new(Weighed::one(Expression::Average(
             exprs
                 .iter()
-                .map(|expr| compile_expression(expr, variables, expressions, point_index))
+                .map(|expr| compile_expression(expr, variables, expressions, template, dst_var))
                 .collect(),
         ))),
     };
@@ -176,7 +244,8 @@ fn compile_variable(
     var: &Rc<Variable>,
     variables: &mut HashMap<HashableRc<Variable>, CompiledVariable>,
     expressions: &mut HashMap<HashableRc<UnrolledExpressionData>, Arc<Weighed<Expression>>>,
-    point_index: &mut usize,
+    template: &mut Vec<AdjustableTemplate>,
+    dst_var: &Option<Rc<Variable>>
 ) -> CompiledVariable {
     // We first have to see if the variable already exists.
     let key = HashableRc::new(Rc::clone(var));
@@ -193,7 +262,8 @@ fn compile_variable(
                 index_collection(&var.definition, 0),
                 variables,
                 expressions,
-                point_index,
+                template,
+                dst_var
             ))
         }
         Type::Predefined(PredefinedType::PointCollection(_)) => {
@@ -203,7 +273,8 @@ fn compile_variable(
             &var.definition,
             variables,
             expressions,
-            point_index,
+            template,
+            dst_var
         )),
     };
 
@@ -235,13 +306,14 @@ fn compile_rules(
     unrolled: Vec<UnrolledRule>,
     variables: &mut HashMap<HashableRc<Variable>, CompiledVariable>,
     expressions: &mut HashMap<HashableRc<UnrolledExpressionData>, Arc<Weighed<Expression>>>,
-    point_index: &mut usize,
+    template: &mut Vec<AdjustableTemplate>,
+    dst_var: &Option<Rc<Variable>>
 ) -> Vec<Criteria> {
     unrolled
         .into_iter()
         .map(|rule| {
-            let lhs = compile_expression(&rule.lhs, variables, expressions, point_index);
-            let rhs = compile_expression(&rule.rhs, variables, expressions, point_index);
+            let lhs = compile_expression(&rule.lhs, variables, expressions, template, dst_var);
+            let rhs = compile_expression(&rule.rhs, variables, expressions, template, dst_var);
 
             let crit = match rule.kind {
                 UnrolledRuleKind::Eq => Weighed::one(CriteriaKind::Equal(lhs, rhs)),
@@ -261,6 +333,27 @@ fn compile_rules(
         .collect()
 }
 
+fn read_flags(flags: &HashMap<String, Flag>) -> Result<Flags, Error> {
+    let distance_literals = &flags["distance_literals"];
+    
+    Ok(Flags {
+            optimizations: Optimizations {
+                identical_expressions: flags["optimizations"].as_set().unwrap()["identical_expressions"].as_bool().unwrap()
+            },
+            distance_literals: match distance_literals.as_ident().unwrap().as_str() {
+                "none" => DistanceLiterals::None,
+                "adjust" => DistanceLiterals::Adjust,
+                "solve" => DistanceLiterals::Solve,
+                t => return Err(Error::FlagEnumInvalidValue {
+                    error_span: distance_literals.get_span().unwrap(),
+                    available_values: &["none", "adjust", "solve"],
+                    received_value: t.to_string()
+                })
+            }
+        }
+    )
+}
+
 /// Compiles the given script.
 ///
 /// # Errors
@@ -271,21 +364,62 @@ fn compile_rules(
 pub fn compile(
     input: &str,
     canvas_size: (usize, usize),
-) -> Result<(Vec<Criteria>, Figure, usize, generator::Flags), Error> {
+) -> Result<(Vec<Criteria>, Figure, Vec<AdjustableTemplate>, generator::Flags), Error> {
     // First, we have to unroll the script.
-    let (unrolled, context) = unroll::unroll(input)?;
+    let (unrolled, mut context) = unroll::unroll(input)?;
+
+    let flags = read_flags(&context.flags)?;
+
+    // Check if there's a distance literal in variables or rules.
+    // In variables
+    let are_literals_present = {
+        context.variables.values().map(|var| var.definition.has_distance_literal()).find(Option::is_some).flatten()
+            .or_else(|| unrolled.iter()
+                .map(|rule| rule.lhs.has_distance_literal().or_else(|| rule.rhs.has_distance_literal()))
+                .find(Option::is_some).flatten())
+    };
+
+    let dst_var = if let Some(at) = are_literals_present {
+        match flags.distance_literals {
+            DistanceLiterals::Adjust => {
+                // To handle adjusted distance, we create a new adjustable variable that will pretend to be the scale.
+                Some(Rc::clone(context.variables.entry(String::from("@distance")).or_insert_with(|| Rc::new(Variable {
+                    name: String::from("@distance"),
+                    definition_span: span!(0, 0, 0, 0),
+                    definition: UnrolledExpression {
+                        data: Rc::new(UnrolledExpressionData::FreeReal),
+                        ty: ty::SCALAR,
+                        span: span!(0, 0, 0, 0),
+                    },
+                    meta: VariableMeta::Scalar,
+                }))))
+            },
+            DistanceLiterals::Solve => return Err(Error::FetureNotSupported {
+                error_span: context.flags.get(&String::from("distance_literals")).unwrap().get_span().unwrap(),
+                feature_name: "solve_distance"
+            }),
+            DistanceLiterals::None => return Err(Error::RequiredFlagNotSet {
+                flag_name: "distance_literals",
+                required_because: at,
+                flagdef_span: None,
+                available_values: &["adjust", "some"],
+            }),
+        }
+    } else {
+        None
+    };
 
     let mut variables = HashMap::new();
     let mut expressions = HashMap::new();
-    let mut point_index = 0;
+    let mut template = Vec::new();
 
     // We precompile all variables.
     for (_, var) in context.variables {
-        compile_variable(&var, &mut variables, &mut expressions, &mut point_index);
+        compile_variable(&var, &mut variables, &mut expressions, &mut template, &dst_var);
     }
 
     // And compile the rules
-    let criteria = compile_rules(unrolled, &mut variables, &mut expressions, &mut point_index);
+    let criteria = compile_rules(unrolled, &mut variables, &mut expressions, &mut template, &dst_var);
 
     let figure = Figure {
         // We're displaying every variable of type Point
@@ -317,14 +451,5 @@ pub fn compile(
         canvas_size,
     };
 
-    let flags = generator::Flags {
-        optimizations: generator::Optimizations {
-            identical_expressions: context.flags["optimizations"].as_set().unwrap()
-                ["identical_expressions"]
-                .as_bool()
-                .unwrap(),
-        },
-    };
-
-    Ok((criteria, figure, point_index, flags))
+    Ok((criteria, figure, template, flags))
 }

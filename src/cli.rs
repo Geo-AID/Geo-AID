@@ -102,13 +102,30 @@ impl DiagnosticData {
     }
 
     #[must_use]
-    pub fn add_annotation_opt<S: ToString + ?Sized>(
+    pub fn add_annotation_opt_msg<S: ToString + ?Sized>(
         mut self,
         at: Span,
         kind: AnnotationKind,
         message: Option<&S>,
     ) -> Self {
         if let Some(message) = message {
+            self.annotations.push(Annotation {
+                kind,
+                message: message.to_string(),
+                at,
+            });
+        }
+        self
+    }
+
+    #[must_use]
+    pub fn add_annotation_opt_span<S: ToString + ?Sized>(
+        mut self,
+        at: Option<Span>,
+        kind: AnnotationKind,
+        message: &S,
+    ) -> Self {
+        if let Some(at) = at {
             self.annotations.push(Annotation {
                 kind,
                 message: message.to_string(),
@@ -491,7 +508,7 @@ impl<'r> Display for Diagnostic<'r> {
                         // And then write the message itself.
                         writeln!(
                             f,
-                            "{:ind$}{}",
+                            "{:ind$} {}",
                             "",
                             format!(
                                 " {}: {}",

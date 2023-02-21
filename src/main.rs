@@ -12,11 +12,11 @@ use clap::{Parser, ValueEnum};
 use crossterm::{cursor, terminal, ExecutableCommand, QueueableCommand};
 use geo_aid::{
     cli::{Diagnostic, DiagnosticKind},
-    drawer::{json, raw},
+    drawer::{json, raw}, generator::{Adjustable, GenerationArgs},
 };
 use geo_aid::{
     drawer::{latex, svg},
-    generator::{Complex, Generator},
+    generator::Generator,
     projector,
     script::compile,
 };
@@ -76,7 +76,7 @@ fn main() {
 
     let result = compile::compile(&script, canvas_size);
 
-    let (criteria, figure, point_count, flags) = match result {
+    let (criteria, figure, template, flags) = match result {
         Ok(v) => v,
         Err(err) => {
             let data = err.diagnostic();
@@ -96,14 +96,9 @@ fn main() {
         }
     };
 
-    // println!("{criteria:#?}");
-
-    let mut gen = Generator::new(
-        point_count,
-        args.count_of_workers,
-        &Arc::new(criteria),
-        &Arc::new(flags),
-    );
+    let mut gen = Generator::new(&template, args.count_of_workers, &GenerationArgs {
+        criteria: Arc::new(criteria)
+    }, &Arc::new(flags));
 
     let mut stdout = io::stdout();
 
@@ -131,10 +126,10 @@ fn main() {
 
     let rendered = projector::project(
         &figure,
-        &gen.get_points()
+        &gen.get_state()
             .iter()
-            .map(|x| x.0)
-            .collect::<Vec<Complex>>(),
+            .map(|x| x.0.clone())
+            .collect::<Vec<Adjustable>>(),
     )
     .unwrap();
 
