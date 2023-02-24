@@ -46,12 +46,24 @@ pub struct Annotation {
     pub at: Span,
 }
 
+#[derive(Debug, Clone)]
+pub struct Change {
+    pub span: Span,
+    pub new_content: String
+}
+
+pub struct Fix {
+    pub changes: Vec<Change>,
+    pub message: String
+}
+
 pub struct Diagnostic<'r> {
     kind: DiagnosticKind,
     annotations: Vec<AnnotationSet>,
     notes: Vec<(AnnotationKind, String)>,
     message: String,
     annotated_notes: BTreeMap<Position, Diagnostic<'r>>,
+    fixes: Vec<Fix>,
     file: &'r Path,
     script: &'r str,
 }
@@ -61,6 +73,7 @@ pub struct DiagnosticData {
     pub spans: Vec<Span>,
     pub annotations: Vec<Annotation>,
     pub notes: Vec<(AnnotationKind, String)>,
+    pub fixes: Vec<Fix>,
 }
 
 impl DiagnosticData {
@@ -71,6 +84,7 @@ impl DiagnosticData {
             spans: Vec::new(),
             annotations: Vec::new(),
             notes: Vec::new(),
+            fixes: Vec::new()
         }
     }
 
@@ -134,6 +148,12 @@ impl DiagnosticData {
         }
         self
     }
+
+    #[must_use]
+    pub fn add_fix(mut self, fix: Fix) -> Self {
+        self.fixes.push(fix);
+        self
+    }
 }
 
 impl<'r> Diagnostic<'r> {
@@ -172,6 +192,7 @@ impl<'r> Diagnostic<'r> {
                                 spans: vec![at],
                                 annotations: Vec::new(),
                                 notes: Vec::new(),
+                                fixes: Vec::new()
                             },
                             file,
                             script,
@@ -247,6 +268,7 @@ impl<'r> Diagnostic<'r> {
                                 spans: vec![ann.at],
                                 annotations: Vec::new(),
                                 notes: Vec::new(),
+                                fixes: Vec::new()
                             },
                             file,
                             script,
@@ -289,12 +311,22 @@ impl<'r> Diagnostic<'r> {
             }
         }
 
+        // Sort by span start position in reverse (first span is the last in the vector)
+        let fixes = data.fixes.into_iter().map(
+            |mut v| {
+                v.changes.sort_unstable_by_key(|c| c.span.start);
+                v.changes.reverse();
+                v
+            }
+        ).collect();
+
         Diagnostic {
             kind,
             annotations: annotation_sets,
             notes: Vec::new(),
             message: data.message,
             annotated_notes,
+            fixes,
             file,
             script,
         }
@@ -578,6 +610,203 @@ impl<'r> Display for Diagnostic<'r> {
 
         for diagnostic in self.annotated_notes.values() {
             write!(f, "{diagnostic}")?;
+        }
+
+        for fix in &self.fixes {
+            writeln!(
+                f,
+                "{} {}",
+                "Fix:".green().bold(),
+                fix.message.clone().bold(),
+            )?;
+
+            if let Some(last) = fix.changes.last() {
+                // Calculate the necessary indent (how much space to leave for line numbers).
+                let indent = last.span.end.line.to_string().len();
+                let first = fix.changes.first().unwrap();
+                // Write the file path
+                writeln!(
+                    f,
+                    "{:indent$}{} {}:{}:{}",
+                    "",
+                    "-->".blue().bold(),
+                    self.file.display(),
+                    first.span.start.line,
+                    first.span.start.column
+                )?;
+
+                let mut lines = self.script.lines().skip(first.span.start.line - 1);
+
+                // First "    | "
+                writeln!(f, "{:indent$} {vertical}", "")?;
+
+                // A fix is a message with vector of changes ordered in descending span start.
+                // So we will create a stack for those spans.
+                // In each iteration we will consider the top entry.
+                // If the entry's span is single-line, we simply print it
+                // Otherwise, we divide the span and push the two parts to the top of the stack,
+                // so that it is considered in the next iteration.
+                let mut changes = fix.changes.clone();
+
+                let mut current_position = first.span.start;
+                let mut current_line = lines.next().map(String::from);
+
+                // Unril there is a top of the stack.
+                while let Some(change) = changes.pop() {
+                    if !change.span.is_singleline() {
+                        // If not single line, divide in two.
+                        changes.push(Change {
+                            span: Span { 
+                                start: Position {
+                                    line: change.span.start.line + 1,
+                                    column: 0
+                                },
+                                end: change.span.end
+                            },
+                            new_content: change.new_content
+                        });
+
+                        changes.push(Change {
+                            span: Span {
+                                start: change.span.start,
+                                end: Position {
+                                    line: change.span.start.line,
+                                    column: usize::MAX
+                                }
+                            },
+                            new_content: String::new()
+                        });
+                    } else {
+                        // Update current position.
+                        if current_position.line != change.span.start.line {
+                            for ln in current_position.line..change.span.start.line
+                            current_position = Position {
+                                line: change.span.start.line,
+                                column: 0
+                            };
+                        }
+
+
+                    }
+
+                    if ann.span.is_singleline() {
+                        // If single line, only render the line of code
+                        writeln!(
+                            f,
+                            "{:indent$} {vertical} {}",
+                            ann.span.start.line.to_string().blue().bold(),
+                            lines.next().unwrap()
+                        )?;
+                        // And simple squiggles
+                        write!(
+                            f,
+                            "{:<indent$} {vertical} {:squiggle_offset$}{}",
+                            "",
+                            "",
+                            "^".repeat(ann.span.end.column - ann.span.start.column)
+                                .with(get_color(self.kind))
+                                .bold(),
+                            squiggle_offset = ann.span.start.column - 1
+                        )?;
+                    } else {
+                        // Otherwise
+                        if ann.span.start.column == 1 {
+                            // If range starts at column 1, start with '/'
+                            writeln!(
+                                f,
+                                "{:<indent$} {vertical} {} {}",
+                                ann.span.start.line.to_string().blue().bold(),
+                                "/".with(get_color(self.kind)).bold(),
+                                lines.next().unwrap()
+                            )?;
+                        } else {
+                            // Otherwise with an indicator of where the span starts
+                            writeln!(
+                                f,
+                                "{:indent$} {vertical} {}",
+                                ann.span.start.line.to_string().blue().bold(),
+                                lines.next().unwrap()
+                            )?;
+                            writeln!(
+                                f,
+                                "{:indent$} {vertical} {}",
+                                "",
+                                (String::from(" ") + &"_".repeat(ann.span.start.column - 2) + "^")
+                                    .with(get_color(self.kind))
+                                    .bold()
+                            )?;
+                        }
+
+                        // Then add '|' for each line in span.
+                        for i in ann.span.start.line..ann.span.end.line {
+                            writeln!(
+                                f,
+                                "{:<indent$} {vertical} {} {}",
+                                (i + 1).to_string().blue().bold(),
+                                "|".with(get_color(self.kind)).bold(),
+                                lines.next().unwrap()
+                            )?;
+                        }
+
+                        // And end with ending indicator.
+                        write!(
+                            f,
+                            "{:indent$} {vertical} {}",
+                            "",
+                            (String::from("|") + &"_".repeat(ann.span.end.column - 1) + "^")
+                                .with(get_color(self.kind))
+                                .bold()
+                        )?;
+                    }
+
+                    let mut messages: Vec<(usize, Vec<&AnnotationPriv>)> = vec![(
+                        ann.span.end.column,
+                        ann.annotations
+                            .iter()
+                            .filter(|x| !x.message.is_empty())
+                            .collect(),
+                    )];
+
+                    // While we can, we put squiggles in the same line.
+                    let mut previous = ann;
+                    let mut next_ann = annotations.peek().copied();
+                    while let Some(next) = next_ann {
+                        if next.span.start.line == previous.span.end.line {
+                            annotations.next();
+                            write!(
+                                f,
+                                "{:squiggle_offset$}{}",
+                                "",
+                                "^".repeat(next.span.end.column - next.span.start.column)
+                                    .with(get_color(self.kind))
+                                    .bold(),
+                                squiggle_offset = next.span.start.column - previous.span.end.column
+                            )?;
+
+                            messages.push((
+                                next.span.end.column,
+                                next.annotations
+                                    .iter()
+                                    .filter(|x| !x.message.is_empty())
+                                    .collect(),
+                            ));
+
+                            previous = next;
+                            next_ann = annotations.peek().copied();
+                        } else {
+                            break;
+                        }
+                    }
+
+                    let l = messages.len();
+                    let mut messages: Vec<(usize, Vec<&AnnotationPriv>)> = messages
+                        .into_iter()
+                        .enumerate()
+                        .filter(|(i, (_, x))| !x.is_empty() || *i == l - 1)
+                        .map(|x| x.1)
+                        .collect();
+                }
+            }
         }
 
         Ok(())
