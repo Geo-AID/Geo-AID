@@ -1,13 +1,16 @@
 use std::sync::Arc;
+use std::collections::HashMap;
 
 use serde::Serialize;
+
+use uuid::Uuid;
 
 use crate::{
     generator::{
         critic::{self, evaluate_expression_simple},
         geometry, Complex, EvaluationError, Adjustable,
     },
-    script::{figure::Figure, unroll, Expression, Weighed},
+    script::{figure::Figure, unroll, Expression, Weighed, HashableArc},
 };
 
 /*#[cfg(test)]
@@ -116,7 +119,7 @@ mod testing {
 pub struct Blueprint {
     pub points: Vec<RenderedPoint>,
     pub lines: Vec<RenderedLine>,
-    pub angles: Vec<RenderedAngle>
+    pub angles: Vec<RenderedAngle>,
 }
 
 #[derive(Serialize)]
@@ -151,6 +154,10 @@ pub struct RenderedAngle {
     pub label: String,
     /// Points defining the angle
     pub points: (Complex, Complex, Complex),
+    /// Number of arcs in the angle
+    pub no_arcs: u8,
+    /// Expression defining the angle
+    pub expr: Arc<Weighed<Expression>>,
 }
 
 
@@ -353,6 +360,13 @@ pub fn project(
         });
     }
 
+    let mut identifiers = HashMap::new();
+    for pt in figure.points {
+        let point = HashableArc::new(pt.0);
+        let id = Uuid::new_v4();
+        identifiers.insert(point, id);
+    }
+
     let mut blueprint_lines = Vec::new();
 
     for ln in &figure.lines {
@@ -369,7 +383,9 @@ pub fn project(
     for ang in &figure.angles {
         blueprint_angles.push(RenderedAngle {
             label: String::new(),
-            points: get_angle_points(ang, generated_points),
+            points: get_angle_points(&ang.0, generated_points),
+            no_arcs: ang.1, 
+            expr: Arc::clone(&ang.0),
         });
     }
 

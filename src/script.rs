@@ -6,6 +6,8 @@ use std::{
     sync::{self, Arc},
 };
 
+use serde::Serialize;
+
 use crate::{cli::{AnnotationKind, DiagnosticData, Fix, Change}, span};
 
 use self::parser::Type;
@@ -436,7 +438,7 @@ impl Error {
 }
 
 /// Defines an object with assigned weight
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct Weighed<T> {
     pub object: T,
     pub weight: f64,
@@ -472,7 +474,7 @@ impl Mul for SimpleUnit {
 }
 
 /// Defines a complex unit: a product of simple units.
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug, Serialize)]
 pub struct ComplexUnit([i8; SimpleUnit::Scalar as usize]);
 
 pub mod unit {
@@ -627,7 +629,7 @@ impl DerefMut for ComplexUnit {
 }
 
 /// Defines an expression.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub enum Expression {
     /// Euclidean distance between two points.
     PointPointDistance(Arc<Weighed<Expression>>, Arc<Weighed<Expression>>),
