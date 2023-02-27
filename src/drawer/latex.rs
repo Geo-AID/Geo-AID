@@ -14,6 +14,7 @@ pub fn draw(target: &Path, canvas_size: (usize, usize), rendered: &Vec<Rendered>
         r#"
     \documentclass{article}
     \usepackage{tikz}
+    \usepackage{tkz-euclide}
     \usetikzlibrary {angles,calc,quotes}
     \begin{document}
     \begin{tikzpicture}
@@ -35,6 +36,16 @@ pub fn draw(target: &Path, canvas_size: (usize, usize), rendered: &Vec<Rendered>
                 content += &format!(
                     "\\draw ({},{}) -- ({},{});",
                     pos1.real, pos1.imaginary, pos2.real, pos2.imaginary
+                );
+            }
+            Rendered::Angle(angle) => {
+                let p1 = angle.points.0 * scale;
+                let origin = angle.points.1 * scale;
+                let p2 = angle.points.2 * scale;
+                let mut no_arcs = String::from("l"); // Requires a change later!
+                content += &format!(r#"
+                \tkzMarkAngle[size = 0.5,mark = none,arc={},mkcolor = black]({},{},{})
+                "#, no_arcs, 
                 );
             }
         }
