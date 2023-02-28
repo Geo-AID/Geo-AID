@@ -566,7 +566,7 @@ impl<'r> Display for Diagnostic<'r> {
                         2 => writeln!(
                             f,
                             "{:<indent$} {vertical} {}",
-                            ann.span.start.line.to_string().blue().bold(),
+                            (previous.span.start.line - 1).to_string().blue().bold(),
                             lines.next().unwrap()
                         )?,
                         diff => {
@@ -638,7 +638,7 @@ impl<'r> Display for Diagnostic<'r> {
                 let mut lines = self.script.lines().skip(first.span.start.line - 1);
 
                 // First "    | "
-                writeln!(f, "{:indent$} {vertical}", "")?;
+                writeln!(f, "{:note_indent$} {vertical}", "")?;
 
                 // A fix is a message with vector of changes ordered in descending span start.
                 // So we will create a stack for those spans.
@@ -648,10 +648,11 @@ impl<'r> Display for Diagnostic<'r> {
                 // so that it is considered in the next iteration.
                 let mut changes = fix.changes.clone();
 
-                let mut current_position = first.span.start;
-                let mut current_line = lines.next().map(String::from);
+                let mut current_column = 0;
+                let mut current_line = lines.next().map(|s| s.chars().enumerate());
+                let mut signs = Vec::new();
 
-                // Unril there is a top of the stack.
+                // Until there is a top of the stack.
                 while let Some(change) = changes.pop() {
                     if !change.span.is_singleline() {
                         // If not single line, divide in two.
@@ -676,135 +677,55 @@ impl<'r> Display for Diagnostic<'r> {
                             },
                             new_content: String::new()
                         });
-                    } else {
-                        // Update current position.
-                        if current_position.line != change.span.start.line {
-                            for ln in current_position.line..change.span.start.line
-                            current_position = Position {
-                                line: change.span.start.line,
-                                column: 0
-                            };
-                        }
-
-
-                    }
-
-                    if ann.span.is_singleline() {
-                        // If single line, only render the line of code
-                        writeln!(
-                            f,
-                            "{:indent$} {vertical} {}",
-                            ann.span.start.line.to_string().blue().bold(),
-                            lines.next().unwrap()
-                        )?;
-                        // And simple squiggles
-                        write!(
-                            f,
-                            "{:<indent$} {vertical} {:squiggle_offset$}{}",
-                            "",
-                            "",
-                            "^".repeat(ann.span.end.column - ann.span.start.column)
-                                .with(get_color(self.kind))
-                                .bold(),
-                            squiggle_offset = ann.span.start.column - 1
-                        )?;
-                    } else {
-                        // Otherwise
-                        if ann.span.start.column == 1 {
-                            // If range starts at column 1, start with '/'
-                            writeln!(
-                                f,
-                                "{:<indent$} {vertical} {} {}",
-                                ann.span.start.line.to_string().blue().bold(),
-                                "/".with(get_color(self.kind)).bold(),
-                                lines.next().unwrap()
-                            )?;
-                        } else {
-                            // Otherwise with an indicator of where the span starts
-                            writeln!(
-                                f,
-                                "{:indent$} {vertical} {}",
-                                ann.span.start.line.to_string().blue().bold(),
-                                lines.next().unwrap()
-                            )?;
-                            writeln!(
-                                f,
-                                "{:indent$} {vertical} {}",
-                                "",
-                                (String::from(" ") + &"_".repeat(ann.span.start.column - 2) + "^")
-                                    .with(get_color(self.kind))
-                                    .bold()
-                            )?;
-                        }
-
-                        // Then add '|' for each line in span.
-                        for i in ann.span.start.line..ann.span.end.line {
-                            writeln!(
-                                f,
-                                "{:<indent$} {vertical} {} {}",
-                                (i + 1).to_string().blue().bold(),
-                                "|".with(get_color(self.kind)).bold(),
-                                lines.next().unwrap()
-                            )?;
-                        }
-
-                        // And end with ending indicator.
-                        write!(
-                            f,
-                            "{:indent$} {vertical} {}",
-                            "",
-                            (String::from("|") + &"_".repeat(ann.span.end.column - 1) + "^")
-                                .with(get_color(self.kind))
-                                .bold()
-                        )?;
-                    }
-
-                    let mut messages: Vec<(usize, Vec<&AnnotationPriv>)> = vec![(
-                        ann.span.end.column,
-                        ann.annotations
-                            .iter()
-                            .filter(|x| !x.message.is_empty())
-                            .collect(),
-                    )];
-
-                    // While we can, we put squiggles in the same line.
-                    let mut previous = ann;
-                    let mut next_ann = annotations.peek().copied();
-                    while let Some(next) = next_ann {
-                        if next.span.start.line == previous.span.end.line {
-                            annotations.next();
-                            write!(
-                                f,
-                                "{:squiggle_offset$}{}",
-                                "",
-                                "^".repeat(next.span.end.column - next.span.start.column)
-                                    .with(get_color(self.kind))
-                                    .bold(),
-                                squiggle_offset = next.span.start.column - previous.span.end.column
-                            )?;
-
-                            messages.push((
-                                next.span.end.column,
-                                next.annotations
-                                    .iter()
-                                    .filter(|x| !x.message.is_empty())
-                                    .collect(),
-                            ));
-
-                            previous = next;
-                            next_ann = annotations.peek().copied();
-                        } else {
-                            break;
+                    } else if let Some(chars) = current_line.as_mut() {
+                        // Render the line and fill in `signs`.
+                        for (i, c) in chars.by_ref() {
+                            if i >= change.span.start.column {
+                                
+                            }
                         }
                     }
 
-                    let l = messages.len();
-                    let mut messages: Vec<(usize, Vec<&AnnotationPriv>)> = messages
-                        .into_iter()
-                        .enumerate()
-                        .filter(|(i, (_, x))| !x.is_empty() || *i == l - 1)
-                        .map(|x| x.1)
-                        .collect();
+                    
+
+                    // Advance the source display
+                    if let Some(next) = changes.last() {
+                        if next.span.start.line != change.span.end.line {
+                            // Render signs
+                            writeln!(f, ""); // Finish the line.
+                            write!(f, "{:note_indent$} {vertical} ", "");
+
+                            for sign in &signs {
+                                match sign {
+                                    '+' => write!(f, "{}", "+".green())?,
+                                    '-' => write!(f, "{}", "-".red())?,
+                                    _ => write!(f, " ")?
+                                }
+                            }
+                            writeln!(f, "");
+                            signs.clear();
+                            current_column = 0;
+
+                            match next.span.start.line - change.span.end.line {
+                                1 => (),
+                                2 => writeln!(
+                                    f,
+                                    "{:<note_indent$} {vertical} {}",
+                                    (change.span.start.line + 1).to_string().blue().bold(),
+                                    lines.next().unwrap()
+                                )?,
+                                diff => {
+                                    for _ in 0..(diff - 1) {
+                                        lines.next();
+                                    }
+
+                                    writeln!(f, "{:indent$}{}", "", "...".blue().bold())?;
+                                }
+                            }
+
+                            current_line = lines.next().map(|s| s.chars().enumerate());
+                        }
+                    }
                 }
             }
         }
