@@ -648,7 +648,6 @@ impl<'r> Display for Diagnostic<'r> {
                 // so that it is considered in the next iteration.
                 let mut changes = fix.changes.clone();
 
-                let mut current_column = 0;
                 let mut current_line = lines.next().map(|s| s.chars().enumerate());
                 let mut signs = Vec::new();
 
@@ -681,9 +680,23 @@ impl<'r> Display for Diagnostic<'r> {
                         // Render the line and fill in `signs`.
                         for (i, c) in chars.by_ref() {
                             if i >= change.span.start.column {
-                                
+                                break;
                             }
+
+                            write!(f, "{c}")?;
+                            signs.push(' ');
                         }
+
+                        for (i, c) in chars.by_ref() {
+                            if i >= change.span.end.column {
+                                break;
+                            }
+
+                            write!(f, "{}", c.red())?;
+                            signs.push('-');
+                        }
+
+                        // Render the added code.
                     }
 
                     
@@ -692,8 +705,8 @@ impl<'r> Display for Diagnostic<'r> {
                     if let Some(next) = changes.last() {
                         if next.span.start.line != change.span.end.line {
                             // Render signs
-                            writeln!(f, ""); // Finish the line.
-                            write!(f, "{:note_indent$} {vertical} ", "");
+                            writeln!(f)?; // Finish the line.
+                            write!(f, "{:note_indent$} {vertical} ", "")?;
 
                             for sign in &signs {
                                 match sign {
@@ -702,9 +715,8 @@ impl<'r> Display for Diagnostic<'r> {
                                     _ => write!(f, " ")?
                                 }
                             }
-                            writeln!(f, "");
+                            writeln!(f)?;
                             signs.clear();
-                            current_column = 0;
 
                             match next.span.start.line - change.span.end.line {
                                 1 => (),
