@@ -137,6 +137,8 @@ pub struct RenderedPoint {
     pub label: String,
     /// Point's position
     pub position: Complex,
+    /// Points mapped to uuid's
+    pub identifiers: HashMap<HashableArc<Weighed<Expression>>, Uuid>,
 }
 
 #[derive(Serialize)]
@@ -156,8 +158,10 @@ pub struct RenderedAngle {
     pub points: (Complex, Complex, Complex),
     /// Number of arcs in the angle
     pub no_arcs: u8,
-    /// Expression defining the angle
+    /// Expression that the angle was defined by
     pub expr: Arc<Weighed<Expression>>,
+    /// Points mapped to uuid's
+    pub identifiers: HashMap<HashableArc<Weighed<Expression>>, Uuid>,
 }
 
 
@@ -339,6 +343,13 @@ pub fn project(
         }
     }
 
+    let mut iden = HashMap::new();
+    for pt in figure.points.clone() {
+        let point = HashableArc::new(pt.0);
+        let id = Uuid::new_v4();
+        iden.insert(point, id);
+    }
+
     // The scaled frame should be at most (and equal for at least one dimension) 90% of the size of the desired image (margins for rendering).
     let scale = f64::min(
         size09.real / furthest.real,
@@ -357,14 +368,8 @@ pub fn project(
                 figure.points[i].1.primes,
             ),
             position: *pt,
+            identifiers: iden.clone(),
         });
-    }
-
-    let mut identifiers = HashMap::new();
-    for pt in figure.points {
-        let point = HashableArc::new(pt.0);
-        let id = Uuid::new_v4();
-        identifiers.insert(point, id);
     }
 
     let mut blueprint_lines = Vec::new();
@@ -386,6 +391,7 @@ pub fn project(
             points: get_angle_points(&ang.0, generated_points),
             no_arcs: ang.1, 
             expr: Arc::clone(&ang.0),
+            identifiers: iden.clone(),
         });
     }
 

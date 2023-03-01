@@ -1,6 +1,9 @@
+use std::sync::Arc;
 use std::{fs::File, io::Write, path::Path};
 
-use crate::projector::Rendered;
+use crate::projector::{Rendered};
+use crate::script::{HashableArc};
+use crate::{script::Expression::{AngleLine, AnglePoint}};
 
 /// Draws the given figure to a .tex file using tikz library.
 ///
@@ -42,11 +45,26 @@ pub fn draw(target: &Path, canvas_size: (usize, usize), rendered: &Vec<Rendered>
                 let p1 = angle.points.0 * scale;
                 let origin = angle.points.1 * scale;
                 let p2 = angle.points.2 * scale;
-                let mut no_arcs = String::from("l"); // Requires a change later!
-                content += &format!(r#"
-                \tkzMarkAngle[size = 0.5,mark = none,arc={},mkcolor = black]({},{},{})
-                "#, no_arcs, 
-                );
+                let no_arcs = String::from("l"); // Requires a change later!
+                match &angle.expr.object {
+                    AnglePoint(p1,p2,p3) => {
+                        let point1 = HashableArc::new(Arc::clone(p1));
+                        let point2 = HashableArc::new(Arc::clone(p2));
+                        let point3 = HashableArc::new(Arc::clone(p3));
+                        let p1_name = angle.identifiers.get(&point1).unwrap();
+                        let p2_name = angle.identifiers.get(&point2).unwrap();
+                        let p3_name = angle.identifiers.get(&point3).unwrap();
+
+                        content += &format!(r#"
+                            \tkzMarkAngle[size = 0.5,mark = none,arc={no_arcs},mkcolor = black]({p1_name},{p2_name},{p3_name})
+                            "#
+                        );
+                    } 
+                    AngleLine(ln1,ln2) => {
+
+                    }
+                    _=> unreachable!(),
+                }
             }
         }
     }
