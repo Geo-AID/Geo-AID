@@ -27,6 +27,9 @@ pub fn draw(target: &Path, canvas_size: (usize, usize), rendered: &Vec<Rendered>
                 x and y coordinates of points defining the line - ({:.3}, {:.3}) and ({:.3}, {:.3})", 
                 line.label, p1.real, p1.imaginary, p2.real, p2.imaginary).as_bytes()).unwrap();
             }
+            Rendered::Angle(..) => {
+                
+            } 
         }
     }
 }

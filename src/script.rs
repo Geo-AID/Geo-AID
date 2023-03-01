@@ -753,6 +753,7 @@ impl CriteriaKind {
 /// Defines a weighed piece of criteria the figure must obey.
 pub type Criteria = Weighed<CriteriaKind>;
 
+#[derive(Serialize, Debug, Clone)]
 pub struct HashableArc<T>(Arc<T>);
 
 impl<T> HashableArc<T> {
