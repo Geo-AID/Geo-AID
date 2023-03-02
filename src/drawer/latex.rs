@@ -45,7 +45,7 @@ pub fn draw(target: &Path, canvas_size: (usize, usize), output: &Output) {
                 let p1 = angle.points.0 * scale;
                 let origin = angle.points.1 * scale;
                 let p2 = angle.points.2 * scale;
-                let no_arcs = String::from("l"); // Requires a change later!
+                let no_arcs = String::from("l"); // Requires a change later! It has to be based on info from the script
                 match &angle.expr.object {
                     AnglePoint(p1, p2, p3) => {
                         let point1 = HashableArc::new(Arc::clone(p1));

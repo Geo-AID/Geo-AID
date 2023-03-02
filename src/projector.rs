@@ -175,15 +175,6 @@ pub struct RenderedAngle {
     pub expr: Arc<Weighed<Expression>>,
 }
 
-fn get_line_arcs(
-    line: &Arc<Weighed<Expression>>,
-) -> (Arc<Weighed<Expression>>, Arc<Weighed<Expression>>) {
-    match &line.object {
-        Expression::Line(p1, p2) => (Arc::clone(p1), Arc::clone(p2)),
-        _ => unreachable!(),
-    }
-}
-
 fn get_angle_points(
     angle: &Arc<Weighed<Expression>>,
     generated_points: &[Complex],
