@@ -49,9 +49,12 @@ pub struct Annotation {
 #[derive(Debug, Clone)]
 pub struct Change {
     pub span: Span,
-    pub new_content: String
+    /// Instead of a simple string, we use a vector of lines to make the
+    /// rendering process more reliable.
+    pub new_content: Vec<String>
 }
 
+#[derive(Debug)]
 pub struct Fix {
     pub changes: Vec<Change>,
     pub message: String
@@ -659,7 +662,7 @@ impl<'r> Display for Diagnostic<'r> {
                             span: Span { 
                                 start: Position {
                                     line: change.span.start.line + 1,
-                                    column: 0
+                                    column: 1
                                 },
                                 end: change.span.end
                             },
@@ -674,12 +677,18 @@ impl<'r> Display for Diagnostic<'r> {
                                     column: usize::MAX
                                 }
                             },
-                            new_content: String::new()
+                            new_content: Vec::new()
                         });
                     } else if let Some(chars) = current_line.as_mut() {
                         // Render the line and fill in `signs`.
+                        writeln!(
+                            f,
+                            "{:indent$} {vertical} ",
+                            change.span.start.line.to_string().blue().bold()
+                        )?;
+
                         for (i, c) in chars.by_ref() {
-                            if i >= change.span.start.column {
+                            if i+2 >= change.span.start.column { // next character is too far, break
                                 break;
                             }
 
@@ -688,7 +697,7 @@ impl<'r> Display for Diagnostic<'r> {
                         }
 
                         for (i, c) in chars.by_ref() {
-                            if i >= change.span.end.column {
+                            if i + 2 >= change.span.end.column {
                                 break;
                             }
 
@@ -699,7 +708,7 @@ impl<'r> Display for Diagnostic<'r> {
                         let mut first = true;
 
                         // Render the added code.
-                        for ln in change.new_content.lines() {
+                        for ln in &change.new_content {
                             // If it's not the first line of the added content, print a newline signs
                             if !first {
                                 writeln!(f)?;
@@ -713,7 +722,7 @@ impl<'r> Display for Diagnostic<'r> {
                                 }
 
                                 // Print the line
-                                write!(f, "{}", ln.green())?;
+                                write!(f, "{}", ln.as_str().green())?;
 
                                 // And add signs
                                 signs.resize(signs.len() + ln.chars().count(), '+');

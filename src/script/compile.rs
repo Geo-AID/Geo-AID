@@ -402,7 +402,7 @@ pub fn compile(
                 flag_name: "distance_literals",
                 required_because: at,
                 flagdef_span: None,
-                available_values: &["adjust", "some"],
+                available_values: &["adjust", "solve"],
             }),
         }
     } else {

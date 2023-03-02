@@ -6,10 +6,10 @@ use std::{
     sync::{self, Arc},
 };
 
-use crate::cli::{AnnotationKind, DiagnosticData};
+use crate::{cli::{AnnotationKind, DiagnosticData, Fix, Change}, span};
 
 use self::parser::Type;
-use self::token::{NamedIdent, Span, Token};
+use self::token::{NamedIdent, Span, Token, Position};
 
 mod builtins;
 pub mod compile;
@@ -418,6 +418,18 @@ impl Error {
                         |v| format!("`{v}`")
                     ).collect::<Vec<String>>().join(", ")))
                     .add_annotation_opt_span(flagdef_span, AnnotationKind::Note, &"Flag defined here")
+                    .add_fix(Fix {
+                        message: String::from("Consider defining this flag at the top of the file."),
+                        changes: vec![
+                            Change {
+                                span: span!(1, 1, 1, 1),
+                                new_content: vec![
+                                    format!("@{flag_name}: {};", available_values[0]),
+                                    String::new()
+                                ]
+                            }
+                        ]
+                    })
             }
         }
     }
