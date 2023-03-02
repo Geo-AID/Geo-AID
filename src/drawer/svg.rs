@@ -48,9 +48,7 @@ pub fn draw(target: &Path, canvas_size: (usize, usize), rendered: &Vec<Rendered>
                     p1.real, p2.real, p1.imaginary, p2.imaginary
                 );
             }
-            Rendered::Angle(..) => {
-                
-            }
+            Rendered::Angle(..) => {}
         }
     }
     content += "</svg>";

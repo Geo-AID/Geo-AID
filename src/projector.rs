@@ -1,5 +1,5 @@
-use std::sync::Arc;
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use serde::Serialize;
 
@@ -8,9 +8,10 @@ use uuid::Uuid;
 use crate::{
     generator::{
         critic::{self, evaluate_expression_simple},
-        geometry::{self}, Complex, EvaluationError,
+        geometry::{self},
+        Complex, EvaluationError,
     },
-    script::{figure::Figure, unroll, Expression, Weighed, HashableArc},
+    script::{figure::Figure, unroll, Expression, HashableArc, Weighed},
 };
 
 /*#[cfg(test)]
@@ -164,9 +165,10 @@ pub struct RenderedAngle {
     pub identifiers: HashMap<HashableArc<Weighed<Expression>>, Uuid>,
 }
 
-
-
-fn get_angle_points(angle: &Arc<Weighed<Expression>>, generated_points: &[Complex]) -> (Complex, Complex, Complex) {
+fn get_angle_points(
+    angle: &Arc<Weighed<Expression>>,
+    generated_points: &[Complex],
+) -> (Complex, Complex, Complex) {
     match &angle.object {
         Expression::AnglePoint(p1, p2, p3) => {
             let arm1 = evaluate_expression_simple(p1, generated_points).unwrap();
@@ -183,15 +185,27 @@ fn get_angle_points(angle: &Arc<Weighed<Expression>>, generated_points: &[Comple
 
             if ev_ln1.0.imaginary == 0.0 {
                 let arm1 = Complex::new(origin.real, origin.imaginary + 2.0);
-                let arm2 = Complex::new(origin.real +2.0, ev_ln2.0.real * (origin.real + 2.0) + ev_ln2.0.imaginary);
+                let arm2 = Complex::new(
+                    origin.real + 2.0,
+                    ev_ln2.0.real * (origin.real + 2.0) + ev_ln2.0.imaginary,
+                );
                 (arm1, origin, arm2)
             } else if ev_ln2.0.imaginary == 0.0 {
-                let arm1 = Complex::new(origin.real + 2.0, ev_ln1.0.real * (origin.real + 2.0) + ev_ln1.0.imaginary);
+                let arm1 = Complex::new(
+                    origin.real + 2.0,
+                    ev_ln1.0.real * (origin.real + 2.0) + ev_ln1.0.imaginary,
+                );
                 let arm2 = Complex::new(origin.real, origin.imaginary + 2.0);
                 (arm1, origin, arm2)
             } else {
-                let arm1 = Complex::new(origin.real + 2.0, ev_ln1.0.real * (origin.real + 2.0) + ev_ln1.0.imaginary);
-                let arm2 = Complex::new(origin.real +2.0, ev_ln2.0.real * (origin.real + 2.0) + ev_ln2.0.imaginary);
+                let arm1 = Complex::new(
+                    origin.real + 2.0,
+                    ev_ln1.0.real * (origin.real + 2.0) + ev_ln1.0.imaginary,
+                );
+                let arm2 = Complex::new(
+                    origin.real + 2.0,
+                    ev_ln2.0.real * (origin.real + 2.0) + ev_ln2.0.imaginary,
+                );
                 (arm1, origin, arm2)
             }
         }
@@ -389,7 +403,7 @@ pub fn project(
         blueprint_angles.push(RenderedAngle {
             label: String::new(),
             points: get_angle_points(&ang.0, generated_points),
-            no_arcs: ang.1, 
+            no_arcs: ang.1,
             expr: Arc::clone(&ang.0),
             identifiers: iden.clone(),
         });
