@@ -1910,8 +1910,16 @@ fn unroll_eq(
     unrolled: &mut Vec<UnrolledRule>,
     full_span: Span,
 ) -> Result<(), Error> {
-    if lhs.ty == Type::Predefined(PredefinedType::PointCollection(2))
-        && rhs.ty == Type::Predefined(PredefinedType::PointCollection(2))
+    if (
+            lhs.ty == ty::collection(2)
+            && rhs.ty == ty::collection(2)
+        ) || (
+            lhs.ty == ty::collection(2)
+            && rhs.ty == ty::SCALAR_UNKNOWN
+        ) || (
+            lhs.ty == ty::SCALAR_UNKNOWN
+            && rhs.ty == ty::collection(2)
+        )
     {
         // AB = CD must have different logic as it's implied that this means "equality of distances".
         unrolled.push(UnrolledRule {
@@ -1933,6 +1941,7 @@ fn unroll_eq(
 
         Ok(())
     } else {
+
         let (mut lhs, mut rhs) = (lhs, rhs);
         // If any of the two types can be cast onto the other, cast and compare.
         if rhs.ty.can_cast(&lhs.ty) {

@@ -490,6 +490,7 @@ pub mod ty {
     pub const SCALAR: Type = Type::Predefined(PredefinedType::Scalar(Some(ComplexUnit::new(
         SimpleUnit::Scalar,
     ))));
+    pub const SCALAR_UNKNOWN: Type = Type::Predefined(PredefinedType::Scalar(None));
 
     #[must_use]
     pub const fn collection(length: usize) -> Type {

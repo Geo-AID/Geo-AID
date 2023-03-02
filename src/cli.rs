@@ -696,10 +696,38 @@ impl<'r> Display for Diagnostic<'r> {
                             signs.push('-');
                         }
 
-                        // Render the added code.
-                    }
+                        let mut first = true;
 
-                    
+                        // Render the added code.
+                        for ln in change.new_content.lines() {
+                            // If it's not the first line of the added content, print a newline signs
+                            if !first {
+                                writeln!(f)?;
+
+                                for sign in &signs {
+                                    match sign {
+                                        '+' => write!(f, "{}", "+".green())?,
+                                        '-' => write!(f, "{}", "-".red())?,
+                                        _ => write!(f, " ")?
+                                    }
+                                }
+
+                                // Print the line
+                                write!(f, "{}", ln.green())?;
+
+                                // And add signs
+                                signs.resize(signs.len() + ln.chars().count(), '+');
+                            }
+
+                            first = false;
+                        }
+
+                        // Render the rest of the line and fill in `signs`.
+                        for (_, c) in chars {
+                            write!(f, "{c}")?;
+                            signs.push(' ');
+                        }
+                    }
 
                     // Advance the source display
                     if let Some(next) = changes.last() {
