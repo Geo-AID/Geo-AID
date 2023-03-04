@@ -46,12 +46,27 @@ pub struct Annotation {
     pub at: Span,
 }
 
+#[derive(Debug, Clone)]
+pub struct Change {
+    pub span: Span,
+    /// Instead of a simple string, we use a vector of lines to make the
+    /// rendering process more reliable.
+    pub new_content: Vec<String>
+}
+
+#[derive(Debug)]
+pub struct Fix {
+    pub changes: Vec<Change>,
+    pub message: String
+}
+
 pub struct Diagnostic<'r> {
     kind: DiagnosticKind,
     annotations: Vec<AnnotationSet>,
     notes: Vec<(AnnotationKind, String)>,
     message: String,
     annotated_notes: BTreeMap<Position, Diagnostic<'r>>,
+    fixes: Vec<Fix>,
     file: &'r Path,
     script: &'r str,
 }
@@ -61,6 +76,7 @@ pub struct DiagnosticData {
     pub spans: Vec<Span>,
     pub annotations: Vec<Annotation>,
     pub notes: Vec<(AnnotationKind, String)>,
+    pub fixes: Vec<Fix>,
 }
 
 impl DiagnosticData {
@@ -71,6 +87,7 @@ impl DiagnosticData {
             spans: Vec::new(),
             annotations: Vec::new(),
             notes: Vec::new(),
+            fixes: Vec::new()
         }
     }
 
@@ -134,6 +151,12 @@ impl DiagnosticData {
         }
         self
     }
+
+    #[must_use]
+    pub fn add_fix(mut self, fix: Fix) -> Self {
+        self.fixes.push(fix);
+        self
+    }
 }
 
 impl<'r> Diagnostic<'r> {
@@ -172,6 +195,7 @@ impl<'r> Diagnostic<'r> {
                                 spans: vec![at],
                                 annotations: Vec::new(),
                                 notes: Vec::new(),
+                                fixes: Vec::new()
                             },
                             file,
                             script,
@@ -247,6 +271,7 @@ impl<'r> Diagnostic<'r> {
                                 spans: vec![ann.at],
                                 annotations: Vec::new(),
                                 notes: Vec::new(),
+                                fixes: Vec::new()
                             },
                             file,
                             script,
@@ -289,12 +314,22 @@ impl<'r> Diagnostic<'r> {
             }
         }
 
+        // Sort by span start position in reverse (first span is the last in the vector)
+        let fixes = data.fixes.into_iter().map(
+            |mut v| {
+                v.changes.sort_unstable_by_key(|c| c.span.start);
+                v.changes.reverse();
+                v
+            }
+        ).collect();
+
         Diagnostic {
             kind,
             annotations: annotation_sets,
             notes: Vec::new(),
             message: data.message,
             annotated_notes,
+            fixes,
             file,
             script,
         }
@@ -534,7 +569,7 @@ impl<'r> Display for Diagnostic<'r> {
                         2 => writeln!(
                             f,
                             "{:<indent$} {vertical} {}",
-                            ann.span.start.line.to_string().blue().bold(),
+                            (previous.span.start.line - 1).to_string().blue().bold(),
                             lines.next().unwrap()
                         )?,
                         diff => {
@@ -578,6 +613,190 @@ impl<'r> Display for Diagnostic<'r> {
 
         for diagnostic in self.annotated_notes.values() {
             write!(f, "{diagnostic}")?;
+        }
+
+        for fix in &self.fixes {
+            writeln!(
+                f,
+                "{} {}",
+                "Fix:".green().bold(),
+                fix.message.clone().bold(),
+            )?;
+
+            if let Some(last) = fix.changes.last() {
+                // Calculate the necessary indent (how much space to leave for line numbers).
+                let indent = last.span.end.line.to_string().len();
+                let first = fix.changes.first().unwrap();
+                // Write the file path
+                writeln!(
+                    f,
+                    "{:indent$}{} {}:{}:{}",
+                    "",
+                    "-->".blue().bold(),
+                    self.file.display(),
+                    first.span.start.line,
+                    first.span.start.column
+                )?;
+
+                let mut lines = self.script.lines().skip(first.span.start.line - 1);
+
+                // First "    | "
+                writeln!(f, "{:note_indent$} {vertical}", "")?;
+
+                // A fix is a message with vector of changes ordered in descending span start.
+                // So we will create a stack for those spans.
+                // In each iteration we will consider the top entry.
+                // If the entry's span is single-line, we simply print it
+                // Otherwise, we divide the span and push the two parts to the top of the stack,
+                // so that it is considered in the next iteration.
+                let mut changes = fix.changes.clone();
+
+                let mut current_line = lines.next().map(|s| s.chars().enumerate());
+                let mut signs = Vec::new();
+
+                // Until there is a top of the stack.
+                while let Some(change) = changes.pop() {
+                    if !change.span.is_singleline() {
+                        // If not single line, divide in two.
+                        changes.push(Change {
+                            span: Span { 
+                                start: Position {
+                                    line: change.span.start.line + 1,
+                                    column: 1
+                                },
+                                end: change.span.end
+                            },
+                            new_content: change.new_content
+                        });
+
+                        changes.push(Change {
+                            span: Span {
+                                start: change.span.start,
+                                end: Position {
+                                    line: change.span.start.line,
+                                    column: usize::MAX
+                                }
+                            },
+                            new_content: Vec::new()
+                        });
+                    } else if let Some(chars) = current_line.as_mut() {
+                        // Render the line and fill in `signs`.
+                        write!(
+                            f,
+                            "{:<indent$} {vertical} ",
+                            change.span.start.line.to_string().blue().bold()
+                        )?;
+
+                        // Render the line pre-change
+                        if change.span.start.column > 1 {
+                            for (i, c) in chars.by_ref() {
+
+                                write!(f, "{c}")?;
+                                signs.push(' ');
+
+                                if i+2 >= change.span.start.column { // next character is too far, break
+                                    break;
+                                }
+                            }
+                        }
+
+                        // Render the deleted span as red.
+                        if !change.span.is_empty() {
+                            for (i, c) in chars.by_ref() {
+
+                                write!(f, "{}", c.red())?;
+                                signs.push('-');
+
+                                if i + 2 >= change.span.end.column {
+                                    break;
+                                }
+                            }
+                        }
+
+                        let mut first = true;
+
+                        // Render the added code.
+                        for ln in &change.new_content {
+                            // If it's not the first line of the added content, print a newline and signs
+                            if !first {
+                                writeln!(f)?;
+                                write!(
+                                    f,
+                                    "{:indent$} {vertical} ",
+                                    ""
+                                )?;
+
+                                for sign in &signs {
+                                    match sign {
+                                        '+' => write!(f, "{}", "+".green())?,
+                                        '-' => write!(f, "{}", "-".red())?,
+                                        _ => write!(f, " ")?
+                                    }
+                                }
+
+                                writeln!(f)?;
+                                write!(
+                                    f,
+                                    "{:indent$} {vertical} ",
+                                    ""
+                                )?;
+                            }
+
+                            // Print the line
+                            write!(f, "{}", ln.as_str().green())?;
+
+                            // And add signs
+                            signs.resize(signs.len() + ln.chars().count(), '+');
+
+                            first = false;
+                        }
+
+                        // Render the rest of the line and fill in `signs`.
+                        for (_, c) in chars {
+                            write!(f, "{c}")?;
+                            signs.push(' ');
+                        }
+                    }
+
+                    // Advance the source display
+                    if let Some(next) = changes.last() {
+                        if next.span.start.line != change.span.end.line {
+                            // Render signs
+                            writeln!(f)?; // Finish the line.
+                            write!(f, "{:note_indent$} {vertical} ", "")?;
+
+                            for sign in &signs {
+                                match sign {
+                                    '+' => write!(f, "{}", "+".green())?,
+                                    '-' => write!(f, "{}", "-".red())?,
+                                    _ => write!(f, " ")?
+                                }
+                            }
+                            writeln!(f)?;
+                            signs.clear();
+
+                            match next.span.start.line - change.span.end.line {
+                                1 => (),
+                                2 => writeln!(
+                                    f,
+                                    "{:<note_indent$} {vertical} {}",
+                                    (change.span.start.line + 1).to_string().blue().bold(),
+                                    lines.next().unwrap()
+                                )?,
+                                diff => {
+                                    for _ in 0..(diff - 1) {
+                                        lines.next();
+                                    }
+
+                                    writeln!(f, "{:indent$}{}", "", "...".blue().bold())?;
+                                }
+                            }
+
+                            current_line = lines.next().map(|s| s.chars().enumerate());
+                        }
+                    }
+                }
+            }
         }
 
         Ok(())

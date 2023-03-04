@@ -26,7 +26,9 @@ for file in os.scandir("tests"):
         proc.communicate()
         proc.wait()
 
-records = []
+records = [
+    ["Name", "Result", "Previous quality", "New quality", "Delta", "Previous time", "New time", "Delta"]
+]
 total_quality_old = 0
 total_quality_new = 0
 
