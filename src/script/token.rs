@@ -143,6 +143,11 @@ impl Span {
     pub fn is_singleline(&self) -> bool {
         self.start.line == self.end.line
     }
+
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.start == self.end
+    }
 }
 
 impl PartialOrd for Span {

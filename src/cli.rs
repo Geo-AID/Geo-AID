@@ -681,37 +681,50 @@ impl<'r> Display for Diagnostic<'r> {
                         });
                     } else if let Some(chars) = current_line.as_mut() {
                         // Render the line and fill in `signs`.
-                        writeln!(
+                        write!(
                             f,
-                            "{:indent$} {vertical} ",
+                            "{:<indent$} {vertical} ",
                             change.span.start.line.to_string().blue().bold()
                         )?;
 
-                        for (i, c) in chars.by_ref() {
-                            if i+2 >= change.span.start.column { // next character is too far, break
-                                break;
-                            }
+                        // Render the line pre-change
+                        if change.span.start.column > 1 {
+                            for (i, c) in chars.by_ref() {
 
-                            write!(f, "{c}")?;
-                            signs.push(' ');
+                                write!(f, "{c}")?;
+                                signs.push(' ');
+
+                                if i+2 >= change.span.start.column { // next character is too far, break
+                                    break;
+                                }
+                            }
                         }
 
-                        for (i, c) in chars.by_ref() {
-                            if i + 2 >= change.span.end.column {
-                                break;
-                            }
+                        // Render the deleted span as red.
+                        if !change.span.is_empty() {
+                            for (i, c) in chars.by_ref() {
 
-                            write!(f, "{}", c.red())?;
-                            signs.push('-');
+                                write!(f, "{}", c.red())?;
+                                signs.push('-');
+
+                                if i + 2 >= change.span.end.column {
+                                    break;
+                                }
+                            }
                         }
 
                         let mut first = true;
 
                         // Render the added code.
                         for ln in &change.new_content {
-                            // If it's not the first line of the added content, print a newline signs
+                            // If it's not the first line of the added content, print a newline and signs
                             if !first {
                                 writeln!(f)?;
+                                write!(
+                                    f,
+                                    "{:indent$} {vertical} ",
+                                    ""
+                                )?;
 
                                 for sign in &signs {
                                     match sign {
@@ -721,12 +734,19 @@ impl<'r> Display for Diagnostic<'r> {
                                     }
                                 }
 
-                                // Print the line
-                                write!(f, "{}", ln.as_str().green())?;
-
-                                // And add signs
-                                signs.resize(signs.len() + ln.chars().count(), '+');
+                                writeln!(f)?;
+                                write!(
+                                    f,
+                                    "{:indent$} {vertical} ",
+                                    ""
+                                )?;
                             }
+
+                            // Print the line
+                            write!(f, "{}", ln.as_str().green())?;
+
+                            // And add signs
+                            signs.resize(signs.len() + ln.chars().count(), '+');
 
                             first = false;
                         }

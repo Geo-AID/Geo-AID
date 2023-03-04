@@ -1,4 +1,4 @@
-@distance_literals: adjust;
+#@distance_literals: adjust;
 
 let A, B, C = Point();
 
