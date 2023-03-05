@@ -45,7 +45,7 @@ pub fn draw(target: &Path, canvas_size: (usize, usize), output: &Output) {
                 let p1 = angle.points.0 * scale;
                 let origin = angle.points.1 * scale;
                 let p2 = angle.points.2 * scale;
-                let no_arcs = String::from("l"); // Requires a change later!
+                let no_arcs = String::from("l"); // Requires a change later! It has to be based on info from the script
                 match &angle.expr.object {
                     AnglePoint(p1, p2, p3) => {
                         let point1 = HashableArc::new(Arc::clone(p1));
@@ -57,17 +57,19 @@ pub fn draw(target: &Path, canvas_size: (usize, usize), output: &Output) {
 
                         content += &format!(
                             r#"
-                            \tkzMarkAngle[size = 0.5,mark = none,arc={},mkcolor = black]({:?},{:?},{:?})
-                            "#, no_arcs, p1_name, p2_name, p3_name
+                            \tkzMarkAngle[size = 0.5,mark = none,arc={no_arcs},mkcolor = black]({},{},{})
+                            "#, p1_name.uuid, p2_name.uuid, p3_name.uuid
                         );
                     }
+                    // There are hard coded values in \coordinate, it is intentional, every point has it label marked by Rendered::Point sequence above
                     AngleLine(_ln1, _ln2) => {
                         content += &format!(
                             r#"
-                        \coordinate (A) at ({}, {})
-                        \coordinate (B) at ({}, {})
-                        \coordinate (C) at ({}, {})
-                        \tkzMarkAngle[size = 0.5,mark = none,arc={no_arcs},mkcolor = black](A,B,C)"#,
+                        \coordinate (A) at ({}, {});
+                        \coordinate (B) at ({}, {});
+                        \coordinate (C) at ({}, {});
+                        \tkzMarkAngle[size = 0.5,mark = none,arc={no_arcs},mkcolor = black](A,B,C)
+                        "#,
                             p1.real,
                             p1.imaginary,
                             origin.real,

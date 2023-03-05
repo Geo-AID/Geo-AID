@@ -44,7 +44,7 @@ pub fn draw(target: &Path, canvas_size: (usize, usize), output: &Output) {
                         file.write_all((format!("\nangle: number of arcs - \"{}\", defined by - point {:?}({:.3}, {:.3}), point {:?}({:.3}, {:.3}) and point {:?}({:.3},{:.3}))", 
                         no_arcs, output.map.get(&HashableArc::new(Arc::clone(p1))).unwrap(), p_1.real, p_1.imaginary, output.map.get(&HashableArc::new(Arc::clone(p2))).unwrap(), p_2.real, p_2.imaginary, output.map.get(&HashableArc::new(Arc::clone(p3))).unwrap(), p_3.real, p_3.imaginary)).as_bytes()).unwrap();
                     }
-                    Expression::AngleLine(ln1, ln2) => {
+                    Expression::AngleLine(_ln1, _ln2) => {
                         
                     }
                     _ => unreachable!(),
