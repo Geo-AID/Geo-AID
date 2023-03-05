@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use std::collections::HashMap;
+use std::{collections::HashMap, rc::Rc};
 
 use serde::Serialize;
 
@@ -10,7 +10,7 @@ use crate::{
         critic::{self, evaluate_expression_simple},
         geometry, Complex, EvaluationError, Adjustable,
     },
-    script::{figure::Figure, unroll, Expression, Weighed, HashableArc},
+    script::{figure::Figure, unroll, Expression, HashableArc, Weighed},
 };
 
 /*#[cfg(test)]
@@ -90,28 +90,30 @@ mod testing {
         let path_json = PathBuf::from("testoutputs\\test.json");
         let path_raw = PathBuf::from("testoutputs\\test.raw");
 
+        let pr = &project(&fig, &gen_points).unwrap();
+
         drawer::latex::draw(
             &path_latex,
             (fig.canvas_size.0, fig.canvas_size.1),
-            &project(&fig, &gen_points).unwrap(),
+            pr,
         );
 
         drawer::svg::draw(
             &path_svg,
             (fig.canvas_size.0, fig.canvas_size.1),
-            &project(&fig, &gen_points).unwrap(),
+            pr,
         );
 
         drawer::json::draw(
             &path_json,
             (fig.canvas_size.0, fig.canvas_size.1),
-            &project(&fig, &gen_points).unwrap(),
+            pr,
         );
 
         drawer::raw::draw(
             &path_raw,
             (fig.canvas_size.0, fig.canvas_size.1),
-            &project(&fig, &gen_points).unwrap(),
+            pr,
         );
     }
 }*/
@@ -126,9 +128,17 @@ pub struct Blueprint {
 #[serde(tag = "type")]
 #[serde(rename_all = "snake_case")]
 pub enum Rendered {
-    Point(RenderedPoint),
+    Point(Rc<RenderedPoint>),
     Line(RenderedLine),
     Angle(RenderedAngle),
+}
+
+#[derive(Serialize)]
+pub struct Output {
+    /// Map containing points as keys and uuid's (v4) as values
+    pub map: HashMap<HashableArc<Weighed<Expression>>, Rc<RenderedPoint>>,
+    /// final product of the project function
+    pub vec_rendered: Vec<Rendered>,
 }
 
 #[derive(Debug, Serialize)]
@@ -137,8 +147,9 @@ pub struct RenderedPoint {
     pub label: String,
     /// Point's position
     pub position: Complex,
-    /// Points mapped to uuid's
-    pub identifiers: HashMap<HashableArc<Weighed<Expression>>, Uuid>,
+    /// Point's custom uuid
+    pub uuid: Uuid,
+    //pub expr: Arc<Weighed<Expression>>,
 }
 
 #[derive(Serialize)]
@@ -148,6 +159,8 @@ pub struct RenderedLine {
     /// The line's thickness
     /// Two ends of the line
     pub points: (Complex, Complex),
+    /// Expression defining the line
+    pub expr: Arc<Weighed<Expression>>,
 }
 
 #[derive(Serialize)]
@@ -160,13 +173,21 @@ pub struct RenderedAngle {
     pub no_arcs: u8,
     /// Expression that the angle was defined by
     pub expr: Arc<Weighed<Expression>>,
-    /// Points mapped to uuid's
-    pub identifiers: HashMap<HashableArc<Weighed<Expression>>, Uuid>,
 }
 
+fn get_line_arcs(
+    line: &Arc<Weighed<Expression>>,
+) -> (Arc<Weighed<Expression>>, Arc<Weighed<Expression>>) {
+    match &line.object {
+        Expression::Line(p1, p2) => (Arc::clone(p1), Arc::clone(p2)),
+        _ => unreachable!(),
+    }
+}
 
-
-fn get_angle_points(angle: &Arc<Weighed<Expression>>, generated_points: &[Complex]) -> (Complex, Complex, Complex) {
+fn get_angle_points(
+    angle: &Arc<Weighed<Expression>>,
+    generated_points: &[Complex],
+) -> (Complex, Complex, Complex) {
     match &angle.object {
         Expression::AnglePoint(p1, p2, p3) => {
             let arm1 = evaluate_expression_simple(p1, generated_points).unwrap();
@@ -183,15 +204,27 @@ fn get_angle_points(angle: &Arc<Weighed<Expression>>, generated_points: &[Comple
 
             if ev_ln1.0.imaginary == 0.0 {
                 let arm1 = Complex::new(origin.real, origin.imaginary + 2.0);
-                let arm2 = Complex::new(origin.real +2.0, ev_ln2.0.real * (origin.real + 2.0) + ev_ln2.0.imaginary);
+                let arm2 = Complex::new(
+                    origin.real + 2.0,
+                    ev_ln2.0.real * (origin.real + 2.0) + ev_ln2.0.imaginary,
+                );
                 (arm1, origin, arm2)
             } else if ev_ln2.0.imaginary == 0.0 {
-                let arm1 = Complex::new(origin.real + 2.0, ev_ln1.0.real * (origin.real + 2.0) + ev_ln1.0.imaginary);
+                let arm1 = Complex::new(
+                    origin.real + 2.0,
+                    ev_ln1.0.real * (origin.real + 2.0) + ev_ln1.0.imaginary,
+                );
                 let arm2 = Complex::new(origin.real, origin.imaginary + 2.0);
                 (arm1, origin, arm2)
             } else {
-                let arm1 = Complex::new(origin.real + 2.0, ev_ln1.0.real * (origin.real + 2.0) + ev_ln1.0.imaginary);
-                let arm2 = Complex::new(origin.real +2.0, ev_ln2.0.real * (origin.real + 2.0) + ev_ln2.0.imaginary);
+                let arm1 = Complex::new(
+                    origin.real + 2.0,
+                    ev_ln1.0.real * (origin.real + 2.0) + ev_ln1.0.imaginary,
+                );
+                let arm2 = Complex::new(
+                    origin.real + 2.0,
+                    ev_ln2.0.real * (origin.real + 2.0) + ev_ln2.0.imaginary,
+                );
                 (arm1, origin, arm2)
             }
         }
@@ -343,13 +376,6 @@ pub fn project(
         }
     }
 
-    let mut iden = HashMap::new();
-    for pt in figure.points.clone() {
-        let point = HashableArc::new(pt.0);
-        let id = Uuid::new_v4();
-        iden.insert(point, id);
-    }
-
     // The scaled frame should be at most (and equal for at least one dimension) 90% of the size of the desired image (margins for rendering).
     let scale = f64::min(
         size09.real / furthest.real,
@@ -362,14 +388,19 @@ pub fn project(
     let mut blueprint_points = Vec::new();
 
     for (i, pt) in points.iter().enumerate() {
-        blueprint_points.push(RenderedPoint {
-            label: unroll::construct_point_name(
-                figure.points[i].1.letter,
-                figure.points[i].1.primes,
-            ),
+        let pt_label =
+            unroll::construct_point_name(figure.points[i].1.letter, figure.points[i].1.primes);
+        blueprint_points.push(Rc::new(RenderedPoint {
+            label: pt_label,
             position: *pt,
-            identifiers: iden.clone(),
-        });
+            uuid: Uuid::new_v4(),
+        }));
+    }
+
+    let mut iden = HashMap::new();
+    for (i, pt) in figure.points.clone().iter().enumerate() {
+        let point = HashableArc::new(Arc::clone(&pt.0));
+        iden.insert(point, Rc::clone(&blueprint_points[i]));
     }
 
     let mut blueprint_lines = Vec::new();
@@ -380,6 +411,7 @@ pub fn project(
         blueprint_lines.push(RenderedLine {
             label: String::new(),
             points: get_line_ends(figure, ln_c.0),
+            expr: Arc::clone(ln),
         });
     }
 
@@ -389,18 +421,19 @@ pub fn project(
         blueprint_angles.push(RenderedAngle {
             label: String::new(),
             points: get_angle_points(&ang.0, generated_points),
-            no_arcs: ang.1, 
+            no_arcs: ang.1,
             expr: Arc::clone(&ang.0),
-            identifiers: iden.clone(),
         });
     }
 
     // println!("{:#?}", blueprint_points);
-
-    Ok(blueprint_points
-        .into_iter()
-        .map(Rendered::Point)
-        .chain(blueprint_lines.into_iter().map(Rendered::Line))
-        .chain(blueprint_angles.into_iter().map(Rendered::Angle))
-        .collect())
+    Ok(Output {
+        vec_rendered: blueprint_points
+            .into_iter()
+            .map(Rendered::Point)
+            .chain(blueprint_lines.into_iter().map(Rendered::Line))
+            .chain(blueprint_angles.into_iter().map(Rendered::Angle))
+            .collect(),
+        map: iden,
+    })
 }
