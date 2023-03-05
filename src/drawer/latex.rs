@@ -1,15 +1,15 @@
 use std::sync::Arc;
 use std::{fs::File, io::Write, path::Path};
 
-use crate::projector::{Rendered};
-use crate::script::{HashableArc};
-use crate::{script::Expression::{AngleLine, AnglePoint}};
+use crate::projector::{Output, Rendered};
+use crate::script::Expression::{AngleLine, AnglePoint};
+use crate::script::HashableArc;
 
 /// Draws the given figure to a .tex file using tikz library.
 ///
 /// # Panics
 /// Panics whenever there is a filesystem related problem.
-pub fn draw(target: &Path, canvas_size: (usize, usize), rendered: &Vec<Rendered>) {
+pub fn draw(target: &Path, canvas_size: (usize, usize), output: &Output) {
     // We must allow losing precision here.
     #[allow(clippy::cast_precision_loss)]
     let scale = f64::min(20.0 / canvas_size.0 as f64, 20.0 / canvas_size.1 as f64);
@@ -23,7 +23,7 @@ pub fn draw(target: &Path, canvas_size: (usize, usize), rendered: &Vec<Rendered>
     \begin{tikzpicture}
     "#,
     );
-    for item in rendered {
+    for item in &output.vec_rendered {
         match item {
             Rendered::Point(point) => {
                 let position = point.position * scale;
@@ -47,23 +47,36 @@ pub fn draw(target: &Path, canvas_size: (usize, usize), rendered: &Vec<Rendered>
                 let p2 = angle.points.2 * scale;
                 let no_arcs = String::from("l"); // Requires a change later!
                 match &angle.expr.object {
-                    AnglePoint(p1,p2,p3) => {
+                    AnglePoint(p1, p2, p3) => {
                         let point1 = HashableArc::new(Arc::clone(p1));
                         let point2 = HashableArc::new(Arc::clone(p2));
                         let point3 = HashableArc::new(Arc::clone(p3));
-                        let p1_name = angle.identifiers.get(&point1).unwrap();
-                        let p2_name = angle.identifiers.get(&point2).unwrap();
-                        let p3_name = angle.identifiers.get(&point3).unwrap();
+                        let p1_name = output.map.get(&point1).unwrap();
+                        let p2_name = output.map.get(&point2).unwrap();
+                        let p3_name = output.map.get(&point3).unwrap();
 
-                        content += &format!(r#"
-                            \tkzMarkAngle[size = 0.5,mark = none,arc={no_arcs},mkcolor = black]({p1_name},{p2_name},{p3_name})
-                            "#
+                        content += &format!(
+                            r#"
+                            \tkzMarkAngle[size = 0.5,mark = none,arc={},mkcolor = black]({:?},{:?},{:?})
+                            "#, no_arcs, p1_name, p2_name, p3_name
                         );
-                    } 
-                    AngleLine(ln1,ln2) => {
-
                     }
-                    _=> unreachable!(),
+                    AngleLine(_ln1, _ln2) => {
+                        content += &format!(
+                            r#"
+                        \coordinate (A) at ({}, {})
+                        \coordinate (B) at ({}, {})
+                        \coordinate (C) at ({}, {})
+                        \tkzMarkAngle[size = 0.5,mark = none,arc={no_arcs},mkcolor = black](A,B,C)"#,
+                            p1.real,
+                            p1.imaginary,
+                            origin.real,
+                            origin.imaginary,
+                            p2.real,
+                            p2.imaginary
+                        );
+                    }
+                    _ => unreachable!(),
                 }
             }
         }

@@ -1,19 +1,22 @@
 use std::{fs::File, io::Write, path::Path};
 
-use crate::{generator::Complex, projector::Rendered};
+use crate::{
+    generator::Complex,
+    projector::{Output, Rendered},
+};
 
 /// Draws the given figure as .svg format.
 ///
 /// # Panics
 /// Panics when there are issues with writing to file.
-pub fn draw(target: &Path, canvas_size: (usize, usize), rendered: &Vec<Rendered>) {
+pub fn draw(target: &Path, canvas_size: (usize, usize), output: &Output) {
     let mut content = String::new();
     content += &format!(
         "<svg height=\"{}\" width=\"{}\" xmlns=\"http://www.w3.org/2000/svg\">",
         canvas_size.0, canvas_size.1
     );
 
-    for elem in rendered {
+    for elem in &output.vec_rendered {
         match elem {
             Rendered::Point(pt) => {
                 #[allow(clippy::cast_precision_loss)]
@@ -48,9 +51,7 @@ pub fn draw(target: &Path, canvas_size: (usize, usize), rendered: &Vec<Rendered>
                     p1.real, p2.real, p1.imaginary, p2.imaginary
                 );
             }
-            Rendered::Angle(..) => {
-                
-            }
+            Rendered::Angle(..) => {}
         }
     }
     content += "</svg>";
