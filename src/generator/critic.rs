@@ -179,6 +179,7 @@ fn evaluate_expression(
         Expression::Literal(v, unit) => (Complex::new(*v, 0.0), unit.clone()),
         Expression::FreePoint(p) => {
             args.weights.borrow_mut()[*p] += expr.weight * weight_mult;
+            // println!("Point {p}, weight: {}", expr.weight * weight_mult);
 
             (*args.adjustables[*p].0.as_point().unwrap(), ComplexUnit::new(SimpleUnit::Point))
         }
@@ -654,6 +655,8 @@ fn evaluate_single(
             invert(quality)
         }
     };
+
+    // println!("{:?}", args.weights);
 
     (quality, args.weights.take())
 }
