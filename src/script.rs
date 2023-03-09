@@ -6,7 +6,7 @@ use std::{
     sync::{self, Arc},
 };
 
-use crate::{cli::{AnnotationKind, DiagnosticData, Fix, Change}, span};
+use crate::{cli::{AnnotationKind, DiagnosticData, Fix, Change}, span, generator::ExprCache};
 
 use self::parser::Type;
 use self::token::{NamedIdent, Span, Token, Position};
@@ -626,114 +626,21 @@ impl DerefMut for ComplexUnit {
     }
 }
 
-/// Defines an expression.
-#[derive(Debug, Clone)]
-pub enum Expression {
-    /// Euclidean distance between two points.
-    PointPointDistance(Arc<Weighed<Expression>>, Arc<Weighed<Expression>>),
-    /// Euclidean distance between a point and its rectangular projection onto a line.
-    PointLineDistance(Arc<Weighed<Expression>>, Arc<Weighed<Expression>>),
-    /// An angle defined with 3 points.
-    AnglePoint(
-        Arc<Weighed<Expression>>,
-        Arc<Weighed<Expression>>,
-        Arc<Weighed<Expression>>,
-    ),
-    /// An angle defined with 2 lines.
-    AngleLine(Arc<Weighed<Expression>>, Arc<Weighed<Expression>>),
-    /// A real literal.
-    Literal(f64, ComplexUnit),
-    /// An adjustable indexed point in euclidean space
-    FreePoint(usize),
-    /// A line in euclidean space. defined by two points.
-    Line(Arc<Weighed<Expression>>, Arc<Weighed<Expression>>),
-    /// The point where two lines cross.
-    LineLineIntersection(Arc<Weighed<Expression>>, Arc<Weighed<Expression>>),
-    /// Changes the unit
-    SetUnit(Arc<Weighed<Expression>>, ComplexUnit),
-    /// Adds two values
-    Sum(Arc<Weighed<Expression>>, Arc<Weighed<Expression>>),
-    /// Subtracts two values
-    Difference(Arc<Weighed<Expression>>, Arc<Weighed<Expression>>),
-    /// Multiplies two values
-    Product(Arc<Weighed<Expression>>, Arc<Weighed<Expression>>),
-    /// Divides two values
-    Quotient(Arc<Weighed<Expression>>, Arc<Weighed<Expression>>),
-    /// Changes the sign
-    Negation(Arc<Weighed<Expression>>),
-    /// An angle bisector.
-    AngleBisector(
-        Arc<Weighed<Expression>>,
-        Arc<Weighed<Expression>>,
-        Arc<Weighed<Expression>>,
-    ),
-    /// Takes the average value (arithmetic mean)
-    Average(Vec<Arc<Weighed<Expression>>>),
-    /// Generates a line perpendicular to $1 going through $2
-    PerpendicularThrough(Arc<Weighed<Expression>>, Arc<Weighed<Expression>>),
-    /// Generates a line parallel to $1 going through $2
-    ParallelThrough(Arc<Weighed<Expression>>, Arc<Weighed<Expression>>),
-    /// An adjusted real value
-    Real(usize)
-}
-
-impl Expression {
-    pub fn collect<'r>(&'r self, into: &mut Vec<&'r Arc<Weighed<Expression>>>) {
-        match self {
-            Expression::PointPointDistance(e1, e2)
-            | Expression::AngleLine(e1, e2)
-            | Expression::Line(e1, e2)
-            | Expression::LineLineIntersection(e1, e2)
-            | Expression::Sum(e1, e2)
-            | Expression::Difference(e1, e2)
-            | Expression::Product(e1, e2)
-            | Expression::Quotient(e1, e2)
-            | Expression::PerpendicularThrough(e1, e2)
-            | Expression::ParallelThrough(e1, e2)
-            | Expression::PointLineDistance(e1, e2) => {
-                into.push(e1);
-                e1.object.collect(into);
-                into.push(e2);
-                e2.object.collect(into);
-            }
-            Expression::AnglePoint(e1, e2, e3) | Expression::AngleBisector(e1, e2, e3) => {
-                into.push(e1);
-                e1.object.collect(into);
-                into.push(e2);
-                e2.object.collect(into);
-                into.push(e3);
-                e3.object.collect(into);
-            }
-            Expression::Literal(_, _) | Expression::FreePoint(_) | Expression::Real(_) => (),
-            Expression::SetUnit(e, _) | Expression::Negation(e) => {
-                into.push(e);
-                e.object.collect(into);
-            }
-            Expression::Average(v) => {
-                for e in v {
-                    into.push(e);
-                    e.object.collect(into);
-                }
-            }
-        }
-    }
-}
-
 /// Defines the kind and information about criteria the figure must obey.
 #[derive(Debug)]
 pub enum CriteriaKind {
     /// Equality. Quality rises quickly as two values approach each other, drops quickly as their difference grows.
-    Equal(Arc<Weighed<Expression>>, Arc<Weighed<Expression>>),
+    Equal(Arc<Weighed<ExprKind>>, Arc<Weighed<ExprKind>>),
     /// Less. Quality starts rising on equality.
-    Less(Arc<Weighed<Expression>>, Arc<Weighed<Expression>>),
+    Less(Arc<Weighed<ExprKind>>, Arc<Weighed<ExprKind>>),
     /// Greater. Quality starts rising on equality.
-    Greater(Arc<Weighed<Expression>>, Arc<Weighed<Expression>>),
+    Greater(Arc<Weighed<ExprKind>>, Arc<Weighed<ExprKind>>),
     /// Inverts the criteria. The quality is calculated as 1 - the quality of the inverted criteria.
     Inverse(Box<CriteriaKind>),
 }
 
 impl CriteriaKind {
-    pub fn collect<'r>(&'r self, into: &mut Vec<&'r Arc<Weighed<Expression>>>) {
+    pub fn collect<'r>(&'r self, into: &mut Vec<&'r Arc<Weighed<ExprKind>>>) {
         match self {
             CriteriaKind::Equal(e1, e2)
             | CriteriaKind::Less(e1, e2)

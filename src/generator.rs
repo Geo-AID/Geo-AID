@@ -20,6 +20,7 @@ pub enum EvaluationError {
 
 pub mod critic;
 pub mod geometry;
+pub mod expression;
 mod magic_box;
 
 /// Represents a complex number located on a "unit" plane.
@@ -196,12 +197,6 @@ impl Adjustable {
 pub enum Message {
     Generate(f64, Vec<(Adjustable, f64)>, Logger),
     Terminate,
-}
-
-pub struct ExprCache {
-    pub value: Complex,
-    pub unit: ComplexUnit,
-    pub generation: u64,
 }
 
 #[derive(Debug, Clone)]

@@ -3,7 +3,7 @@ use std::{cell::RefCell, collections::HashMap, sync::Arc};
 use crate::{
     generator::geometry,
     script::{
-        unit, ComplexUnit, Criteria, CriteriaKind, Expression, HashableWeakArc, SimpleUnit, Weighed,
+        unit, ComplexUnit, Criteria, CriteriaKind, ExprKind, HashableWeakArc, SimpleUnit, Weighed,
     },
 };
 
@@ -84,12 +84,12 @@ pub struct EvaluationArgs<'r> {
     weights: RefCell<Vec<f64>>,
     generation: u64,
     flags: &'r Arc<Flags>,
-    record: &'r RefCell<HashMap<HashableWeakArc<Weighed<Expression>>, ExprCache>>
+    record: &'r RefCell<HashMap<HashableWeakArc<Weighed<ExprKind>>, ExprCache>>
 }
 
 fn evaluate_point_point_distance(
-    p1: &Arc<Weighed<Expression>>,
-    p2: &Arc<Weighed<Expression>>,
+    p1: &Arc<Weighed<ExprKind>>,
+    p2: &Arc<Weighed<ExprKind>>,
     weight_mult: f64,
     args: &EvaluationArgs,
 ) -> Result<(Complex, ComplexUnit), EvaluationError> {
@@ -106,8 +106,8 @@ fn evaluate_point_point_distance(
 }
 
 fn evaluate_point_line_distance(
-    point: &Arc<Weighed<Expression>>,
-    line: &Arc<Weighed<Expression>>,
+    point: &Arc<Weighed<ExprKind>>,
+    line: &Arc<Weighed<ExprKind>>,
     weight_mult: f64,
     args: &EvaluationArgs,
 ) -> Result<(Complex, ComplexUnit), EvaluationError> {
@@ -141,7 +141,7 @@ fn evaluate_point_line_distance(
 
 #[allow(clippy::too_many_lines)]
 fn evaluate_expression(
-    expr: &Arc<Weighed<Expression>>,
+    expr: &Arc<Weighed<ExprKind>>,
     weight_mult: f64,
     args: &EvaluationArgs,
 ) -> Result<(Complex, ComplexUnit), EvaluationError> {
@@ -158,13 +158,13 @@ fn evaluate_expression(
 
     // If no flag is on or no value is cached yet, compute.
     let computed = match &expr.object {
-        Expression::PointPointDistance(p1, p2) => {
+        ExprKind::PointPointDistance(p1, p2) => {
             evaluate_point_point_distance(p1, p2, weight_mult, args)?
         }
-        Expression::PointLineDistance(point, line) => {
+        ExprKind::PointLineDistance(point, line) => {
             evaluate_point_line_distance(point, line, weight_mult, args)?
         }
-        Expression::AnglePoint(p1, p2, p3) => {
+        ExprKind::AnglePoint(p1, p2, p3) => {
             // Evaluate the three points
             let p1 = evaluate_expression(p1, weight_mult * p1.weight, args)?;
             let p2 = evaluate_expression(p2, weight_mult * p2.weight, args)?;
@@ -176,14 +176,14 @@ fn evaluate_expression(
                 ComplexUnit::new(SimpleUnit::Angle),
             )
         }
-        Expression::Literal(v, unit) => (Complex::new(*v, 0.0), unit.clone()),
-        Expression::FreePoint(p) => {
+        ExprKind::Literal(v, unit) => (Complex::new(*v, 0.0), unit.clone()),
+        ExprKind::FreePoint(p) => {
             args.weights.borrow_mut()[*p] += expr.weight * weight_mult;
             // println!("Point {p}, weight: {}", expr.weight * weight_mult);
 
             (*args.adjustables[*p].0.as_point().unwrap(), ComplexUnit::new(SimpleUnit::Point))
         }
-        Expression::Line(p1, p2) => {
+        ExprKind::Line(p1, p2) => {
             // Evaluate the two points
             let p1 = evaluate_expression(p1, weight_mult * p1.weight, args)?;
             let p2 = evaluate_expression(p2, weight_mult * p2.weight, args)?;
@@ -196,7 +196,7 @@ fn evaluate_expression(
                 ComplexUnit::new(SimpleUnit::Line),
             )
         }
-        Expression::LineLineIntersection(l1, l2) => {
+        ExprKind::LineLineIntersection(l1, l2) => {
             // Evaluate the two lines
             let l1 = evaluate_expression(l1, weight_mult * l1.weight, args)?;
             let l2 = evaluate_expression(l2, weight_mult * l2.weight, args)?;
@@ -209,13 +209,13 @@ fn evaluate_expression(
                 ComplexUnit::new(SimpleUnit::Point),
             )
         }
-        Expression::SetUnit(e, unit) => {
+        ExprKind::SetUnit(e, unit) => {
             // Evaluate e
             let e = evaluate_expression(e, weight_mult * e.weight, args)?;
 
             (e.0, unit.clone())
         }
-        Expression::Sum(e1, e2) => {
+        ExprKind::Sum(e1, e2) => {
             let v1 = evaluate_expression(e1, weight_mult * e1.weight, args)?;
             let v2 = evaluate_expression(e2, weight_mult * e2.weight, args)?;
 
@@ -223,7 +223,7 @@ fn evaluate_expression(
 
             (v1.0 + v2.0, v1.1)
         }
-        Expression::Difference(e1, e2) => {
+        ExprKind::Difference(e1, e2) => {
             let v1 = evaluate_expression(e1, weight_mult * e1.weight, args)?;
             let v2 = evaluate_expression(e2, weight_mult * e2.weight, args)?;
 
@@ -231,24 +231,24 @@ fn evaluate_expression(
 
             (v1.0 - v2.0, v1.1)
         }
-        Expression::Product(e1, e2) => {
+        ExprKind::Product(e1, e2) => {
             let v1 = evaluate_expression(e1, weight_mult * e1.weight, args)?;
             let v2 = evaluate_expression(e2, weight_mult * e2.weight, args)?;
 
             (v1.0 * v2.0, v1.1 * v2.1)
         }
-        Expression::Quotient(e1, e2) => {
+        ExprKind::Quotient(e1, e2) => {
             let v1 = evaluate_expression(e1, weight_mult * e1.weight, args)?;
             let v2 = evaluate_expression(e2, weight_mult * e2.weight, args)?;
 
             (v1.0 / v2.0, v1.1 / v2.1)
         }
-        Expression::Negation(expr) => {
+        ExprKind::Negation(expr) => {
             let v = evaluate_expression(expr, weight_mult * expr.weight, args)?;
 
             (-v.0, v.1)
         }
-        Expression::AngleLine(l1, l2) => {
+        ExprKind::AngleLine(l1, l2) => {
             // Evaluate the two lines
             let l1 = evaluate_expression(l1, weight_mult * l1.weight, args)?;
             let l2 = evaluate_expression(l2, weight_mult * l2.weight, args)?;
@@ -275,7 +275,7 @@ fn evaluate_expression(
                 ComplexUnit::new(SimpleUnit::Angle),
             )
         }
-        Expression::AngleBisector(p1, p2, p3) => {
+        ExprKind::AngleBisector(p1, p2, p3) => {
             // Evaluate the three points
             let p1 = evaluate_expression(p1, weight_mult * p1.weight, args)?;
             let p2 = evaluate_expression(p2, weight_mult * p2.weight, args)?;
@@ -288,7 +288,7 @@ fn evaluate_expression(
                 unit::LINE,
             )
         }
-        Expression::Average(exprs) => {
+        ExprKind::Average(exprs) => {
             // Evaluate all
             let exprs = exprs
                 .iter()
@@ -306,7 +306,7 @@ fn evaluate_expression(
             #[allow(clippy::cast_precision_loss)]
             (sum / exprs.len() as f64, exprs[0].1.clone())
         }
-        Expression::PerpendicularThrough(l, p) => {
+        ExprKind::PerpendicularThrough(l, p) => {
             let l = evaluate_expression(l, weight_mult * l.weight, args)?;
             let p = evaluate_expression(p, weight_mult * p.weight, args)?;
 
@@ -327,7 +327,7 @@ fn evaluate_expression(
 
             (Complex::new(a, b), unit::LINE)
         }
-        Expression::ParallelThrough(l, p) => {
+        ExprKind::ParallelThrough(l, p) => {
             let l = evaluate_expression(l, weight_mult * l.weight, args)?;
             let p = evaluate_expression(p, weight_mult * p.weight, args)?;
 
@@ -341,7 +341,7 @@ fn evaluate_expression(
 
             (Complex::new(a, b), unit::LINE)
         }
-        Expression::Real(index) => {
+        ExprKind::Real(index) => {
             args.weights.borrow_mut()[*index] += expr.weight * weight_mult;
 
             (Complex::new(*args.adjustables[*index].0.as_real().unwrap(), 0.0), unit::SCALAR)
@@ -369,11 +369,11 @@ fn evaluate_expression(
 /// On evaluation errors.
 #[allow(clippy::too_many_lines)]
 pub fn evaluate_expression_simple(
-    expr: &Arc<Weighed<Expression>>,
+    expr: &Arc<Weighed<ExprKind>>,
     generated_points: &[Adjustable],
 ) -> Result<(Complex, ComplexUnit), EvaluationError> {
     Ok(match &expr.object {
-        Expression::PointPointDistance(p1, p2) => {
+        ExprKind::PointPointDistance(p1, p2) => {
             let p1 = evaluate_expression_simple(p1, generated_points)?;
             let p2 = evaluate_expression_simple(p2, generated_points)?;
 
@@ -384,7 +384,7 @@ pub fn evaluate_expression_simple(
                 ComplexUnit::new(SimpleUnit::Distance),
             )
         }
-        Expression::PointLineDistance(point, line) => {
+        ExprKind::PointLineDistance(point, line) => {
             // Evaluate the line and the point
             let point = evaluate_expression_simple(point, generated_points)?;
             let line = evaluate_expression_simple(line, generated_points)?;
@@ -413,7 +413,7 @@ pub fn evaluate_expression_simple(
                 ComplexUnit::new(SimpleUnit::Distance),
             )
         }
-        Expression::AnglePoint(p1, p2, p3) => {
+        ExprKind::AnglePoint(p1, p2, p3) => {
             // Evaluate the three points
             let p1 = evaluate_expression_simple(p1, generated_points)?;
             let p2 = evaluate_expression_simple(p2, generated_points)?;
@@ -425,9 +425,9 @@ pub fn evaluate_expression_simple(
                 ComplexUnit::new(SimpleUnit::Angle),
             )
         }
-        Expression::Literal(v, unit) => (Complex::new(*v, 0.0), unit.clone()),
-        Expression::FreePoint(p) => (*generated_points[*p].as_point().unwrap(), ComplexUnit::new(SimpleUnit::Point)),
-        Expression::Line(p1, p2) => {
+        ExprKind::Literal(v, unit) => (Complex::new(*v, 0.0), unit.clone()),
+        ExprKind::FreePoint(p) => (*generated_points[*p].as_point().unwrap(), ComplexUnit::new(SimpleUnit::Point)),
+        ExprKind::Line(p1, p2) => {
             // Evaluate the two points
             let p1 = evaluate_expression_simple(p1, generated_points)?;
             let p2 = evaluate_expression_simple(p2, generated_points)?;
@@ -437,7 +437,7 @@ pub fn evaluate_expression_simple(
                 ComplexUnit::new(SimpleUnit::Line),
             )
         }
-        Expression::LineLineIntersection(l1, l2) => {
+        ExprKind::LineLineIntersection(l1, l2) => {
             // Evaluate the two lines
             let l1 = evaluate_expression_simple(l1, generated_points)?;
             let l2 = evaluate_expression_simple(l2, generated_points)?;
@@ -447,13 +447,13 @@ pub fn evaluate_expression_simple(
                 ComplexUnit::new(SimpleUnit::Point),
             )
         }
-        Expression::SetUnit(e, unit) => {
+        ExprKind::SetUnit(e, unit) => {
             // Evaluate e
             let e = evaluate_expression_simple(e, generated_points)?;
 
             (e.0, unit.clone())
         }
-        Expression::Sum(e1, e2) => {
+        ExprKind::Sum(e1, e2) => {
             let v1 = evaluate_expression_simple(e1, generated_points)?;
             let v2 = evaluate_expression_simple(e2, generated_points)?;
 
@@ -461,7 +461,7 @@ pub fn evaluate_expression_simple(
 
             (v1.0 + v2.0, v1.1)
         }
-        Expression::Difference(e1, e2) => {
+        ExprKind::Difference(e1, e2) => {
             let v1 = evaluate_expression_simple(e1, generated_points)?;
             let v2 = evaluate_expression_simple(e2, generated_points)?;
 
@@ -469,24 +469,24 @@ pub fn evaluate_expression_simple(
 
             (v1.0 - v2.0, v1.1)
         }
-        Expression::Product(e1, e2) => {
+        ExprKind::Product(e1, e2) => {
             let v1 = evaluate_expression_simple(e1, generated_points)?;
             let v2 = evaluate_expression_simple(e2, generated_points)?;
 
             (v1.0 * v2.0, v1.1 * v2.1)
         }
-        Expression::Quotient(e1, e2) => {
+        ExprKind::Quotient(e1, e2) => {
             let v1 = evaluate_expression_simple(e1, generated_points)?;
             let v2 = evaluate_expression_simple(e2, generated_points)?;
 
             (v1.0 / v2.0, v1.1 / v2.1)
         }
-        Expression::Negation(expr) => {
+        ExprKind::Negation(expr) => {
             let v = evaluate_expression_simple(expr, generated_points)?;
 
             (-v.0, v.1)
         }
-        Expression::AngleLine(l1, l2) => {
+        ExprKind::AngleLine(l1, l2) => {
             // Evaluate the two lines
             let l1 = evaluate_expression_simple(l1, generated_points)?;
             let l2 = evaluate_expression_simple(l2, generated_points)?;
@@ -510,7 +510,7 @@ pub fn evaluate_expression_simple(
                 ComplexUnit::new(SimpleUnit::Angle),
             )
         }
-        Expression::AngleBisector(p1, p2, p3) => {
+        ExprKind::AngleBisector(p1, p2, p3) => {
             // Evaluate the three points
             let p1 = evaluate_expression_simple(p1, generated_points)?;
             let p2 = evaluate_expression_simple(p2, generated_points)?;
@@ -523,7 +523,7 @@ pub fn evaluate_expression_simple(
                 unit::POINT,
             )
         }
-        Expression::Average(exprs) => {
+        ExprKind::Average(exprs) => {
             // Evaluate all
             let exprs = exprs
                 .iter()
@@ -541,7 +541,7 @@ pub fn evaluate_expression_simple(
             #[allow(clippy::cast_precision_loss)]
             (sum / exprs.len() as f64, exprs[0].1.clone())
         }
-        Expression::PerpendicularThrough(l, p) => {
+        ExprKind::PerpendicularThrough(l, p) => {
             let l = evaluate_expression_simple(l, generated_points)?;
             let p = evaluate_expression_simple(p, generated_points)?;
 
@@ -562,7 +562,7 @@ pub fn evaluate_expression_simple(
 
             (Complex::new(a, b), unit::LINE)
         }
-        Expression::ParallelThrough(l, p) => {
+        ExprKind::ParallelThrough(l, p) => {
             let l = evaluate_expression_simple(l, generated_points)?;
             let p = evaluate_expression_simple(p, generated_points)?;
 
@@ -576,7 +576,7 @@ pub fn evaluate_expression_simple(
 
             (Complex::new(a, b), unit::LINE)
         }
-        Expression::Real(index) =>(Complex::new(*generated_points[*index].as_real().unwrap(), 0.0), unit::SCALAR),
+        ExprKind::Real(index) =>(Complex::new(*generated_points[*index].as_real().unwrap(), 0.0), unit::SCALAR),
     })
 }
 
@@ -587,7 +587,7 @@ fn evaluate_single(
     logger: &mut Logger,
     generation: u64,
     flags: &Arc<Flags>,
-    record: &RefCell<HashMap<HashableWeakArc<Weighed<Expression>>, ExprCache>>
+    record: &RefCell<HashMap<HashableWeakArc<Weighed<ExprKind>>, ExprCache>>
 ) -> (Quality, Vec<f64>) {
     let mut weights = Vec::new();
     weights.resize(points.len(), 0.0);
@@ -664,7 +664,7 @@ fn evaluate_single(
 #[allow(clippy::implicit_hasher)]
 /// Evaluates all rules in terms of quality
 pub fn evaluate(points: &AdjustableVec, criteria: &Arc<Vec<Criteria>>, logger: &mut Logger, generation: u64, flags: &Arc<Flags>,
-    record: &RefCell<HashMap<HashableWeakArc<Weighed<Expression>>, ExprCache>>) -> AdjustableVec {
+    record: &RefCell<HashMap<HashableWeakArc<Weighed<ExprKind>>, ExprCache>>) -> AdjustableVec {
     let mut point_evaluation = Vec::new();
     point_evaluation.resize(points.len(), Vec::new());
 
