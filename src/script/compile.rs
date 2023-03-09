@@ -409,6 +409,16 @@ pub fn compile(
         None
     };
 
+    // Print variables (debugging)
+    // for var in context.variables.values() {
+    //     println!("let {} = {}", var.name, var.definition);
+    // }
+
+    // Print rules (debugging)
+    // for rule in &unrolled {
+    //     println!("{rule}");
+    // }
+
     let mut variables = HashMap::new();
     let mut expressions = HashMap::new();
     let mut template = Vec::new();
