@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::script::{ComplexUnit, Weighed};
+use crate::script::ComplexUnit;
 
 use super::Complex;
 
@@ -14,6 +14,21 @@ pub struct ExprCache {
 /// A utility for `Weights`.
 #[derive(Debug, Clone)]
 pub struct Weights(Vec<f64>);
+
+impl Weights {
+    pub fn empty() -> Self {
+        Self(Vec::new())
+    }
+
+    pub fn one_at(index: usize) -> Self {
+        let mut v = Vec::new();
+        v.resize(index + 1, 0.0);
+
+        v[index] = 1.0;
+
+        Self(v)
+    }
+}
 
 /// An expression is a base construct of Geo-AID. Contains a cache, saved weights and the expression kind itself.
 #[derive(Debug, Clone)]
@@ -38,55 +53,55 @@ impl Expression {
 #[derive(Debug, Clone)]
 pub enum ExprKind {
     /// Euclidean distance between two points.
-    PointPointDistance(Arc<Weighed<ExprKind>>, Arc<Weighed<ExprKind>>),
+    PointPointDistance(Arc<Expression>, Arc<Expression>),
     /// Euclidean distance between a point and its rectangular projection onto a line.
-    PointLineDistance(Arc<Weighed<ExprKind>>, Arc<Weighed<ExprKind>>),
+    PointLineDistance(Arc<Expression>, Arc<Expression>),
     /// An angle defined with 3 points.
     AnglePoint(
-        Arc<Weighed<ExprKind>>,
-        Arc<Weighed<ExprKind>>,
-        Arc<Weighed<ExprKind>>,
+        Arc<Expression>,
+        Arc<Expression>,
+        Arc<Expression>,
     ),
     /// An angle defined with 2 lines.
-    AngleLine(Arc<Weighed<Expression>>, Arc<Weighed<Expression>>),
+    AngleLine(Arc<Expression>, Arc<Expression>),
     /// A real literal.
     Literal(f64, ComplexUnit),
     /// An adjustable indexed point in euclidean space
     FreePoint(usize),
     /// A line in euclidean space. defined by two points.
-    Line(Arc<Weighed<Expression>>, Arc<Weighed<Expression>>),
+    Line(Arc<Expression>, Arc<Expression>),
     /// The point where two lines cross.
-    LineLineIntersection(Arc<Weighed<Expression>>, Arc<Weighed<Expression>>),
+    LineLineIntersection(Arc<Expression>, Arc<Expression>),
     /// Changes the unit
-    SetUnit(Arc<Weighed<Expression>>, ComplexUnit),
+    SetUnit(Arc<Expression>, ComplexUnit),
     /// Adds two values
-    Sum(Arc<Weighed<Expression>>, Arc<Weighed<Expression>>),
+    Sum(Arc<Expression>, Arc<Expression>),
     /// Subtracts two values
-    Difference(Arc<Weighed<Expression>>, Arc<Weighed<Expression>>),
+    Difference(Arc<Expression>, Arc<Expression>),
     /// Multiplies two values
-    Product(Arc<Weighed<Expression>>, Arc<Weighed<Expression>>),
+    Product(Arc<Expression>, Arc<Expression>),
     /// Divides two values
-    Quotient(Arc<Weighed<Expression>>, Arc<Weighed<Expression>>),
+    Quotient(Arc<Expression>, Arc<Expression>),
     /// Changes the sign
-    Negation(Arc<Weighed<Expression>>),
+    Negation(Arc<Expression>),
     /// An angle bisector.
     AngleBisector(
-        Arc<Weighed<Expression>>,
-        Arc<Weighed<Expression>>,
-        Arc<Weighed<Expression>>,
+        Arc<Expression>,
+        Arc<Expression>,
+        Arc<Expression>,
     ),
     /// Takes the average value (arithmetic mean)
-    Average(Vec<Arc<Weighed<Expression>>>),
+    Average(Vec<Arc<Expression>>),
     /// Generates a line perpendicular to $1 going through $2
-    PerpendicularThrough(Arc<Weighed<Expression>>, Arc<Weighed<Expression>>),
+    PerpendicularThrough(Arc<Expression>, Arc<Expression>),
     /// Generates a line parallel to $1 going through $2
-    ParallelThrough(Arc<Weighed<Expression>>, Arc<Weighed<Expression>>),
+    ParallelThrough(Arc<Expression>, Arc<Expression>),
     /// An adjusted real value
     Real(usize)
 }
 
 impl ExprKind {
-    pub fn collect<'r>(&'r self, into: &mut Vec<&'r Arc<Weighed<ExprKind>>>) {
+    pub fn collect<'r>(&'r self, into: &mut Vec<&'r Arc<Expression>>) {
         match self {
             ExprKind::PointPointDistance(e1, e2)
             | ExprKind::AngleLine(e1, e2)
@@ -128,25 +143,35 @@ impl ExprKind {
 
     pub fn evaluate_weights(&self) -> Weights {
         match self {
-            ExprKind::PointPointDistance(_, _) => todo!(),
-            ExprKind::PointLineDistance(_, _) => todo!(),
-            ExprKind::AnglePoint(_, _, _) => todo!(),
-            ExprKind::AngleLine(_, _) => todo!(),
-            ExprKind::Literal(_, _) => todo!(),
-            ExprKind::FreePoint(_) => todo!(),
-            ExprKind::Line(_, _) => todo!(),
-            ExprKind::LineLineIntersection(_, _) => todo!(),
-            ExprKind::SetUnit(_, _) => todo!(),
-            ExprKind::Sum(_, _) => todo!(),
-            ExprKind::Difference(_, _) => todo!(),
-            ExprKind::Product(_, _) => todo!(),
-            ExprKind::Quotient(_, _) => todo!(),
-            ExprKind::Negation(_) => todo!(),
-            ExprKind::AngleBisector(_, _, _) => todo!(),
-            ExprKind::Average(_) => todo!(),
-            ExprKind::PerpendicularThrough(_, _) => todo!(),
-            ExprKind::ParallelThrough(_, _) => todo!(),
-            ExprKind::Real(_) => todo!(),
+            Self::PointPointDistance(e1, e2)
+            | Self::AngleLine(e1, e2)
+            | Self::Line(e1, e2)
+            | Self::LineLineIntersection(e1, e2)
+            | Self::Sum(e1, e2)
+            | Self::Difference(e1, e2)
+            | Self::Product(e1, e2)
+            | Self::Quotient(e1, e2)
+            | Self::PerpendicularThrough(e1, e2)
+            | Self::ParallelThrough(e1, e2)
+            | Self::PointLineDistance(e1, e2) => {
+                e1.weights + e2.weights
+            }
+            Self::AnglePoint(e1, e2, e3)
+            | Self::AngleBisector(e1, e2, e3) => {
+                e1.weights + e2.weights + e3.weights
+            }
+            Self::Literal(_, _) => Weights::empty(),
+            Self::FreePoint(i) | Self::Real(i) => Weights::one_at(*i),
+            Self::SetUnit(e, _) | Self::Negation(e) => {
+                into.push(e);
+                e.object.collect(into);
+            }
+            Self::Average(v) => {
+                for e in v {
+                    into.push(e);
+                    e.object.collect(into);
+                }
+            }
         }
     }
 }
