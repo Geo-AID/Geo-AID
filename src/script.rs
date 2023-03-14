@@ -6,7 +6,7 @@ use std::{
     sync::{self, Arc},
 };
 
-use crate::{cli::{AnnotationKind, DiagnosticData, Fix, Change}, span, generator::ExprCache};
+use crate::{cli::{AnnotationKind, DiagnosticData, Fix, Change}, span, generator::expression::Expression};
 
 use self::parser::Type;
 use self::token::{NamedIdent, Span, Token, Position};
@@ -630,29 +630,13 @@ impl DerefMut for ComplexUnit {
 #[derive(Debug)]
 pub enum CriteriaKind {
     /// Equality. Quality rises quickly as two values approach each other, drops quickly as their difference grows.
-    Equal(Arc<Weighed<ExprKind>>, Arc<Weighed<ExprKind>>),
+    Equal(Arc<Expression>, Arc<Expression>),
     /// Less. Quality starts rising on equality.
-    Less(Arc<Weighed<ExprKind>>, Arc<Weighed<ExprKind>>),
+    Less(Arc<Expression>, Arc<Expression>),
     /// Greater. Quality starts rising on equality.
-    Greater(Arc<Weighed<ExprKind>>, Arc<Weighed<ExprKind>>),
+    Greater(Arc<Expression>, Arc<Expression>),
     /// Inverts the criteria. The quality is calculated as 1 - the quality of the inverted criteria.
     Inverse(Box<CriteriaKind>),
-}
-
-impl CriteriaKind {
-    pub fn collect<'r>(&'r self, into: &mut Vec<&'r Arc<Weighed<ExprKind>>>) {
-        match self {
-            CriteriaKind::Equal(e1, e2)
-            | CriteriaKind::Less(e1, e2)
-            | CriteriaKind::Greater(e1, e2) => {
-                into.push(e1);
-                e1.object.collect(into);
-                into.push(e2);
-                e2.object.collect(into);
-            }
-            CriteriaKind::Inverse(c) => c.collect(into),
-        }
-    }
 }
 
 /// Defines a weighed piece of criteria the figure must obey.

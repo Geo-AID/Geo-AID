@@ -1,6 +1,6 @@
 use std::{collections::HashMap, rc::Rc, sync::Arc};
 
-use crate::{generator::{self, AdjustableTemplate, Flags, DistanceLiterals, Optimizations}, span};
+use crate::{generator::{self, AdjustableTemplate, Flags, DistanceLiterals, Optimizations, expression::{Expression, ExprKind}}, span};
 
 use super::{
     figure::Figure,
@@ -9,7 +9,7 @@ use super::{
         self, PointMeta, UnrolledExpression, UnrolledExpressionData, UnrolledRule,
         UnrolledRuleKind, Variable, Flag, VariableMeta
     },
-    Criteria, CriteriaKind, Error, ExprKind, HashableRc, SimpleUnit, Weighed, token::{Span, Position}, ty, unit,
+    Criteria, CriteriaKind, Error, HashableRc, SimpleUnit, Weighed, token::{Span, Position}, ty, unit,
 };
 
 /// Takes the unrolled expression of type `PointCollection` and takes the point at `index`, isolating it out of the entire expression.
@@ -60,10 +60,10 @@ pub fn fix_distance(expr: UnrolledExpression, power: i8, dst_var: &Rc<Variable>)
 fn compile_expression(
     expr: &UnrolledExpression,
     variables: &mut HashMap<HashableRc<Variable>, CompiledVariable>,
-    expressions: &mut HashMap<HashableRc<UnrolledExpressionData>, Arc<Weighed<ExprKind>>>,
+    expressions: &mut HashMap<HashableRc<UnrolledExpressionData>, Arc<Expression>>,
     template: &mut Vec<AdjustableTemplate>,
     dst_var: &Option<Rc<Variable>>
-) -> Arc<Weighed<ExprKind>> {
+) -> Arc<Expression> {
     // First we have to check if this expression has been compiled already.
     let key = HashableRc::new(Rc::clone(&expr.data));
 
@@ -89,10 +89,10 @@ fn compile_expression(
         UnrolledExpressionData::Number(v) => {
             if expr.ty == ty::SCALAR {
                 // If a scalar, we treat it as a standard literal.
-                Arc::new(Weighed::one(ExprKind::Literal(
+                Arc::new(Expression::new(ExprKind::Literal(
                     *v,
                     unit::SCALAR
-                )))
+                ), 1.0))
             } else {
                 // Otherwise we pretend it's a scalar literal inside a SetUnit.
                 compile_expression(
@@ -119,13 +119,13 @@ fn compile_expression(
             let index = template.len();
             template.push(AdjustableTemplate::Point);
 
-            Arc::new(Weighed::one(ExprKind::FreePoint(index)))
+            Arc::new(Expression::new(ExprKind::FreePoint(index), 1.0))
         }
         UnrolledExpressionData::FreeReal => {
             let index = template.len();
             template.push(AdjustableTemplate::Real);
 
-            Arc::new(Weighed::one(ExprKind::Real(index)))
+            Arc::new(Expression::new(ExprKind::Real(index), 1.0))
         }
         UnrolledExpressionData::Boxed(expr) => {
             compile_expression(expr, variables, expressions, template, dst_var)
@@ -140,23 +140,23 @@ fn compile_expression(
             template,
             dst_var
         ),
-        UnrolledExpressionData::LineFromPoints(p1, p2) => Arc::new(Weighed::one(ExprKind::Line(
+        UnrolledExpressionData::LineFromPoints(p1, p2) => Arc::new(Expression::new(ExprKind::Line(
             compile_expression(p1, variables, expressions, template, dst_var),
             compile_expression(p2, variables, expressions, template, dst_var),
-        ))),
+        ), 1.0)),
         UnrolledExpressionData::ParallelThrough(p1, p2) => {
-            Arc::new(Weighed::one(ExprKind::ParallelThrough(
+            Arc::new(Expression::new(ExprKind::ParallelThrough(
                 compile_expression(p1, variables, expressions, template, dst_var),
                 compile_expression(p2, variables, expressions, template, dst_var),
-            )))
+            ), 1.0))
         }
         UnrolledExpressionData::PerpendicularThrough(p1, p2) => {
-            Arc::new(Weighed::one(ExprKind::PerpendicularThrough(
+            Arc::new(Expression::new(ExprKind::PerpendicularThrough(
                 compile_expression(p1, variables, expressions, template, dst_var),
                 compile_expression(p2, variables, expressions, template, dst_var),
-            )))
+            ), 1.0))
         }
-        UnrolledExpressionData::SetUnit(expr, unit) => Arc::new(Weighed::one(ExprKind::SetUnit(
+        UnrolledExpressionData::SetUnit(expr, unit) => Arc::new(Expression::new(ExprKind::SetUnit(
             compile_expression(
                 &fix_distance(expr.clone(), unit[SimpleUnit::Distance as usize] - match expr.ty.as_predefined().unwrap().as_scalar().unwrap() {
                     Some(unit) => unit[SimpleUnit::Distance as usize],
@@ -168,70 +168,70 @@ fn compile_expression(
                 dst_var
             ),
             unit.clone(),
-        ))),
+        ), 1.0)),
         UnrolledExpressionData::PointPointDistance(p1, p2) => {
-            Arc::new(Weighed::one(ExprKind::PointPointDistance(
+            Arc::new(Expression::new(ExprKind::PointPointDistance(
                 compile_expression(p1, variables, expressions, template, dst_var),
                 compile_expression(p2, variables, expressions, template, dst_var),
-            )))
+            ), 1.0))
         }
         UnrolledExpressionData::PointLineDistance(p, l) => {
-            Arc::new(Weighed::one(ExprKind::PointLineDistance(
+            Arc::new(Expression::new(ExprKind::PointLineDistance(
                 compile_expression(p, variables, expressions, template, dst_var),
                 compile_expression(l, variables, expressions, template, dst_var),
-            )))
+            ), 1.0))
         }
-        UnrolledExpressionData::Negate(expr) => Arc::new(Weighed::one(ExprKind::Negation(
+        UnrolledExpressionData::Negate(expr) => Arc::new(Expression::new(ExprKind::Negation(
             compile_expression(expr, variables, expressions, template, dst_var),
-        ))),
-        UnrolledExpressionData::Add(v1, v2) => Arc::new(Weighed::one(ExprKind::Sum(
+        ), 1.0)),
+        UnrolledExpressionData::Add(v1, v2) => Arc::new(Expression::new(ExprKind::Sum(
             compile_expression(v1, variables, expressions, template, dst_var),
             compile_expression(v2, variables, expressions, template, dst_var),
-        ))),
-        UnrolledExpressionData::Subtract(v1, v2) => Arc::new(Weighed::one(ExprKind::Difference(
+        ), 1.0)),
+        UnrolledExpressionData::Subtract(v1, v2) => Arc::new(Expression::new(ExprKind::Difference(
             compile_expression(v1, variables, expressions, template, dst_var),
             compile_expression(v2, variables, expressions, template, dst_var),
-        ))),
-        UnrolledExpressionData::Multiply(v1, v2) => Arc::new(Weighed::one(ExprKind::Product(
+        ), 1.0)),
+        UnrolledExpressionData::Multiply(v1, v2) => Arc::new(Expression::new(ExprKind::Product(
             compile_expression(v1, variables, expressions, template, dst_var),
             compile_expression(v2, variables, expressions, template, dst_var),
-        ))),
-        UnrolledExpressionData::Divide(v1, v2) => Arc::new(Weighed::one(ExprKind::Quotient(
+        ), 1.0)),
+        UnrolledExpressionData::Divide(v1, v2) => Arc::new(Expression::new(ExprKind::Quotient(
             compile_expression(v1, variables, expressions, template, dst_var),
             compile_expression(v2, variables, expressions, template, dst_var),
-        ))),
+        ), 1.0)),
         UnrolledExpressionData::ThreePointAngle(v1, v2, v3) => {
-            Arc::new(Weighed::one(ExprKind::AnglePoint(
+            Arc::new(Expression::new(ExprKind::AnglePoint(
                 compile_expression(v1, variables, expressions, template, dst_var),
                 compile_expression(v2, variables, expressions, template, dst_var),
                 compile_expression(v3, variables, expressions, template, dst_var),
-            )))
+            ), 1.0))
         }
         UnrolledExpressionData::AngleBisector(v1, v2, v3) => {
-            Arc::new(Weighed::one(ExprKind::AngleBisector(
+            Arc::new(Expression::new(ExprKind::AngleBisector(
                 compile_expression(v1, variables, expressions, template, dst_var),
                 compile_expression(v2, variables, expressions, template, dst_var),
                 compile_expression(v3, variables, expressions, template, dst_var),
-            )))
+            ), 1.0))
         }
         UnrolledExpressionData::TwoLineAngle(v1, v2) => {
-            Arc::new(Weighed::one(ExprKind::AngleLine(
+            Arc::new(Expression::new(ExprKind::AngleLine(
                 compile_expression(v1, variables, expressions, template, dst_var),
                 compile_expression(v2, variables, expressions, template, dst_var),
-            )))
+            ), 1.0))
         }
         UnrolledExpressionData::LineLineIntersection(v1, v2) => {
-            Arc::new(Weighed::one(ExprKind::LineLineIntersection(
+            Arc::new(Expression::new(ExprKind::LineLineIntersection(
                 compile_expression(v1, variables, expressions, template, dst_var),
                 compile_expression(v2, variables, expressions, template, dst_var),
-            )))
+            ), 1.0))
         }
-        UnrolledExpressionData::Average(exprs) => Arc::new(Weighed::one(ExprKind::Average(
+        UnrolledExpressionData::Average(exprs) => Arc::new(Expression::new(ExprKind::Average(
             exprs
                 .iter()
                 .map(|expr| compile_expression(expr, variables, expressions, template, dst_var))
                 .collect(),
-        ))),
+        ), 1.0)),
     };
 
     // We insert for memory.
@@ -243,7 +243,7 @@ fn compile_expression(
 fn compile_variable(
     var: &Rc<Variable>,
     variables: &mut HashMap<HashableRc<Variable>, CompiledVariable>,
-    expressions: &mut HashMap<HashableRc<UnrolledExpressionData>, Arc<Weighed<ExprKind>>>,
+    expressions: &mut HashMap<HashableRc<UnrolledExpressionData>, Arc<Expression>>,
     template: &mut Vec<AdjustableTemplate>,
     dst_var: &Option<Rc<Variable>>
 ) -> CompiledVariable {
@@ -287,13 +287,13 @@ fn compile_variable(
 #[derive(Debug, Clone)]
 enum CompiledVariable {
     /// A compiled variable.
-    Compiled(Arc<Weighed<ExprKind>>),
+    Compiled(Arc<Expression>),
     /// An unrolled variable of type `PointCollection`.
     Unrolled(UnrolledExpression),
 }
 
 impl CompiledVariable {
-    fn assume_compiled(self) -> Option<Arc<Weighed<ExprKind>>> {
+    fn assume_compiled(self) -> Option<Arc<Expression>> {
         if let Self::Compiled(v) = self {
             Some(v)
         } else {
@@ -305,7 +305,7 @@ impl CompiledVariable {
 fn compile_rules(
     unrolled: Vec<UnrolledRule>,
     variables: &mut HashMap<HashableRc<Variable>, CompiledVariable>,
-    expressions: &mut HashMap<HashableRc<UnrolledExpressionData>, Arc<Weighed<ExprKind>>>,
+    expressions: &mut HashMap<HashableRc<UnrolledExpressionData>, Arc<Expression>>,
     template: &mut Vec<AdjustableTemplate>,
     dst_var: &Option<Rc<Variable>>
 ) -> Vec<Criteria> {

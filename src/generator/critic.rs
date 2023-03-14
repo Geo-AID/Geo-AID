@@ -81,10 +81,8 @@ fn invert(q: Quality) -> Quality {
 pub struct EvaluationArgs<'r> {
     logger: &'r mut Logger,
     adjustables: &'r AdjustableVec,
-    weights: RefCell<Vec<f64>>,
     generation: u64,
-    flags: &'r Arc<Flags>,
-    record: &'r RefCell<HashMap<HashableWeakArc<Weighed<ExprKind>>, ExprCache>>
+    flags: &'r Arc<Flags>
 }
 
 fn evaluate_point_point_distance(
@@ -586,8 +584,7 @@ fn evaluate_single(
     points: &AdjustableVec,
     logger: &mut Logger,
     generation: u64,
-    flags: &Arc<Flags>,
-    record: &RefCell<HashMap<HashableWeakArc<Weighed<ExprKind>>, ExprCache>>
+    flags: &Arc<Flags>
 ) -> (Quality, Vec<f64>) {
     let mut weights = Vec::new();
     weights.resize(points.len(), 0.0);
@@ -597,8 +594,7 @@ fn evaluate_single(
         adjustables: points,
         weights: RefCell::new(weights),
         generation,
-        flags,
-        record,
+        flags
     };
 
     let quality = match crit {
@@ -664,14 +660,14 @@ fn evaluate_single(
 #[allow(clippy::implicit_hasher)]
 /// Evaluates all rules in terms of quality
 pub fn evaluate(points: &AdjustableVec, criteria: &Arc<Vec<Criteria>>, logger: &mut Logger, generation: u64, flags: &Arc<Flags>,
-    record: &RefCell<HashMap<HashableWeakArc<Weighed<ExprKind>>, ExprCache>>) -> AdjustableVec {
+    ) -> AdjustableVec {
     let mut point_evaluation = Vec::new();
     point_evaluation.resize(points.len(), Vec::new());
 
     for crit in criteria.iter() {
         // println!("Evaluating criteria {:#?}", crit);
         let (quality, weights) =
-            evaluate_single(&crit.object, points, logger, generation, flags, record);
+            evaluate_single(&crit.object, points, logger, generation, flags);
 
         // println!("Evaluation result: {quality}, {:?}", weights);
 
