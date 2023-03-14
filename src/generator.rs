@@ -1,6 +1,5 @@
 use std::{
-    cell::RefCell,
-    collections::{HashMap, VecDeque},
+    collections::VecDeque,
     fmt::Display,
     mem,
     ops::{Add, AddAssign, Div, Mul, Neg, Sub, SubAssign},
@@ -11,7 +10,7 @@ use std::{
 
 use serde::Serialize;
 
-use crate::script::{unit, ComplexUnit, Criteria, HashableWeakArc};
+use crate::script::Criteria;
 
 #[derive(Debug)]
 pub enum EvaluationError {
@@ -36,6 +35,11 @@ impl Complex {
     #[must_use]
     pub fn new(real: f64, imaginary: f64) -> Self {
         Self { real, imaginary }
+    }
+
+    #[must_use]
+    pub fn zero() -> Self {
+        Self::new(0.0, 0.0)
     }
 
     #[must_use]
@@ -210,35 +214,13 @@ fn generation_cycle(
     args: &GenerationArgs,
     flags: &Arc<Flags>,
 ) {
-    // Create the expression record
-    let mut record = HashMap::new();
-
-    if flags.optimizations.identical_expressions {
-        for crit in args.criteria.as_ref() {
-            let mut exprs = Vec::new();
-            crit.object.collect(&mut exprs);
-
-            for expr in exprs.into_iter().filter(|x| Arc::strong_count(x) > 1) {
-                // We use weak to not mess with the strong count.
-                record
-                    .entry(HashableWeakArc::new(Arc::downgrade(expr)))
-                    .or_insert(ExprCache {
-                        value: Complex::new(0.0, 0.0),
-                        unit: unit::SCALAR,
-                        generation: 0,
-                    });
-            }
-        }
-    }
-
     let mut generation = 1;
-    let record = RefCell::new(record);
 
     loop {
         match receiver.recv().unwrap() {
             Message::Generate(adjustment, points, mut logger) => {
                 let points = magic_box::adjust(points, adjustment);
-                let points = critic::evaluate(&points, &args.criteria, &mut logger, generation, flags, &record);
+                let points = critic::evaluate(&points, &args.criteria, &mut logger, generation, flags);
 
                 // println!("Adjustment + critic = {:#?}", points);
 

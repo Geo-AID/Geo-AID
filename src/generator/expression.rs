@@ -1,6 +1,6 @@
-use std::sync::Arc;
+use std::{sync::Arc, ops::{Add, Mul, AddAssign}};
 
-use crate::script::ComplexUnit;
+use crate::script::{ComplexUnit, unit};
 
 use super::Complex;
 
@@ -28,6 +28,41 @@ impl Weights {
 
         Self(v)
     }
+
+    pub fn set(&mut self, index: usize, weight: f64) {
+        self.0.resize(index + 1, 0.0);
+        self.0[index] = weight;
+    }
+}
+
+impl Add<&Weights> for Weights {
+    type Output = Weights;
+
+    fn add(mut self, rhs: &Self) -> Self::Output {
+        for (i, w) in rhs.0.into_iter().enumerate() {
+            if let Some(v) = self.0.get_mut(i) {
+                *v += w
+            } else {
+                self.set(i, w);
+            }
+        }
+
+        self
+    }
+}
+
+impl AddAssign<&Weights> for Weights {
+    fn add_assign(&mut self, rhs: &Self) {
+        *self = *self + rhs;
+    }
+}
+
+impl Mul<f64> for Weights {
+    type Output = Weights;
+
+    fn mul(self, rhs: f64) -> Self::Output {
+        Weights(self.0.into_iter().map(|v|  v * rhs).collect())
+    }
 }
 
 /// An expression is a base construct of Geo-AID. Contains a cache, saved weights and the expression kind itself.
@@ -42,9 +77,15 @@ pub struct Expression {
 }
 
 impl Expression {
-    pub fn new(expr: ExprKind) -> Self {
+    pub fn new(expr: ExprKind, weight: f64) -> Self {
         Self {
-
+            weights: expr.evaluate_weights() * weight,
+            cache: ExprCache {
+                value: Complex::zero(),
+                unit: unit::SCALAR,
+                generation: 0
+            },
+            kind: expr
         }
     }
 }
@@ -101,45 +142,45 @@ pub enum ExprKind {
 }
 
 impl ExprKind {
-    pub fn collect<'r>(&'r self, into: &mut Vec<&'r Arc<Expression>>) {
-        match self {
-            ExprKind::PointPointDistance(e1, e2)
-            | ExprKind::AngleLine(e1, e2)
-            | ExprKind::Line(e1, e2)
-            | ExprKind::LineLineIntersection(e1, e2)
-            | ExprKind::Sum(e1, e2)
-            | ExprKind::Difference(e1, e2)
-            | ExprKind::Product(e1, e2)
-            | ExprKind::Quotient(e1, e2)
-            | ExprKind::PerpendicularThrough(e1, e2)
-            | ExprKind::ParallelThrough(e1, e2)
-            | ExprKind::PointLineDistance(e1, e2) => {
-                into.push(e1);
-                e1.object.collect(into);
-                into.push(e2);
-                e2.object.collect(into);
-            }
-            ExprKind::AnglePoint(e1, e2, e3) | ExprKind::AngleBisector(e1, e2, e3) => {
-                into.push(e1);
-                e1.object.collect(into);
-                into.push(e2);
-                e2.object.collect(into);
-                into.push(e3);
-                e3.object.collect(into);
-            }
-            ExprKind::Literal(_, _) | ExprKind::FreePoint(_) | ExprKind::Real(_) => (),
-            ExprKind::SetUnit(e, _) | ExprKind::Negation(e) => {
-                into.push(e);
-                e.object.collect(into);
-            }
-            ExprKind::Average(v) => {
-                for e in v {
-                    into.push(e);
-                    e.object.collect(into);
-                }
-            }
-        }
-    }
+    // pub fn collect<'r>(&'r self, into: &mut Vec<&'r Arc<Expression>>) {
+    //     match self {
+    //         ExprKind::PointPointDistance(e1, e2)
+    //         | ExprKind::AngleLine(e1, e2)
+    //         | ExprKind::Line(e1, e2)
+    //         | ExprKind::LineLineIntersection(e1, e2)
+    //         | ExprKind::Sum(e1, e2)
+    //         | ExprKind::Difference(e1, e2)
+    //         | ExprKind::Product(e1, e2)
+    //         | ExprKind::Quotient(e1, e2)
+    //         | ExprKind::PerpendicularThrough(e1, e2)
+    //         | ExprKind::ParallelThrough(e1, e2)
+    //         | ExprKind::PointLineDistance(e1, e2) => {
+    //             into.push(e1);
+    //             e1.object.collect(into);
+    //             into.push(e2);
+    //             e2.object.collect(into);
+    //         }
+    //         ExprKind::AnglePoint(e1, e2, e3) | ExprKind::AngleBisector(e1, e2, e3) => {
+    //             into.push(e1);
+    //             e1.object.collect(into);
+    //             into.push(e2);
+    //             e2.object.collect(into);
+    //             into.push(e3);
+    //             e3.object.collect(into);
+    //         }
+    //         ExprKind::Literal(_, _) | ExprKind::FreePoint(_) | ExprKind::Real(_) => (),
+    //         ExprKind::SetUnit(e, _) | ExprKind::Negation(e) => {
+    //             into.push(e);
+    //             e.object.collect(into);
+    //         }
+    //         ExprKind::Average(v) => {
+    //             for e in v {
+    //                 into.push(e);
+    //                 e.object.collect(into);
+    //             }
+    //         }
+    //     }
+    // }
 
     pub fn evaluate_weights(&self) -> Weights {
         match self {
@@ -154,23 +195,25 @@ impl ExprKind {
             | Self::PerpendicularThrough(e1, e2)
             | Self::ParallelThrough(e1, e2)
             | Self::PointLineDistance(e1, e2) => {
-                e1.weights + e2.weights
+                e1.weights.clone() + &e2.weights
             }
             Self::AnglePoint(e1, e2, e3)
             | Self::AngleBisector(e1, e2, e3) => {
-                e1.weights + e2.weights + e3.weights
+                e1.weights.clone() + &e2.weights + &e3.weights
             }
             Self::Literal(_, _) => Weights::empty(),
             Self::FreePoint(i) | Self::Real(i) => Weights::one_at(*i),
             Self::SetUnit(e, _) | Self::Negation(e) => {
-                into.push(e);
-                e.object.collect(into);
+                e.weights.clone()
             }
             Self::Average(v) => {
+                let mut ws = Weights::empty();
+
                 for e in v {
-                    into.push(e);
-                    e.object.collect(into);
+                    ws += &e.weights;
                 }
+
+                ws
             }
         }
     }
