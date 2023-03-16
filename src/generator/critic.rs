@@ -79,62 +79,10 @@ fn invert(q: Quality) -> Quality {
 }
 
 pub struct EvaluationArgs<'r> {
-    logger: &'r mut Logger,
-    adjustables: &'r AdjustableVec,
-    generation: u64,
-    flags: &'r Arc<Flags>
-}
-
-fn evaluate_point_point_distance(
-    p1: &Arc<Weighed<ExprKind>>,
-    p2: &Arc<Weighed<ExprKind>>,
-    weight_mult: f64,
-    args: &EvaluationArgs,
-) -> Result<(Complex, ComplexUnit), EvaluationError> {
-    // Evaluate the two points
-    let p1 = evaluate_expression(p1, weight_mult * p1.weight, args)?;
-    let p2 = evaluate_expression(p2, weight_mult * p2.weight, args)?;
-
-    // Pythagorean theorem
-    let distance = (p1.0 - p2.0).mangitude();
-    Ok((
-        Complex::new(distance, 0.0),
-        ComplexUnit::new(SimpleUnit::Distance),
-    ))
-}
-
-fn evaluate_point_line_distance(
-    point: &Arc<Weighed<ExprKind>>,
-    line: &Arc<Weighed<ExprKind>>,
-    weight_mult: f64,
-    args: &EvaluationArgs,
-) -> Result<(Complex, ComplexUnit), EvaluationError> {
-    // Evaluate the line and the point
-    let point = evaluate_expression(point, weight_mult * point.weight, args)?;
-    let line = evaluate_expression(line, weight_mult * line.weight, args)?;
-
-    // If the line's vertical (slope is NaN), the question's easy
-    let distance = if line.0.real.is_infinite() {
-        f64::abs(point.0.real - line.0.imaginary)
-    } else {
-        // We use the formula
-        // Get the general form
-
-        // A is the slope
-        let a = line.0.real;
-        // B is -1
-        let b = -1.0f64;
-        // C is the intercept
-        let c = line.0.imaginary;
-
-        // And the magical formula
-        f64::abs(a * point.0.real + b * point.0.imaginary + c) / f64::sqrt(a.powi(2) + b.powi(2))
-    };
-
-    Ok((
-        Complex::new(distance, 0.0),
-        ComplexUnit::new(SimpleUnit::Distance),
-    ))
+    pub logger: &'r mut Logger,
+    pub adjustables: &'r AdjustableVec,
+    pub generation: u64,
+    pub flags: &'r Arc<Flags>
 }
 
 #[allow(clippy::too_many_lines)]
@@ -156,24 +104,6 @@ fn evaluate_expression(
 
     // If no flag is on or no value is cached yet, compute.
     let computed = match &expr.object {
-        ExprKind::PointPointDistance(p1, p2) => {
-            evaluate_point_point_distance(p1, p2, weight_mult, args)?
-        }
-        ExprKind::PointLineDistance(point, line) => {
-            evaluate_point_line_distance(point, line, weight_mult, args)?
-        }
-        ExprKind::AnglePoint(p1, p2, p3) => {
-            // Evaluate the three points
-            let p1 = evaluate_expression(p1, weight_mult * p1.weight, args)?;
-            let p2 = evaluate_expression(p2, weight_mult * p2.weight, args)?;
-            let p3 = evaluate_expression(p3, weight_mult * p3.weight, args)?;
-
-            let (arm1, origin, arm2) = (p1.0, p2.0, p3.0);
-            (
-                Complex::new(geometry::get_angle(arm1, origin, arm2), 0.0),
-                ComplexUnit::new(SimpleUnit::Angle),
-            )
-        }
         ExprKind::Literal(v, unit) => (Complex::new(*v, 0.0), unit.clone()),
         ExprKind::FreePoint(p) => {
             args.weights.borrow_mut()[*p] += expr.weight * weight_mult;
