@@ -2,7 +2,7 @@ use std::{sync::Arc, ops::{Add, Mul, AddAssign}};
 
 use crate::script::{ComplexUnit, unit};
 
-use self::expr::PointPointDistance;
+use self::expr::{PointPointDistance, PointLineDistance, AnglePoint, AngleLine, Literal, FreePoint};
 
 use super::{Complex, critic::EvaluationArgs, EvaluationError};
 
@@ -140,14 +140,19 @@ impl Value {
             None
         }
     }
-}
 
-impl Value {
     /// Creates a scalar value.
     pub fn scalar(value: f64, unit: ComplexUnit) -> Self {
         Self::Scalar(Scalar {
             value,
             unit
+        })
+    }
+
+    /// Creates a point value.
+    pub fn point(position: Complex) -> Self {
+        Self::Point(Point {
+            position
         })
     }
 }
@@ -156,11 +161,18 @@ impl Value {
 pub trait Evaluate {
     /// Evaluates the thing.
     fn evaluate(&self, args: &EvaluationArgs) -> Result<Value, EvaluationError>;
+
+    /// Evaluates weights.
+    fn evaluate_weights(&self) -> Weights;
 }
 
 impl Evaluate for Expression {
     fn evaluate(&self, args: &EvaluationArgs) -> Result<Value, EvaluationError> {
         self.kind.evaluate(args)
+    }
+
+    fn evaluate_weights(&self) -> Weights {
+        self.weights.clone()
     }
 }
 
@@ -168,9 +180,9 @@ impl Evaluate for Expression {
 pub mod expr {
     use std::sync::Arc;
 
-    use crate::{generator::{critic::EvaluationArgs, EvaluationError}, script::unit};
+    use crate::{generator::{critic::EvaluationArgs, EvaluationError, geometry}, script::{unit, ComplexUnit}};
 
-    use super::{Expression, Evaluate, Value};
+    use super::{Expression, Evaluate, Value, Weights};
 
     #[derive(Debug, Clone)]
     pub struct PointPointDistance {
@@ -188,25 +200,127 @@ pub mod expr {
             let distance = (p1.position - p2.position).mangitude();
             Ok(Value::scalar(distance, unit::DISTANCE))
         }
+
+        fn evaluate_weights(&self) -> Weights {
+            self.a.weights + &self.b.weights
+        }
     }
 
     #[derive(Debug, Clone)]
     pub struct PointLineDistance {
-        pub a: Arc<Expression>,
-        pub b: Arc<Expression>
+        pub point: Arc<Expression>,
+        pub line: Arc<Expression>
     }
 
     impl Evaluate for PointLineDistance {
         fn evaluate(&self, args: &EvaluationArgs) -> Result<Value, EvaluationError> {
             // Evaluate the two points
-            let point = self.a.evaluate(args)?.as_point().unwrap();
-            let line = self.b.evaluate(args)?.as_line().unwrap();
+            let point = self.point.evaluate(args)?.as_point().unwrap();
+            let line = self.line.evaluate(args)?.as_line().unwrap();
 
-            // Rotate the point and line's origin so that 
+            // Rotate the point and line's origin so that the line can be trated as a horizontal one.
+            let point_rot = point.position / line.direction;
+            let origin_rot = line.origin / line.direction;
 
-            // Pythagorean theorem
-            let distance = (*p1 - *p2).mangitude();
+            // Now we can just get the difference in the imaginary parts.
+            let distance = point_rot.imaginary - origin_rot.imaginary;
+
             Ok(Value::scalar(distance, unit::DISTANCE))
+        }
+
+        fn evaluate_weights(&self) -> Weights {
+            self.point.weights + &self.line.weights
+        }
+    }
+
+    #[derive(Debug, Clone)]
+    /// An angle defined with 3 points.
+    pub struct AnglePoint {
+        pub arm1: Arc<Expression>,
+        pub origin: Arc<Expression>,
+        pub arm2: Arc<Expression>,
+    }
+
+    impl Evaluate for AnglePoint {
+        fn evaluate(&self, args: &EvaluationArgs) -> Result<Value, EvaluationError> {
+            // Evaluate the two points
+            let arm1 = self.arm1.evaluate(args)?.as_point().unwrap();
+            let origin = self.origin.evaluate(args)?.as_point().unwrap();
+            let arm2 = self.arm2.evaluate(args)?.as_point().unwrap();
+
+            Ok(Value::scalar(
+                geometry::get_angle(arm1.position, origin.position, arm2.position),
+                unit::ANGLE
+            ))
+        }
+
+        fn evaluate_weights(&self) -> Weights {
+            self.arm1.weights + &self.origin.weights + &self.arm2.weights
+        }
+    }
+
+    #[derive(Debug, Clone)]
+    /// An angle defined with 2 lines.
+    pub struct AngleLine {
+        pub line1: Arc<Expression>,
+        pub line2: Arc<Expression>
+    }
+
+    impl Evaluate for AngleLine {
+        fn evaluate(&self, args: &EvaluationArgs) -> Result<Value, EvaluationError> {
+            // Evaluate the two points
+            let line1 = self.line1.evaluate(args)?.as_line().unwrap();
+            let line2 = self.line2.evaluate(args)?.as_line().unwrap();
+
+            // Divide direction vectors and get the arg.
+            let div = line1.direction / line2.direction;
+
+            Ok(Value::scalar(
+                div.arg(),
+                unit::ANGLE
+            ))
+        }
+
+        fn evaluate_weights(&self) -> Weights {
+            self.line1.weights + &self.line2.weights
+        }
+    }
+
+    #[derive(Debug, Clone)]
+    /// An angle defined with 2 lines.
+    pub struct Literal {
+        pub value: f64,
+        pub unit: ComplexUnit
+    }
+
+    impl Evaluate for Literal {
+        fn evaluate(&self, args: &EvaluationArgs) -> Result<Value, EvaluationError> {
+            Ok(Value::scalar(
+                self.value,
+                self.unit
+            ))
+        }
+
+        fn evaluate_weights(&self) -> Weights {
+            Weights::empty()
+        }
+    }
+
+    #[derive(Debug, Clone)]
+    /// An angle defined with 2 lines.
+    pub struct FreePoint {
+        pub index: usize
+    }
+
+    impl Evaluate for FreePoint {
+        fn evaluate(&self, args: &EvaluationArgs) -> Result<Value, EvaluationError> {
+            Ok(Value::point(
+                args.adjustables[self.index].0.as_point().copied().unwrap()
+            ))
+        }
+
+        fn evaluate_weights(&self) -> Weights {
+            Weights::one_at(self.index)
         }
     }
 }
@@ -217,19 +331,15 @@ pub enum ExprKind {
     /// Euclidean distance between two points.
     PointPointDistance(PointPointDistance),
     /// Euclidean distance between a point and its rectangular projection onto a line.
-    PointLineDistance(Arc<Expression>, Arc<Expression>),
+    PointLineDistance(PointLineDistance),
     /// An angle defined with 3 points.
-    AnglePoint(
-        Arc<Expression>,
-        Arc<Expression>,
-        Arc<Expression>,
-    ),
+    AnglePoint(AnglePoint),
     /// An angle defined with 2 lines.
-    AngleLine(Arc<Expression>, Arc<Expression>),
+    AngleLine(AngleLine),
     /// A real literal.
-    Literal(f64, ComplexUnit),
+    Literal(Literal),
     /// An adjustable indexed point in euclidean space
-    FreePoint(usize),
+    FreePoint(FreePoint),
     /// A line in euclidean space. defined by two points.
     Line(Arc<Expression>, Arc<Expression>),
     /// The point where two lines cross.
@@ -262,84 +372,6 @@ pub enum ExprKind {
     Real(usize)
 }
 
-impl ExprKind {
-    // pub fn collect<'r>(&'r self, into: &mut Vec<&'r Arc<Expression>>) {
-    //     match self {
-    //         ExprKind::PointPointDistance(e1, e2)
-    //         | ExprKind::AngleLine(e1, e2)
-    //         | ExprKind::Line(e1, e2)
-    //         | ExprKind::LineLineIntersection(e1, e2)
-    //         | ExprKind::Sum(e1, e2)
-    //         | ExprKind::Difference(e1, e2)
-    //         | ExprKind::Product(e1, e2)
-    //         | ExprKind::Quotient(e1, e2)
-    //         | ExprKind::PerpendicularThrough(e1, e2)
-    //         | ExprKind::ParallelThrough(e1, e2)
-    //         | ExprKind::PointLineDistance(e1, e2) => {
-    //             into.push(e1);
-    //             e1.object.collect(into);
-    //             into.push(e2);
-    //             e2.object.collect(into);
-    //         }
-    //         ExprKind::AnglePoint(e1, e2, e3) | ExprKind::AngleBisector(e1, e2, e3) => {
-    //             into.push(e1);
-    //             e1.object.collect(into);
-    //             into.push(e2);
-    //             e2.object.collect(into);
-    //             into.push(e3);
-    //             e3.object.collect(into);
-    //         }
-    //         ExprKind::Literal(_, _) | ExprKind::FreePoint(_) | ExprKind::Real(_) => (),
-    //         ExprKind::SetUnit(e, _) | ExprKind::Negation(e) => {
-    //             into.push(e);
-    //             e.object.collect(into);
-    //         }
-    //         ExprKind::Average(v) => {
-    //             for e in v {
-    //                 into.push(e);
-    //                 e.object.collect(into);
-    //             }
-    //         }
-    //     }
-    // }
-
-    pub fn evaluate_weights(&self) -> Weights {
-        match self {
-            Self::PointPointDistance(e1, e2)
-            | Self::AngleLine(e1, e2)
-            | Self::Line(e1, e2)
-            | Self::LineLineIntersection(e1, e2)
-            | Self::Sum(e1, e2)
-            | Self::Difference(e1, e2)
-            | Self::Product(e1, e2)
-            | Self::Quotient(e1, e2)
-            | Self::PerpendicularThrough(e1, e2)
-            | Self::ParallelThrough(e1, e2)
-            | Self::PointLineDistance(e1, e2) => {
-                e1.weights.clone() + &e2.weights
-            }
-            Self::AnglePoint(e1, e2, e3)
-            | Self::AngleBisector(e1, e2, e3) => {
-                e1.weights.clone() + &e2.weights + &e3.weights
-            }
-            Self::Literal(_, _) => Weights::empty(),
-            Self::FreePoint(i) | Self::Real(i) => Weights::one_at(*i),
-            Self::SetUnit(e, _) | Self::Negation(e) => {
-                e.weights.clone()
-            }
-            Self::Average(v) => {
-                let mut ws = Weights::empty();
-
-                for e in v {
-                    ws += &e.weights;
-                }
-
-                ws
-            }
-        }
-    }
-}
-
 impl Evaluate for ExprKind {
     fn evaluate(&self, args: &EvaluationArgs) -> Result<Value, EvaluationError> {
         match self {
@@ -362,6 +394,30 @@ impl Evaluate for ExprKind {
             Self::PerpendicularThrough(v) => v.evaluate(args),
             Self::ParallelThrough(v) => v.evaluate(args),
             Self::Real(v) => v.evaluate(args),
+        }
+    }
+
+    fn evaluate_weights(&self) -> Weights {
+        match self {
+            Self::PointPointDistance(v) => v.evaluate_weigts(),
+            Self::PointLineDistance(v) => v.evaluate_weigts(),
+            Self::AnglePoint(v) => v.evaluate_weigts(),
+            Self::AngleLine(v) => v.evaluate_weigts(),
+            Self::Literal(v) => v.evaluate_weigts(),
+            Self::FreePoint(v) => v.evaluate_weigts(),
+            Self::Line(v) => v.evaluate_weigts(),
+            Self::LineLineIntersection(v) => v.evaluate_weigts(),
+            Self::SetUnit(v) => v.evaluate_weigts(),
+            Self::Sum(v) => v.evaluate_weigts(),
+            Self::Difference(v) => v.evaluate_weigts(),
+            Self::Product(v) => v.evaluate_weigts(),
+            Self::Quotient(v) => v.evaluate_weigts(),
+            Self::Negation(v) => v.evaluate_weigts(),
+            Self::AngleBisector(v) => v.evaluate_weigts(),
+            Self::Average(v) => v.evaluate_weigts(),
+            Self::PerpendicularThrough(v) => v.evaluate_weigts(),
+            Self::ParallelThrough(v) => v.evaluate_weigts(),
+            Self::Real(v) => v.evaluate_weigts(),
         }
     }
 }

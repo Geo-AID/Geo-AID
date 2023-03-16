@@ -1,6 +1,6 @@
 use std::{collections::HashMap, rc::Rc, sync::Arc};
 
-use crate::{generator::{self, AdjustableTemplate, Flags, DistanceLiterals, Optimizations, expression::{Expression, ExprKind}}, span};
+use crate::{generator::{self, AdjustableTemplate, Flags, DistanceLiterals, Optimizations, expression::{Expression, ExprKind, expr::{PointPointDistance, PointLineDistance, AnglePoint}}}, span};
 
 use super::{
     figure::Figure,
@@ -170,16 +170,16 @@ fn compile_expression(
             unit.clone(),
         ), 1.0)),
         UnrolledExpressionData::PointPointDistance(p1, p2) => {
-            Arc::new(Expression::new(ExprKind::PointPointDistance(
-                compile_expression(p1, variables, expressions, template, dst_var),
-                compile_expression(p2, variables, expressions, template, dst_var),
-            ), 1.0))
+            Arc::new(Expression::new(ExprKind::PointPointDistance(PointPointDistance {
+                a: compile_expression(p1, variables, expressions, template, dst_var),
+                b: compile_expression(p2, variables, expressions, template, dst_var),
+            }), 1.0))
         }
         UnrolledExpressionData::PointLineDistance(p, l) => {
-            Arc::new(Expression::new(ExprKind::PointLineDistance(
-                compile_expression(p, variables, expressions, template, dst_var),
-                compile_expression(l, variables, expressions, template, dst_var),
-            ), 1.0))
+            Arc::new(Expression::new(ExprKind::PointLineDistance(PointLineDistance {
+                point: compile_expression(p, variables, expressions, template, dst_var),
+                line: compile_expression(l, variables, expressions, template, dst_var),
+            }), 1.0))
         }
         UnrolledExpressionData::Negate(expr) => Arc::new(Expression::new(ExprKind::Negation(
             compile_expression(expr, variables, expressions, template, dst_var),
@@ -201,11 +201,11 @@ fn compile_expression(
             compile_expression(v2, variables, expressions, template, dst_var),
         ), 1.0)),
         UnrolledExpressionData::ThreePointAngle(v1, v2, v3) => {
-            Arc::new(Expression::new(ExprKind::AnglePoint(
-                compile_expression(v1, variables, expressions, template, dst_var),
-                compile_expression(v2, variables, expressions, template, dst_var),
-                compile_expression(v3, variables, expressions, template, dst_var),
-            ), 1.0))
+            Arc::new(Expression::new(ExprKind::AnglePoint(AnglePoint {
+                arm1: compile_expression(v1, variables, expressions, template, dst_var),
+                origin: compile_expression(v2, variables, expressions, template, dst_var),
+                arm2: compile_expression(v3, variables, expressions, template, dst_var),
+            }), 1.0))
         }
         UnrolledExpressionData::AngleBisector(v1, v2, v3) => {
             Arc::new(Expression::new(ExprKind::AngleBisector(
