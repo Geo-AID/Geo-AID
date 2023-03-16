@@ -3,6 +3,7 @@ use std::{fs::File, io::Write, path::Path};
 use crate::{
     generator::Complex,
     projector::{Output, Rendered},
+    script::Expression::{AnglePoint, AngleLine},
 };
 
 /// Draws the given figure as .svg format.
@@ -51,7 +52,17 @@ pub fn draw(target: &Path, canvas_size: (usize, usize), output: &Output) {
                     p1.real, p2.real, p1.imaginary, p2.imaginary
                 );
             }
-            Rendered::Angle(..) => {}
+            Rendered::Angle(angle) => {
+                match &angle.expr.object {
+                    AnglePoint(p1, p2, p3) => {
+                        content+= &format!("<path d=\"M {},{} 100 L 140 100 L 120 140 z\"/>", )
+                    }
+                    AngleLine(ln1, ln2) => {
+                        
+                    }
+                    _=>unreachable!(),
+                }
+            }
         }
     }
     content += "</svg>";
