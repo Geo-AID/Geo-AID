@@ -1,13 +1,13 @@
-use std::{cell::RefCell, collections::HashMap, sync::Arc};
+use std::{cell::RefCell, sync::Arc};
 
 use crate::{
     generator::geometry,
     script::{
-        unit, ComplexUnit, Criteria, CriteriaKind, ExprKind, HashableWeakArc, SimpleUnit, Weighed,
+        unit, ComplexUnit, Criteria, CriteriaKind, HashableWeakArc, SimpleUnit, Weighed,
     },
 };
 
-use super::{Complex, EvaluationError, Logger, Flags, ExprCache, Adjustable};
+use super::{Complex, EvaluationError, Logger, Flags, Adjustable, expression::Weights};
 
 type AdjustableVec = Vec<(Adjustable, f64)>;
 
@@ -590,18 +590,16 @@ fn evaluate_single(
     generation: u64,
     flags: &Arc<Flags>
 ) -> (Quality, Vec<f64>) {
-    let mut weights = Vec::new();
-    weights.resize(points.len(), 0.0);
+    let mut weights = Weights::empty();
 
     let mut args = EvaluationArgs {
         logger,
         adjustables: points,
-        weights: RefCell::new(weights),
         generation,
         flags
     };
 
-    let quality = match crit {
+    (match crit {
         CriteriaKind::Equal(e1, e2) => {
             let v1 = evaluate_expression(e1, 1.0, &args);
             let v2 = evaluate_expression(e2, 1.0, &args);
@@ -650,15 +648,10 @@ fn evaluate_single(
         // There's a problem here: if there is an evaluation error, the inverse is treated as 100% met, which might lead to some problems in some edge cases.
         CriteriaKind::Inverse(kind) => {
             let (quality, ws) =
-                evaluate_single(kind, points, args.logger, generation, flags, record);
-            args.weights = RefCell::new(ws);
+                evaluate_single(kind, points, args.logger, generation, flags);
             invert(quality)
         }
-    };
-
-    // println!("{:?}", args.weights);
-
-    (quality, args.weights.take())
+    }, weights)
 }
 
 #[allow(clippy::implicit_hasher)]

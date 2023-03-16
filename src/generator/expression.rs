@@ -2,7 +2,9 @@ use std::{sync::Arc, ops::{Add, Mul, AddAssign}};
 
 use crate::script::{ComplexUnit, unit};
 
-use super::Complex;
+use self::expr::PointPointDistance;
+
+use super::{Complex, critic::EvaluationArgs, EvaluationError};
 
 #[derive(Debug, Clone)]
 pub struct ExprCache {
@@ -90,11 +92,130 @@ impl Expression {
     }
 }
 
+/// Represents a point in a 2D euclidean space.
+#[derive(Debug, Clone)]
+pub struct Point {
+    /// Point's position as a complex number.
+    pub position: Complex
+}
+
+/// Represents a line in a 2D euclidean space.
+#[derive(Debug, Clone)]
+pub struct Line {
+    /// Line's origin as a complex number.
+    pub origin: Complex,
+    /// A normalized direction vector.
+    pub direction: Complex
+}
+
+/// Represents a scalar with a unit.
+#[derive(Debug, Clone)]
+pub struct Scalar {
+    /// The value.
+    pub value: f64,
+    /// The unit.
+    pub unit: ComplexUnit
+}
+
+/// An evaluated value.
+pub enum Value {
+    Point(Point),
+    Line(Line),
+    Scalar(Scalar)
+}
+
+impl Value {
+    pub fn as_point(&self) -> Option<&Point> {
+        if let Self::Point(v) = self {
+            Some(v)
+        } else {
+            None
+        }
+    }
+
+    pub fn as_line(&self) -> Option<&Line> {
+        if let Self::Line(v) = self {
+            Some(v)
+        } else {
+            None
+        }
+    }
+}
+
+impl Value {
+    /// Creates a scalar value.
+    pub fn scalar(value: f64, unit: ComplexUnit) -> Self {
+        Self::Scalar(Scalar {
+            value,
+            unit
+        })
+    }
+}
+
+/// Marks everything that can be evaluated.
+pub trait Evaluate {
+    /// Evaluates the thing.
+    fn evaluate(&self, args: &EvaluationArgs) -> Result<Value, EvaluationError>;
+}
+
+impl Evaluate for Expression {
+    fn evaluate(&self, args: &EvaluationArgs) -> Result<Value, EvaluationError> {
+        self.kind.evaluate(args)
+    }
+}
+
+/// All possible expressions.
+pub mod expr {
+    use std::sync::Arc;
+
+    use crate::{generator::{critic::EvaluationArgs, EvaluationError}, script::unit};
+
+    use super::{Expression, Evaluate, Value};
+
+    #[derive(Debug, Clone)]
+    pub struct PointPointDistance {
+        pub a: Arc<Expression>,
+        pub b: Arc<Expression>
+    }
+
+    impl Evaluate for PointPointDistance {
+        fn evaluate(&self, args: &EvaluationArgs) -> Result<Value, EvaluationError> {
+            // Evaluate the two points
+            let p1 = self.a.evaluate(args)?.as_point().unwrap();
+            let p2 = self.b.evaluate(args)?.as_point().unwrap();
+
+            // Pythagorean theorem
+            let distance = (p1.position - p2.position).mangitude();
+            Ok(Value::scalar(distance, unit::DISTANCE))
+        }
+    }
+
+    #[derive(Debug, Clone)]
+    pub struct PointLineDistance {
+        pub a: Arc<Expression>,
+        pub b: Arc<Expression>
+    }
+
+    impl Evaluate for PointLineDistance {
+        fn evaluate(&self, args: &EvaluationArgs) -> Result<Value, EvaluationError> {
+            // Evaluate the two points
+            let point = self.a.evaluate(args)?.as_point().unwrap();
+            let line = self.b.evaluate(args)?.as_line().unwrap();
+
+            // Rotate the point and line's origin so that 
+
+            // Pythagorean theorem
+            let distance = (*p1 - *p2).mangitude();
+            Ok(Value::scalar(distance, unit::DISTANCE))
+        }
+    }
+}
+
 /// Defines an expression kind.
 #[derive(Debug, Clone)]
 pub enum ExprKind {
     /// Euclidean distance between two points.
-    PointPointDistance(Arc<Expression>, Arc<Expression>),
+    PointPointDistance(PointPointDistance),
     /// Euclidean distance between a point and its rectangular projection onto a line.
     PointLineDistance(Arc<Expression>, Arc<Expression>),
     /// An angle defined with 3 points.
@@ -215,6 +336,32 @@ impl ExprKind {
 
                 ws
             }
+        }
+    }
+}
+
+impl Evaluate for ExprKind {
+    fn evaluate(&self, args: &EvaluationArgs) -> Result<Value, EvaluationError> {
+        match self {
+            Self::PointPointDistance(v) => v.evaluate(args),
+            Self::PointLineDistance(v) => v.evaluate(args),
+            Self::AnglePoint(v) => v.evaluate(args),
+            Self::AngleLine(v) => v.evaluate(args),
+            Self::Literal(v) => v.evaluate(args),
+            Self::FreePoint(v) => v.evaluate(args),
+            Self::Line(v) => v.evaluate(args),
+            Self::LineLineIntersection(v) => v.evaluate(args),
+            Self::SetUnit(v) => v.evaluate(args),
+            Self::Sum(v) => v.evaluate(args),
+            Self::Difference(v) => v.evaluate(args),
+            Self::Product(v) => v.evaluate(args),
+            Self::Quotient(v) => v.evaluate(args),
+            Self::Negation(v) => v.evaluate(args),
+            Self::AngleBisector(v) => v.evaluate(args),
+            Self::Average(v) => v.evaluate(args),
+            Self::PerpendicularThrough(v) => v.evaluate(args),
+            Self::ParallelThrough(v) => v.evaluate(args),
+            Self::Real(v) => v.evaluate(args),
         }
     }
 }
