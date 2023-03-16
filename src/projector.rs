@@ -136,7 +136,8 @@ pub enum Rendered {
 
 #[derive(Serialize)]
 pub struct Output {
-    /// Map containing points as keys and uuid's (v4) as values
+    /// Map containing points as keys and point structs as values
+    /// 
     pub map: HashMap<HashableArc<Weighed<Expression>>, Rc<RenderedPoint>>,
     /// final product of the project function
     pub vec_rendered: Vec<Rendered>,
