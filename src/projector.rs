@@ -1,9 +1,11 @@
+use std::sync::Arc;
+
 use serde::Serialize;
 
 use crate::{
     generator::{
-        critic::{self, evaluate_expression_simple},
-        geometry, Complex, EvaluationError, Adjustable,
+        critic::EvaluationArgs,
+        geometry, Complex, EvaluationError, Adjustable, Flags, expression::Line,
     },
     script::{figure::Figure, unroll},
 };
@@ -141,7 +143,7 @@ pub struct RenderedLine {
     pub points: (Complex, Complex),
 }
 
-fn get_line_ends(figure: &Figure, ln_c: Complex) -> (Complex, Complex) {
+fn get_line_ends(figure: &Figure, ln_c: Line) -> (Complex, Complex) {
     // +--0--+
     // |     |
     // 1     2
@@ -154,29 +156,26 @@ fn get_line_ends(figure: &Figure, ln_c: Complex) -> (Complex, Complex) {
     let height = figure.canvas_size.1 as f64;
 
     let intersections = [
-        geometry::get_crossing(
+        geometry::get_intersection(
             ln_c,
             geometry::get_line(Complex::new(0.0, height), Complex::new(1.0, height)),
         ),
-        geometry::get_crossing(
+        geometry::get_intersection(
             ln_c,
             geometry::get_line(Complex::new(0.0, 0.0), Complex::new(0.0, 1.0)),
         ),
-        geometry::get_crossing(
+        geometry::get_intersection(
             ln_c,
             geometry::get_line(Complex::new(width, 0.0), Complex::new(width, 1.0)),
         ),
-        geometry::get_crossing(
+        geometry::get_intersection(
             ln_c,
             geometry::get_line(Complex::new(0.0, 0.0), Complex::new(1.0, 0.0)),
         ),
     ];
 
-    // If the a in ax+b is negative, line is "going down".
-    let a = ln_c.real;
-
-    // println!("a is {a}");
-    // println!("intersection points are {:#?}", intersections);
+    // If the product of the real and imaginary is negative, line is "going down".
+    let a = ln_c.direction.imaginary * ln_c.direction.real;
 
     #[allow(clippy::cast_precision_loss)]
     if a < 0f64 {
@@ -241,12 +240,22 @@ fn get_line_ends(figure: &Figure, ln_c: Complex) -> (Complex, Complex) {
 /// Returns an error if there is a problem with evaluating constructs (e. g. intersection of two parallel lines).
 pub fn project(
     figure: &Figure,
-    generated_points: &[Adjustable],
+    generated_points: &Vec<(Adjustable, f64)>,
+    flags: &Arc<Flags>
 ) -> Result<Vec<Rendered>, EvaluationError> {
+    let mut logger = Vec::new();
+    let args = EvaluationArgs {
+        logger: &mut logger,
+        adjustables: generated_points,
+        generation: 0,
+        flags,
+        cache: None
+    };
+
     let points: Vec<Complex> = figure
         .points
         .iter()
-        .map(|pt| Ok(critic::evaluate_expression_simple(&pt.0, generated_points)?.0))
+        .map(|pt| Ok(pt.0.evaluate(&args)?.as_point().unwrap().position))
         .collect::<Result<Vec<Complex>, EvaluationError>>()?;
 
     #[allow(clippy::cast_precision_loss)]
@@ -309,11 +318,9 @@ pub fn project(
     let mut blueprint_lines = Vec::new();
 
     for ln in &figure.lines {
-        let ln_c = evaluate_expression_simple(ln, generated_points)?;
-
         blueprint_lines.push(RenderedLine {
             label: String::new(),
-            points: get_line_ends(figure, ln_c.0),
+            points: get_line_ends(figure, *ln.evaluate(&args)?.as_line().unwrap()),
         });
     }
 

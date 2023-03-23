@@ -10,7 +10,7 @@ use super::{
     token::{
         Ampersant, Asterisk, At, Colon, Comma, Dollar, Eq, Exclamation, Gt, Gteq, Ident, LBrace,
         LParen, Let, Lt, Lteq, Minus, NamedIdent, Number, Plus, Position, RBrace, RParen, Semi,
-        Slash, Span, Token, Vertical,
+        Slash, Span, Token, Vertical, Dot,
     },
     unroll::{CompileContext, RuleOperatorDefinition},
     ComplexUnit, Error, SimpleUnit,
@@ -108,100 +108,6 @@ pub enum BinaryOperator {
     Mul(MulOp),
     /// Division
     Div(DivOp),
-}
-
-impl BinaryOperator {
-    /// Gets the type returned by this operator given the operand types.
-    #[must_use]
-    pub fn get_returned(&self, lhs: &Type, rhs: &Type) -> Type {
-        match self {
-            // For addition and subtraction the unit of both operands must be the same. The result is of the same type as the operands.
-            // This code primarily checks if the two operands are of the same type. If one does not have a type (scalar(none)) and
-            // the other does, the former is assumed to be of the same type.
-            BinaryOperator::Add(_) | BinaryOperator::Sub(_) => {
-                let left_unit = match lhs {
-                    Type::Predefined(PredefinedType::Scalar(Some(unit))) => {
-                        Some(Some(unit.clone()))
-                    }
-                    Type::Predefined(PredefinedType::Scalar(None)) => Some(None),
-                    Type::Predefined(PredefinedType::PointCollection(2)) => {
-                        Some(Some(ComplexUnit::new(SimpleUnit::Distance)))
-                    }
-                    _ => None,
-                };
-
-                if let Some(ltype) = left_unit {
-                    if let Some(ltype) = ltype {
-                        if rhs.can_cast(&Type::Predefined(PredefinedType::Scalar(Some(
-                            ltype.clone(),
-                        )))) {
-                            Type::Predefined(PredefinedType::Scalar(Some(ltype)))
-                        } else {
-                            Type::Undefined
-                        }
-                    } else {
-                        let right_unit = match rhs {
-                            Type::Predefined(PredefinedType::Scalar(Some(unit))) => {
-                                Some(Some(unit.clone()))
-                            }
-                            Type::Predefined(PredefinedType::Scalar(None)) => Some(None),
-                            Type::Predefined(PredefinedType::PointCollection(2)) => {
-                                Some(Some(ComplexUnit::new(SimpleUnit::Distance)))
-                            }
-                            _ => None,
-                        };
-
-                        if let Some(rtype) = right_unit {
-                            if let Some(rtype) = rtype {
-                                Type::Predefined(PredefinedType::Scalar(Some(rtype)))
-                            } else {
-                                Type::Predefined(PredefinedType::Scalar(None))
-                            }
-                        } else {
-                            Type::Undefined
-                        }
-                    }
-                } else {
-                    Type::Undefined
-                }
-            }
-            // For multiplication and division the result is a product of operand types.
-            // If a type is a scalar(None), it's assumed to be a dimensionless scalar.
-            BinaryOperator::Mul(_) | BinaryOperator::Div(_) => {
-                let left_unit = match lhs {
-                    Type::Predefined(PredefinedType::Scalar(Some(unit))) => Some(unit.clone()),
-                    Type::Predefined(PredefinedType::Scalar(None)) => {
-                        Some(ComplexUnit::new(SimpleUnit::Scalar))
-                    }
-                    Type::Predefined(PredefinedType::PointCollection(2)) => {
-                        Some(ComplexUnit::new(SimpleUnit::Distance))
-                    }
-                    _ => None,
-                };
-
-                let right_unit = match rhs {
-                    Type::Predefined(PredefinedType::Scalar(Some(unit))) => Some(unit.clone()),
-                    Type::Predefined(PredefinedType::Scalar(None)) => {
-                        Some(ComplexUnit::new(SimpleUnit::Scalar))
-                    }
-                    Type::Predefined(PredefinedType::PointCollection(2)) => {
-                        Some(ComplexUnit::new(SimpleUnit::Distance))
-                    }
-                    _ => None,
-                };
-
-                if let Some(ltype) = left_unit {
-                    if let Some(rtype) = right_unit {
-                        Type::Predefined(PredefinedType::Scalar(Some(ltype * rtype)))
-                    } else {
-                        Type::Undefined
-                    }
-                } else {
-                    Type::Undefined
-                }
-            }
-        }
-    }
 }
 
 impl ToString for BinaryOperator {
@@ -523,7 +429,7 @@ pub struct InvertedRuleOperator {
 #[derive(Debug)]
 pub struct FlagName {
     pub at: At,
-    pub name: NamedIdent,
+    pub name: Punctuated<NamedIdent, Dot>,
     pub colon: Colon,
 }
 
@@ -534,7 +440,7 @@ impl Parse for FlagName {
     ) -> Result<Self, Error> {
         Ok(Self {
             at: At::parse(it, context)?,
-            name: NamedIdent::parse(it, context)?,
+            name: Punctuated::parse(it, context)?,
             colon: Colon::parse(it, context)?,
         })
     }
@@ -1215,6 +1121,7 @@ impl_token_parse! {Let}
 impl_token_parse! {Colon}
 impl_token_parse! {Exclamation}
 impl_token_parse! {Number}
+impl_token_parse! {Dot}
 
 impl Parse for NamedIdent {
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(

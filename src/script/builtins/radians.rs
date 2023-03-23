@@ -15,12 +15,14 @@ use crate::{
 /// radians(scalar) - converts no-unit scalar into angle
 fn radians_function_scalar() -> UnrolledExpression {
     UnrolledExpression {
+        weight: 1.0,
         ty: Type::Predefined(PredefinedType::Scalar(Some(ComplexUnit::new(
             SimpleUnit::Angle,
         )))),
         span: span!(0, 0, 0, 0),
         data: Rc::new(UnrolledExpressionData::SetUnit(
             UnrolledExpression {
+                weight: 1.0,
                 ty: Type::Predefined(PredefinedType::Scalar(Some(ComplexUnit::new(
                     SimpleUnit::Scalar,
                 )))),

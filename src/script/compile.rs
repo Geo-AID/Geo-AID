@@ -1,6 +1,6 @@
 use std::{collections::HashMap, rc::Rc, sync::Arc};
 
-use crate::{generator::{self, AdjustableTemplate, Flags, DistanceLiterals, Optimizations, expression::{Expression, ExprKind, expr::{PointPointDistance, PointLineDistance, AnglePoint}}}, span};
+use crate::{generator::{self, AdjustableTemplate, Flags, DistanceLiterals, Optimizations, expression::{Expression, ExprKind, expr::{PointPointDistance, PointLineDistance, AnglePoint, Literal, LinePoint, ParallelThrough, PerpendicularThrough, SetUnit, Sum, Difference, Product, Quotient, Negation, AngleBisector, AngleLine, LineLineIntersection, Average, Real, FreePoint, PointX, PointY}, Weights}}, span};
 
 use super::{
     figure::Figure,
@@ -29,9 +29,11 @@ pub fn fix_distance(expr: UnrolledExpression, power: i8, dst_var: &Rc<Variable>)
 
     match power.cmp(&0) {
         std::cmp::Ordering::Less => UnrolledExpression {
+            weight: 1.0,
             data: Rc::new(UnrolledExpressionData::Divide(
                 fix_distance(expr, power + 1, dst_var),
                 UnrolledExpression {
+                    weight: 1.0,
                     ty: ty::SCALAR,
                     span: sp,
                     data: Rc::new(UnrolledExpressionData::VariableAccess(Rc::clone(dst_var)))
@@ -42,9 +44,11 @@ pub fn fix_distance(expr: UnrolledExpression, power: i8, dst_var: &Rc<Variable>)
         },
         std::cmp::Ordering::Equal => expr,
         std::cmp::Ordering::Greater => UnrolledExpression {
+            weight: 1.0,
             data: Rc::new(UnrolledExpressionData::Multiply(
                 fix_distance(expr, power - 1, dst_var),
                 UnrolledExpression {
+                    weight: 1.0,
                     ty: ty::SCALAR,
                     span: sp,
                     data: Rc::new(UnrolledExpressionData::VariableAccess(Rc::clone(dst_var)))
@@ -89,18 +93,20 @@ fn compile_expression(
         UnrolledExpressionData::Number(v) => {
             if expr.ty == ty::SCALAR {
                 // If a scalar, we treat it as a standard literal.
-                Arc::new(Expression::new(ExprKind::Literal(
-                    *v,
-                    unit::SCALAR
-                ), 1.0))
+                Arc::new(Expression::new(ExprKind::Literal(Literal {
+                    value: *v,
+                    unit: unit::SCALAR
+                }), 1.0))
             } else {
                 // Otherwise we pretend it's a scalar literal inside a SetUnit.
                 compile_expression(
                     &UnrolledExpression {
+                        weight: 1.0,
                         ty: expr.ty.clone(),
                         span: expr.span,
                         data: Rc::new(UnrolledExpressionData::SetUnit(
                             UnrolledExpression {
+                                weight: 1.0,
                                 ty: ty::SCALAR,
                                 span: expr.span,
                                 data: expr.data.clone()
@@ -119,13 +125,13 @@ fn compile_expression(
             let index = template.len();
             template.push(AdjustableTemplate::Point);
 
-            Arc::new(Expression::new(ExprKind::FreePoint(index), 1.0))
+            Arc::new(Expression::new(ExprKind::FreePoint(FreePoint {index}), 1.0))
         }
         UnrolledExpressionData::FreeReal => {
             let index = template.len();
             template.push(AdjustableTemplate::Real);
 
-            Arc::new(Expression::new(ExprKind::Real(index), 1.0))
+            Arc::new(Expression::new(ExprKind::Real(Real {index}), 1.0))
         }
         UnrolledExpressionData::Boxed(expr) => {
             compile_expression(expr, variables, expressions, template, dst_var)
@@ -140,24 +146,24 @@ fn compile_expression(
             template,
             dst_var
         ),
-        UnrolledExpressionData::LineFromPoints(p1, p2) => Arc::new(Expression::new(ExprKind::Line(
-            compile_expression(p1, variables, expressions, template, dst_var),
-            compile_expression(p2, variables, expressions, template, dst_var),
-        ), 1.0)),
-        UnrolledExpressionData::ParallelThrough(p1, p2) => {
-            Arc::new(Expression::new(ExprKind::ParallelThrough(
-                compile_expression(p1, variables, expressions, template, dst_var),
-                compile_expression(p2, variables, expressions, template, dst_var),
-            ), 1.0))
+        UnrolledExpressionData::LineFromPoints(p1, p2) => Arc::new(Expression::new(ExprKind::Line(LinePoint {
+            a: compile_expression(p1, variables, expressions, template, dst_var),
+            b: compile_expression(p2, variables, expressions, template, dst_var),
+        }), 1.0)),
+        UnrolledExpressionData::ParallelThrough(line, point) => {
+            Arc::new(Expression::new(ExprKind::ParallelThrough(ParallelThrough {
+                line: compile_expression(line, variables, expressions, template, dst_var),
+                point: compile_expression(point, variables, expressions, template, dst_var),
+            }), 1.0))
         }
-        UnrolledExpressionData::PerpendicularThrough(p1, p2) => {
-            Arc::new(Expression::new(ExprKind::PerpendicularThrough(
-                compile_expression(p1, variables, expressions, template, dst_var),
-                compile_expression(p2, variables, expressions, template, dst_var),
-            ), 1.0))
+        UnrolledExpressionData::PerpendicularThrough(line, point) => {
+            Arc::new(Expression::new(ExprKind::PerpendicularThrough(PerpendicularThrough { 
+                line: compile_expression(line, variables, expressions, template, dst_var),
+                point: compile_expression(point, variables, expressions, template, dst_var),
+            }), 1.0))
         }
-        UnrolledExpressionData::SetUnit(expr, unit) => Arc::new(Expression::new(ExprKind::SetUnit(
-            compile_expression(
+        UnrolledExpressionData::SetUnit(expr, unit) => Arc::new(Expression::new(ExprKind::SetUnit(SetUnit {
+            value: compile_expression(
                 &fix_distance(expr.clone(), unit[SimpleUnit::Distance as usize] - match expr.ty.as_predefined().unwrap().as_scalar().unwrap() {
                     Some(unit) => unit[SimpleUnit::Distance as usize],
                     None => 0
@@ -167,8 +173,8 @@ fn compile_expression(
                 template,
                 dst_var
             ),
-            unit.clone(),
-        ), 1.0)),
+            unit: unit.clone(),
+        }), 1.0)),
         UnrolledExpressionData::PointPointDistance(p1, p2) => {
             Arc::new(Expression::new(ExprKind::PointPointDistance(PointPointDistance {
                 a: compile_expression(p1, variables, expressions, template, dst_var),
@@ -181,25 +187,25 @@ fn compile_expression(
                 line: compile_expression(l, variables, expressions, template, dst_var),
             }), 1.0))
         }
-        UnrolledExpressionData::Negate(expr) => Arc::new(Expression::new(ExprKind::Negation(
-            compile_expression(expr, variables, expressions, template, dst_var),
-        ), 1.0)),
-        UnrolledExpressionData::Add(v1, v2) => Arc::new(Expression::new(ExprKind::Sum(
-            compile_expression(v1, variables, expressions, template, dst_var),
-            compile_expression(v2, variables, expressions, template, dst_var),
-        ), 1.0)),
-        UnrolledExpressionData::Subtract(v1, v2) => Arc::new(Expression::new(ExprKind::Difference(
-            compile_expression(v1, variables, expressions, template, dst_var),
-            compile_expression(v2, variables, expressions, template, dst_var),
-        ), 1.0)),
-        UnrolledExpressionData::Multiply(v1, v2) => Arc::new(Expression::new(ExprKind::Product(
-            compile_expression(v1, variables, expressions, template, dst_var),
-            compile_expression(v2, variables, expressions, template, dst_var),
-        ), 1.0)),
-        UnrolledExpressionData::Divide(v1, v2) => Arc::new(Expression::new(ExprKind::Quotient(
-            compile_expression(v1, variables, expressions, template, dst_var),
-            compile_expression(v2, variables, expressions, template, dst_var),
-        ), 1.0)),
+        UnrolledExpressionData::Negate(expr) => Arc::new(Expression::new(ExprKind::Negation(Negation {
+            value: compile_expression(expr, variables, expressions, template, dst_var),
+        }), 1.0)),
+        UnrolledExpressionData::Add(v1, v2) => Arc::new(Expression::new(ExprKind::Sum(Sum {
+            a: compile_expression(v1, variables, expressions, template, dst_var),
+            b: compile_expression(v2, variables, expressions, template, dst_var),
+        }), 1.0)),
+        UnrolledExpressionData::Subtract(v1, v2) => Arc::new(Expression::new(ExprKind::Difference(Difference {
+            a: compile_expression(v1, variables, expressions, template, dst_var),
+            b: compile_expression(v2, variables, expressions, template, dst_var),
+        }), 1.0)),
+        UnrolledExpressionData::Multiply(v1, v2) => Arc::new(Expression::new(ExprKind::Product(Product {
+            a: compile_expression(v1, variables, expressions, template, dst_var),
+            b: compile_expression(v2, variables, expressions, template, dst_var),
+        }), 1.0)),
+        UnrolledExpressionData::Divide(v1, v2) => Arc::new(Expression::new(ExprKind::Quotient(Quotient {
+            a: compile_expression(v1, variables, expressions, template, dst_var),
+            b: compile_expression(v2, variables, expressions, template, dst_var),
+        }), 1.0)),
         UnrolledExpressionData::ThreePointAngle(v1, v2, v3) => {
             Arc::new(Expression::new(ExprKind::AnglePoint(AnglePoint {
                 arm1: compile_expression(v1, variables, expressions, template, dst_var),
@@ -208,30 +214,30 @@ fn compile_expression(
             }), 1.0))
         }
         UnrolledExpressionData::AngleBisector(v1, v2, v3) => {
-            Arc::new(Expression::new(ExprKind::AngleBisector(
-                compile_expression(v1, variables, expressions, template, dst_var),
-                compile_expression(v2, variables, expressions, template, dst_var),
-                compile_expression(v3, variables, expressions, template, dst_var),
-            ), 1.0))
+            Arc::new(Expression::new(ExprKind::AngleBisector(AngleBisector {
+                arm1: compile_expression(v1, variables, expressions, template, dst_var),
+                origin: compile_expression(v2, variables, expressions, template, dst_var),
+                arm2: compile_expression(v3, variables, expressions, template, dst_var),
+            }), 1.0))
         }
         UnrolledExpressionData::TwoLineAngle(v1, v2) => {
-            Arc::new(Expression::new(ExprKind::AngleLine(
-                compile_expression(v1, variables, expressions, template, dst_var),
-                compile_expression(v2, variables, expressions, template, dst_var),
-            ), 1.0))
+            Arc::new(Expression::new(ExprKind::AngleLine(AngleLine {
+                k: compile_expression(v1, variables, expressions, template, dst_var),
+                l: compile_expression(v2, variables, expressions, template, dst_var),
+            }), 1.0))
         }
         UnrolledExpressionData::LineLineIntersection(v1, v2) => {
-            Arc::new(Expression::new(ExprKind::LineLineIntersection(
-                compile_expression(v1, variables, expressions, template, dst_var),
-                compile_expression(v2, variables, expressions, template, dst_var),
-            ), 1.0))
+            Arc::new(Expression::new(ExprKind::LineLineIntersection(LineLineIntersection {
+                k: compile_expression(v1, variables, expressions, template, dst_var),
+                l: compile_expression(v2, variables, expressions, template, dst_var),
+            }), 1.0))
         }
-        UnrolledExpressionData::Average(exprs) => Arc::new(Expression::new(ExprKind::Average(
-            exprs
+        UnrolledExpressionData::Average(exprs) => Arc::new(Expression::new(ExprKind::Average(Average {
+            items: exprs
                 .iter()
                 .map(|expr| compile_expression(expr, variables, expressions, template, dst_var))
                 .collect(),
-        ), 1.0)),
+        }), 1.0)),
     };
 
     // We insert for memory.
@@ -349,7 +355,8 @@ fn read_flags(flags: &HashMap<String, Flag>) -> Result<Flags, Error> {
                     available_values: &["none", "adjust", "solve"],
                     received_value: t.to_string()
                 })
-            }
+            },
+            point_bounds: flags["point_bounds"].as_bool().unwrap()
         }
     )
 }
@@ -387,6 +394,7 @@ pub fn compile(
                     name: String::from("@distance"),
                     definition_span: span!(0, 0, 0, 0),
                     definition: UnrolledExpression {
+                        weight: 0.1, // We reduce the weight of distance to reduce its movement.
                         data: Rc::new(UnrolledExpressionData::FreeReal),
                         ty: ty::SCALAR,
                         span: span!(0, 0, 0, 0),
@@ -429,7 +437,23 @@ pub fn compile(
     }
 
     // And compile the rules
-    let criteria = compile_rules(unrolled, &mut variables, &mut expressions, &mut template, &dst_var);
+    let mut criteria = compile_rules(unrolled, &mut variables, &mut expressions, &mut template, &dst_var);
+
+    if let Some(dst) = &dst_var {
+        // It's worth noting, that assigning a smaller weight will never be enough. We have to also bias the quality.
+        criteria.push(Weighed {
+            object: CriteriaKind::Bias(compile_variable(dst, &mut variables, &mut expressions, &mut template, &dst_var).assume_compiled().unwrap()),
+            weight: 10.0 // The bias.
+        });
+    }
+
+    // Add standard bounds
+    add_bounds(&template, &mut criteria, &flags);
+
+    // Print the compiled (debugging)
+    // for rule in &criteria {
+    //     println!("{rule:?}");
+    // }
 
     let figure = Figure {
         // We're displaying every variable of type Point
@@ -462,4 +486,107 @@ pub fn compile(
     };
 
     Ok((criteria, figure, template, flags))
+}
+
+/// Inequality principle and the point plane limit.
+fn add_bounds(template: &[AdjustableTemplate], criteria: &mut Vec<Weighed<CriteriaKind>>, flags: &Flags) {
+    // Point inequality principle.
+    for (i, _) in template.iter().enumerate().filter(|v: _| v.1.is_point()) {
+        // For each of the next points, add an inequality rule.
+        for (j, _) in template.iter().enumerate().skip(i+1).filter(|v: _| v.1.is_point()) {
+            // println!("{i} != {j}");
+            criteria.push(Weighed {
+                object: CriteriaKind::Inverse(Box::new(CriteriaKind::Equal(
+                    Arc::new(Expression {
+                        weights: Weights::one_at(i),
+                        kind: ExprKind::FreePoint(FreePoint { index: i })
+                    }),
+                    Arc::new(Expression {
+                        weights: Weights::one_at(j),
+                        kind: ExprKind::FreePoint(FreePoint { index: j })
+                    }),
+                ))),
+                weight: 1.0
+            });
+        }
+
+        if flags.point_bounds {
+            // For each point, add a rule limiting its range.
+            criteria.push(Weighed {
+                object: CriteriaKind::Greater(
+                    Arc::new(Expression {
+                        weights: Weights::one_at(i),
+                        kind: ExprKind::PointX(PointX {
+                            point: Arc::new(Expression {
+                                weights: Weights::one_at(i),
+                                kind: ExprKind::FreePoint(FreePoint { index: i })
+                            })
+                        })
+                    }),
+                    Arc::new(Expression {
+                        weights: Weights::empty(),
+                        kind: ExprKind::Literal(Literal { value: 0.0, unit: unit::SCALAR })
+                    }),
+                ),
+                weight: 1.0
+            }); // x > 0
+
+            criteria.push(Weighed {
+                object: CriteriaKind::Greater(
+                    Arc::new(Expression {
+                        weights: Weights::one_at(i),
+                        kind: ExprKind::PointY(PointY {
+                            point: Arc::new(Expression {
+                                weights: Weights::one_at(i),
+                                kind: ExprKind::FreePoint(FreePoint { index: i })
+                            })
+                        })
+                    }),
+                    Arc::new(Expression {
+                        weights: Weights::empty(),
+                        kind: ExprKind::Literal(Literal { value: 1.0, unit: unit::SCALAR })
+                    }),
+                ),
+                weight: 1.0
+            }); // y > 0
+
+            criteria.push(Weighed {
+                object: CriteriaKind::Less(
+                    Arc::new(Expression {
+                        weights: Weights::one_at(i),
+                        kind: ExprKind::PointX(PointX {
+                            point: Arc::new(Expression {
+                                weights: Weights::one_at(i),
+                                kind: ExprKind::FreePoint(FreePoint { index: i })
+                            })
+                        })
+                    }),
+                    Arc::new(Expression {
+                        weights: Weights::empty(),
+                        kind: ExprKind::Literal(Literal { value: 1.0, unit: unit::SCALAR })
+                    }),
+                ),
+                weight: 1.0
+            }); // x < 1
+
+            criteria.push(Weighed {
+                object: CriteriaKind::Less(
+                    Arc::new(Expression {
+                        weights: Weights::one_at(i),
+                        kind: ExprKind::PointY(PointY {
+                            point: Arc::new(Expression {
+                                weights: Weights::one_at(i),
+                                kind: ExprKind::FreePoint(FreePoint { index: i })
+                            })
+                        })
+                    }),
+                    Arc::new(Expression {
+                        weights: Weights::empty(),
+                        kind: ExprKind::Literal(Literal { value: 1.0, unit: unit::SCALAR })
+                    }),
+                ),
+                weight: 1.0
+            }); // y < 1
+        }
+    }
 }

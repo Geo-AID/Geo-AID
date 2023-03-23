@@ -15,9 +15,11 @@ macro_rules! mid_function {
     ($t:expr, $name:ident) => {
         pub fn $name() -> UnrolledExpression {
             UnrolledExpression {
+                weight: 1.0,
                 ty: $t,
                 span: span!(0, 0, 0, 0),
                 data: Rc::new(UnrolledExpressionData::Average(vec![UnrolledExpression {
+                    weight: 1.0,
                     ty: $t,
                     span: span!(0, 0, 0, 0),
                     data: Rc::new(UnrolledExpressionData::UnrollParameterGroup(0)),

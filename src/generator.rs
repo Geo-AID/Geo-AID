@@ -1,16 +1,18 @@
 use std::{
-    collections::VecDeque,
+    collections::{VecDeque, HashMap},
     fmt::Display,
     mem,
     ops::{Add, AddAssign, Div, Mul, Neg, Sub, SubAssign},
     sync::{mpsc, Arc},
     thread::{self, JoinHandle},
-    time::{Duration, Instant},
+    time::{Duration, Instant}, cell::RefCell,
 };
 
 use serde::Serialize;
 
-use crate::script::Criteria;
+use crate::script::{Criteria, HashableWeakArc, unit};
+
+use self::expression::{ExprCache, Value};
 
 #[derive(Debug)]
 pub enum EvaluationError {
@@ -43,6 +45,17 @@ impl Complex {
     }
 
     #[must_use]
+    pub fn i() -> Self {
+        Self::new(0.0, 1.0)
+    }
+
+    /// Optimized multiplication by the complex unit (i).
+    #[must_use]
+    pub fn mul_i(self) -> Complex {
+        Complex::new(-self.imaginary, self.real)
+    }
+
+    #[must_use]
     pub fn mangitude(self) -> f64 {
         f64::sqrt(self.real.powi(2) + self.imaginary.powi(2))
     }
@@ -66,6 +79,41 @@ impl Complex {
     pub fn arg(self) -> f64 {
         f64::atan2(self.imaginary, self.real)
     }
+
+    #[must_use]
+    pub fn normalize(self) -> Complex {
+        self / self.mangitude()
+    }
+
+    #[must_use]
+    pub fn sqrt(self) -> Complex {
+        // The formula used here doesn't work for negative reals. We can use a trick here to bypass that restriction.
+        // If the real part is negative, we simply negate it to get a positive part and then multiply the result by i.
+        if self.real > 0.0 {
+            // Use the generic formula (https://math.stackexchange.com/questions/44406/how-do-i-get-the-square-root-of-a-complex-number)
+            let r = self.mangitude();
+
+            r.sqrt() * (self + r).normalize()
+        } else {
+            (-self).sqrt().mul_i()
+        }
+    }
+
+    /// Same as sqrt, but returns a normalized result.
+    #[must_use]
+    pub fn sqrt_norm(self) -> Complex {
+        // The formula used here doesn't work for negative reals. We can use a trick here to bypass that restriction.
+        // If the real part is negative, we simply negate it to get a positive part and then multiply the result by i.
+        if self.real > 0.0 {
+            // Use the generic formula (https://math.stackexchange.com/questions/44406/how-do-i-get-the-square-root-of-a-complex-number)
+            let r = self.mangitude();
+
+            // We simply don't multiply by the square root of r.
+            (self + r).normalize()
+        } else {
+            (-self).sqrt_norm().mul_i() // Normalization isn't lost here.
+        }
+    }
 }
 
 impl Mul for Complex {
@@ -76,6 +124,14 @@ impl Mul for Complex {
             self.real * rhs.real - self.imaginary * rhs.imaginary,
             self.real * rhs.imaginary + rhs.real * self.imaginary,
         )
+    }
+}
+
+impl Mul<Complex> for f64 {
+    type Output = Complex;
+
+    fn mul(self, rhs: Complex) -> Self::Output {
+        Complex::new(self * rhs.real, self * rhs.imaginary)
     }
 }
 
@@ -205,7 +261,8 @@ pub enum Message {
 
 #[derive(Debug, Clone)]
 pub struct GenerationArgs {
-    pub criteria: Arc<Vec<Criteria>>
+    pub criteria: Arc<Vec<Criteria>>,
+    pub point_count: usize
 }
 
 fn generation_cycle(
@@ -214,13 +271,37 @@ fn generation_cycle(
     args: &GenerationArgs,
     flags: &Arc<Flags>,
 ) {
+    // Create the expression record
+    let mut record = HashMap::new();
+
+    if flags.optimizations.identical_expressions {
+        for crit in args.criteria.as_ref() {
+            let mut exprs = Vec::new();
+            crit.object.collect(&mut exprs);
+
+            for expr in exprs.into_iter().filter(|x| !x.is_trivial() && Arc::strong_count(x) > 1) {
+                // We use weak to not mess with the strong count.
+                record
+                    .entry(HashableWeakArc::new(Arc::downgrade(expr)))
+                    .or_insert(ExprCache {
+                        value: Value::scalar(0.0, unit::SCALAR),
+                        generation: 0,
+                    });
+            }
+        }
+    }
+
     let mut generation = 1;
+    let record = RefCell::new(record);
+
+    let mut point_evaluation = Vec::new();
+    point_evaluation.resize(args.point_count, Vec::new());
 
     loop {
         match receiver.recv().unwrap() {
             Message::Generate(adjustment, points, mut logger) => {
                 let points = magic_box::adjust(points, adjustment);
-                let points = critic::evaluate(&points, &args.criteria, &mut logger, generation, flags);
+                let points = critic::evaluate(&points, &args.criteria, &mut logger, generation, flags, Some(&record), &mut point_evaluation);
 
                 // println!("Adjustment + critic = {:#?}", points);
 
@@ -253,6 +334,16 @@ pub struct Generator {
 pub enum AdjustableTemplate {
     Point,
     Real
+}
+
+impl AdjustableTemplate {
+    /// Returns `true` if the adjustable template is [`Point`].
+    ///
+    /// [`Point`]: AdjustableTemplate::Point
+    #[must_use]
+    pub fn is_point(&self) -> bool {
+        matches!(self, Self::Point)
+    }
 }
 
 impl Generator {
@@ -452,5 +543,6 @@ pub enum DistanceLiterals {
 #[derive(Debug)]
 pub struct Flags {
     pub optimizations: Optimizations,
-    pub distance_literals: DistanceLiterals
+    pub distance_literals: DistanceLiterals,
+    pub point_bounds: bool
 }

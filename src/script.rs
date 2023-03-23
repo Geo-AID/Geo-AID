@@ -455,9 +455,7 @@ impl<T> Weighed<T> {
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum SimpleUnit {
     Distance,
-    Point,
     Angle,
-    Line,
     Scalar,
 }
 
@@ -479,9 +477,7 @@ pub mod unit {
     use super::{ComplexUnit, SimpleUnit};
 
     pub const DISTANCE: ComplexUnit = ComplexUnit::new(SimpleUnit::Distance);
-    pub const POINT: ComplexUnit = ComplexUnit::new(SimpleUnit::Point);
     pub const ANGLE: ComplexUnit = ComplexUnit::new(SimpleUnit::Angle);
-    pub const LINE: ComplexUnit = ComplexUnit::new(SimpleUnit::Line);
     pub const SCALAR: ComplexUnit = ComplexUnit::new(SimpleUnit::Scalar);
 }
 
@@ -574,10 +570,10 @@ impl Mul<SimpleUnit> for ComplexUnit {
     }
 }
 
-impl Mul for ComplexUnit {
+impl Mul<&ComplexUnit> for ComplexUnit {
     type Output = ComplexUnit;
 
-    fn mul(mut self, rhs: Self) -> Self::Output {
+    fn mul(mut self, rhs: &Self) -> Self::Output {
         self.iter_mut()
             .enumerate()
             .map(|(i, x)| *x += rhs[i])
@@ -600,10 +596,10 @@ impl Div<SimpleUnit> for ComplexUnit {
     }
 }
 
-impl Div for ComplexUnit {
+impl Div<&ComplexUnit> for ComplexUnit {
     type Output = ComplexUnit;
 
-    fn div(mut self, rhs: Self) -> Self::Output {
+    fn div(mut self, rhs: &Self) -> Self::Output {
         self.iter_mut()
             .enumerate()
             .map(|(i, x)| *x -= rhs[i])
@@ -637,6 +633,23 @@ pub enum CriteriaKind {
     Greater(Arc<Expression>, Arc<Expression>),
     /// Inverts the criteria. The quality is calculated as 1 - the quality of the inverted criteria.
     Inverse(Box<CriteriaKind>),
+    /// Bias. Always evaluates to 1.0. Artificially raises quality for everything contained  in the arc.
+    Bias(Arc<Expression>)
+}
+
+impl CriteriaKind {
+    pub fn collect<'r>(&'r self, exprs: &mut Vec<&'r Arc<Expression>>) {
+        match self {
+            CriteriaKind::Equal(lhs, rhs)
+            | CriteriaKind::Less(lhs, rhs)
+            | CriteriaKind::Greater(lhs, rhs) => {
+                lhs.collect(exprs);
+                rhs.collect(exprs);
+            }
+            CriteriaKind::Inverse(v) => v.collect(exprs),
+            CriteriaKind::Bias(v) => v.collect(exprs)
+        }
+    }
 }
 
 /// Defines a weighed piece of criteria the figure must obey.

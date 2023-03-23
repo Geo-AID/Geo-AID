@@ -2,9 +2,7 @@
 # In theory, it should perform poorly without optimization.
 let A, B, C = Point();
 
-@optimizations: {
-    @identical_expressions: off
-}
+@optimizations.identical_expressions: off;
 
 let l = bisector(ABC);
 let D = intersection(l, AC);

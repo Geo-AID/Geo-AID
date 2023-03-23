@@ -14,6 +14,7 @@ use crate::{
 /// Point constructor. Creates a free point.
 fn point_function() -> UnrolledExpression {
     UnrolledExpression {
+        weight: 1.0,
         ty: Type::Predefined(PredefinedType::Point),
         data: Rc::new(UnrolledExpressionData::FreePoint),
         span: span!(0, 0, 0, 0),

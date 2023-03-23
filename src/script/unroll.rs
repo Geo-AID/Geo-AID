@@ -10,7 +10,7 @@ use super::{
     parser::{
         BinaryOperator, ExplicitIterator, Expression, FlagStatement, ImplicitIterator,
         LetStatement, Parse, PredefinedRuleOperator, PredefinedType, Punctuated, RuleOperator,
-        RuleStatement, SimpleExpression, Statement, Type,
+        RuleStatement, SimpleExpression, Statement, Type
     },
     token::{self, Ident, NamedIdent, PointCollection, Span},
     ty, ComplexUnit, Error, SimpleUnit,
@@ -849,6 +849,7 @@ pub struct UnrolledExpression {
     pub data: Rc<UnrolledExpressionData>,
     pub ty: Type,
     pub span: Span,
+    pub weight: f64 // Assigned weight.
 }
 
 impl Display for UnrolledExpression {
@@ -858,6 +859,13 @@ impl Display for UnrolledExpression {
 }
 
 impl UnrolledExpression {
+    #[must_use]
+    pub fn clone_with_weight(&self, weight: f64) -> Self {
+        let mut cloned = self.clone();
+        cloned.weight = weight;
+        cloned
+    }
+
     /// # Panics
     /// Never.
     #[must_use]
@@ -984,6 +992,7 @@ pub fn unroll_parameters(
     params: &Vec<UnrolledExpression>,
 ) -> UnrolledExpression {
     UnrolledExpression {
+        weight: definition.weight,
         ty: definition.ty.clone(),
         span: definition.span,
         data: Rc::new(match definition.data.as_ref() {
@@ -1099,6 +1108,7 @@ fn unroll_pc_conversion(
         1 => {
             if to == &Type::Predefined(PredefinedType::Point) {
                 Ok(UnrolledExpression {
+                    weight: 1.0, // Weight is propagated through `IndexCollection`.
                     data: Rc::new(UnrolledExpressionData::IndexCollection(expr.clone(), 0)),
                     ty: Type::Predefined(PredefinedType::Point),
                     span: expr.span,
@@ -1114,13 +1124,16 @@ fn unroll_pc_conversion(
         2 => match to {
             Type::Predefined(pre) => match pre {
                 PredefinedType::Line => Ok(UnrolledExpression {
+                    weight: 1.0, // Weight is propagated through `IndexCollection`.
                     data: Rc::new(UnrolledExpressionData::LineFromPoints(
                         UnrolledExpression {
+                            weight: 1.0, // Weight is propagated through `IndexCollection`.
                             data: Rc::new(UnrolledExpressionData::IndexCollection(expr.clone(), 0)),
                             ty: Type::Predefined(PredefinedType::Point),
                             span: expr.span,
                         },
                         UnrolledExpression {
+                            weight: 1.0, // Weight is propagated through `IndexCollection`.
                             data: Rc::new(UnrolledExpressionData::IndexCollection(expr.clone(), 1)),
                             ty: Type::Predefined(PredefinedType::Point),
                             span: expr.span,
@@ -1132,8 +1145,10 @@ fn unroll_pc_conversion(
                 PredefinedType::Scalar(unit) => {
                     if unit == &Some(ComplexUnit::new(SimpleUnit::Distance)) {
                         Ok(UnrolledExpression {
+                            weight: 1.0, // Weight is propagated through `IndexCollection`.
                             data: Rc::new(UnrolledExpressionData::PointPointDistance(
                                 UnrolledExpression {
+                                    weight: 1.0, // Weight is propagated through `IndexCollection`.
                                     data: Rc::new(UnrolledExpressionData::IndexCollection(
                                         expr.clone(),
                                         0,
@@ -1142,6 +1157,7 @@ fn unroll_pc_conversion(
                                     span: expr.span,
                                 },
                                 UnrolledExpression {
+                                    weight: 1.0, // Weight is propagated through `IndexCollection`.
                                     data: Rc::new(UnrolledExpressionData::IndexCollection(
                                         expr.clone(),
                                         1,
@@ -1184,6 +1200,7 @@ fn unroll_pc_conversion(
 }
 
 /// Unrolls the conversion of the given expression of type scalar(none) to a scalar type.
+#[allow(clippy::too_many_lines)]
 fn unroll_conversion_to_scalar(
     expr: &UnrolledExpression,
     to: &Type,
@@ -1192,6 +1209,7 @@ fn unroll_conversion_to_scalar(
         UnrolledExpressionData::Boxed(x) => Ok(UnrolledExpression {
             ty: to.clone(),
             span: expr.span,
+            weight: expr.weight,
             data: Rc::new(UnrolledExpressionData::Boxed(unroll_implicit_conversion(
                 x.clone(),
                 to,
@@ -1200,11 +1218,13 @@ fn unroll_conversion_to_scalar(
         UnrolledExpressionData::Number(_) => Ok(UnrolledExpression {
             ty: to.clone(),
             span: expr.span,
+            weight: expr.weight,
             data: Rc::clone(&expr.data),
         }),
         UnrolledExpressionData::Negate(x) => Ok(UnrolledExpression {
             ty: to.clone(),
             span: expr.span,
+            weight: expr.weight,
             data: Rc::new(UnrolledExpressionData::Negate(unroll_implicit_conversion(
                 x.clone(),
                 to,
@@ -1213,6 +1233,7 @@ fn unroll_conversion_to_scalar(
         UnrolledExpressionData::Add(e1, e2) => Ok(UnrolledExpression {
             ty: to.clone(),
             span: expr.span,
+            weight: expr.weight,
             data: Rc::new(UnrolledExpressionData::Add(
                 unroll_implicit_conversion(e1.clone(), to)?,
                 unroll_implicit_conversion(e2.clone(), to)?,
@@ -1221,6 +1242,7 @@ fn unroll_conversion_to_scalar(
         UnrolledExpressionData::Subtract(e1, e2) => Ok(UnrolledExpression {
             ty: to.clone(),
             span: expr.span,
+            weight: expr.weight,
             data: Rc::new(UnrolledExpressionData::Subtract(
                 unroll_implicit_conversion(e1.clone(), to)?,
                 unroll_implicit_conversion(e2.clone(), to)?,
@@ -1229,6 +1251,7 @@ fn unroll_conversion_to_scalar(
         UnrolledExpressionData::Multiply(e1, e2) => Ok(UnrolledExpression {
             ty: to.clone(),
             span: expr.span,
+            weight: expr.weight,
             data: Rc::new(UnrolledExpressionData::Multiply(
                 unroll_implicit_conversion(e1.clone(), to)?,
                 unroll_implicit_conversion(
@@ -1242,6 +1265,7 @@ fn unroll_conversion_to_scalar(
         UnrolledExpressionData::Divide(e1, e2) => Ok(UnrolledExpression {
             ty: to.clone(),
             span: expr.span,
+            weight: expr.weight,
             data: Rc::new(UnrolledExpressionData::Divide(
                 unroll_implicit_conversion(e1.clone(), to)?,
                 unroll_implicit_conversion(
@@ -1255,6 +1279,7 @@ fn unroll_conversion_to_scalar(
         UnrolledExpressionData::Average(exprs) => Ok(UnrolledExpression {
             ty: to.clone(),
             span: expr.span,
+            weight: expr.weight,
             data: Rc::new(UnrolledExpressionData::Average(
                 exprs
                     .iter()
@@ -1300,7 +1325,7 @@ fn unroll_implicit_conversion(
                     match to {
                         Type::Predefined(PredefinedType::Scalar(unit)) => match unit {
                             Some(unit) => {
-                                if unit.0[3] == 0 {
+                                if unit.0[SimpleUnit::Angle as usize] == 0 {
                                     // no angle
                                     unroll_conversion_to_scalar(&expr, to)
                                 } else {
@@ -1362,12 +1387,14 @@ fn unroll_simple(
                 })?;
 
                 UnrolledExpression {
+                    weight: 1.0, // TODO: UPDATE FOR WEIGHING SUPPORT IN GEOSCRIPT
                     ty: var.definition.ty.clone(),
                     data: Rc::new(UnrolledExpressionData::VariableAccess(Rc::clone(var))),
                     span: named.span,
                 }
             }
             Ident::Collection(col) => UnrolledExpression {
+                weight: 1.0, // TODO: UPDATE FOR WEIGHING SUPPORT IN GEOSCRIPT
                 ty: Type::Predefined(PredefinedType::PointCollection(col.collection.len())),
                 data: Rc::new(UnrolledExpressionData::PointCollection(
                     col.collection
@@ -1375,6 +1402,7 @@ fn unroll_simple(
                         .map(|(letter, primes)| {
                             match context.points.get(&construct_point_id(*letter, *primes)) {
                                 Some(var) => Ok(UnrolledExpression {
+                                    weight: 1.0, // Always one.
                                     data: Rc::new(UnrolledExpressionData::VariableAccess(
                                         Rc::clone(var),
                                     )),
@@ -1394,6 +1422,7 @@ fn unroll_simple(
             },
         },
         SimpleExpression::Number(num) => UnrolledExpression {
+            weight: 0.0, // Always zero.
             ty: Type::Predefined(PredefinedType::Scalar(None)),
             data: Rc::new(UnrolledExpressionData::Number(num.value)),
             span: num.get_span(),
@@ -1427,6 +1456,7 @@ fn unroll_simple(
                         .collect::<Result<Vec<UnrolledExpression>, Error>>()?;
 
                     UnrolledExpression {
+                        weight: 1.0, // TODO: UPDATE FOR WEIGHING SUPPORT IN GEOSCRIPT
                         ty: overload.returned_type.clone(),
                         data: Rc::new(UnrolledExpressionData::Boxed(unroll_parameters(
                             &overload.definition,
@@ -1461,6 +1491,7 @@ fn unroll_simple(
             let unrolled = unroll_simple(&op.rhs, context, it_index)?;
             match &unrolled.ty {
                 Type::Predefined(PredefinedType::Scalar(_)) => UnrolledExpression {
+                    weight: 1.0, // TODO: UPDATE FOR WEIGHING SUPPORT IN GEOSCRIPT
                     ty: unrolled.ty.clone(),
                     span: expr.get_span(),
                     data: Rc::new(UnrolledExpressionData::Negate(unrolled)),
@@ -1479,6 +1510,7 @@ fn unroll_simple(
             unroll_expression(it.get(it_index[&it.id]).unwrap(), context, it_index)?
         }
         SimpleExpression::PointCollection(col) => UnrolledExpression {
+            weight: 1.0, // TODO: UPDATE FOR WEIGHING SUPPORT IN GEOSCRIPT
             ty: ty::collection(col.points.len()),
             span: col.get_span(),
             data: Rc::new(UnrolledExpressionData::PointCollection(
@@ -1584,6 +1616,7 @@ fn unroll_binop(
             let rhs = unroll_implicit_conversion(rhs, &lhs.ty)?;
 
             Ok(UnrolledExpression {
+                weight: 1.0, // Technically, the only way to assign weight to an arithmetic op is to parenthise it.
                 ty: lhs.ty.clone(),
                 span: lhs.span.join(rhs.span),
                 data: Rc::new(match op {
@@ -1599,13 +1632,14 @@ fn unroll_binop(
             let rhs = unroll_muldiv(rhs, &lhs)?;
 
             Ok(UnrolledExpression {
+                weight: 1.0, // Technically, the only way to assign weight to an arithmetic op is to parenthise it.
                 ty: match &lhs.ty {
                     Type::Predefined(PredefinedType::Scalar(None)) => lhs.ty.clone(),
                     Type::Predefined(PredefinedType::Scalar(Some(left_unit))) => {
                         if let Type::Predefined(PredefinedType::Scalar(Some(right_unit))) = &rhs.ty
                         {
                             Type::Predefined(PredefinedType::Scalar(Some(
-                                left_unit.clone() * right_unit.clone(),
+                                left_unit.clone() * right_unit,
                             )))
                         } else {
                             unreachable!()
@@ -1656,6 +1690,7 @@ fn unpack_expression(
             PredefinedType::Point => Ok(vec![expr.clone()]),
             PredefinedType::PointCollection(l) => Ok((0..*l)
                 .map(|i| UnrolledExpression {
+                    weight: 1.0, // Weight propagated through `IndexCollecttion`
                     data: Rc::new(UnrolledExpressionData::IndexCollection(expr.clone(), i)),
                     ty: Type::Predefined(PredefinedType::Point),
                     span: expr.span,
@@ -2256,14 +2291,14 @@ fn unroll_rulestat(
     Ok(())
 }
 
-fn set_flag_bool(v: &mut Flag, flag: &FlagStatement) -> Result<(), Error> {
-    match &flag.value {
+fn set_flag_bool(flag: &mut Flag, stmt: &FlagStatement) -> Result<(), Error> {
+    match &stmt.value {
         super::parser::FlagValue::Set(_) => {
             return Err(Error::FlagBooleanExpected {
-                error_span: flag.get_span(),
+                error_span: stmt.get_span(),
             })
         }
-        super::parser::FlagValue::Ident(ident) => match &mut v.kind {
+        super::parser::FlagValue::Ident(ident) => match &mut flag.kind {
             FlagKind::Setting(s) => match s {
                 FlagSetting::Default(_) | FlagSetting::Unset => {
                     *s = FlagSetting::Set(
@@ -2272,24 +2307,24 @@ fn set_flag_bool(v: &mut Flag, flag: &FlagStatement) -> Result<(), Error> {
                             "disabled" | "off" | "false" => false,
                             _ => {
                                 return Err(Error::FlagBooleanExpected {
-                                    error_span: flag.get_span(),
+                                    error_span: stmt.get_span(),
                                 })
                             }
                         }),
-                        flag.get_span(),
+                        stmt.get_span(),
                     );
                 }
                 FlagSetting::Set(_, sp) => {
                     return Err(Error::RedefinedFlag {
-                        error_span: flag.get_span(),
+                        error_span: stmt.get_span(),
                         first_defined: *sp,
-                        flag_name: flag.name.name.ident.clone(),
+                        flag_name: flag.name.clone(),
                     })
                 }
             },
             FlagKind::Set(_) => unreachable!(),
         },
-        super::parser::FlagValue::Number(num) => match &mut v.kind {
+        super::parser::FlagValue::Number(num) => match &mut flag.kind {
             FlagKind::Setting(s) => match s {
                 FlagSetting::Default(_) | FlagSetting::Unset => {
                     if num.dot.is_none() {
@@ -2299,23 +2334,23 @@ fn set_flag_bool(v: &mut Flag, flag: &FlagStatement) -> Result<(), Error> {
                                 0 => false,
                                 _ => {
                                     return Err(Error::FlagBooleanExpected {
-                                        error_span: flag.get_span(),
+                                        error_span: stmt.get_span(),
                                     })
                                 }
                             }),
-                            flag.get_span(),
+                            stmt.get_span(),
                         );
                     } else {
                         return Err(Error::FlagBooleanExpected {
-                            error_span: flag.get_span(),
+                            error_span: stmt.get_span(),
                         });
                     }
                 }
                 FlagSetting::Set(_, sp) => {
                     return Err(Error::RedefinedFlag {
-                        error_span: flag.get_span(),
+                        error_span: stmt.get_span(),
                         first_defined: *sp,
-                        flag_name: flag.name.name.ident.clone(),
+                        flag_name: flag.name.clone(),
                     })
                 }
             },
@@ -2327,54 +2362,10 @@ fn set_flag_bool(v: &mut Flag, flag: &FlagStatement) -> Result<(), Error> {
 }
 
 fn set_flag(set: &mut FlagSet, flag: &FlagStatement) -> Result<(), Error> {
-    if let Some(v) = set.get_mut(&flag.name.name.ident) {
-        match v.ty {
-            FlagType::Set => match &flag.value {
-                super::parser::FlagValue::Set(set) => match &mut v.kind {
-                    FlagKind::Setting(_) => unreachable!(),
-                    FlagKind::Set(s) => {
-                        for stat in &set.flags {
-                            set_flag(s, stat)?;
-                        }
-                    }
-                },
-                super::parser::FlagValue::Ident(_) | super::parser::FlagValue::Number(_) => {
-                    return Err(Error::FlagSetExpected {
-                        error_span: flag.get_span(),
-                    })
-                }
-            },
-            FlagType::Boolean => set_flag_bool(v, flag)?,
-            FlagType::String => match &flag.value {
-                super::parser::FlagValue::Number(_) | super::parser::FlagValue::Set(_) => {
-                    return Err(Error::FlagStringExpected {
-                        error_span: flag.get_span(),
-                    })
-                }
-                super::parser::FlagValue::Ident(ident) => match &mut v.kind {
-                    FlagKind::Setting(s) => match s {
-                        FlagSetting::Default(_) | FlagSetting::Unset => {
-                            *s = FlagSetting::Set(
-                                FlagValue::String(ident.ident.clone()),
-                                flag.get_span(),
-                            );
-                        }
-                        FlagSetting::Set(_, sp) => {
-                            return Err(Error::RedefinedFlag {
-                                error_span: flag.get_span(),
-                                first_defined: *sp,
-                                flag_name: flag.name.name.ident.clone(),
-                            })
-                        }
-                    },
-                    FlagKind::Set(_) => unreachable!(),
-                },
-            },
-        }
-
-        Ok(())
+    let mut flag_ref = if let Some(v) = set.get_mut(&flag.name.name.first.ident) {
+        v
     } else {
-        let flag_name = flag.name.name.ident.clone();
+        let flag_name = flag.name.name.first.ident.clone();
 
         #[allow(clippy::cast_possible_truncation)]
         let suggested = set
@@ -2383,13 +2374,87 @@ fn set_flag(set: &mut FlagSet, flag: &FlagStatement) -> Result<(), Error> {
             .map(|x| x.0)
             .cloned();
 
-        Err(Error::FlagDoesNotExist {
+        return Err(Error::FlagDoesNotExist {
             flag_name,
             flag_span: flag.name.get_span(),
             error_span: flag.get_span(),
             suggested,
-        })
+        });
+    };
+
+    for part in flag.name.name.iter().skip(1) {
+        flag_ref = if let Some(v) = if let FlagKind::Set(set) = &mut flag_ref.kind {
+            set.get_mut(&part.ident)
+        } else {
+            return Err(Error::FlagSetExpected {
+                error_span: flag.get_span(),
+            })
+        } {
+            v
+        } else {
+            let flag_name = part.ident.clone();
+
+            #[allow(clippy::cast_possible_truncation)]
+            let suggested = set
+                .iter()
+                .max_by_key(|v| (strsim::jaro(v.0, &flag_name) * 1000.0).floor() as i64)
+                .map(|x| x.0)
+                .cloned();
+
+            return Err(Error::FlagDoesNotExist {
+                flag_name,
+                flag_span: flag.name.get_span(),
+                error_span: flag.get_span(),
+                suggested,
+            });
+        };
     }
+
+    match flag_ref.ty {
+        FlagType::Set => match &flag.value {
+            super::parser::FlagValue::Set(set) => match &mut flag_ref.kind {
+                FlagKind::Setting(_) => unreachable!(),
+                FlagKind::Set(s) => {
+                    for stat in &set.flags {
+                        set_flag(s, stat)?;
+                    }
+                }
+            },
+            super::parser::FlagValue::Ident(_) | super::parser::FlagValue::Number(_) => {
+                return Err(Error::FlagSetExpected {
+                    error_span: flag.get_span(),
+                })
+            }
+        },
+        FlagType::Boolean => set_flag_bool(flag_ref, flag)?,
+        FlagType::String => match &flag.value {
+            super::parser::FlagValue::Number(_) | super::parser::FlagValue::Set(_) => {
+                return Err(Error::FlagStringExpected {
+                    error_span: flag.get_span(),
+                })
+            }
+            super::parser::FlagValue::Ident(ident) => match &mut flag_ref.kind {
+                FlagKind::Setting(s) => match s {
+                    FlagSetting::Default(_) | FlagSetting::Unset => {
+                        *s = FlagSetting::Set(
+                            FlagValue::String(ident.ident.clone()),
+                            flag.get_span(),
+                        );
+                    }
+                    FlagSetting::Set(_, sp) => {
+                        return Err(Error::RedefinedFlag {
+                            error_span: flag.get_span(),
+                            first_defined: *sp,
+                            flag_name: flag_ref.name.clone(),
+                        })
+                    }
+                },
+                FlagKind::Set(_) => unreachable!(),
+            },
+        },
+    }
+
+    Ok(())
 }
 
 /// Unrolls the given script. All iterators are expanded and all conversions applied. The output can be immediately compiled.
@@ -2409,6 +2474,7 @@ pub fn unroll(input: &str) -> Result<(Vec<UnrolledRule>, CompileContext), Error>
                 FlagSetConstructor::new().add_bool_def(&"identical_expressions", true),
             )
             .add_ident_def(&"distance_literals", &"none")
+            .add_bool_def(&"point_bounds", false)
             .finish()
     };
 
