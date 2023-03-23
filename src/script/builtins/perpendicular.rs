@@ -15,15 +15,18 @@ use crate::{
 /// `perpendicular_through(line, point)` - returns a line perpendicular to the 1st argument going through point at 2nd argument.
 pub fn line_point() -> UnrolledExpression {
     UnrolledExpression {
+        weight: 1.0,
         ty: ty::LINE,
         span: span!(0, 0, 0, 0),
         data: Rc::new(UnrolledExpressionData::PerpendicularThrough(
             UnrolledExpression {
+                weight: 1.0,
                 ty: ty::LINE,
                 span: span!(0, 0, 0, 0),
                 data: Rc::new(UnrolledExpressionData::Parameter(0)),
             },
             UnrolledExpression {
+                weight: 1.0,
                 ty: ty::POINT,
                 span: span!(0, 0, 0, 0),
                 data: Rc::new(UnrolledExpressionData::Parameter(1)),
@@ -38,11 +41,13 @@ pub fn point_line() -> UnrolledExpression {
         &line_point(),
         &vec![
             UnrolledExpression {
+                weight: 1.0,
                 ty: ty::LINE,
                 span: span!(0, 0, 0, 0),
                 data: Rc::new(UnrolledExpressionData::Parameter(1)),
             },
             UnrolledExpression {
+                weight: 1.0,
                 ty: ty::POINT,
                 span: span!(0, 0, 0, 0),
                 data: Rc::new(UnrolledExpressionData::Parameter(0)),

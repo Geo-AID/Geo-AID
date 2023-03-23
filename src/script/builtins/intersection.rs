@@ -14,15 +14,18 @@ use crate::{
 /// `intersection(line, line)` - point where two lines intersect.
 fn intersection_function_line_line() -> UnrolledExpression {
     UnrolledExpression {
+        weight: 1.0,
         ty: ty::POINT,
         span: span!(0, 0, 0, 0),
         data: Rc::new(UnrolledExpressionData::LineLineIntersection(
             UnrolledExpression {
+                weight: 1.0,
                 ty: ty::LINE,
                 span: span!(0, 0, 0, 0),
                 data: Rc::new(UnrolledExpressionData::Parameter(0)),
             },
             UnrolledExpression {
+                weight: 1.0,
                 ty: ty::LINE,
                 span: span!(0, 0, 0, 0),
                 data: Rc::new(UnrolledExpressionData::Parameter(1)),

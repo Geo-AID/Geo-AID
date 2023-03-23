@@ -18,10 +18,12 @@ pub fn pc3() -> UnrolledExpression {
         &point_point_point(),
         &vec![
             UnrolledExpression {
+                weight: 1.0,
                 ty: ty::POINT,
                 span: span!(0, 0, 0, 0),
                 data: Rc::new(UnrolledExpressionData::IndexCollection(
                     UnrolledExpression {
+                        weight: 1.0,
                         ty: ty::collection(3),
                         span: span!(0, 0, 0, 0),
                         data: Rc::new(UnrolledExpressionData::Parameter(0)),
@@ -30,10 +32,12 @@ pub fn pc3() -> UnrolledExpression {
                 )),
             },
             UnrolledExpression {
+                weight: 1.0,
                 ty: ty::POINT,
                 span: span!(0, 0, 0, 0),
                 data: Rc::new(UnrolledExpressionData::IndexCollection(
                     UnrolledExpression {
+                        weight: 1.0,
                         ty: ty::collection(3),
                         span: span!(0, 0, 0, 0),
                         data: Rc::new(UnrolledExpressionData::Parameter(0)),
@@ -42,10 +46,12 @@ pub fn pc3() -> UnrolledExpression {
                 )),
             },
             UnrolledExpression {
+                weight: 1.0,
                 ty: ty::POINT,
                 span: span!(0, 0, 0, 0),
                 data: Rc::new(UnrolledExpressionData::IndexCollection(
                     UnrolledExpression {
+                        weight: 1.0,
                         ty: ty::collection(3),
                         span: span!(0, 0, 0, 0),
                         data: Rc::new(UnrolledExpressionData::Parameter(0)),
@@ -60,20 +66,24 @@ pub fn pc3() -> UnrolledExpression {
 /// bisector(point, point, point) - angle bisector.
 pub fn point_point_point() -> UnrolledExpression {
     UnrolledExpression {
+        weight: 1.0,
         ty: ty::LINE,
         span: span!(0, 0, 0, 0),
         data: Rc::new(UnrolledExpressionData::AngleBisector(
             UnrolledExpression {
+                weight: 1.0,
                 ty: ty::POINT,
                 span: span!(0, 0, 0, 0),
                 data: Rc::new(UnrolledExpressionData::Parameter(0)),
             },
             UnrolledExpression {
+                weight: 1.0,
                 ty: ty::POINT,
                 span: span!(0, 0, 0, 0),
                 data: Rc::new(UnrolledExpressionData::Parameter(1)),
             },
             UnrolledExpression {
+                weight: 1.0,
                 ty: ty::POINT,
                 span: span!(0, 0, 0, 0),
                 data: Rc::new(UnrolledExpressionData::Parameter(2)),
@@ -88,10 +98,12 @@ pub fn pc2() -> UnrolledExpression {
         &point_point(),
         &vec![
             UnrolledExpression {
+                weight: 1.0,
                 ty: ty::POINT,
                 span: span!(0, 0, 0, 0),
                 data: Rc::new(UnrolledExpressionData::IndexCollection(
                     UnrolledExpression {
+                        weight: 1.0,
                         ty: ty::collection(2),
                         span: span!(0, 0, 0, 0),
                         data: Rc::new(UnrolledExpressionData::Parameter(0)),
@@ -100,10 +112,12 @@ pub fn pc2() -> UnrolledExpression {
                 )),
             },
             UnrolledExpression {
+                weight: 1.0,
                 ty: ty::POINT,
                 span: span!(0, 0, 0, 0),
                 data: Rc::new(UnrolledExpressionData::IndexCollection(
                     UnrolledExpression {
+                        weight: 1.0,
                         ty: ty::collection(2),
                         span: span!(0, 0, 0, 0),
                         data: Rc::new(UnrolledExpressionData::Parameter(0)),
@@ -121,15 +135,18 @@ pub fn point_point() -> UnrolledExpression {
         &super::perpendicular::line_point(),
         &vec![
             UnrolledExpression {
+                weight: 1.0,
                 ty: ty::LINE,
                 span: span!(0, 0, 0, 0),
                 data: Rc::new(UnrolledExpressionData::LineFromPoints(
                     UnrolledExpression {
+                        weight: 1.0,
                         ty: ty::POINT,
                         span: span!(0, 0, 0, 0),
                         data: Rc::new(UnrolledExpressionData::Parameter(0)),
                     },
                     UnrolledExpression {
+                        weight: 1.0,
                         ty: ty::POINT,
                         span: span!(0, 0, 0, 0),
                         data: Rc::new(UnrolledExpressionData::Parameter(1)),
@@ -140,11 +157,13 @@ pub fn point_point() -> UnrolledExpression {
                 &super::mid::mid_function_point(),
                 &vec![
                     UnrolledExpression {
+                        weight: 1.0,
                         ty: ty::POINT,
                         span: span!(0, 0, 0, 0),
                         data: Rc::new(UnrolledExpressionData::Parameter(0)),
                     },
                     UnrolledExpression {
+                        weight: 1.0,
                         ty: ty::POINT,
                         span: span!(0, 0, 0, 0),
                         data: Rc::new(UnrolledExpressionData::Parameter(1)),
