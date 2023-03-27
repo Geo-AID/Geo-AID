@@ -14,21 +14,27 @@ use crate::{
     script::{figure::Figure, unroll, Expression, HashableArc, Weighed},
 };
 
-/*#[cfg(test)]
+#[cfg(test)]
 mod testing {
-    use std::path::PathBuf;
+    use std::{path::PathBuf, sync::Arc};
 
     use crate::{
         drawer,
         generator::Complex,
-        script::figure::Figure
+        script::{
+            figure::Figure,
+            unroll::PointMeta,
+            Expression::{FreePoint, Line, AnglePoint},
+            Weighed,
+        },
     };
 
     use super::project;
 
     #[test]
     fn test_project() {
-        let gen_points: [Complex; 4] = [
+        let x:u8 = 1;
+        let gen_points: [Complex; 3] = [
             Complex {
                 real: 0.3463,
                 imaginary: 0.436,
@@ -41,83 +47,74 @@ mod testing {
                 real: 0.312,
                 imaginary: 0.314,
             },
-            Complex {
-                real: 0.54764,
-                imaginary: 0.7546,
-            },
         ];
 
         let fig = Figure {
             points: vec![
-                Point {
-                    label: "A".to_string(),
-                    definition: PointDefinition::Indexed(0),
-                },
-                Point {
-                    label: "B".to_string(),
-                    definition: PointDefinition::Indexed(1),
-                },
-                Point {
-                    label: "C".to_string(),
-                    definition: PointDefinition::Indexed(2),
-                },
-                Point {
-                    label: "D".to_string(),
-                    definition: PointDefinition::Indexed(3),
-                },
+                (
+                    Arc::new(Weighed::one(FreePoint(0))),
+                    PointMeta {
+                        letter: 'A',
+                        primes: 0,
+                        index: None,
+                    },
+                ),
+                (
+                    Arc::new(Weighed::one(FreePoint(1))),
+                    PointMeta {
+                        letter: 'B',
+                        primes: 0,
+                        index: None,
+                    },
+                ),
+                (
+                    Arc::new(Weighed::one(FreePoint(2))),
+                    PointMeta {
+                        letter: 'C',
+                        primes: 0,
+                        index: None,
+                    },
+                ),
             ],
             lines: vec![
-                Line {
-                    label: "l".to_string(),
-                    definition: LineDefinition::TwoPoints(
-                        Box::new(PointDefinition::Indexed(0)),
-                        Box::new(PointDefinition::Indexed(1)),
-                    ),
-                },
-                Line {
-                    label: "k".to_string(),
-                    definition: LineDefinition::TwoPoints(
-                        Box::new(PointDefinition::Indexed(1)),
-                        Box::new(PointDefinition::Indexed(2)),
-                    ),
-                },
+                Arc::new(Weighed::one(Line(
+                    Arc::new(Weighed::one(FreePoint(0))),
+                    Arc::new(Weighed::one(FreePoint(1))),
+                ))),
+                Arc::new(Weighed::one(Line(
+                    Arc::new(Weighed::one(FreePoint(1))),
+                    Arc::new(Weighed::one(FreePoint(2))),
+                ))),
             ],
-            segments: Vec::new(),
+            angles: vec![
+                (
+                    Arc::new(Weighed::one(AnglePoint(
+                        Arc::new(Weighed::one(FreePoint(0))),
+                        Arc::new(Weighed::one(FreePoint(1))),
+                        Arc::new(Weighed::one(FreePoint(2))), 
+                    ))),
+                    x,
+                ),
+            ],
             canvas_size: (200, 200),
         };
 
-        let path_latex = PathBuf::from("testoutputs\\test.latex");
+        // let path_latex = PathBuf::from("testoutputs\\test.latex");
         let path_svg = PathBuf::from("testoutputs\\test.svg");
         let path_json = PathBuf::from("testoutputs\\test.json");
-        let path_raw = PathBuf::from("testoutputs\\test.raw");
+        // let path_raw = PathBuf::from("testoutputs\\test.raw");
 
         let pr = &project(&fig, &gen_points).unwrap();
 
-        drawer::latex::draw(
-            &path_latex,
-            (fig.canvas_size.0, fig.canvas_size.1),
-            pr,
-        );
+        // drawer::latex::draw(&path_latex, (fig.canvas_size.0, fig.canvas_size.1), pr);
 
-        drawer::svg::draw(
-            &path_svg,
-            (fig.canvas_size.0, fig.canvas_size.1),
-            pr,
-        );
+        drawer::svg::draw(&path_svg, (fig.canvas_size.0, fig.canvas_size.1), pr);
 
-        drawer::json::draw(
-            &path_json,
-            (fig.canvas_size.0, fig.canvas_size.1),
-            pr,
-        );
+        drawer::json::draw(&path_json, (fig.canvas_size.0, fig.canvas_size.1), pr);
 
-        drawer::raw::draw(
-            &path_raw,
-            (fig.canvas_size.0, fig.canvas_size.1),
-            pr,
-        );
+        // drawer::raw::draw(&path_raw, (fig.canvas_size.0, fig.canvas_size.1), pr);
     }
-}*/
+}
 
 pub struct Blueprint {
     pub points: Vec<RenderedPoint>,
@@ -137,7 +134,6 @@ pub enum Rendered {
 #[derive(Serialize)]
 pub struct Output {
     /// Map containing points as keys and point structs as values
-    /// 
     pub map: HashMap<HashableArc<Weighed<Expression>>, Rc<RenderedPoint>>,
     /// final product of the project function
     pub vec_rendered: Vec<Rendered>,
@@ -175,6 +171,8 @@ pub struct RenderedAngle {
     pub no_arcs: u8,
     /// Expression that the angle was defined by
     pub expr: Arc<Weighed<Expression>>,
+    // Value of the angle (who'd have guessed)
+    pub angle_value: f64,
 }
 
 fn get_angle_points(
@@ -220,6 +218,50 @@ fn get_angle_points(
                 );
                 (arm1, origin, arm2)
             }
+        }
+        _ => unreachable!(),
+    }
+}
+
+fn get_angle_value(angle: &Arc<Weighed<Expression>>, generated_points: &[Complex]) -> f64 {
+    match &angle.object {
+        Expression::AnglePoint(p1, p2, p3) => {
+            let arm1 = evaluate_expression_simple(p1, generated_points).unwrap();
+            let origin = evaluate_expression_simple(p2, generated_points).unwrap();
+            let arm2 = evaluate_expression_simple(p3, generated_points).unwrap();
+
+            geometry::get_angle(arm1.0, origin.0, arm2.0)
+        }
+        Expression::AngleLine(ln1, ln2) => {
+            let ev_ln1 = evaluate_expression_simple(ln1, generated_points).unwrap();
+            let ev_ln2 = evaluate_expression_simple(ln2, generated_points).unwrap();
+
+            let origin = geometry::get_crossing(ev_ln1.0, ev_ln2.0).unwrap();
+
+            if ev_ln1.0.imaginary == 0.0 {
+                let arm1 = Complex::new(origin.real, origin.imaginary + 2.0);
+                let arm2 = Complex::new(
+                    origin.real + 2.0,
+                    ev_ln2.0.real * (origin.real + 2.0) + ev_ln2.0.imaginary,
+                );
+                return geometry::get_angle(arm1, origin, arm2);
+            } else if ev_ln2.0.imaginary == 0.0 {
+                let arm1 = Complex::new(
+                    origin.real + 2.0,
+                    ev_ln1.0.real * (origin.real + 2.0) + ev_ln1.0.imaginary,
+                );
+                let arm2 = Complex::new(origin.real, origin.imaginary + 2.0);
+                return geometry::get_angle(arm1, origin, arm2);
+            }
+            let arm1 = Complex::new(
+                origin.real + 2.0,
+                ev_ln1.0.real * (origin.real + 2.0) + ev_ln1.0.imaginary,
+            );
+            let arm2 = Complex::new(
+                origin.real + 2.0,
+                ev_ln2.0.real * (origin.real + 2.0) + ev_ln2.0.imaginary,
+            );
+            geometry::get_angle(arm1, origin, arm2)
         }
         _ => unreachable!(),
     }
@@ -380,10 +422,11 @@ pub fn project(figure: &Figure, generated_points: &[Complex]) -> Result<Output, 
     for (i, pt) in points.iter().enumerate() {
         let pt_label =
             unroll::construct_point_name(figure.points[i].1.letter, figure.points[i].1.primes);
+        let id = Uuid::new_v4();
         blueprint_points.push(Rc::new(RenderedPoint {
             label: pt_label,
             position: *pt,
-            uuid: Uuid::new_v4(),
+            uuid: id,
         }));
     }
 
@@ -413,17 +456,18 @@ pub fn project(figure: &Figure, generated_points: &[Complex]) -> Result<Output, 
             points: get_angle_points(&ang.0, generated_points),
             no_arcs: ang.1,
             expr: Arc::clone(&ang.0),
+            angle_value: get_angle_value(&ang.0, generated_points),
         });
     }
 
     // println!("{:#?}", blueprint_points);
     Ok(Output {
+        map: iden,
         vec_rendered: blueprint_points
             .into_iter()
             .map(Rendered::Point)
             .chain(blueprint_lines.into_iter().map(Rendered::Line))
             .chain(blueprint_angles.into_iter().map(Rendered::Angle))
             .collect(),
-        map: iden,
     })
 }

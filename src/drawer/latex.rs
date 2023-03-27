@@ -58,7 +58,8 @@ pub fn draw(target: &Path, canvas_size: (usize, usize), output: &Output) {
                         content += &format!(
                             r#"
                             \tkzMarkAngle[size = 0.5,mark = none,arc={no_arcs},mkcolor = black]({},{},{})
-                            "#, p1_name.uuid, p2_name.uuid, p3_name.uuid
+                            "#,
+                            p1_name.uuid, p2_name.uuid, p3_name.uuid
                         );
                     }
                     // There are hard coded values in \coordinate, it is intentional, every point has it label marked by Rendered::Point sequence above

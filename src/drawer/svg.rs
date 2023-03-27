@@ -3,7 +3,7 @@ use std::{fs::File, io::Write, path::Path};
 use crate::{
     generator::Complex,
     projector::{Output, Rendered},
-    script::Expression::{AnglePoint, AngleLine},
+    script::Expression::{AngleLine, AnglePoint},
 };
 
 /// Draws the given figure as .svg format.
@@ -53,14 +53,49 @@ pub fn draw(target: &Path, canvas_size: (usize, usize), output: &Output) {
                 );
             }
             Rendered::Angle(angle) => {
+                let _no_arcs = String::from("l"); // Requires a change later! It has to be based on info from the script
                 match &angle.expr.object {
-                    AnglePoint(p1, p2, p3) => {
-                        content+= &format!("<path d=\"M {},{} 100 L 140 100 L 120 140 z\"/>", )
+                    AnglePoint(_p1, _p2, _p3) => {
+                        let x: u32 = 5;
+                        content += &format!(
+                            r#"
+                        <g transform="rotate({}, {}, {}) translate({}, {})" fill="transparent" stroke="black" stroke-width="0.1">
+                            <path d="M {}, 0 A 45, 45, 0, 0, 0, {}, {}" /> 
+                        </g>"#,
+                            (crate::generator::geometry::get_line(angle.points.0, angle.points.1)
+                                .real
+                                .atan())
+                            .to_degrees(),
+                            angle.points.1.real,
+                            angle.points.1.imaginary,
+                            angle.points.1.real,
+                            angle.points.1.imaginary,
+                            9 * x,
+                            angle.angle_value.cos() * 45.0,
+                            -angle.angle_value.sin() * 45.0
+                        );
                     }
-                    AngleLine(ln1, ln2) => {
-                        
+                    AngleLine(_ln1, _ln2) => {
+                        let x: u32 = 5;
+                        content += &format!(
+                            r#"
+                        <g transform="rotate({}, {}, {}) translate({}, {})" fill="transparent" stroke="black" stroke-width="0.1">
+                            <path d="M {}, 0 A 45, 45, 0, 0, 0, {}, {}" /> 
+                        </g>"#,
+                            (crate::generator::geometry::get_line(angle.points.0, angle.points.1)
+                                .real
+                                .atan()) 
+                            .to_degrees(),
+                            angle.points.1.real,
+                            angle.points.1.imaginary,
+                            angle.points.1.real,
+                            angle.points.1.imaginary,
+                            9 * x,
+                            angle.angle_value.cos() * 45.0,
+                            -angle.angle_value.sin() * 45.0
+                        );
                     }
-                    _=>unreachable!(),
+                    _ => unreachable!(),
                 }
             }
         }
