@@ -57,8 +57,9 @@ pub fn draw(target: &Path, canvas_size: (usize, usize), output: &Output) {
 
                         content += &format!(
                             r#"
-                            \tkzMarkAngle[size = 0.5,mark = none,arc={},mkcolor = black]({:?},{:?},{:?})
-                            "#, no_arcs, p1_name, p2_name, p3_name
+                            \tkzMarkAngle[size = 0.5,mark = none,arc={no_arcs},mkcolor = black]({},{},{})
+                            "#,
+                            p1_name.uuid, p2_name.uuid, p3_name.uuid
                         );
                     }
                     AngleLine(_ln1, _ln2) => {

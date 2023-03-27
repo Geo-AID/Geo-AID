@@ -1,6 +1,12 @@
 use std::{fs::OpenOptions, io::Write, path::Path, sync::Arc};
 
-use crate::{projector::{Rendered, Output}, script::{Expression::{AnglePoint, AngleLine}, HashableArc}};
+use crate::{
+    projector::{Output, Rendered},
+    script::{
+        Expression::{AngleLine, AnglePoint},
+        HashableArc,
+    },
+};
 
 /// # Panics
 /// Panics whenever there is a filesystem problem
@@ -33,7 +39,7 @@ pub fn draw(target: &Path, canvas_size: (usize, usize), output: &Output) {
                 let p_2 = angle.points.2;
                 let no_arcs = String::from("l"); // Requires a change later! It has to be based on info from the script
                 match &angle.expr.object {
-                    AnglePoint(p1,p2, p3) => {
+                    AnglePoint(p1, p2, p3) => {
                         let point1 = HashableArc::new(Arc::clone(p1));
                         let point2 = HashableArc::new(Arc::clone(p2));
                         let point3 = HashableArc::new(Arc::clone(p3));
@@ -41,13 +47,13 @@ pub fn draw(target: &Path, canvas_size: (usize, usize), output: &Output) {
                         let p2_name = output.map.get(&point2).unwrap();
                         let p3_name = output.map.get(&point3).unwrap();
 
-                        file.write(format!("\nangle defined with 3 points: points defining the angle with their x and y coordinates: first point - ({})({}, {}), origin - ({})({}, {}), second point - ({})({}, {}). Number of arcs: {}",
+                        file.write_all(format!("\nangle defined with 3 points: points defining the angle with their x and y coordinates: first point - ({})({}, {}), origin - ({})({}, {}), second point - ({})({}, {}). Number of arcs: {}",
                         p1_name.label, p1_name.position.real, p1_name.position.imaginary, p2_name.label, p2_name.position.real, p2_name.position.imaginary, p3_name.label, p3_name.position.real, p3_name.position.imaginary, no_arcs).as_bytes()).unwrap();
                     }
                     AngleLine(_ln1, _ln2) => {
-                        file.write(format!("\nangle defined with 2 lines: coordinates of the points defining the lines: first point - ({}, {}), origin - ({}, {}), second point - ({}, {})", p_1.real, p_1. imaginary, origin.real, origin.imaginary, p_2.real, p_2.imaginary).as_bytes()).unwrap();
+                        file.write_all(format!("\nangle defined with 2 lines: coordinates of the points defining the lines: first point - ({}, {}), origin - ({}, {}), second point - ({}, {})", p_1.real, p_1. imaginary, origin.real, origin.imaginary, p_2.real, p_2.imaginary).as_bytes()).unwrap();
                     }
-                    _=>unreachable!(),
+                    _ => unreachable!(),
                 }
             }
         }
