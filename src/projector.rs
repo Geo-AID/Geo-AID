@@ -24,7 +24,7 @@ mod testing {
         script::{
             figure::Figure,
             unroll::PointMeta,
-            Expression::{FreePoint, Line, AnglePoint},
+            Expression::{AnglePoint, FreePoint, Line},
             Weighed,
         },
     };
@@ -33,7 +33,7 @@ mod testing {
 
     #[test]
     fn test_project() {
-        let x:u8 = 1;
+        let x: u8 = 1;
         let gen_points: [Complex; 3] = [
             Complex {
                 real: 0.3463,
@@ -86,42 +86,35 @@ mod testing {
                     Arc::new(Weighed::one(FreePoint(2))),
                 ))),
             ],
-            angles: vec![
-                (
-                    Arc::new(Weighed::one(AnglePoint(
-                        Arc::new(Weighed::one(FreePoint(0))),
-                        Arc::new(Weighed::one(FreePoint(1))),
-                        Arc::new(Weighed::one(FreePoint(2))), 
-                    ))),
-                    x,
-                ),
-            ],
+            angles: vec![(
+                Arc::new(Weighed::one(AnglePoint(
+                    Arc::new(Weighed::one(FreePoint(0))),
+                    Arc::new(Weighed::one(FreePoint(1))),
+                    Arc::new(Weighed::one(FreePoint(2))),
+                ))),
+                x,
+            )],
             canvas_size: (200, 200),
         };
 
-        // let path_latex = PathBuf::from("testoutputs\\test.latex");
+        let path_latex = PathBuf::from("testoutputs\\test.latex");
         let path_svg = PathBuf::from("testoutputs\\test.svg");
         let path_json = PathBuf::from("testoutputs\\test.json");
-        // let path_raw = PathBuf::from("testoutputs\\test.raw");
+        let path_raw = PathBuf::from("testoutputs\\test.raw");
 
         let pr = &project(&fig, &gen_points).unwrap();
 
-        // drawer::latex::draw(&path_latex, (fig.canvas_size.0, fig.canvas_size.1), pr);
+        drawer::latex::draw(&path_latex, (fig.canvas_size.0, fig.canvas_size.1), pr);
 
         drawer::svg::draw(&path_svg, (fig.canvas_size.0, fig.canvas_size.1), pr);
 
         drawer::json::draw(&path_json, (fig.canvas_size.0, fig.canvas_size.1), pr);
 
-        // drawer::raw::draw(&path_raw, (fig.canvas_size.0, fig.canvas_size.1), pr);
+        drawer::raw::draw(&path_raw, (fig.canvas_size.0, fig.canvas_size.1), pr);
     }
 }
 
-pub struct Blueprint {
-    pub points: Vec<RenderedPoint>,
-    pub lines: Vec<RenderedLine>,
-    pub angles: Vec<RenderedAngle>,
-}
-
+/// Enum representing things that are later drawn in the drawers.
 #[derive(Serialize)]
 #[serde(tag = "type")]
 #[serde(rename_all = "snake_case")]
@@ -131,9 +124,10 @@ pub enum Rendered {
     Angle(RenderedAngle),
 }
 
+/// The final product passed to the drawers.
 #[derive(Serialize)]
 pub struct Output {
-    /// Map containing points as keys and point structs as values
+    /// Map containing Expression (points) as keys and point structs as values
     pub map: HashMap<HashableArc<Weighed<Expression>>, Rc<RenderedPoint>>,
     /// final product of the project function
     pub vec_rendered: Vec<Rendered>,
@@ -147,14 +141,12 @@ pub struct RenderedPoint {
     pub position: Complex,
     /// Point's custom uuid
     pub uuid: Uuid,
-    //pub expr: Arc<Weighed<Expression>>,
 }
 
 #[derive(Serialize)]
 pub struct RenderedLine {
     /// The line's label
     pub label: String,
-    /// The line's thickness
     /// Two ends of the line
     pub points: (Complex, Complex),
     /// Expression defining the line
@@ -175,6 +167,10 @@ pub struct RenderedAngle {
     pub angle_value: f64,
 }
 
+/// Function getting the points defining the angle from the Expression defining it.
+///
+/// # Panics
+/// It panics when the two lines that you are trying find crossing point of, are parallel.
 fn get_angle_points(
     angle: &Arc<Weighed<Expression>>,
     generated_points: &[Complex],
@@ -193,14 +189,14 @@ fn get_angle_points(
 
             let origin = geometry::get_crossing(ev_ln1.0, ev_ln2.0).unwrap();
 
-            if ev_ln1.0.imaginary == 0.0 {
+            if ev_ln1.0.real.is_infinite() {
                 let arm1 = Complex::new(origin.real, origin.imaginary + 2.0);
                 let arm2 = Complex::new(
                     origin.real + 2.0,
                     ev_ln2.0.real * (origin.real + 2.0) + ev_ln2.0.imaginary,
                 );
                 (arm1, origin, arm2)
-            } else if ev_ln2.0.imaginary == 0.0 {
+            } else if ev_ln2.0.real.is_infinite() {
                 let arm1 = Complex::new(
                     origin.real + 2.0,
                     ev_ln1.0.real * (origin.real + 2.0) + ev_ln1.0.imaginary,
@@ -223,6 +219,10 @@ fn get_angle_points(
     }
 }
 
+/// Function getting the value of the angle defined by an Expression.
+///
+/// # Panics
+/// It panics when the two lines that you are trying find crossing point of, are parallel.
 fn get_angle_value(angle: &Arc<Weighed<Expression>>, generated_points: &[Complex]) -> f64 {
     match &angle.object {
         Expression::AnglePoint(p1, p2, p3) => {
@@ -238,14 +238,14 @@ fn get_angle_value(angle: &Arc<Weighed<Expression>>, generated_points: &[Complex
 
             let origin = geometry::get_crossing(ev_ln1.0, ev_ln2.0).unwrap();
 
-            if ev_ln1.0.imaginary == 0.0 {
+            if ev_ln1.0.real.is_infinite() {
                 let arm1 = Complex::new(origin.real, origin.imaginary + 2.0);
                 let arm2 = Complex::new(
                     origin.real + 2.0,
                     ev_ln2.0.real * (origin.real + 2.0) + ev_ln2.0.imaginary,
                 );
                 return geometry::get_angle(arm1, origin, arm2);
-            } else if ev_ln2.0.imaginary == 0.0 {
+            } else if ev_ln2.0.real.is_infinite() {
                 let arm1 = Complex::new(
                     origin.real + 2.0,
                     ev_ln1.0.real * (origin.real + 2.0) + ev_ln1.0.imaginary,
@@ -267,6 +267,7 @@ fn get_angle_value(angle: &Arc<Weighed<Expression>>, generated_points: &[Complex
     }
 }
 
+/// Function getting the intersection points of the line with the picture's frame.
 fn get_line_ends(figure: &Figure, ln_c: Complex) -> (Complex, Complex) {
     // +--0--+
     // |     |
@@ -358,7 +359,12 @@ fn get_line_ends(figure: &Figure, ln_c: Complex) -> (Complex, Complex) {
     }
 }
 
-/// Takes the figure and rendered points and attempt to design a figure that can then be rendered in chosen format.
+/// Pure utitlity function, used for scaling and transforming points which were missed by fn project.
+fn scale_and_tranform(offset: Complex, scale: f64, size: Complex, pt: Complex) -> Complex {
+    (pt - offset) * scale + size
+}
+
+/// Takes the figure and rendered points and attempts to design a figure that can then be rendered in chosen format.
 ///
 /// # Panics
 /// Despite containing .unwrap() calls, it shouldn't panic.
@@ -430,6 +436,7 @@ pub fn project(figure: &Figure, generated_points: &[Complex]) -> Result<Output, 
         }));
     }
 
+    // Creating a HashMap (the bridge between Expression defining the point and those points).
     let mut iden = HashMap::new();
     for (i, pt) in figure.points.clone().iter().enumerate() {
         let point = HashableArc::new(Arc::clone(&pt.0));
@@ -438,12 +445,22 @@ pub fn project(figure: &Figure, generated_points: &[Complex]) -> Result<Output, 
 
     let mut blueprint_lines = Vec::new();
 
+    // All the scaling and moving is just adjusting (scaling and moving by a vector) the lines to match the points to which the scale and offset were applied before.
     for ln in &figure.lines {
         let ln_c = evaluate_expression_simple(ln, generated_points)?;
-
+        let ln_c_moved = Complex::new(
+            ln_c.0.real,
+            ln_c.0.real * offset.real + ln_c.0.imaginary - offset.imaginary,
+        );
+        let ln_c_scaled = Complex::new(ln_c_moved.real, ln_c_moved.imaginary * scale);
+        let ln_c_moved_by_size = Complex::new(
+            ln_c_scaled.real,
+            -(ln_c_scaled.real * size005.real) + ln_c_scaled.imaginary + size005.imaginary,
+        );
+        let line_ends = get_line_ends(figure, ln_c_moved_by_size);
         blueprint_lines.push(RenderedLine {
             label: String::new(),
-            points: get_line_ends(figure, ln_c.0),
+            points: (line_ends.0, line_ends.1),
             expr: Arc::clone(ln),
         });
     }
@@ -451,16 +468,20 @@ pub fn project(figure: &Figure, generated_points: &[Complex]) -> Result<Output, 
     let mut blueprint_angles = Vec::new();
 
     for ang in &figure.angles {
+        let angle_points = get_angle_points(&ang.0, generated_points);
         blueprint_angles.push(RenderedAngle {
             label: String::new(),
-            points: get_angle_points(&ang.0, generated_points),
+            points: (
+                scale_and_tranform(offset, scale, size005, angle_points.0),
+                scale_and_tranform(offset, scale, size005, angle_points.1),
+                scale_and_tranform(offset, scale, size005, angle_points.2),
+            ),
             no_arcs: ang.1,
             expr: Arc::clone(&ang.0),
             angle_value: get_angle_value(&ang.0, generated_points),
         });
     }
 
-    // println!("{:#?}", blueprint_points);
     Ok(Output {
         map: iden,
         vec_rendered: blueprint_points

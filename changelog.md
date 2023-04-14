@@ -27,3 +27,4 @@
 - Added parser support for compiler flags.
 - Added identical_expressions optimization flag, allowing to optimise for calculating identical expressions.
 - Improved generator-projector pipeline.
+- Improved angle support.
