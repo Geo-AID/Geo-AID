@@ -1,10 +1,28 @@
+use std::string::String;
 use std::sync::Arc;
 use std::{fs::File, io::Write, path::Path};
 
+use crate::generator::Complex;
 use crate::projector::{Output, Rendered};
-use crate::script::Expression::{AngleLine, AnglePoint};
-use crate::script::HashableArc;
+use crate::script::Expression::{self, AngleLine, AnglePoint};
+use crate::script::{HashableArc, Weighed};
 
+/// Function getting the point's name (if it exists, if not then it returns the point's coordinates)
+fn get_point_name(
+    expr: &Arc<Weighed<Expression>>,
+    output: &Output,
+    point: Complex,
+    scale: f64,
+) -> String {
+    match output.map.get(&HashableArc::new(Arc::clone(expr))) {
+        Some(p) => {
+            format!("q{}", p.uuid)
+        }
+        None => {
+            format!("({}, {})", (point.real * scale), point.imaginary * scale)
+        }
+    }
+}
 /// Draws the given figure to a .tex file using tikz library.
 ///
 /// # Panics
@@ -29,8 +47,8 @@ pub fn draw(target: &Path, canvas_size: (usize, usize), output: &Output) {
                 let position = point.position * scale;
                 content+=&format!(
                     "\\coordinate [label=left:${}$] ({}) at ({}, {}); \\fill[black] ({}) circle (1pt);",
-                    point.label, point.label, position.real,
-                    position.imaginary, point.label
+                    point.label, point.uuid, position.real,
+                    position.imaginary, point.uuid
                 );
             }
             Rendered::Line(line) => {
@@ -42,33 +60,36 @@ pub fn draw(target: &Path, canvas_size: (usize, usize), output: &Output) {
                 );
             }
             Rendered::Angle(angle) => {
-                let p1 = angle.points.0 * scale;
-                let origin = angle.points.1 * scale;
-                let p2 = angle.points.2 * scale;
+                let p1 = angle.points.0;
+                let origin = angle.points.1;
+                let p2 = angle.points.2;
                 let no_arcs = String::from("l"); // Requires a change later! It has to be based on info from the script
                 match &angle.expr.object {
-                    AnglePoint(p1, p2, p3) => {
-                        let point1 = HashableArc::new(Arc::clone(p1));
-                        let point2 = HashableArc::new(Arc::clone(p2));
-                        let point3 = HashableArc::new(Arc::clone(p3));
-                        let p1_name = output.map.get(&point1).unwrap();
-                        let p2_name = output.map.get(&point2).unwrap();
-                        let p3_name = output.map.get(&point3).unwrap();
-
+                    AnglePoint(point1, point2, point3) => {
                         content += &format!(
                             r#"
-                            \tkzMarkAngle[size = 0.5,mark = none,arc={no_arcs},mkcolor = black]({},{},{})
+                            \begin{{scope}}
+                            \coordinate (A) at {};
+                            \coordinate (B) at {};
+                            \coordinate (C) at {};
+                            \tkzMarkAngle[size = 0.5,mark = none,arc={no_arcs},mkcolor = black](A,B,C)
+                            \end{{scope}}
                             "#,
-                            p1_name.uuid, p2_name.uuid, p3_name.uuid
+                            get_point_name(point1, output, p1, scale),
+                            get_point_name(point2, output, origin, scale),
+                            get_point_name(point3, output, p2, scale),
                         );
                     }
                     AngleLine(_ln1, _ln2) => {
                         content += &format!(
                             r#"
-                        \coordinate (A) at ({}, {})
-                        \coordinate (B) at ({}, {})
-                        \coordinate (C) at ({}, {})
-                        \tkzMarkAngle[size = 0.5,mark = none,arc={no_arcs},mkcolor = black](A,B,C)"#,
+                            \begin{{scope}}
+                            \coordinate (A) at ({}, {});
+                            \coordinate (B) at ({}, {});
+                            \coordinate (C) at ({}, {});
+                            \tkzMarkAngle[size = 2,mark = none,arc={no_arcs},mkcolor = black](A,B,C)
+                            \end{{scope}}
+                        "#,
                             p1.real,
                             p1.imaginary,
                             origin.real,
