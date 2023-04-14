@@ -23,20 +23,22 @@ pub fn draw(target: &Path, canvas_size: (usize, usize), output: &Output) {
                 #[allow(clippy::cast_precision_loss)]
                 let p = Complex::new(pt.position.real, pt.position.imaginary);
                 let real = if p.real - 20.0 < 0.0 {
-                    p.real + 10.0
+                    p.real + 20.0
                 } else {
-                    p.real - 10.0
+                    p.real - 20.0
                 };
 
                 let imaginary = if p.imaginary - 20.0 < 0.0 {
-                    p.imaginary + 10.0
+                    p.imaginary + 20.0
                 } else {
-                    p.imaginary - 10.0
+                    p.imaginary - 20.0
                 };
                 content += &format!(
                     "<circle cx=\"{}\" cy=\"{}\" fill=\"black\" r=\"2\"/>
                 <text stroke=\"black\" x=\"{real}\" y=\"{imaginary}\">{}</text>",
-                    p.real, p.imaginary, pt.label
+                    p.real,
+                    p.imaginary,
+                    pt.label
                 );
             }
 

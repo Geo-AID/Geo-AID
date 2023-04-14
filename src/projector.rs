@@ -19,7 +19,7 @@ mod testing {
 
     use crate::{
         drawer,
-        generator::Complex,
+        generator::{Complex, Adjustable},
         script::{
             figure::Figure,
             unroll::PointMeta,
@@ -33,19 +33,19 @@ mod testing {
     #[test]
     fn test_project() {
         let x: u8 = 1;
-        let gen_points: [Complex; 3] = [
-            Complex {
+        let gen_points: [Adjustable; 3] = [
+            Adjustable::Point(Complex {
                 real: 0.3463,
                 imaginary: 0.436,
-            },
-            Complex {
+            }),
+            Adjustable::Point(Complex {
                 real: 0.23,
                 imaginary: 0.87,
-            },
-            Complex {
+            }),
+            Adjustable::Point(Complex {
                 real: 0.312,
                 imaginary: 0.314,
-            },
+            }),
         ];
 
         let fig = Figure {
@@ -172,19 +172,19 @@ pub struct RenderedAngle {
 /// It panics when the two lines that you are trying find crossing point of, are parallel.
 fn get_angle_points(
     angle: &Arc<Weighed<Expression>>,
-    generated_points: &[Complex],
+    generated: &[Adjustable],
 ) -> (Complex, Complex, Complex) {
     match &angle.object {
         Expression::AnglePoint(p1, p2, p3) => {
-            let arm1 = evaluate_expression_simple(p1, generated_points).unwrap();
-            let origin = evaluate_expression_simple(p2, generated_points).unwrap();
-            let arm2 = evaluate_expression_simple(p3, generated_points).unwrap();
+            let arm1 = evaluate_expression_simple(p1, generated).unwrap();
+            let origin = evaluate_expression_simple(p2, generated).unwrap();
+            let arm2 = evaluate_expression_simple(p3, generated).unwrap();
 
             (arm1.0, origin.0, arm2.0)
         }
         Expression::AngleLine(ln1, ln2) => {
-            let ev_ln1 = evaluate_expression_simple(ln1, generated_points).unwrap();
-            let ev_ln2 = evaluate_expression_simple(ln2, generated_points).unwrap();
+            let ev_ln1 = evaluate_expression_simple(ln1, generated).unwrap();
+            let ev_ln2 = evaluate_expression_simple(ln2, generated).unwrap();
 
             let origin = geometry::get_crossing(ev_ln1.0, ev_ln2.0).unwrap();
 
@@ -222,18 +222,18 @@ fn get_angle_points(
 ///
 /// # Panics
 /// It panics when the two lines that you are trying find crossing point of, are parallel.
-fn get_angle_value(angle: &Arc<Weighed<Expression>>, generated_points: &[Complex]) -> f64 {
+fn get_angle_value(angle: &Arc<Weighed<Expression>>, generated: &[Adjustable]) -> f64 {
     match &angle.object {
         Expression::AnglePoint(p1, p2, p3) => {
-            let arm1 = evaluate_expression_simple(p1, generated_points).unwrap();
-            let origin = evaluate_expression_simple(p2, generated_points).unwrap();
-            let arm2 = evaluate_expression_simple(p3, generated_points).unwrap();
+            let arm1 = evaluate_expression_simple(p1, generated).unwrap();
+            let origin = evaluate_expression_simple(p2, generated).unwrap();
+            let arm2 = evaluate_expression_simple(p3, generated).unwrap();
 
             geometry::get_angle(arm1.0, origin.0, arm2.0)
         }
         Expression::AngleLine(ln1, ln2) => {
-            let ev_ln1 = evaluate_expression_simple(ln1, generated_points).unwrap();
-            let ev_ln2 = evaluate_expression_simple(ln2, generated_points).unwrap();
+            let ev_ln1 = evaluate_expression_simple(ln1, generated).unwrap();
+            let ev_ln2 = evaluate_expression_simple(ln2, generated).unwrap();
 
             let origin = geometry::get_crossing(ev_ln1.0, ev_ln2.0).unwrap();
 
@@ -370,10 +370,7 @@ fn scale_and_tranform(offset: Complex, scale: f64, size: Complex, pt: Complex) -
 ///
 /// # Errors
 /// Returns an error if there is a problem with evaluating constructs (e. g. intersection of two parallel lines).
-pub fn project(
-    figure: &Figure,
-    generated_points: &[Adjustable],
-) -> Result<Vec<Rendered>, EvaluationError> {
+pub fn project(figure: &Figure, generated_points: &[Adjustable]) -> Result<Output, EvaluationError> {
     let points: Vec<Complex> = figure
         .points
         .iter()

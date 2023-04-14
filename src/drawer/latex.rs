@@ -80,6 +80,7 @@ pub fn draw(target: &Path, canvas_size: (usize, usize), output: &Output) {
                             get_point_name(point3, output, p2, scale),
                         );
                     }
+                    // There are hard coded values in \coordinate, it is intentional, every point has it label marked by Rendered::Point sequence above
                     AngleLine(_ln1, _ln2) => {
                         content += &format!(
                             r#"
