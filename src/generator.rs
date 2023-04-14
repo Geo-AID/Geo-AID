@@ -1,29 +1,25 @@
 use std::{
-    cell::RefCell,
-    collections::{HashMap, VecDeque},
+    collections::VecDeque,
     fmt::Display,
     mem,
     ops::{Add, AddAssign, Div, Mul, Neg, Sub, SubAssign},
     sync::{mpsc, Arc},
     thread::{self, JoinHandle},
-    time::{Duration, Instant},
 };
 
-use serde::Serialize;
-
-use crate::script::{unit, ComplexUnit, Criteria, HashableWeakArc};
+use crate::script::Criteria;
 
 #[derive(Debug)]
 pub enum EvaluationError {
     ParallelLines,
 }
 
-pub mod critic;
+mod critic;
 pub mod geometry;
 mod magic_box;
 
 /// Represents a complex number located on a "unit" plane.
-#[derive(Debug, Clone, Copy, Serialize)]
+#[derive(Debug, Clone, Copy)]
 pub struct Complex {
     /// X coordinate located in range [0, 1).
     pub real: f64,
@@ -32,29 +28,12 @@ pub struct Complex {
 }
 
 impl Complex {
-    #[must_use]
     pub fn new(real: f64, imaginary: f64) -> Self {
         Self { real, imaginary }
     }
 
-    #[must_use]
     pub fn mangitude(self) -> f64 {
         f64::sqrt(self.real.powi(2) + self.imaginary.powi(2))
-    }
-
-    #[must_use]
-    pub fn conjugate(self) -> Complex {
-        Complex::new(self.real, -self.imaginary)
-    }
-
-    #[must_use]
-    pub fn partial_mul(self, other: Complex) -> Complex {
-        Complex::new(self.real * other.real, self.imaginary * other.imaginary)
-    }
-
-    #[must_use]
-    pub fn partial_div(self, other: Complex) -> Complex {
-        Complex::new(self.real / other.real, self.imaginary / other.imaginary)
     }
 }
 
@@ -62,10 +41,7 @@ impl Mul for Complex {
     type Output = Complex;
 
     fn mul(self, rhs: Complex) -> Self::Output {
-        Complex::new(
-            self.real * rhs.real - self.imaginary * rhs.imaginary,
-            self.real * rhs.imaginary + rhs.real * self.imaginary,
-        )
+        Complex::new(self.real * rhs.real, self.imaginary * rhs.imaginary)
     }
 }
 
@@ -105,7 +81,7 @@ impl Div for Complex {
     type Output = Complex;
 
     fn div(self, rhs: Complex) -> Self::Output {
-        (self * rhs.conjugate()) / (rhs.real * rhs.real + rhs.imaginary * rhs.imaginary)
+        Complex::new(self.real / rhs.real, self.imaginary / rhs.imaginary)
     }
 }
 
@@ -167,49 +143,17 @@ pub enum Message {
     Terminate,
 }
 
-pub struct ExprCache {
-    pub value: Complex,
-    pub unit: ComplexUnit,
-    pub generation: u64,
-}
-
 fn generation_cycle(
-    receiver: &mpsc::Receiver<Message>,
-    sender: &mpsc::Sender<(Vec<(Complex, f64)>, Logger)>,
-    criteria: &Arc<Vec<Criteria>>,
-    flags: &Arc<Flags>,
+    receiver: mpsc::Receiver<Message>,
+    sender: mpsc::Sender<(Vec<(Complex, f64)>, Logger)>,
+    criteria: Arc<Vec<Criteria>>,
 ) {
-    // Create the expression record
-    let mut record = HashMap::new();
-
-    if flags.optimizations.identical_expressions {
-        for crit in criteria.as_ref() {
-            let mut exprs = Vec::new();
-            crit.object.collect(&mut exprs);
-
-            for expr in exprs.into_iter().filter(|x| Arc::strong_count(x) > 1) {
-                // We use weak to not mess with the strong count.
-                record
-                    .entry(HashableWeakArc::new(Arc::downgrade(expr)))
-                    .or_insert(ExprCache {
-                        value: Complex::new(0.0, 0.0),
-                        unit: unit::SCALAR,
-                        generation: 0,
-                    });
-            }
-        }
-    }
-
-    let mut generation = 1;
-    let record = RefCell::new(record);
-
     loop {
         match receiver.recv().unwrap() {
             Message::Generate(adjustment, points) => {
                 let mut logger = points.1;
                 let points = magic_box::adjust(points.0, adjustment);
-                let points =
-                    critic::evaluate(&points, criteria, &mut logger, generation, flags, &record);
+                let points = critic::evaluate(points, &criteria, &mut logger);
 
                 // println!("Adjustment + critic = {:#?}", points);
 
@@ -217,8 +161,6 @@ fn generation_cycle(
             }
             Message::Terminate => return,
         }
-
-        generation += 1;
     }
 }
 
@@ -239,12 +181,10 @@ pub struct Generator {
 }
 
 impl Generator {
-    #[must_use]
     pub fn new(
         point_count: usize,
         cycles_per_generation: usize,
-        criteria: &Arc<Vec<Criteria>>,
-        flags: &Arc<Flags>,
+        criteria: Arc<Vec<Criteria>>,
     ) -> Self {
         let (input_senders, input_receivers): (
             Vec<mpsc::Sender<Message>>,
@@ -261,9 +201,8 @@ impl Generator {
                 .into_iter()
                 .map(|rec| {
                     let sender = mpsc::Sender::clone(&output_sender);
-                    let criteria = Arc::clone(criteria);
-                    let flags = Arc::clone(flags);
-                    thread::spawn(move || generation_cycle(&rec, &sender, &criteria, &flags))
+                    let criteria = Arc::clone(&criteria);
+                    thread::spawn(move || generation_cycle(rec, sender, criteria))
                 })
                 .collect(),
             senders: input_senders,
@@ -274,12 +213,7 @@ impl Generator {
     }
 
     /// Performs a generation cycle with pre-baked magnitudes (how much a point can get adjusted).
-    ///
-    /// # Returns
-    /// The time it took for this cycle to complete.
-    fn cycle_prebaked(&mut self, magnitudes: &[f64]) -> Duration {
-        let now = Instant::now();
-
+    fn cycle_prebaked(&mut self, magnitudes: &[f64]) {
         // Send data to each worker
         for (i, sender) in self.senders.iter().enumerate() {
             sender
@@ -296,7 +230,6 @@ impl Generator {
         for _ in 0..self.workers.len() {
             // If the total quality is larger than the current total, replace the points.
             let (points, logger) = self.receiver.recv().unwrap();
-            #[allow(clippy::cast_precision_loss)]
             let total_quality =
                 points.iter().map(|x| x.1).sum::<f64>() / self.current_points.len() as f64;
 
@@ -309,18 +242,13 @@ impl Generator {
             }
         }
 
-        let delta = now.elapsed();
-
         // Show the logger's output
         for line in final_logger {
             println!("{line}");
         }
-
-        delta
     }
 
     fn bake_magnitudes(&self, maximum_adjustment: f64) -> Vec<f64> {
-        #[allow(clippy::cast_precision_loss)]
         let step = maximum_adjustment / self.workers.len() as f64;
 
         let mut magnitudes = Vec::new();
@@ -341,21 +269,12 @@ impl Generator {
         self.delta = self.total_quality - current_quality;
     }
 
-    /// Performs generation cycles until the mean delta from the last `mean_count` deltas becomes less or equal to `max_mean`.
-    /// Executes `cyclic` after the end of each cycle.
-    ///
-    /// # Returns
-    /// The time it took to generate the figure.
-    ///
-    /// # Panics
-    /// Panics if there are multithreading issues (there has been a panic in one of the generation threads).
-    pub fn cycle_until_mean_delta<P: FnMut(f64)>(
+    pub fn cycle_until_mean_delta(
         &mut self,
         maximum_adjustment: f64,
         mean_count: usize,
         max_mean: f64,
-        mut cyclic: P,
-    ) -> Duration {
+    ) {
         let magnitudes = self.bake_magnitudes(maximum_adjustment);
         let mut last_deltas = VecDeque::new();
 
@@ -364,24 +283,16 @@ impl Generator {
 
         last_deltas.resize(mean_count, 1.0);
 
-        #[allow(clippy::cast_precision_loss)]
-        let mean_count_f = mean_count as f64;
-
-        let mut duration = Duration::new(0, 0);
-
         while mean_delta > max_mean {
-            duration += self.cycle_prebaked(&magnitudes);
+            self.cycle_prebaked(&magnitudes);
 
             self.delta = self.total_quality - current_quality;
             current_quality = self.total_quality;
             let dropped_delta = last_deltas.pop_front().unwrap();
-            mean_delta = (mean_delta * mean_count_f - dropped_delta + self.delta) / mean_count_f;
+            mean_delta =
+                (mean_delta * mean_count as f64 - dropped_delta + self.delta) / mean_count as f64;
             last_deltas.push_back(self.delta);
-
-            cyclic(current_quality);
         }
-
-        duration
     }
 
     pub fn get_points(&self) -> &Vec<(Complex, f64)> {
@@ -399,7 +310,7 @@ impl Generator {
 
 impl Drop for Generator {
     fn drop(&mut self) {
-        for sender in &mut self.senders {
+        for sender in self.senders.iter_mut() {
             sender.send(Message::Terminate).unwrap();
         }
 
@@ -409,14 +320,4 @@ impl Drop for Generator {
             worker.join().unwrap();
         }
     }
-}
-
-#[derive(Debug)]
-pub struct Optimizations {
-    pub identical_expressions: bool,
-}
-
-#[derive(Debug)]
-pub struct Flags {
-    pub optimizations: Optimizations,
 }

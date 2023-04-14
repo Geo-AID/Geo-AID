@@ -1,69 +1,50 @@
 use std::{
-    fmt::Display,
     hash::Hash,
     ops::{Deref, DerefMut, Div, Mul},
-    rc::Rc,
-    sync::{self, Arc},
+    sync::Arc, rc::Rc,
 };
 
-use serde::Serialize;
-
-use crate::cli::{AnnotationKind, DiagnosticData};
-
-use self::parser::Type;
 use self::token::{NamedIdent, Span, Token};
+use self::{parser::Type, token::PointCollection};
 
-mod builtins;
-pub mod compile;
 pub mod figure;
 pub mod parser;
 pub mod token;
 pub mod unroll;
+mod builtins;
+pub mod compile;
 
 #[derive(Debug)]
-pub enum Error {
+pub enum ScriptError {
     InvalidToken {
         token: Token,
     },
     InvalidCharacter {
         character: char,
-        error_span: Span,
-    },
-    IteratorIdMustBeAnInteger {
-        error_span: Span,
-    },
-    IteratorIdExceeds255 {
-        error_span: Span,
-    },
-    SingleVariantExplicitIterator {
-        error_span: Span,
     },
     EndOfInput,
-    UndefinedRuleOperator {
+    UndefinedOperator {
         operator: NamedIdent,
     },
     InconsistentIterators {
-        first_span: Span,
-        first_length: usize,
-        occured_span: Span,
-        occured_length: usize,
-        error_span: Span,
-    },
-    IteratorWithSameIdIterator {
-        error_span: Span,
-        parent_span: Span,
-        contained_span: Span,
+        span: Span,
     },
     InconsistentTypes {
-        // boxes here to reduce size
-        expected: (Type, Box<Span>),
-        got: (Type, Box<Span>),
-        error_span: Box<Span>,
+        expected: (Type, Span),
+        got: (Type, Span),
+    },
+    InvalidType {
+        expected: Type,
+        got: (Type, Span),
     },
     RedefinedVariable {
         defined_at: Span,
         error_span: Span,
         variable_name: String,
+    },
+    CollectionNotInfered {
+        error_span: Span,
+        collection: PointCollection,
     },
     UndefinedTypeVariable {
         definition: Span,
@@ -71,96 +52,76 @@ pub enum Error {
     UndefinedVariable {
         error_span: Span,
         variable_name: String,
-        suggested: Option<String>,
     },
     UndefinedFunction {
         error_span: Span,
         function_name: String,
-        suggested: Option<String>,
     },
     FetureNotSupported {
         error_span: Span,
-        feature_name: &'static str,
+        feature_name: &'static str
     },
     InvalidArgumentCount {
         error_span: Span,
         expected: &'static [u8],
-        got: u8,
+        got: u8
     },
     OverloadNotFound {
         error_span: Span,
         params: Vec<Type>,
-        function_name: String,
+        function_name: String
     },
     CannotUnpack {
         error_span: Span,
-        ty: Type,
+        ty: Type
     },
     ImplicitConversionDoesNotExist {
         error_span: Span,
         from: Type,
-        to: Type,
+        to: Type
     },
     InvalidOperandType {
         error_span: Span,
         got: (Type, Span),
-        op: String,
-    },
-    LetStatUnexpectedIterator {
-        var_span: Span,
-        error_span: Span,
-    },
-    LetStatMoreThanOneIterator {
-        error_span: Span,
-        first_span: Span,
-        second_span: Span,
-    },
-    NonPointInPointCollection {
-        error_span: Span,
-        received: (Span, Type),
-    },
-    FlagDoesNotExist {
-        flag_name: String,
-        flag_span: Span,
-        error_span: Span,
-        suggested: Option<String>,
-    },
-    FlagSetExpected {
-        error_span: Span,
-    },
-    FlagStringExpected {
-        error_span: Span,
-    },
-    FlagBooleanExpected {
-        error_span: Span,
-    },
-    RedefinedFlag {
-        error_span: Span,
-        first_defined: Span,
-        flag_name: String,
-    },
+        op: String
+    }
 }
 
-impl Error {
-    #[must_use]
+impl ScriptError {
     pub fn invalid_token(token: Token) -> Self {
         Self::InvalidToken { token }
     }
 
-    #[must_use]
-    pub fn invalid_character(character: char, error_span: Span) -> Self {
-        Self::InvalidCharacter {
-            character,
-            error_span,
+    pub fn invalid_character(character: char) -> Self {
+        Self::InvalidCharacter { character }
+    }
+
+    pub fn end_of_input() -> Self {
+        Self::EndOfInput
+    }
+
+    pub fn undefined_operator(name: NamedIdent) -> Self {
+        Self::UndefinedOperator { operator: name }
+    }
+
+    pub fn inconsistent_iterators(span: Span) -> Self {
+        Self::InconsistentIterators { span }
+    }
+
+    pub fn inconsistent_types(expected: Type, exp_span: Span, got: Type, got_span: Span) -> Self {
+        Self::InconsistentTypes {
+            expected: (expected, exp_span),
+            got: (got, got_span),
         }
     }
 
-    #[must_use]
-    pub fn undefined_rule_operator(name: NamedIdent) -> Self {
-        Self::UndefinedRuleOperator { operator: name }
+    pub fn invalid_type(expected: Type, got: Type, got_span: Span) -> Self {
+        Self::InvalidType {
+            expected,
+            got: (got, got_span),
+        }
     }
 
-    #[must_use]
     pub fn redefined_variable(defined_at: Span, error_span: Span, variable_name: String) -> Self {
         Self::RedefinedVariable {
             defined_at,
@@ -169,238 +130,54 @@ impl Error {
         }
     }
 
-    #[must_use]
+    pub fn collection_not_infered(error_span: Span, collection: PointCollection) -> Self {
+        Self::CollectionNotInfered {
+            error_span,
+            collection,
+        }
+    }
+
     pub fn undefined_type_variable(definition: Span) -> Self {
         Self::UndefinedTypeVariable { definition }
     }
 
-    #[must_use]
-    pub fn feature_not_supported(error_span: Span, feature_name: &'static str) -> Self {
-        Self::FetureNotSupported {
+    pub fn undefined_variable(error_span: Span, variable_name: String) -> Self {
+        Self::UndefinedVariable {
             error_span,
-            feature_name,
+            variable_name,
         }
     }
 
-    #[must_use]
-    pub fn overload_not_found(error_span: Span, function_name: String, params: Vec<Type>) -> Self {
-        Self::OverloadNotFound {
+    pub fn undefined_function(error_span: Span, function_name: String) -> Self {
+        Self::UndefinedFunction {
             error_span,
-            params,
             function_name,
         }
     }
 
-    #[must_use]
+    pub fn feature_not_supported(error_span: Span, feature_name: &'static str) -> Self {
+        Self::FetureNotSupported { error_span, feature_name }
+    }
+
+    pub fn invalid_argument_count(error_span: Span, expected: &'static [u8], got: u8) -> Self {
+        Self::InvalidArgumentCount { error_span, expected, got }
+    }
+
+    pub fn overload_not_found(error_span: Span, function_name: String, params: Vec<Type>) -> Self {
+        Self::OverloadNotFound { error_span, params, function_name }
+    }
+
     pub fn cannot_unpack(error_span: Span, ty: Type) -> Self {
         Self::CannotUnpack { error_span, ty }
     }
 
-    #[must_use]
     pub fn implicit_conversion_does_not_exist(error_span: Span, from: Type, to: Type) -> Self {
-        Self::ImplicitConversionDoesNotExist {
-            error_span,
-            from,
-            to,
-        }
-    }
-
-    #[must_use]
-    #[allow(clippy::too_many_lines)]
-    pub fn diagnostic(self) -> DiagnosticData {
-        match self {
-            Self::InvalidToken { token } => {
-                DiagnosticData::new(&format!("invalid token: `{token}`")).add_span(token.get_span())
-            }
-            Self::InvalidCharacter {
-                character,
-                error_span,
-            } => DiagnosticData::new(&format!("invalid character: `{character}`"))
-                .add_span(error_span),
-            Self::EndOfInput => DiagnosticData::new("unexpected end of input"),
-            Self::UndefinedRuleOperator { operator } => {
-                DiagnosticData::new(&format!("undefined rule operator: `{}`", operator.ident))
-                    .add_span(operator.span)
-            }
-            Self::InconsistentIterators {
-                first_span,
-                first_length,
-                occured_span,
-                occured_length,
-                error_span,
-            } => DiagnosticData::new(&"inconsitent iterator lengths")
-                .add_span(error_span)
-                .add_annotation(
-                    first_span,
-                    AnnotationKind::Note,
-                    &format!("First iterator with length {first_length} here."),
-                )
-                .add_annotation(
-                    occured_span,
-                    AnnotationKind::Note,
-                    &format!("Inconsistensy (iterator with length {occured_length}) here."),
-                ),
-            Self::InconsistentTypes {
-                expected,
-                got,
-                error_span,
-            } => DiagnosticData::new("inconsistent types")
-                .add_span(*error_span)
-                .add_annotation(
-                    *expected.1,
-                    AnnotationKind::Note,
-                    &format!("This expression is of type {}", expected.0),
-                )
-                .add_annotation(
-                    *got.1,
-                    AnnotationKind::Note,
-                    &format!("This expression is of type {}", got.0),
-                ),
-            Self::RedefinedVariable {
-                defined_at,
-                error_span,
-                variable_name,
-            } => DiagnosticData::new(&format!("redefined variable: `{variable_name}`"))
-                .add_span(error_span)
-                .add_annotation(defined_at, AnnotationKind::Note, "First defined here."),
-            Self::UndefinedTypeVariable { definition } => {
-                DiagnosticData::new("variable of undefined type")
-                    .add_span(definition)
-                    .add_annotation(definition, AnnotationKind::Note, "Defined here.")
-            }
-            Self::UndefinedVariable {
-                error_span,
-                variable_name,
-                suggested
-            } => {
-                let message = suggested.map(|v| format!("Did you mean: `{v}`?"));
-                DiagnosticData::new(&format!("undefined variable: `{variable_name}`"))
-                    .add_span(error_span)
-                    .add_annotation_opt(error_span, AnnotationKind::Help, message.as_ref())
-            }
-            Self::UndefinedFunction {
-                error_span,
-                function_name,
-                suggested
-            } => {
-                let message = suggested.map(|v| format!("Did you mean: `{v}`?"));
-                DiagnosticData::new(&format!("undefined function: `{function_name}`"))
-                    .add_span(error_span)
-                    .add_annotation_opt(error_span, AnnotationKind::Help, message.as_ref())
-            }
-            Self::FetureNotSupported {
-                error_span,
-                feature_name,
-            } => {
-                DiagnosticData::new(&format!("feature `{feature_name}` of undefined type"))
-                    .add_span(error_span)
-            }
-            Self::InvalidArgumentCount {
-                error_span,
-                expected,
-                got,
-            } => {
-                DiagnosticData::new(&format!("invalid argument count. Expected one of `{expected:?}`, got {got}"))
-                    .add_span(error_span)
-            }
-            Self::OverloadNotFound {
-                error_span,
-                params,
-                function_name,
-            } => {
-                DiagnosticData::new(&format!("overload for function `{function_name}` with params `({})` not found", params.into_iter().map(|x| format!("{x}")).collect::<Vec<String>>().join(", ")))
-                    .add_span(error_span)
-            },
-            Self::CannotUnpack { error_span, ty } => {
-                DiagnosticData::new(&format!("could not unpack `{ty}` onto a point collection"))
-                    .add_span(error_span)
-            }
-            Self::ImplicitConversionDoesNotExist {
-                error_span,
-                from,
-                to,
-            } => {
-                DiagnosticData::new(&format!("implicit conversion from `{from}` to `{to}` does not exist."))
-                    .add_span(error_span)
-            }
-            Self::InvalidOperandType {
-                error_span,
-                got,
-                op,
-            } => {
-                DiagnosticData::new(&format!("invalid operand type `{}` for operator `{op}`", got.0))
-                    .add_span(error_span)
-                    .add_annotation(got.1, AnnotationKind::Note, "This is of invalid type.")
-            }
-            Self::LetStatUnexpectedIterator {
-                var_span,
-                error_span,
-            } => {
-                DiagnosticData::new(&"unexpected iterator in right-hand side of `let` statement")
-                    .add_span(error_span)
-                    .add_annotation(var_span, AnnotationKind::Note, "There was no iterator of left-hand side, so the same is expected for the right.")
-            }
-            Self::IteratorWithSameIdIterator { error_span, parent_span, contained_span } => {
-                DiagnosticData::new(&"An iterator with an id of `x` must not contain an iterator with an id of `x`.")
-                    .add_span(error_span)
-                    .add_annotation(parent_span, AnnotationKind::Note, "Parent iterator here.")
-                    .add_annotation(contained_span, AnnotationKind::Note, "Child iterator here.")
-            }
-            Self::LetStatMoreThanOneIterator { error_span, first_span, second_span } => {
-                DiagnosticData::new(&"Right hand side of a let statement must contain at most a single level of iteration.")
-                    .add_span(error_span)
-                    .add_annotation(first_span, AnnotationKind::Note, "First iterator here.")
-                    .add_annotation(second_span, AnnotationKind::Note, "Second iterator here.")
-            }
-            Self::IteratorIdMustBeAnInteger { error_span } => {
-                DiagnosticData::new(&"Iterator id must be an integer.")
-                    .add_span(error_span)
-            }
-            Self::IteratorIdExceeds255 { error_span } => {
-                DiagnosticData::new(&"Iterator id must be smaller than 256.")
-                    .add_span(error_span)
-            }
-            Self::SingleVariantExplicitIterator { error_span } => {
-                DiagnosticData::new(&"Explicit iterators must have at least two variants.")
-                    .add_span(error_span)
-            }
-            Self::NonPointInPointCollection { error_span, received } => {
-                DiagnosticData::new(&"All values in a point collection constructor must be points.")
-                    .add_span(error_span)
-                    .add_annotation(received.0, AnnotationKind::Note, &format!("Value should be a point, received {}.", received.1))
-            }
-            Self::FlagDoesNotExist { flag_name, flag_span, error_span, suggested } => {
-                let message = suggested.map(|v| format!("Did you mean: `{v}`?"));
-                DiagnosticData::new(&format!("Compiler flag `{flag_name}` does not exist."))
-                    .add_span(error_span)
-                    .add_annotation(flag_span, AnnotationKind::Note, &"This does not exist.")
-                    .add_annotation_opt(flag_span, AnnotationKind::Help, message.as_ref())
-            }
-            Self::FlagSetExpected { error_span } => {
-                DiagnosticData::new(&"Expected a flag set ({...}).")
-                    .add_span(error_span)
-            }
-            Self::FlagStringExpected { error_span } => {
-                DiagnosticData::new(&"Expected a string (identifier).")
-                    .add_span(error_span)
-            }
-            Self::FlagBooleanExpected { error_span } => {
-                DiagnosticData::new(&"Expected a boolean value (enabled, disabled, on, off, true, false, 1 or 0).")
-                    .add_span(error_span)
-            }
-            Self::RedefinedFlag {
-                first_defined,
-                error_span,
-                flag_name,
-            } => DiagnosticData::new(&format!("redefined flag: `{flag_name}`"))
-                .add_span(error_span)
-                .add_annotation(first_defined, AnnotationKind::Note, "First defined here.")
-        }
+        Self::ImplicitConversionDoesNotExist { error_span, from, to }
     }
 }
 
 /// Defines an object with assigned weight
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug)]
 pub struct Weighed<T> {
     pub object: T,
     pub weight: f64,
@@ -410,7 +187,7 @@ impl<T> Weighed<T> {
     pub fn one(object: T) -> Self {
         Self {
             object,
-            weight: 1.0,
+            weight: 1.0
         }
     }
 }
@@ -436,46 +213,11 @@ impl Mul for SimpleUnit {
 }
 
 /// Defines a complex unit: a product of simple units.
-#[derive(Clone, PartialEq, Eq, Debug, Serialize)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct ComplexUnit([i8; SimpleUnit::Scalar as usize]);
 
-pub mod unit {
-    use super::{ComplexUnit, SimpleUnit};
-
-    pub const DISTANCE: ComplexUnit = ComplexUnit::new(SimpleUnit::Distance);
-    pub const POINT: ComplexUnit = ComplexUnit::new(SimpleUnit::Point);
-    pub const ANGLE: ComplexUnit = ComplexUnit::new(SimpleUnit::Angle);
-    pub const LINE: ComplexUnit = ComplexUnit::new(SimpleUnit::Line);
-    pub const SCALAR: ComplexUnit = ComplexUnit::new(SimpleUnit::Scalar);
-}
-
-pub mod ty {
-    use super::{
-        parser::{PredefinedType, Type},
-        ComplexUnit, SimpleUnit,
-    };
-
-    pub const DISTANCE: Type = Type::Predefined(PredefinedType::Scalar(Some(ComplexUnit::new(
-        SimpleUnit::Distance,
-    ))));
-    pub const POINT: Type = Type::Predefined(PredefinedType::Point);
-    pub const ANGLE: Type = Type::Predefined(PredefinedType::Scalar(Some(ComplexUnit::new(
-        SimpleUnit::Angle,
-    ))));
-    pub const LINE: Type = Type::Predefined(PredefinedType::Line);
-    pub const SCALAR: Type = Type::Predefined(PredefinedType::Scalar(Some(ComplexUnit::new(
-        SimpleUnit::Scalar,
-    ))));
-
-    #[must_use]
-    pub const fn collection(length: usize) -> Type {
-        Type::Predefined(PredefinedType::PointCollection(length))
-    }
-}
-
 impl ComplexUnit {
-    #[must_use]
-    pub const fn new(simple: SimpleUnit) -> Self {
+    pub fn new(simple: SimpleUnit) -> Self {
         let mut arr = [0; SimpleUnit::Scalar as usize];
 
         match simple {
@@ -484,42 +226,6 @@ impl ComplexUnit {
         }
 
         Self(arr)
-    }
-}
-
-impl Display for ComplexUnit {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut s = String::new();
-
-        for i in 0..(SimpleUnit::Scalar as usize) {
-            if self.0[i] > 0 {
-                let name = match i {
-                    0 => "Distance",
-                    1 => "Point",
-                    2 => "Angle",
-                    3 => "Line",
-                    _ => unreachable!(),
-                };
-
-                if self.0[i] == 1 {
-                    s += name;
-                } else {
-                    s += &format!("{name}^{}", self.0[i]);
-                };
-
-                s += " * ";
-            }
-        }
-
-        if s.is_empty() {
-            write!(f, "no unit")
-        } else {
-            write!(
-                f,
-                "{}",
-                String::from_utf8(s.as_bytes()[0..(s.len() - 3)].to_vec()).unwrap()
-            )
-        }
     }
 }
 
@@ -590,7 +296,7 @@ impl DerefMut for ComplexUnit {
 }
 
 /// Defines an expression.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug)]
 pub enum Expression {
     /// Euclidean distance between two points.
     PointPointDistance(Arc<Weighed<Expression>>, Arc<Weighed<Expression>>),
@@ -598,12 +304,10 @@ pub enum Expression {
     PointLineDistance(Arc<Weighed<Expression>>, Arc<Weighed<Expression>>),
     /// An angle defined with 3 points.
     AnglePoint(
-        Arc<Weighed<Expression>>,
-        Arc<Weighed<Expression>>,
-        Arc<Weighed<Expression>>,
+        Box<Weighed<Expression>>,
+        Box<Weighed<Expression>>,
+        Box<Weighed<Expression>>,
     ),
-    /// An angle defined with 2 lines.
-    AngleLine(Arc<Weighed<Expression>>, Arc<Weighed<Expression>>),
     /// A real literal.
     Literal(f64, ComplexUnit),
     /// An adjustable indexed point in euclidean space
@@ -611,7 +315,7 @@ pub enum Expression {
     /// A line in euclidean space. defined by two points.
     Line(Arc<Weighed<Expression>>, Arc<Weighed<Expression>>),
     /// The point where two lines cross.
-    LineLineIntersection(Arc<Weighed<Expression>>, Arc<Weighed<Expression>>),
+    LineCrossing(Box<Weighed<Expression>>, Box<Weighed<Expression>>),
     /// Changes the unit
     SetUnit(Arc<Weighed<Expression>>, ComplexUnit),
     /// Adds two values
@@ -623,61 +327,7 @@ pub enum Expression {
     /// Divides two values
     Quotient(Arc<Weighed<Expression>>, Arc<Weighed<Expression>>),
     /// Changes the sign
-    Negation(Arc<Weighed<Expression>>),
-    /// An angle bisector.
-    AngleBisector(
-        Arc<Weighed<Expression>>,
-        Arc<Weighed<Expression>>,
-        Arc<Weighed<Expression>>,
-    ),
-    /// Takes the average value (arithmetic mean)
-    Average(Vec<Arc<Weighed<Expression>>>),
-    /// Generates a line perpendicular to $1 going through $2
-    PerpendicularThrough(Arc<Weighed<Expression>>, Arc<Weighed<Expression>>),
-    /// Generates a line parallel to $1 going through $2
-    ParallelThrough(Arc<Weighed<Expression>>, Arc<Weighed<Expression>>),
-}
-
-impl Expression {
-    pub fn collect<'r>(&'r self, into: &mut Vec<&'r Arc<Weighed<Expression>>>) {
-        match self {
-            Expression::PointPointDistance(e1, e2)
-            | Expression::AngleLine(e1, e2)
-            | Expression::Line(e1, e2)
-            | Expression::LineLineIntersection(e1, e2)
-            | Expression::Sum(e1, e2)
-            | Expression::Difference(e1, e2)
-            | Expression::Product(e1, e2)
-            | Expression::Quotient(e1, e2)
-            | Expression::PerpendicularThrough(e1, e2)
-            | Expression::ParallelThrough(e1, e2)
-            | Expression::PointLineDistance(e1, e2) => {
-                into.push(e1);
-                e1.object.collect(into);
-                into.push(e2);
-                e2.object.collect(into);
-            }
-            Expression::AnglePoint(e1, e2, e3) | Expression::AngleBisector(e1, e2, e3) => {
-                into.push(e1);
-                e1.object.collect(into);
-                into.push(e2);
-                e2.object.collect(into);
-                into.push(e3);
-                e3.object.collect(into);
-            }
-            Expression::Literal(_, _) | Expression::FreePoint(_) => (),
-            Expression::SetUnit(e, _) | Expression::Negation(e) => {
-                into.push(e);
-                e.object.collect(into);
-            }
-            Expression::Average(v) => {
-                for e in v {
-                    into.push(e);
-                    e.object.collect(into);
-                }
-            }
-        }
-    }
+    Negation(Arc<Weighed<Expression>>)
 }
 
 /// Defines the kind and information about criteria the figure must obey.
@@ -693,30 +343,12 @@ pub enum CriteriaKind {
     Inverse(Box<CriteriaKind>),
 }
 
-impl CriteriaKind {
-    pub fn collect<'r>(&'r self, into: &mut Vec<&'r Arc<Weighed<Expression>>>) {
-        match self {
-            CriteriaKind::Equal(e1, e2)
-            | CriteriaKind::Less(e1, e2)
-            | CriteriaKind::Greater(e1, e2) => {
-                into.push(e1);
-                e1.object.collect(into);
-                into.push(e2);
-                e2.object.collect(into);
-            }
-            CriteriaKind::Inverse(c) => c.collect(into),
-        }
-    }
-}
-
 /// Defines a weighed piece of criteria the figure must obey.
 pub type Criteria = Weighed<CriteriaKind>;
 
-#[derive(Serialize, Debug, Clone)]
 pub struct HashableArc<T>(Arc<T>);
 
 impl<T> HashableArc<T> {
-    #[must_use]
     pub fn new(content: Arc<T>) -> Self {
         Self(content)
     }
@@ -724,7 +356,7 @@ impl<T> HashableArc<T> {
 
 impl<T> Hash for HashableArc<T> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        Arc::as_ptr(&self.0).hash(state);
+        Arc::as_ptr(&self.0).hash(state)
     }
 }
 
@@ -741,7 +373,6 @@ impl<T> Eq for HashableArc<T> {
 pub struct HashableRc<T: ?Sized>(Rc<T>);
 
 impl<T: ?Sized> HashableRc<T> {
-    #[must_use]
     pub fn new(content: Rc<T>) -> Self {
         Self(content)
     }
@@ -749,7 +380,7 @@ impl<T: ?Sized> HashableRc<T> {
 
 impl<T: ?Sized> Hash for HashableRc<T> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        Rc::as_ptr(&self.0).hash(state);
+        Rc::as_ptr(&self.0).hash(state)
     }
 }
 
@@ -769,29 +400,4 @@ impl<T: ?Sized> Deref for HashableRc<T> {
     fn deref(&self) -> &Self::Target {
         &self.0
     }
-}
-
-pub struct HashableWeakArc<T>(sync::Weak<T>);
-
-impl<T> HashableWeakArc<T> {
-    #[must_use]
-    pub fn new(content: sync::Weak<T>) -> Self {
-        Self(content)
-    }
-}
-
-impl<T> Hash for HashableWeakArc<T> {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        sync::Weak::as_ptr(&self.0).hash(state);
-    }
-}
-
-impl<T> PartialEq for HashableWeakArc<T> {
-    fn eq(&self, other: &Self) -> bool {
-        sync::Weak::as_ptr(&self.0) == sync::Weak::as_ptr(&other.0)
-    }
-}
-
-impl<T> Eq for HashableWeakArc<T> {
-    fn assert_receiver_is_total_eq(&self) {}
 }
