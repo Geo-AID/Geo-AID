@@ -53,8 +53,8 @@ pub fn draw(target: &Path, canvas_size: (usize, usize), output: &Output) {
                 let no_arcs = String::from("l"); // Requires a change later! It has to be based on info from the script
                 match &angle.expr.object {
                     AnglePoint(p1, p2, p3) => {
-                        file.write_all(format!("\nangle defined with 3 points: points with x and y coordinates: first point - {}, origin - {}, second point - {}. Number of arcs: {}",
-                        get_point_name(p1, output, p_1), get_point_name(p2, output, origin), get_point_name(p3, output, p_2), no_arcs).as_bytes()).unwrap();
+                        file.write_all(format!("\nangle defined with 3 points: points with x and y coordinates: first point - {}, origin - {}, second point - {}. Number of arcs: {no_arcs}",
+                        get_point_name(p1, output, p_1), get_point_name(p2, output, origin), get_point_name(p3, output, p_2)).as_bytes()).unwrap();
                     }
                     AngleLine(_ln1, _ln2) => {
                         file.write_all(format!("\nangle defined with 2 lines: coordinates of the points defining the angle: first point - ({}, {}), origin - ({}, {}), second point - ({}, {})", 
