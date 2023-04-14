@@ -1,12 +1,12 @@
-use std::iter::Peekable;
+use std::{fmt::Display, iter::Peekable};
 
-use super::ScriptError;
+use super::{parser::Parse, Error};
 
 #[cfg(test)]
 mod tests {
     use crate::{
         script::token::{
-            Eq, Ident, Let, NamedIdent, Number, PointCollection, Position, Semi, Span,
+            Dot, Eq, Ident, Let, NamedIdent, Number, PointCollection, Position, Semi, Span,
         },
         span,
     };
@@ -21,7 +21,7 @@ let ABC = Triangle;
         "#;
 
         assert_eq!(
-            tokenize(script.to_string()).unwrap(),
+            tokenize(script).unwrap(),
             vec![
                 Token::Let(Let {
                     span: span!(1, 1, 1, 4)
@@ -37,7 +37,8 @@ let ABC = Triangle;
                     span: span!(1, 9, 1, 10),
                     integral: 5,
                     decimal: 0,
-                    decimal_places: 0
+                    decimal_places: 0,
+                    dot: None
                 }),
                 Token::Semi(Semi {
                     span: span!(1, 10, 1, 11)
@@ -56,7 +57,10 @@ let ABC = Triangle;
                     span: span!(2, 9, 2, 12),
                     integral: 5,
                     decimal: 5,
-                    decimal_places: 2
+                    decimal_places: 1,
+                    dot: Some(Dot {
+                        span: span!(2, 10, 2, 11)
+                    })
                 }),
                 Token::Semi(Semi {
                     span: span!(2, 12, 2, 13)
@@ -83,6 +87,7 @@ let ABC = Triangle;
     }
 }
 
+/// Defines a position in the script.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Position {
     pub line: usize,
@@ -98,17 +103,13 @@ impl PartialOrd for Position {
 impl Ord for Position {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         match self.line.cmp(&other.line) {
-            std::cmp::Ordering::Less => std::cmp::Ordering::Less,
-            std::cmp::Ordering::Equal => match self.column.cmp(&other.column) {
-                std::cmp::Ordering::Less => std::cmp::Ordering::Less,
-                std::cmp::Ordering::Equal => std::cmp::Ordering::Equal,
-                std::cmp::Ordering::Greater => std::cmp::Ordering::Greater,
-            },
-            std::cmp::Ordering::Greater => std::cmp::Ordering::Greater,
+            std::cmp::Ordering::Equal => self.column.cmp(&other.column),
+            v => v,
         }
     }
 }
 
+/// Defines a span in the script.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Span {
     pub start: Position,
@@ -116,6 +117,7 @@ pub struct Span {
 }
 
 impl Span {
+    #[must_use]
     pub fn join(self, other: Span) -> Self {
         Self {
             start: if self.start < other.start {
@@ -129,6 +131,32 @@ impl Span {
                 other.end
             },
         }
+    }
+
+    #[must_use]
+    pub fn overlaps(self, other: Span) -> bool {
+        (self.start <= other.start && self.end >= other.start)
+            || (other.start <= self.start && other.end >= self.start)
+    }
+
+    #[must_use]
+    pub fn is_singleline(&self) -> bool {
+        self.start.line == self.end.line
+    }
+}
+
+impl PartialOrd for Span {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        match self.start.cmp(&other.start) {
+            std::cmp::Ordering::Equal => Some(self.end.cmp(&other.end)),
+            v => Some(v),
+        }
+    }
+}
+
+impl Ord for Span {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.partial_cmp(other).unwrap()
     }
 }
 
@@ -172,9 +200,39 @@ pub struct RParen {
     pub span: Span,
 }
 
+/// A '{' token.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LBrace {
+    pub span: Span,
+}
+
+/// A '}' token.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RBrace {
+    pub span: Span,
+}
+
 /// A ',' token.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Comma {
+    pub span: Span,
+}
+
+/// A ':' token.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Colon {
+    pub span: Span,
+}
+
+/// A '$' token.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Dollar {
+    pub span: Span,
+}
+
+/// A '@' token.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct At {
     pub span: Span,
 }
 
@@ -232,6 +290,12 @@ pub struct Lteq {
     pub span: Span,
 }
 
+/// A '.' token.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Dot {
+    pub span: Span,
+}
+
 /// A '>=' token.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Gteq {
@@ -244,7 +308,13 @@ pub struct Exclamation {
     pub span: Span,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+/// A '&' token.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Ampersant {
+    pub span: Span,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Token {
     Semi(Semi),
     Eq(Eq),
@@ -264,6 +334,95 @@ pub enum Token {
     Exclamation(Exclamation),
     Ident(Ident),
     Number(Number),
+    Dollar(Dollar),
+    Ampersant(Ampersant),
+    LBrace(LBrace),
+    RBrace(RBrace),
+    At(At),
+    Colon(Colon),
+}
+
+impl Display for Token {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Token::Semi(_) => write!(f, ";"),
+            Token::Eq(_) => write!(f, "="),
+            Token::Comma(_) => write!(f, ","),
+            Token::Let(_) => write!(f, "let"),
+            Token::Plus(_) => write!(f, "+"),
+            Token::Minus(_) => write!(f, "-"),
+            Token::Asterisk(_) => write!(f, "*"),
+            Token::Vertical(_) => write!(f, "|"),
+            Token::LParen(_) => write!(f, "("),
+            Token::RParen(_) => write!(f, ")"),
+            Token::Slash(_) => write!(f, "/"),
+            Token::Lt(_) => write!(f, "<"),
+            Token::Gt(_) => write!(f, ">"),
+            Token::Lteq(_) => write!(f, "<="),
+            Token::Gteq(_) => write!(f, ">="),
+            Token::Exclamation(_) => write!(f, "!"),
+            Token::Dollar(_) => write!(f, "$"),
+            Token::Ampersant(_) => write!(f, "&"),
+            Token::At(_) => write!(f, "@"),
+            Token::LBrace(_) => write!(f, "{{"),
+            Token::RBrace(_) => write!(f, "}}"),
+            Token::Colon(_) => write!(f, ":"),
+            Token::Ident(ident) => write!(
+                f,
+                "{}",
+                match ident {
+                    Ident::Named(named) => named.ident.clone(),
+                    Ident::Collection(col) => col
+                        .collection
+                        .iter()
+                        .map(|(letter, primes)| format!("{letter}{}", "'".repeat(*primes as usize)))
+                        .collect::<String>(),
+                }
+            ),
+            Token::Number(num) => match num.dot {
+                Some(_) => write!(
+                    f,
+                    "{}.{:0>places$}",
+                    num.integral,
+                    num.decimal,
+                    places = num.decimal_places as usize
+                ),
+                None => write!(f, "{}", num.integral),
+            },
+        }
+    }
+}
+
+impl Token {
+    #[must_use]
+    pub fn get_span(&self) -> Span {
+        match self {
+            Token::Semi(v) => v.span,
+            Token::Eq(v) => v.span,
+            Token::Comma(v) => v.span,
+            Token::Let(v) => v.span,
+            Token::Plus(v) => v.span,
+            Token::Minus(v) => v.span,
+            Token::Asterisk(v) => v.span,
+            Token::Vertical(v) => v.span,
+            Token::LParen(v) => v.span,
+            Token::RParen(v) => v.span,
+            Token::Slash(v) => v.span,
+            Token::Lt(v) => v.span,
+            Token::Gt(v) => v.span,
+            Token::Lteq(v) => v.span,
+            Token::Gteq(v) => v.span,
+            Token::Exclamation(v) => v.span,
+            Token::Ident(v) => v.get_span(),
+            Token::Number(v) => v.span,
+            Token::Dollar(v) => v.span,
+            Token::At(v) => v.span,
+            Token::LBrace(v) => v.span,
+            Token::RBrace(v) => v.span,
+            Token::Ampersant(v) => v.span,
+            Token::Colon(v) => v.span,
+        }
+    }
 }
 
 /// A name.
@@ -281,10 +440,12 @@ pub struct PointCollection {
 }
 
 impl PointCollection {
+    #[must_use]
     pub fn len(&self) -> usize {
         self.collection.len()
     }
 
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.collection.is_empty()
     }
@@ -298,6 +459,7 @@ pub enum Ident {
 }
 
 impl Ident {
+    #[must_use]
     pub fn as_collection(&self) -> Option<&PointCollection> {
         if let Self::Collection(v) = self {
             Some(v)
@@ -307,13 +469,14 @@ impl Ident {
     }
 }
 
-/// A 'ident' token.
+/// A number.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Number {
     pub span: Span,
     pub integral: u64,
     pub decimal: u64,
     pub decimal_places: u8,
+    pub dot: Option<Dot>,
 }
 
 fn is_identifier_character(c: char) -> bool {
@@ -352,14 +515,23 @@ fn read_number<I: Iterator<Item = char>>(it: &mut Peekable<I>, position: &mut Po
     let mut integral: u64 = 0;
     let mut decimal: u64 = 0;
     let begin_pos = *position;
+    let mut dot = None;
 
     while let Some(&c) = it.peek() {
         if c.is_ascii_digit() {
             integral *= 10;
-            integral += (c as u64) - b'0' as u64;
+            integral += (c as u64) - u64::from(b'0');
             position.column += 1;
             it.next();
         } else if c == '.' {
+            dot = Some(Dot {
+                span: span!(
+                    position.line,
+                    position.column,
+                    position.line,
+                    position.column + 1
+                ),
+            });
             position.column += 1;
             it.next();
             break;
@@ -374,6 +546,7 @@ fn read_number<I: Iterator<Item = char>>(it: &mut Peekable<I>, position: &mut Po
                 integral,
                 decimal: 0,
                 decimal_places: 0,
+                dot,
             };
         }
     }
@@ -383,7 +556,7 @@ fn read_number<I: Iterator<Item = char>>(it: &mut Peekable<I>, position: &mut Po
     while let Some(&c) = it.peek() {
         if c.is_ascii_digit() {
             decimal *= 10;
-            decimal += (c as u64) - b'0' as u64;
+            decimal += (c as u64) - u64::from(b'0');
             decimal_places += 1;
             position.column += 1;
             it.next();
@@ -402,9 +575,11 @@ fn read_number<I: Iterator<Item = char>>(it: &mut Peekable<I>, position: &mut Po
         integral,
         decimal,
         decimal_places,
+        dot,
     }
 }
 
+/// Decides whether the given string is a standard named identifier or a point collection.
 fn dispatch_ident(sp: Span, ident: String) -> Ident {
     let mut collection = PointCollection {
         collection: vec![],
@@ -424,7 +599,98 @@ fn dispatch_ident(sp: Span, ident: String) -> Ident {
     Ident::Collection(collection)
 }
 
-pub fn tokenize(input: String) -> Result<Vec<Token>, ScriptError> {
+fn tokenize_special<I: Iterator<Item = char>>(
+    position: &mut Position,
+    tokens: &mut Vec<Token>,
+    c: char,
+    it: &mut Peekable<I>,
+) -> Result<(), Error> {
+    let sp = span!(
+        position.line,
+        position.column,
+        position.line,
+        position.column + 1
+    );
+
+    if c == '=' {
+        let last = tokens.last().cloned();
+
+        match last {
+            Some(Token::Lt(Lt { span })) => {
+                if span
+                    == span!(
+                        sp.start.line,
+                        sp.start.column - 1,
+                        sp.start.line,
+                        sp.start.column
+                    )
+                {
+                    *tokens.last_mut().unwrap() = Token::Lteq(Lteq {
+                        span: span!(
+                            sp.start.line,
+                            sp.start.column - 1,
+                            sp.start.line,
+                            sp.start.column + 1
+                        ),
+                    });
+                }
+            }
+            Some(Token::Gt(Gt { span })) => {
+                if span
+                    == span!(
+                        sp.start.line,
+                        sp.start.column - 1,
+                        sp.start.line,
+                        sp.start.column
+                    )
+                {
+                    *tokens.last_mut().unwrap() = Token::Gteq(Gteq {
+                        span: span!(
+                            sp.start.line,
+                            sp.start.column - 1,
+                            sp.start.line,
+                            sp.start.column + 1
+                        ),
+                    });
+                }
+            }
+            _ => tokens.push(Token::Eq(Eq { span: sp })),
+        }
+    } else {
+        tokens.push(match c {
+            ';' => Token::Semi(Semi { span: sp }),
+            ',' => Token::Comma(Comma { span: sp }),
+            '+' => Token::Plus(Plus { span: sp }),
+            '-' => Token::Minus(Minus { span: sp }),
+            '*' => Token::Asterisk(Asterisk { span: sp }),
+            '/' => Token::Slash(Slash { span: sp }),
+            '(' => Token::LParen(LParen { span: sp }),
+            ')' => Token::RParen(RParen { span: sp }),
+            '|' => Token::Vertical(Vertical { span: sp }),
+            '<' => Token::Lt(Lt { span: sp }),
+            '>' => Token::Gt(Gt { span: sp }),
+            '!' => Token::Exclamation(Exclamation { span: sp }),
+            '$' => Token::Dollar(Dollar { span: sp }),
+            '&' => Token::Ampersant(Ampersant { span: sp }),
+            '@' => Token::At(At { span: sp }),
+            '{' => Token::LBrace(LBrace { span: sp }),
+            '}' => Token::RBrace(RBrace { span: sp }),
+            ':' => Token::Colon(Colon { span: sp }),
+            _ => return Err(Error::invalid_character(c, sp)),
+        });
+    }
+
+    position.column += 1;
+    it.next();
+
+    Ok(())
+}
+
+/// Tokenizes the given script.
+///
+/// # Errors
+/// Emits an appropiate error if the script is invalid and tokenization fails.
+pub fn tokenize(input: &str) -> Result<Vec<Token>, Error> {
     let mut it = input.chars().peekable();
     let mut tokens = vec![];
     let mut position = Position { line: 1, column: 1 };
@@ -459,77 +725,7 @@ pub fn tokenize(input: String) -> Result<Vec<Token>, ScriptError> {
                         }
                     }
                 } else {
-                    let sp = span!(
-                        position.line,
-                        position.column,
-                        position.line,
-                        position.column + 1
-                    );
-
-                    if c == '=' {
-                        let last = tokens.last().cloned();
-
-                        match last {
-                            Some(Token::Lt(Lt { span })) => {
-                                if span
-                                    == span!(
-                                        sp.start.line,
-                                        sp.start.column - 1,
-                                        sp.start.line,
-                                        sp.start.column
-                                    )
-                                {
-                                    *tokens.last_mut().unwrap() = Token::Lteq(Lteq {
-                                        span: span!(
-                                            sp.start.line,
-                                            sp.start.column - 1,
-                                            sp.start.line,
-                                            sp.start.column + 1
-                                        ),
-                                    });
-                                }
-                            }
-                            Some(Token::Gt(Gt { span })) => {
-                                if span
-                                    == span!(
-                                        sp.start.line,
-                                        sp.start.column - 1,
-                                        sp.start.line,
-                                        sp.start.column
-                                    )
-                                {
-                                    *tokens.last_mut().unwrap() = Token::Gteq(Gteq {
-                                        span: span!(
-                                            sp.start.line,
-                                            sp.start.column - 1,
-                                            sp.start.line,
-                                            sp.start.column + 1
-                                        ),
-                                    });
-                                }
-                            }
-                            _ => tokens.push(Token::Eq(Eq { span: sp })),
-                        }
-                    } else {
-                        tokens.push(match c {
-                            ';' => Token::Semi(Semi { span: sp }),
-                            ',' => Token::Comma(Comma { span: sp }),
-                            '+' => Token::Plus(Plus { span: sp }),
-                            '-' => Token::Minus(Minus { span: sp }),
-                            '*' => Token::Asterisk(Asterisk { span: sp }),
-                            '/' => Token::Slash(Slash { span: sp }),
-                            '(' => Token::LParen(LParen { span: sp }),
-                            ')' => Token::RParen(RParen { span: sp }),
-                            '|' => Token::Vertical(Vertical { span: sp }),
-                            '<' => Token::Lt(Lt { span: sp }),
-                            '>' => Token::Gt(Gt { span: sp }),
-                            '!' => Token::Exclamation(Exclamation { span: sp }),
-                            _ => return Err(ScriptError::invalid_character(c)),
-                        });
-                    }
-
-                    position.column += 1;
-                    it.next();
+                    tokenize_special(&mut position, &mut tokens, c, &mut it)?;
                 }
             }
         }

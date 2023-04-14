@@ -1,2 +1,10 @@
-pub mod point;
+pub mod angle;
+pub mod bisector;
+pub mod degrees;
 pub mod dst;
+pub mod intersection;
+pub mod mid;
+pub mod parallel;
+pub mod perpendicular;
+pub mod point;
+pub mod radians;

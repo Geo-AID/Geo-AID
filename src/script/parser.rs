@@ -1,25 +1,52 @@
-use std::{fmt::Debug, iter::Peekable, rc::Rc};
+use std::{
+    fmt::{Debug, Display},
+    iter::Peekable,
+    rc::Rc,
+};
 
 use crate::span;
 
 use super::{
     token::{
-        Asterisk, Comma, Eq, Exclamation, Gt, Gteq, Ident, LParen, Let, Lt, Lteq, Minus,
-        NamedIdent, Number, Plus, PointCollection, Position, RParen, Semi, Slash, Span, Token,
-        Vertical,
+        Ampersant, Asterisk, At, Colon, Comma, Dollar, Eq, Exclamation, Gt, Gteq, Ident, LBrace,
+        LParen, Let, Lt, Lteq, Minus, NamedIdent, Number, Plus, Position, RBrace, RParen, Semi,
+        Slash, Span, Token, Vertical,
     },
-    unroll::{
-        CompileContext, RuleOperatorDefinition,
-    },
-    ScriptError, ComplexUnit, SimpleUnit,
+    unroll::{CompileContext, RuleOperatorDefinition},
+    ComplexUnit, Error, SimpleUnit,
 };
 
+macro_rules! impl_token_parse {
+    ($token:ident) => {
+        impl Parse for $token {
+            fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
+                it: &mut Peekable<I>,
+                _context: &CompileContext,
+            ) -> Result<Self, Error> {
+                match it.next() {
+                    Some(Token::$token(tok)) => Ok(*tok),
+                    Some(t) => Err(Error::invalid_token(t.clone())),
+                    None => Err(Error::EndOfInput),
+                }
+            }
+
+            fn get_span(&self) -> Span {
+                self.span
+            }
+        }
+    };
+}
+
+/// A unary operator, like `-`.
 #[derive(Debug)]
 pub enum UnaryOperator {
+    /// A negation, as in `-x`.
     Neg(NegOp),
 }
 
 impl UnaryOperator {
+    /// Gets the type that this operator returns.
+    #[must_use]
     pub fn get_returned(&self, param: &Type) -> Type {
         match self {
             UnaryOperator::Neg(_) => match param {
@@ -27,7 +54,7 @@ impl UnaryOperator {
                     PredefinedType::Point
                     | PredefinedType::Line
                     | PredefinedType::PointCollection(_) => Type::Undefined,
-                    t => Type::Predefined(t.clone()),
+                    t @ PredefinedType::Scalar(_) => Type::Predefined(t.clone()),
                 },
                 _ => Type::Undefined,
             },
@@ -35,64 +62,93 @@ impl UnaryOperator {
     }
 }
 
+/// A parsed unary `-` operator.
 #[derive(Debug)]
 pub struct NegOp {
+    /// The `-` token.
     pub minus: Minus,
 }
 
+/// A parsed `+` operator.
 #[derive(Debug)]
 pub struct AddOp {
+    //. The `+` token.
     pub plus: Plus,
 }
 
+/// A parsed `-` operator.
 #[derive(Debug)]
 pub struct SubOp {
+    //. The `-` token.
     pub minus: Minus,
 }
 
+/// A parsed `*` operator.
 #[derive(Debug)]
 pub struct MulOp {
+    //. The `*` token.
     pub asterisk: Asterisk,
 }
 
+/// A parsed `/` operator.
 #[derive(Debug)]
 pub struct DivOp {
+    //. The `/` token.
     pub slash: Slash,
 }
 
+/// A binary operator, like `+`, `-`, `*` or `/`.
 #[derive(Debug)]
 pub enum BinaryOperator {
+    /// Addition
     Add(AddOp),
+    /// Subtraction
     Sub(SubOp),
+    /// Multiplication
     Mul(MulOp),
+    /// Division
     Div(DivOp),
 }
 
 impl BinaryOperator {
+    /// Gets the type returned by this operator given the operand types.
+    #[must_use]
     pub fn get_returned(&self, lhs: &Type, rhs: &Type) -> Type {
         match self {
-            BinaryOperator::Add(_)
-            | BinaryOperator::Sub(_) => {
+            // For addition and subtraction the unit of both operands must be the same. The result is of the same type as the operands.
+            // This code primarily checks if the two operands are of the same type. If one does not have a type (scalar(none)) and
+            // the other does, the former is assumed to be of the same type.
+            BinaryOperator::Add(_) | BinaryOperator::Sub(_) => {
                 let left_unit = match lhs {
-                    Type::Predefined(PredefinedType::Scalar(Some(unit))) => Some(Some(unit.clone())),
+                    Type::Predefined(PredefinedType::Scalar(Some(unit))) => {
+                        Some(Some(unit.clone()))
+                    }
                     Type::Predefined(PredefinedType::Scalar(None)) => Some(None),
-                    Type::Predefined(PredefinedType::PointCollection(2)) => Some(Some(ComplexUnit::new(SimpleUnit::Distance))),
-                    _ => None
+                    Type::Predefined(PredefinedType::PointCollection(2)) => {
+                        Some(Some(ComplexUnit::new(SimpleUnit::Distance)))
+                    }
+                    _ => None,
                 };
 
                 if let Some(ltype) = left_unit {
                     if let Some(ltype) = ltype {
-                        if rhs.can_cast(&Type::Predefined(PredefinedType::Scalar(Some(ltype.clone())))) {
+                        if rhs.can_cast(&Type::Predefined(PredefinedType::Scalar(Some(
+                            ltype.clone(),
+                        )))) {
                             Type::Predefined(PredefinedType::Scalar(Some(ltype)))
                         } else {
                             Type::Undefined
                         }
                     } else {
                         let right_unit = match rhs {
-                            Type::Predefined(PredefinedType::Scalar(Some(unit))) => Some(Some(unit.clone())),
+                            Type::Predefined(PredefinedType::Scalar(Some(unit))) => {
+                                Some(Some(unit.clone()))
+                            }
                             Type::Predefined(PredefinedType::Scalar(None)) => Some(None),
-                            Type::Predefined(PredefinedType::PointCollection(2)) => Some(Some(ComplexUnit::new(SimpleUnit::Distance))),
-                            _ => None
+                            Type::Predefined(PredefinedType::PointCollection(2)) => {
+                                Some(Some(ComplexUnit::new(SimpleUnit::Distance)))
+                            }
+                            _ => None,
                         };
 
                         if let Some(rtype) = right_unit {
@@ -109,20 +165,29 @@ impl BinaryOperator {
                     Type::Undefined
                 }
             }
-            BinaryOperator::Mul(_)
-            | BinaryOperator::Div(_) => {
+            // For multiplication and division the result is a product of operand types.
+            // If a type is a scalar(None), it's assumed to be a dimensionless scalar.
+            BinaryOperator::Mul(_) | BinaryOperator::Div(_) => {
                 let left_unit = match lhs {
                     Type::Predefined(PredefinedType::Scalar(Some(unit))) => Some(unit.clone()),
-                    Type::Predefined(PredefinedType::Scalar(None)) => Some(ComplexUnit::new(SimpleUnit::Scalar)),
-                    Type::Predefined(PredefinedType::PointCollection(2)) => Some(ComplexUnit::new(SimpleUnit::Distance)),
-                    _ => None
+                    Type::Predefined(PredefinedType::Scalar(None)) => {
+                        Some(ComplexUnit::new(SimpleUnit::Scalar))
+                    }
+                    Type::Predefined(PredefinedType::PointCollection(2)) => {
+                        Some(ComplexUnit::new(SimpleUnit::Distance))
+                    }
+                    _ => None,
                 };
 
                 let right_unit = match rhs {
                     Type::Predefined(PredefinedType::Scalar(Some(unit))) => Some(unit.clone()),
-                    Type::Predefined(PredefinedType::Scalar(None)) => Some(ComplexUnit::new(SimpleUnit::Scalar)),
-                    Type::Predefined(PredefinedType::PointCollection(2)) => Some(ComplexUnit::new(SimpleUnit::Distance)),
-                    _ => None
+                    Type::Predefined(PredefinedType::Scalar(None)) => {
+                        Some(ComplexUnit::new(SimpleUnit::Scalar))
+                    }
+                    Type::Predefined(PredefinedType::PointCollection(2)) => {
+                        Some(ComplexUnit::new(SimpleUnit::Distance))
+                    }
+                    _ => None,
                 };
 
                 if let Some(ltype) = left_unit {
@@ -151,31 +216,163 @@ impl ToString for BinaryOperator {
 }
 
 #[derive(Debug)]
-pub enum Expression {
-    Simple(Punctuated<SimpleExpression, Vertical>),
-    Binop(ExprBinop),
+pub struct PointCollectionConstructor {
+    pub ampersant: Ampersant,
+    pub left_paren: LParen,
+    pub points: Punctuated<Expression<false>, Comma>,
+    pub right_paren: RParen,
 }
 
-impl Expression {
-    pub fn as_simple(&self) -> Option<&Punctuated<SimpleExpression, Vertical>> {
-        if let Self::Simple(v) = self {
-            Some(v)
-        } else {
-            None
-        }
+impl Parse for PointCollectionConstructor {
+    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
+        it: &mut Peekable<I>,
+        context: &CompileContext,
+    ) -> Result<Self, Error> {
+        Ok(Self {
+            ampersant: Ampersant::parse(it, context)?,
+            left_paren: LParen::parse(it, context)?,
+            points: Punctuated::parse(it, context)?,
+            right_paren: RParen::parse(it, context)?,
+        })
+    }
+
+    fn get_span(&self) -> Span {
+        self.ampersant.span.join(self.right_paren.span)
     }
 }
 
+/// Punctuated expressions.
+#[derive(Debug)]
+pub struct ImplicitIterator {
+    pub exprs: Punctuated<SimpleExpression, Comma>,
+}
+
+impl ImplicitIterator {
+    #[must_use]
+    pub fn get(&self, index: usize) -> Option<&SimpleExpression> {
+        self.exprs.get(index)
+    }
+}
+
+/// $id(a, b, ...).
+#[derive(Debug)]
+pub struct ExplicitIterator {
+    pub exprs: Punctuated<Expression<false>, Comma>,
+    pub id_token: Number,
+    pub id: u8,
+    pub dollar: Dollar,
+    pub left_paren: LParen,
+    pub right_paren: RParen,
+}
+
+impl ExplicitIterator {
+    #[must_use]
+    pub fn get(&self, index: usize) -> Option<&Expression<false>> {
+        self.exprs.get(index)
+    }
+}
+
+impl Parse for ImplicitIterator {
+    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
+        it: &mut Peekable<I>,
+        context: &CompileContext,
+    ) -> Result<Self, Error> {
+        Ok(ImplicitIterator {
+            exprs: Punctuated::parse(it, context)?,
+        })
+    }
+
+    fn get_span(&self) -> Span {
+        self.exprs.get_span()
+    }
+}
+
+impl Parse for ExplicitIterator {
+    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
+        it: &mut Peekable<I>,
+        context: &CompileContext,
+    ) -> Result<Self, Error> {
+        let dollar = Dollar::parse(it, context)?;
+        let id_token = ExprNumber::parse(it, context)?;
+        let left_paren = LParen::parse(it, context)?;
+        let exprs = Punctuated::parse(it, context)?;
+        let right_paren = RParen::parse(it, context)?;
+
+        if exprs.len() == 1 {
+            return Err(Error::SingleVariantExplicitIterator {
+                error_span: dollar.span.join(right_paren.span),
+            });
+        }
+
+        Ok(ExplicitIterator {
+            dollar,
+            id_token: id_token.token,
+            left_paren,
+            exprs,
+            right_paren,
+            id: if id_token.token.dot.is_none() {
+                if id_token.token.integral < 256 {
+                    id_token.token.integral.try_into().unwrap()
+                } else {
+                    return Err(Error::IteratorIdExceeds255 {
+                        error_span: id_token.get_span(),
+                    });
+                }
+            } else {
+                return Err(Error::IteratorIdMustBeAnInteger {
+                    error_span: id_token.get_span(),
+                });
+            },
+        })
+    }
+
+    fn get_span(&self) -> Span {
+        self.dollar.span.join(self.right_paren.span)
+    }
+}
+
+/// A parsed expression.
+#[derive(Debug)]
+pub enum Expression<const ITER: bool> {
+    /// Simple values separated by a comma.
+    ImplicitIterator(ImplicitIterator),
+    /// A single simple expression
+    Single(Box<SimpleExpression>),
+    /// A binary operator expression.
+    Binop(ExprBinop<ITER>),
+}
+
+impl<const ITER: bool> Expression<ITER> {
+    /// Returns `true` if the expression is [`Single`].
+    ///
+    /// [`Single`]: Expression::Single
+    #[must_use]
+    pub fn is_single(&self) -> bool {
+        matches!(self, Self::Single(..))
+    }
+}
+
+/// A parsed simple expression.
 #[derive(Debug)]
 pub enum SimpleExpression {
+    /// An identifier (variable access, most likely)
     Ident(Ident),
+    /// A raw number
     Number(ExprNumber),
+    /// A function call
     Call(ExprCall),
+    /// A unary operator expression
     Unop(ExprUnop),
+    /// An expression inside parentheses.
     Parenthised(ExprParenthised),
+    /// An explicit iterator.
+    ExplicitIterator(ExplicitIterator),
+    /// A point collection construction
+    PointCollection(PointCollectionConstructor),
 }
 
 impl SimpleExpression {
+    #[must_use]
     pub fn as_ident(&self) -> Option<&Ident> {
         if let Self::Ident(v) = self {
             Some(v)
@@ -185,144 +382,355 @@ impl SimpleExpression {
     }
 }
 
+/// A parsed function call
 #[derive(Debug)]
 pub struct ExprCall {
+    /// The ident of the function.
     pub name: NamedIdent,
+    /// The `(` token.
     pub lparen: LParen,
+    /// The `)` token.
     pub rparen: RParen,
-    pub params: Option<Punctuated<Box<Expression>, Comma>>,
+    /// Punctuated params. `None` if no params are given.
+    pub params: Option<Punctuated<Expression<false>, Comma>>,
 }
 
+/// A parsed parenthesed expression
 #[derive(Debug)]
 pub struct ExprParenthised {
+    /// The `(` token.
     pub lparen: LParen,
+    /// The `)` token.
     pub rparen: RParen,
-    pub content: Box<Expression>,
+    /// The contained `Expression`.
+    pub content: Box<Expression<true>>,
 }
 
+/// A parsed unary operator expression.
 #[derive(Debug)]
 pub struct ExprUnop {
+    /// The operator.
     pub operator: UnaryOperator,
+    /// The operand (right hand side).
     pub rhs: Box<SimpleExpression>,
 }
 
+/// A parsed binary operator expression.
 #[derive(Debug)]
-pub struct ExprBinop {
+pub struct ExprBinop<const ITER: bool> {
+    /// The operator
     pub operator: BinaryOperator,
-    pub lhs: Box<Expression>,
-    pub rhs: Box<Expression>,
+    /// Left hand side
+    pub lhs: Box<Expression<ITER>>,
+    /// Right hand side.
+    pub rhs: Box<Expression<ITER>>,
 }
 
+/// A parsed raw number.
 #[derive(Debug)]
 pub struct ExprNumber {
+    /// Its value.
     pub value: f64,
+    /// Its token.
     pub token: Number,
 }
 
+/// A no-operation statement - a single semicolon.
 #[derive(Debug)]
 pub struct Noop {
+    /// The `;` token.
     pub semi: Semi,
 }
 
+/// A `=` rule operator.
 #[derive(Debug)]
 pub struct EqOp {
+    /// The `=` token.
     pub eq: Eq,
 }
 
+/// A `<` rule operator.
 #[derive(Debug)]
 pub struct LtOp {
+    /// The `=` token.
     pub lt: Lt,
 }
 
+/// A `>` rule operator.
 #[derive(Debug)]
 pub struct GtOp {
+    /// The `>` token.
     pub gt: Gt,
 }
 
+/// A `<=` rule operator.
 #[derive(Debug)]
 pub struct LteqOp {
+    /// The `<=` token.
     pub lteq: Lteq,
 }
 
+/// A `>=` rule operator.
 #[derive(Debug)]
 pub struct GteqOp {
+    /// The `>=` token.
     pub gteq: Gteq,
 }
 
+/// A user-defined rule operator.
 #[derive(Debug)]
 pub struct DefinedRuleOperator {
+    /// The ident.
     pub ident: NamedIdent,
+    /// Pointer to the definition.
     pub definition: Rc<RuleOperatorDefinition>,
 }
 
+/// A builtin rule operator
 #[derive(Debug)]
 pub enum PredefinedRuleOperator {
+    /// Equality
     Eq(EqOp),
+    /// Less than
     Lt(LtOp),
+    /// Greater than
     Gt(GtOp),
+    /// Less than or equal
     Lteq(LteqOp),
+    /// Greater than or equal
     Gteq(GteqOp),
 }
 
+/// A rule operator.
 #[derive(Debug)]
 pub enum RuleOperator {
     Predefined(PredefinedRuleOperator),
     Defined(DefinedRuleOperator),
+    /// A inverted rule operator (!op)
     Inverted(InvertedRuleOperator),
 }
 
+/// An inverted rule operator.
 #[derive(Debug)]
 pub struct InvertedRuleOperator {
+    /// The `!` token
     pub exlamation: Exclamation,
+    /// The operator.
     pub operator: Box<RuleOperator>,
 }
 
+/// Defines the first half of a flag statement.
+#[derive(Debug)]
+pub struct FlagName {
+    pub at: At,
+    pub name: NamedIdent,
+    pub colon: Colon,
+}
+
+impl Parse for FlagName {
+    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
+        it: &mut Peekable<I>,
+        context: &CompileContext,
+    ) -> Result<Self, Error> {
+        Ok(Self {
+            at: At::parse(it, context)?,
+            name: NamedIdent::parse(it, context)?,
+            colon: Colon::parse(it, context)?,
+        })
+    }
+
+    fn get_span(&self) -> Span {
+        self.at.span.join(self.colon.span)
+    }
+}
+
+/// A set of flags.
+#[derive(Debug)]
+pub struct FlagSet {
+    pub lbrace: LBrace,
+    pub flags: Vec<FlagStatement>,
+    pub rbrace: RBrace,
+}
+
+impl Parse for FlagSet {
+    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
+        it: &mut Peekable<I>,
+        context: &CompileContext,
+    ) -> Result<Self, Error> {
+        let mut flags = Vec::new();
+
+        let lbrace = LBrace::parse(it, context)?;
+
+        while let Some(Token::At(_)) = it.peek().copied() {
+            flags.push(FlagStatement::parse(it, context)?);
+        }
+
+        Ok(Self {
+            lbrace,
+            flags,
+            rbrace: RBrace::parse(it, context)?,
+        })
+    }
+
+    fn get_span(&self) -> Span {
+        self.lbrace.span.join(self.rbrace.span)
+    }
+}
+
+/// Defines the second half of a flag statement.
+#[derive(Debug)]
+pub enum FlagValue {
+    Ident(NamedIdent),
+    Set(FlagSet),
+    Number(Number),
+}
+
+impl Parse for FlagValue {
+    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
+        it: &mut Peekable<I>,
+        context: &CompileContext,
+    ) -> Result<Self, Error> {
+        let peeked = it.peek().copied();
+
+        Ok(match peeked {
+            Some(Token::Ident(Ident::Named(_))) => {
+                FlagValue::Ident(NamedIdent::parse(it, context)?)
+            }
+            Some(Token::LBrace(_)) => FlagValue::Set(FlagSet::parse(it, context)?),
+            Some(Token::Number(_)) => FlagValue::Number(Number::parse(it, context)?),
+            Some(t) => return Err(Error::InvalidToken { token: t.clone() }),
+            None => return Err(Error::EndOfInput),
+        })
+    }
+
+    fn get_span(&self) -> Span {
+        match self {
+            FlagValue::Ident(v) => v.span,
+            FlagValue::Set(v) => v.get_span(),
+            FlagValue::Number(v) => v.span,
+        }
+    }
+}
+
+/// Defines a compiler flag or flagset.
+#[derive(Debug)]
+pub struct FlagStatement {
+    pub name: FlagName,
+    pub value: FlagValue,
+}
+
+impl Parse for FlagStatement {
+    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
+        it: &mut Peekable<I>,
+        context: &CompileContext,
+    ) -> Result<Self, Error> {
+        Ok(Self {
+            name: FlagName::parse(it, context)?,
+            value: FlagValue::parse(it, context)?,
+        })
+    }
+
+    fn get_span(&self) -> Span {
+        self.name.get_span().join(self.value.get_span())
+    }
+}
+
+/// `let <something> = <something else>`.
+/// Defines variables and possibly adds rules to them.
 #[derive(Debug)]
 pub struct LetStatement {
+    /// The `let` token.
     pub let_token: Let,
-    pub ident: Punctuated<Ident, Vertical>,
+    /// The lhs ident iterator.
+    pub ident: Punctuated<Ident, Comma>,
+    /// The `=` token.
     pub eq: Eq,
-    pub expr: Expression,
-    pub rules: Vec<(RuleOperator, Expression)>,
+    /// The rhs expression.
+    pub expr: Expression<true>,
+    /// The rules after the rhs expression.
+    pub rules: Vec<(RuleOperator, Expression<true>)>,
+    /// The ending semicolon.
     pub semi: Semi,
 }
 
+/// `lhs ruleop rhs`.
+/// Defines a rule.
 #[derive(Debug)]
 pub struct RuleStatement {
-    pub lhs: Expression,
+    /// Left hand side
+    pub lhs: Expression<true>,
+    /// Rule operator
     pub op: RuleOperator,
-    pub rhs: Expression,
+    /// Right hand side
+    pub rhs: Expression<true>,
+    /// The ending semicolon.
     pub semi: Semi,
 }
 
+/// A general statement.
 #[derive(Debug)]
 pub enum Statement {
+    /// No operation
     Noop(Noop),
+    /// let
     Let(LetStatement),
+    /// rule
     Rule(RuleStatement),
+    /// Flag
+    Flag(FlagStatement),
 }
 
+impl Statement {
+    #[must_use]
+    pub fn as_flag(&self) -> Option<&FlagStatement> {
+        if let Self::Flag(v) = self {
+            Some(v)
+        } else {
+            None
+        }
+    }
+}
+
+/// A utility struct for collections of parsed items with punctuators between them.
 #[derive(Debug)]
 pub struct Punctuated<T, P> {
-    pub first: T,
+    /// The first parsed item.
+    pub first: Box<T>,
+    /// The next items with punctuators.
     pub collection: Vec<(P, T)>,
 }
 
 impl<T, P> Punctuated<T, P> {
+    /// Creates a new instance of `Punctuated`.
+    #[must_use]
+    pub fn new(first: T) -> Punctuated<T, P> {
+        Self {
+            first: Box::new(first),
+            collection: Vec::new(),
+        }
+    }
+
+    /// Turns the punctuated into an iterator on the items.
     pub fn iter(&self) -> impl Iterator<Item = &T> {
-        vec![&self.first]
+        vec![self.first.as_ref()]
             .into_iter()
             .chain(self.collection.iter().map(|x| &x.1))
     }
 
+    /// Gets the item count.
+    #[must_use]
     pub fn len(&self) -> usize {
         self.collection.len() + 1
     }
 
+    /// Checks if there are no items (always false).
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         false
     }
 
+    /// Tries to get the element on `index`.
+    #[must_use]
     pub fn get(&self, index: usize) -> Option<&T> {
         match index {
             0 => Some(&self.first),
@@ -332,29 +740,29 @@ impl<T, P> Punctuated<T, P> {
 }
 
 pub trait Parse: Sized {
+    /// Tries to parse input tokens into Self.
+    ///
+    /// # Errors
+    /// Errors originate from invalid scripts.
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
         it: &mut Peekable<I>,
         context: &CompileContext,
-    ) -> Result<Self, ScriptError>;
+    ) -> Result<Self, Error>;
 
+    /// Gets the parsed item's span.
     fn get_span(&self) -> Span;
-}
-
-pub trait GetType {
-    fn get_type(&self, context: &CompileContext) -> Result<Type, ScriptError>;
-
-    fn match_type(&self, context: &CompileContext, t: &Type) -> Result<(), ScriptError>;
 }
 
 impl Parse for ExprCall {
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-            _it: &mut Peekable<I>,
-            _context: &CompileContext,
-        ) -> Result<Self, ScriptError> {
+        _it: &mut Peekable<I>,
+        _context: &CompileContext,
+    ) -> Result<Self, Error> {
         unreachable!("ExprCall::parse should never be called.")
     }
 
     fn get_span(&self) -> Span {
+        // From the ident to the ).
         self.name.span.join(self.rparen.span)
     }
 }
@@ -363,11 +771,12 @@ impl Parse for Statement {
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
         it: &mut Peekable<I>,
         context: &CompileContext,
-    ) -> Result<Self, ScriptError> {
+    ) -> Result<Self, Error> {
         let tok = it.peek().unwrap();
         Ok(match tok {
             Token::Let(_) => Statement::Let(LetStatement::parse(it, context)?),
             Token::Semi(_) => Statement::Noop(Noop::parse(it, context)?),
+            Token::At(_) => Statement::Flag(FlagStatement::parse(it, context)?),
             _ => Statement::Rule(RuleStatement::parse(it, context)?),
         })
     }
@@ -377,6 +786,7 @@ impl Parse for Statement {
             Statement::Noop(v) => v.get_span(),
             Statement::Let(v) => v.get_span(),
             Statement::Rule(v) => v.get_span(),
+            Statement::Flag(v) => v.get_span(),
         }
     }
 }
@@ -385,7 +795,7 @@ impl Parse for Noop {
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
         it: &mut Peekable<I>,
         context: &CompileContext,
-    ) -> Result<Self, ScriptError> {
+    ) -> Result<Self, Error> {
         Ok(Noop {
             semi: Semi::parse(it, context)?,
         })
@@ -396,45 +806,11 @@ impl Parse for Noop {
     }
 }
 
-impl Parse for Let {
-    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-        it: &mut Peekable<I>,
-        _context: &CompileContext,
-    ) -> Result<Self, ScriptError> {
-        match it.next() {
-            Some(Token::Let(tok)) => Ok(*tok),
-            Some(t) => Err(ScriptError::invalid_token(t.clone())),
-            None => Err(ScriptError::end_of_input()),
-        }
-    }
-
-    fn get_span(&self) -> Span {
-        self.span
-    }
-}
-
-impl Parse for Semi {
-    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-        it: &mut Peekable<I>,
-        _context: &CompileContext,
-    ) -> Result<Self, ScriptError> {
-        match it.next() {
-            Some(Token::Semi(tok)) => Ok(*tok),
-            Some(t) => Err(ScriptError::invalid_token(t.clone())),
-            None => Err(ScriptError::end_of_input()),
-        }
-    }
-
-    fn get_span(&self) -> Span {
-        self.span
-    }
-}
-
 impl Parse for RuleStatement {
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
         it: &mut Peekable<I>,
         context: &CompileContext,
-    ) -> Result<Self, ScriptError> {
+    ) -> Result<Self, Error> {
         Ok(RuleStatement {
             lhs: Expression::parse(it, context)?,
             op: RuleOperator::parse(it, context)?,
@@ -452,15 +828,16 @@ impl Parse for LetStatement {
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
         it: &mut Peekable<I>,
         context: &CompileContext,
-    ) -> Result<Self, ScriptError> {
+    ) -> Result<Self, Error> {
         let let_token = Let::parse(it, context)?;
         let ident = Punctuated::parse(it, context)?;
         let eq = Eq::parse(it, context)?;
         let expr = Expression::parse(it, context)?;
         let mut rules = Vec::new();
 
+        // After the defining expression there can be rules.
         loop {
-            let next = it.peek().cloned();
+            let next = it.peek().copied();
 
             match next {
                 Some(Token::Semi(_)) => break,
@@ -468,7 +845,7 @@ impl Parse for LetStatement {
                     RuleOperator::parse(it, context)?,
                     Expression::parse(it, context)?,
                 )),
-                None => return Err(ScriptError::end_of_input()),
+                None => return Err(Error::EndOfInput),
             };
         }
 
@@ -491,17 +868,19 @@ impl Parse for ExprNumber {
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
         it: &mut Peekable<I>,
         _context: &CompileContext,
-    ) -> Result<Self, ScriptError> {
+    ) -> Result<Self, Error> {
         match it.next() {
+            // The integral and decimal parts have to be merged into one floating point number.
+            #[allow(clippy::cast_precision_loss)]
             Some(Token::Number(num)) => Ok(ExprNumber {
                 value: {
                     num.integral as f64
-                        + num.decimal as f64 * f64::powi(10.0, -(num.decimal_places as i32))
+                        + num.decimal as f64 * f64::powi(10.0, -i32::from(num.decimal_places))
                 },
                 token: *num,
             }),
-            Some(t) => Err(ScriptError::invalid_token(t.clone())),
-            None => Err(ScriptError::end_of_input()),
+            Some(t) => Err(Error::invalid_token(t.clone())),
+            None => Err(Error::EndOfInput),
         }
     }
 
@@ -510,44 +889,53 @@ impl Parse for ExprNumber {
     }
 }
 
-impl Parse for Expression {
+impl<const ITER: bool> Parse for Expression<ITER> {
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
         it: &mut Peekable<I>,
         context: &CompileContext,
-    ) -> Result<Self, ScriptError> {
-        let mut expr = Expression::Simple(Punctuated::parse(it, context)?);
+    ) -> Result<Self, Error> {
+        let mut expr = if ITER {
+            let punct = Punctuated::parse(it, context)?;
+            if punct.len() == 1 {
+                Expression::Single(punct.first)
+            } else {
+                // Implicit iterators have id of 0.
+                Expression::ImplicitIterator(ImplicitIterator { exprs: punct })
+            }
+        } else {
+            // We can only parse one expression.
+            Expression::Single(Box::new(SimpleExpression::parse(it, context)?))
+        };
 
         loop {
-            let next = it.peek().cloned();
+            let next = it.peek().copied();
 
             let op = match next {
                 Some(next) => match next {
-                    Token::Asterisk(asterisk) => {
-                        BinaryOperator::Mul(MulOp {
-                            asterisk: *asterisk,
-                        })
-                    },
-                    Token::Plus(plus) => {
-                        BinaryOperator::Add(AddOp {
-                            plus: *plus,
-                        })
-                    },
-                    Token::Minus(minus) => {
-                        BinaryOperator::Sub(SubOp {
-                            minus: *minus,
-                        })
-                    },
-                    Token::Slash(slash) => {
-                        BinaryOperator::Div(DivOp {
-                            slash: *slash,
-                        })
-                    },
+                    Token::Asterisk(asterisk) => BinaryOperator::Mul(MulOp {
+                        asterisk: *asterisk,
+                    }),
+                    Token::Plus(plus) => BinaryOperator::Add(AddOp { plus: *plus }),
+                    Token::Minus(minus) => BinaryOperator::Sub(SubOp { minus: *minus }),
+                    Token::Slash(slash) => BinaryOperator::Div(DivOp { slash: *slash }),
                     _ => break,
                 },
                 None => break,
             };
 
-            expr = dispatch_order(expr, op, Punctuated::parse(it, context)?);
+            it.next();
+
+            let rhs = {
+                let punct = Punctuated::parse(it, context)?;
+                if punct.len() == 1 {
+                    Expression::Single(punct.first)
+                } else {
+                    // Implicit iterators have id of 0.
+                    Expression::ImplicitIterator(ImplicitIterator { exprs: punct })
+                }
+            };
+
+            expr = dispatch_order(expr, op, rhs);
         }
 
         Ok(expr)
@@ -555,7 +943,8 @@ impl Parse for Expression {
 
     fn get_span(&self) -> Span {
         match self {
-            Expression::Simple(s) => s.get_span(),
+            Expression::ImplicitIterator(it) => it.get_span(),
+            Expression::Single(expr) => expr.get_span(),
             Expression::Binop(e) => e.lhs.get_span().join(e.rhs.get_span()),
         }
     }
@@ -570,17 +959,24 @@ impl BinaryOperator {
     }
 }
 
-fn dispatch_order(
-    lhs: Expression,
+/// Inserts an operator with an rhs into a operator series, considering the order of operations.
+fn dispatch_order<const ITER: bool>(
+    lhs: Expression<ITER>,
     op: BinaryOperator,
-    rhs: Punctuated<SimpleExpression, Vertical>,
-) -> Expression {
+    rhs: Expression<ITER>, // We have to trust, that it is a valid expression.
+) -> Expression<ITER> {
+    assert!(ITER || rhs.is_single());
+
     match lhs {
-        Expression::Simple(s) => Expression::Binop(ExprBinop {
-            lhs: Box::new(Expression::Simple(s)),
-            operator: op,
-            rhs: Box::new(Expression::Simple(rhs)),
-        }),
+        // if lhs is simple, there is no order to consider.
+        lhs @ (Expression::ImplicitIterator(_) | Expression::Single(_)) => {
+            Expression::Binop(ExprBinop {
+                lhs: Box::new(lhs),
+                operator: op,
+                rhs: Box::new(rhs),
+            })
+        }
+        // Otherwise we compare indices of the operators and act accordingly.
         Expression::Binop(lhs) => {
             if op.index() > lhs.operator.index() {
                 Expression::Binop(ExprBinop {
@@ -592,7 +988,7 @@ fn dispatch_order(
                 Expression::Binop(ExprBinop {
                     lhs: Box::new(Expression::Binop(lhs)),
                     operator: op,
-                    rhs: Box::new(Expression::Simple(rhs)),
+                    rhs: Box::new(rhs),
                 })
             }
         }
@@ -603,8 +999,8 @@ impl Parse for SimpleExpression {
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
         it: &mut Peekable<I>,
         context: &CompileContext,
-    ) -> Result<Self, ScriptError> {
-        let next = it.peek().cloned();
+    ) -> Result<Self, Error> {
+        let next = it.peek().copied();
 
         let expr = match next {
             Some(next) => match next {
@@ -613,9 +1009,7 @@ impl Parse for SimpleExpression {
                     it.next();
                     // negation
                     SimpleExpression::Unop(ExprUnop {
-                        operator: UnaryOperator::Neg(NegOp {
-                            minus: *m,
-                        }),
+                        operator: UnaryOperator::Neg(NegOp { minus: *m }),
                         rhs: Box::new(SimpleExpression::parse(it, context)?),
                     })
                 }
@@ -623,8 +1017,9 @@ impl Parse for SimpleExpression {
                     it.next();
                     match ident {
                         Ident::Named(name) => {
-                            let next = it.peek().cloned();
+                            let next = it.peek().copied();
 
+                            // Names can mean either function calls
                             if let Some(Token::LParen(lparen)) = next {
                                 it.next();
 
@@ -637,6 +1032,7 @@ impl Parse for SimpleExpression {
                                     params,
                                 })
                             } else {
+                                // or variable access.
                                 SimpleExpression::Ident(Ident::Named(name.clone()))
                             }
                         }
@@ -648,9 +1044,15 @@ impl Parse for SimpleExpression {
                 Token::LParen(_) => {
                     SimpleExpression::Parenthised(ExprParenthised::parse(it, context)?)
                 }
-                tok => return Err(ScriptError::invalid_token(tok.clone())),
+                Token::Dollar(_) => {
+                    SimpleExpression::ExplicitIterator(ExplicitIterator::parse(it, context)?)
+                }
+                Token::Ampersant(_) => SimpleExpression::PointCollection(
+                    PointCollectionConstructor::parse(it, context)?,
+                ),
+                tok => return Err(Error::invalid_token(tok.clone())),
             },
-            None => return Err(ScriptError::end_of_input()),
+            None => return Err(Error::EndOfInput),
         };
 
         Ok(expr)
@@ -665,24 +1067,26 @@ impl Parse for SimpleExpression {
                 UnaryOperator::Neg(v) => v.minus.span,
             }),
             SimpleExpression::Parenthised(v) => v.get_span(),
+            Self::ExplicitIterator(v) => v.get_span(),
+            Self::PointCollection(v) => v.get_span(),
         }
     }
 }
 
-impl<T: Parse + Debug, U: Parse> Parse for Punctuated<T, U> {
+impl<T: Parse, U: Parse> Parse for Punctuated<T, U> {
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
         it: &mut Peekable<I>,
         context: &CompileContext,
-    ) -> Result<Self, ScriptError> {
+    ) -> Result<Self, Error> {
         let mut collection = Vec::new();
 
-        let first = T::parse(it, context)?;
+        let first = Box::parse(it, context)?;
 
         while let Some(punct) = Option::<U>::parse(it, context).unwrap() {
             collection.push((punct, T::parse(it, context)?));
         }
 
-        Ok(Punctuated { collection, first })
+        Ok(Punctuated { first, collection })
     }
 
     fn get_span(&self) -> Span {
@@ -697,7 +1101,7 @@ impl<T: Parse> Parse for Option<T> {
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
         it: &mut Peekable<I>,
         context: &CompileContext,
-    ) -> Result<Self, ScriptError> {
+    ) -> Result<Self, Error> {
         let mut it_cloned = it.clone();
 
         Ok(match T::parse(&mut it_cloned, context) {
@@ -721,7 +1125,7 @@ impl Parse for ExprParenthised {
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
         it: &mut Peekable<I>,
         context: &CompileContext,
-    ) -> Result<Self, ScriptError> {
+    ) -> Result<Self, Error> {
         Ok(Self {
             lparen: LParen::parse(it, context)?,
             content: Box::parse(it, context)?,
@@ -738,7 +1142,7 @@ impl Parse for RuleOperator {
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
         it: &mut Peekable<I>,
         context: &CompileContext,
-    ) -> Result<Self, ScriptError> {
+    ) -> Result<Self, Error> {
         let next = it.next();
         match next {
             Some(t) => match t {
@@ -764,16 +1168,16 @@ impl Parse for RuleOperator {
                             definition: Rc::clone(definition),
                         }))
                     } else {
-                        Err(ScriptError::undefined_operator(name.clone()))
+                        Err(Error::undefined_rule_operator(name.clone()))
                     }
                 }
                 Token::Exclamation(excl) => Ok(RuleOperator::Inverted(InvertedRuleOperator {
                     exlamation: *excl,
                     operator: Box::new(RuleOperator::parse(it, context)?),
                 })),
-                t => Err(ScriptError::invalid_token(t.clone())),
+                t => Err(Error::invalid_token(t.clone())),
             },
-            None => Err(ScriptError::end_of_input()),
+            None => Err(Error::EndOfInput),
         }
     }
 
@@ -792,151 +1196,35 @@ impl Parse for RuleOperator {
     }
 }
 
-impl Parse for Vertical {
+impl_token_parse! {At}
+impl_token_parse! {LBrace}
+impl_token_parse! {RBrace}
+impl_token_parse! {Dollar}
+impl_token_parse! {Vertical}
+impl_token_parse! {Semi}
+impl_token_parse! {Comma}
+impl_token_parse! {Ampersant}
+impl_token_parse! {Lt}
+impl_token_parse! {Gt}
+impl_token_parse! {Lteq}
+impl_token_parse! {Gteq}
+impl_token_parse! {Eq}
+impl_token_parse! {LParen}
+impl_token_parse! {RParen}
+impl_token_parse! {Let}
+impl_token_parse! {Colon}
+impl_token_parse! {Exclamation}
+impl_token_parse! {Number}
+
+impl Parse for NamedIdent {
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
         it: &mut Peekable<I>,
         _context: &CompileContext,
-    ) -> Result<Self, ScriptError> {
+    ) -> Result<Self, Error> {
         match it.next() {
-            Some(Token::Vertical(tok)) => Ok(*tok),
-            Some(t) => Err(ScriptError::invalid_token(t.clone())),
-            None => Err(ScriptError::end_of_input()),
-        }
-    }
-
-    fn get_span(&self) -> Span {
-        self.span
-    }
-}
-
-impl Parse for Comma {
-    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-        it: &mut Peekable<I>,
-        _context: &CompileContext,
-    ) -> Result<Self, ScriptError> {
-        match it.next() {
-            Some(Token::Comma(tok)) => Ok(*tok),
-            Some(t) => Err(ScriptError::invalid_token(t.clone())),
-            None => Err(ScriptError::end_of_input()),
-        }
-    }
-
-    fn get_span(&self) -> Span {
-        self.span
-    }
-}
-
-impl Parse for Lt {
-    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-        it: &mut Peekable<I>,
-        _context: &CompileContext,
-    ) -> Result<Self, ScriptError> {
-        match it.next() {
-            Some(Token::Lt(tok)) => Ok(*tok),
-            Some(t) => Err(ScriptError::invalid_token(t.clone())),
-            None => Err(ScriptError::end_of_input()),
-        }
-    }
-
-    fn get_span(&self) -> Span {
-        self.span
-    }
-}
-
-impl Parse for Gt {
-    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-        it: &mut Peekable<I>,
-        _context: &CompileContext,
-    ) -> Result<Self, ScriptError> {
-        match it.next() {
-            Some(Token::Gt(tok)) => Ok(*tok),
-            Some(t) => Err(ScriptError::invalid_token(t.clone())),
-            None => Err(ScriptError::end_of_input()),
-        }
-    }
-
-    fn get_span(&self) -> Span {
-        self.span
-    }
-}
-
-impl Parse for Lteq {
-    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-        it: &mut Peekable<I>,
-        _context: &CompileContext,
-    ) -> Result<Self, ScriptError> {
-        match it.next() {
-            Some(Token::Lteq(tok)) => Ok(*tok),
-            Some(t) => Err(ScriptError::invalid_token(t.clone())),
-            None => Err(ScriptError::end_of_input()),
-        }
-    }
-
-    fn get_span(&self) -> Span {
-        self.span
-    }
-}
-
-impl Parse for Gteq {
-    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-        it: &mut Peekable<I>,
-        _context: &CompileContext,
-    ) -> Result<Self, ScriptError> {
-        match it.next() {
-            Some(Token::Gteq(tok)) => Ok(*tok),
-            Some(t) => Err(ScriptError::invalid_token(t.clone())),
-            None => Err(ScriptError::end_of_input()),
-        }
-    }
-
-    fn get_span(&self) -> Span {
-        self.span
-    }
-}
-
-impl Parse for Exclamation {
-    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-        it: &mut Peekable<I>,
-        _context: &CompileContext,
-    ) -> Result<Self, ScriptError> {
-        match it.next() {
-            Some(Token::Exclamation(tok)) => Ok(*tok),
-            Some(t) => Err(ScriptError::invalid_token(t.clone())),
-            None => Err(ScriptError::end_of_input()),
-        }
-    }
-
-    fn get_span(&self) -> Span {
-        self.span
-    }
-}
-
-impl Parse for LParen {
-    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-        it: &mut Peekable<I>,
-        _context: &CompileContext,
-    ) -> Result<Self, ScriptError> {
-        match it.next() {
-            Some(Token::LParen(tok)) => Ok(*tok),
-            Some(t) => Err(ScriptError::invalid_token(t.clone())),
-            None => Err(ScriptError::end_of_input()),
-        }
-    }
-
-    fn get_span(&self) -> Span {
-        self.span
-    }
-}
-
-impl Parse for RParen {
-    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-        it: &mut Peekable<I>,
-        _context: &CompileContext,
-    ) -> Result<Self, ScriptError> {
-        match it.next() {
-            Some(Token::RParen(tok)) => Ok(*tok),
-            Some(t) => Err(ScriptError::invalid_token(t.clone())),
-            None => Err(ScriptError::end_of_input()),
+            Some(Token::Ident(Ident::Named(named))) => Ok(named.clone()),
+            Some(t) => Err(Error::invalid_token(t.clone())),
+            None => Err(Error::EndOfInput),
         }
     }
 
@@ -949,11 +1237,11 @@ impl Parse for Ident {
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
         it: &mut Peekable<I>,
         _context: &CompileContext,
-    ) -> Result<Self, ScriptError> {
+    ) -> Result<Self, Error> {
         match it.next() {
             Some(Token::Ident(ident)) => Ok(ident.clone()),
-            Some(t) => Err(ScriptError::invalid_token(t.clone())),
-            None => Err(ScriptError::end_of_input()),
+            Some(t) => Err(Error::invalid_token(t.clone())),
+            None => Err(Error::EndOfInput),
         }
     }
 
@@ -965,28 +1253,11 @@ impl Parse for Ident {
     }
 }
 
-impl Parse for Eq {
-    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-        it: &mut Peekable<I>,
-        _context: &CompileContext,
-    ) -> Result<Self, ScriptError> {
-        match it.next() {
-            Some(Token::Eq(tok)) => Ok(*tok),
-            Some(t) => Err(ScriptError::invalid_token(t.clone())),
-            None => Err(ScriptError::end_of_input()),
-        }
-    }
-
-    fn get_span(&self) -> Span {
-        self.span
-    }
-}
-
 impl<T: Parse> Parse for Box<T> {
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
         it: &mut Peekable<I>,
         context: &CompileContext,
-    ) -> Result<Self, ScriptError> {
+    ) -> Result<Self, Error> {
         Ok(Box::new(T::parse(it, context)?))
     }
 
@@ -995,40 +1266,21 @@ impl<T: Parse> Parse for Box<T> {
     }
 }
 
-impl<T: GetType + Parse, U> GetType for Punctuated<T, U> {
-    fn get_type(&self, context: &CompileContext) -> Result<Type, ScriptError> {
-        let t = self.first.get_type(context)?;
-
-        for (_, v) in &self.collection {
-            v.match_type(context, &t).map_err(|err| match err {
-                ScriptError::InvalidType { expected, got } => {
-                    ScriptError::inconsistent_types(expected, self.first.get_span(), got.0, got.1)
-                }
-                err => err,
-            })?;
-        }
-
-        Ok(t)
-    }
-
-    fn match_type(&self, context: &CompileContext, t: &Type) -> Result<(), ScriptError> {
-        for v in self.iter() {
-            v.match_type(context, t)?;
-        }
-
-        Ok(())
-    }
-}
-
+/// A builtin type.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PredefinedType {
+    /// A point
     Point,
+    /// A line
     Line,
+    /// A scalar of a certain unit.
     Scalar(Option<ComplexUnit>),
+    /// A point collection.
     PointCollection(usize),
 }
 
 impl PredefinedType {
+    #[must_use]
     pub fn as_scalar(&self) -> Option<&Option<ComplexUnit>> {
         if let Self::Scalar(v) = self {
             Some(v)
@@ -1038,35 +1290,48 @@ impl PredefinedType {
     }
 }
 
+/// A user-defined type.
 pub struct DefinedType {
+    /// The type's name.
     pub name: String,
 }
 
+/// A type of an expression or a variable.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Type {
+    /// Builtin
     Predefined(PredefinedType),
+    /// User-defined
     Defined,
+    /// undefined, unknown
     Undefined,
 }
 
-impl Type {
-    pub fn can_infer_pc(&self, collection: &PointCollection) -> bool {
+impl Display for Type {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Predefined(pre) => match pre {
-                PredefinedType::Point => collection.len() == 1,
-                PredefinedType::Line => collection.len() == 2,
-                PredefinedType::PointCollection(l) => collection.len() == *l,
-                PredefinedType::Scalar(None) => false,
-                PredefinedType::Scalar(Some(unit)) => unit == &ComplexUnit::new(SimpleUnit::Distance) && collection.len() == 2
+            Type::Predefined(pre) => match pre {
+                PredefinedType::Point => write!(f, "Point"),
+                PredefinedType::Line => write!(f, "Line"),
+                PredefinedType::Scalar(unit) => match unit {
+                    Some(unit) => write!(f, "Scalar ({unit})"),
+                    None => write!(f, "Scalar (no unit)"),
+                },
+                PredefinedType::PointCollection(l) => write!(f, "Point collection ({l})"),
             },
-            Self::Defined => false,
-            Self::Undefined => false,
+            Type::Defined => write!(f, "Defined"),
+            Type::Undefined => write!(f, "Undefined"),
         }
     }
+}
 
+impl Type {
+    /// Whether `self` can be cast to `into`.
+    #[must_use]
     pub fn can_cast(&self, into: &Type) -> bool {
         match self {
             Type::Predefined(pre) => match pre {
+                // A point can only be cast into another point or a point collection with length one.
                 PredefinedType::Point => match into {
                     Type::Predefined(pre) => matches!(
                         pre,
@@ -1074,108 +1339,47 @@ impl Type {
                     ),
                     _ => false,
                 },
-                PredefinedType::Line => match into {
-                    Type::Predefined(pre) => matches!(
-                        pre,
-                        PredefinedType::Line | PredefinedType::PointCollection(2)
-                    ),
+                // A line can only be cast into another line.
+                PredefinedType::Line => matches!(into, Type::Predefined(PredefinedType::Line)),
+                // A scalar with a defined unit can only be cast into another scalar with the same unit.
+                PredefinedType::Scalar(Some(unit1)) => {
+                    if let Type::Predefined(PredefinedType::Scalar(Some(unit2))) = into {
+                        unit1 == unit2
+                    } else {
+                        false
+                    }
+                }
+                // A scalar with no defined unit can be cast into any other scalar, except angle.
+                PredefinedType::Scalar(None) => match into {
+                    Type::Predefined(PredefinedType::Scalar(unit)) => match unit {
+                        Some(unit) => unit.0[3] == 0, // no angle
+                        None => true,
+                    },
                     _ => false,
                 },
-                PredefinedType::Scalar(Some(unit1)) => if let Type::Predefined(PredefinedType::Scalar(Some(unit2))) = into {
-                    unit1 == unit2
-                } else {
-                    false
-                },
-                PredefinedType::Scalar(None) => matches!(into, Type::Predefined(PredefinedType::Scalar(_))),
                 PredefinedType::PointCollection(l) => match into {
                     Type::Predefined(pre) => match pre {
                         PredefinedType::Point => *l == 1,
                         PredefinedType::Line => *l == 2,
-                        PredefinedType::Scalar(Some(unit)) => unit == &ComplexUnit::new(SimpleUnit::Distance) && *l == 2,
+                        PredefinedType::Scalar(Some(unit)) => {
+                            unit == &ComplexUnit::new(SimpleUnit::Distance) && *l == 2
+                        }
                         PredefinedType::Scalar(None) => false,
                         PredefinedType::PointCollection(v) => v == l,
                     },
                     _ => false,
                 },
             },
-            Type::Defined => false,
-            Type::Undefined => false,
+            Type::Defined | Type::Undefined => false,
         }
     }
 
+    #[must_use]
     pub fn as_predefined(&self) -> Option<&PredefinedType> {
         if let Self::Predefined(v) = self {
             Some(v)
         } else {
             None
-        }
-    }
-}
-
-impl GetType for Expression {
-    fn get_type(&self, context: &CompileContext) -> Result<Type, ScriptError> {
-        match self {
-            Expression::Simple(s) => s.get_type(context),
-            Expression::Binop(b) => Ok(b
-                .operator
-                .get_returned(&b.lhs.get_type(context)?, &b.rhs.get_type(context)?)),
-        }
-    }
-
-    /// Checks if the type of the expression matches type `t`.
-    fn match_type(&self, context: &CompileContext, t: &Type) -> Result<(), ScriptError> {
-        let vt = self.get_type(context)?;
-
-        if !vt.can_cast(t) {
-            Err(ScriptError::invalid_type(t.clone(), vt, self.get_span()))
-        } else {
-            Ok(())
-        }
-    }
-}
-
-impl GetType for SimpleExpression {
-    fn get_type(&self, context: &CompileContext) -> Result<Type, ScriptError> {
-        Ok(match self {
-            SimpleExpression::Ident(ident) => match ident {
-                Ident::Named(named) => {
-                    if let Some(var) = context.variables.get(&named.ident) {
-                        var.get_type(context)?
-                    } else {
-                        Type::Undefined
-                    }
-                }
-                Ident::Collection(c) => Type::Predefined(PredefinedType::PointCollection(c.len())),
-            },
-            SimpleExpression::Number(_) => Type::Predefined(PredefinedType::Scalar(None)),
-            SimpleExpression::Call(c) => {
-                if let Some(f) = context.functions.get(&c.name.ident) {
-                    let params = c
-                        .params.as_ref().map_or_else(
-                            || Ok(Vec::new()),
-                            |x| x.iter()
-                                                                    .map(|v| v.get_type(context))
-                                                                    .collect::<Result<Vec<Type>, ScriptError>>()
-                        )?;
-
-                    f.get_returned(&params)
-                } else {
-                    Type::Undefined
-                }
-            }
-            SimpleExpression::Unop(u) => u.operator.get_returned(&u.rhs.get_type(context)?),
-            SimpleExpression::Parenthised(p) => p.content.get_type(context)?,
-        })
-    }
-
-    /// Checks if the type of the expression matches type `t`.
-    fn match_type(&self, context: &CompileContext, t: &Type) -> Result<(), ScriptError> {
-        let vt = self.get_type(context)?;
-
-        if !vt.can_cast(t) {
-            Err(ScriptError::invalid_type(t.clone(), vt, self.get_span()))
-        } else {
-            Ok(())
         }
     }
 }

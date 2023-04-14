@@ -1,3 +1,6 @@
+#![warn(clippy::pedantic)]
+
+pub mod cli;
 pub mod drawer;
 pub mod generator;
 pub mod projector;
