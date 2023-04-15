@@ -2,7 +2,7 @@ use std::{fs::File, io::Write, path::Path};
 
 use serde::Serialize;
 
-use crate::projector::Rendered;
+use crate::projector::{Output, Rendered};
 
 #[derive(Serialize)]
 struct Data<'r> {
@@ -13,12 +13,12 @@ struct Data<'r> {
 
 /// # Panics
 /// Panics whenever there is a filesystem problem
-pub fn draw(target: &Path, canvas_size: (usize, usize), rendered: &Vec<Rendered>) {
+pub fn draw(target: &Path, canvas_size: (usize, usize), output: &Output) {
     let mut content = String::new();
     let data = Data {
         width: canvas_size.0,
         height: canvas_size.1,
-        rendered,
+        rendered: &output.vec_rendered,
     };
     content += (serde_json::to_string(&data).unwrap()).as_str();
 

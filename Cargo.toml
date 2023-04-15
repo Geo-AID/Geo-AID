@@ -10,6 +10,14 @@ repository = "https://www.github.com/DragonGamesStudios/Geo-AID"
 rand = "0.8.5"
 clap = {version = "4.0.32", features = ["derive"]}
 crossterm = "0.25.0"
-serde = {version = "1.0.151", features = ["derive"]}
+serde = {version = "1.0.151", features = ["derive", "rc"]}
 serde_json = "1.0"
 strsim = "0.10.0"
+[dependencies.uuid]
+version = "1.3.0"
+features = [
+    "v4",                
+    "fast-rng",          
+    "macro-diagnostics", 
+    "serde",
+]
