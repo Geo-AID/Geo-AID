@@ -546,3 +546,15 @@ pub struct Flags {
     pub distance_literals: DistanceLiterals,
     pub point_bounds: bool
 }
+
+impl Default for Flags {
+    fn default() -> Self {
+        Self {
+            optimizations: Optimizations {
+                identical_expressions: true
+            },
+            distance_literals: DistanceLiterals::None,
+            point_bounds: false
+        }
+    }
+}

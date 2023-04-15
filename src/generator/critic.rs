@@ -81,7 +81,7 @@ pub type Cache = HashMap<HashableWeakArc<Expression>, ExprCache>;
 
 pub struct EvaluationArgs<'r> {
     pub logger: &'r mut Logger,
-    pub adjustables: &'r AdjustableVec,
+    pub adjustables: &'r [(Adjustable, f64)],
     pub generation: u64,
     pub flags: &'r Arc<Flags>,
     pub cache: Option<&'r RefCell<Cache>>

@@ -1,5 +1,7 @@
 use std::{ops::{Add, Mul, AddAssign}, sync::Arc, cell::RefCell};
 
+use serde::Serialize;
+
 use crate::script::{ComplexUnit, HashableWeakArc};
 
 use self::expr::{PointPointDistance, PointLineDistance, AnglePoint, AngleLine, Literal, FreePoint, LinePoint, LineLineIntersection, SetUnit, Sum, Difference, Product, Quotient, Negation, AngleBisector, Average, PerpendicularThrough, ParallelThrough, Real, PointX, PointY};
@@ -13,7 +15,7 @@ pub struct ExprCache {
 }
 
 /// A utility for `Weights`.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct Weights(pub Vec<f64>);
 
 impl Weights {
@@ -68,7 +70,7 @@ impl Mul<f64> for Weights {
 }
 
 /// An expression is a base construct of Geo-AID. Contains a cache, saved weights and the expression kind itself.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct Expression {
     /// Saved weights
     pub weights: Weights,
@@ -297,11 +299,13 @@ pub trait Evaluate {
 pub mod expr {
     use std::sync::Arc;
 
+    use serde::Serialize;
+
     use crate::{generator::{critic::EvaluationArgs, EvaluationError, geometry, Complex}, script::{unit, ComplexUnit}};
 
     use super::{Expression, Evaluate, Value, Weights};
 
-    #[derive(Debug, Clone)]
+    #[derive(Debug, Clone, Serialize)]
     pub struct PointPointDistance {
         pub a: Arc<Expression>,
         pub b: Arc<Expression>
@@ -323,7 +327,7 @@ pub mod expr {
         }
     }
 
-    #[derive(Debug, Clone)]
+    #[derive(Debug, Clone, Serialize)]
     pub struct PointLineDistance {
         pub point: Arc<Expression>,
         pub line: Arc<Expression>
@@ -350,7 +354,7 @@ pub mod expr {
         }
     }
 
-    #[derive(Debug, Clone)]
+    #[derive(Debug, Clone, Serialize)]
     /// An angle defined with 3 points.
     pub struct AnglePoint {
         pub arm1: Arc<Expression>,
@@ -376,7 +380,7 @@ pub mod expr {
         }
     }
 
-    #[derive(Debug, Clone)]
+    #[derive(Debug, Clone, Serialize)]
     /// An angle defined with 2 lines.
     pub struct AngleLine {
         pub k: Arc<Expression>,
@@ -405,7 +409,7 @@ pub mod expr {
         }
     }
 
-    #[derive(Debug, Clone)]
+    #[derive(Debug, Clone, Serialize)]
     /// An angle defined with 2 lines.
     pub struct Literal {
         pub value: f64,
@@ -425,7 +429,7 @@ pub mod expr {
         }
     }
 
-    #[derive(Debug, Clone)]
+    #[derive(Debug, Clone, Serialize)]
     /// A free adjustable point.
     pub struct FreePoint {
         pub index: usize
@@ -443,7 +447,7 @@ pub mod expr {
         }
     }
 
-    #[derive(Debug, Clone)]
+    #[derive(Debug, Clone, Serialize)]
     /// A line defined with two points.
     pub struct LinePoint {
         pub a: Arc<Expression>,
@@ -465,7 +469,7 @@ pub mod expr {
         }
     }
 
-    #[derive(Debug, Clone)]
+    #[derive(Debug, Clone, Serialize)]
     /// Line-line intersection.
     pub struct LineLineIntersection {
         pub k: Arc<Expression>,
@@ -489,7 +493,7 @@ pub mod expr {
         }
     }
 
-    #[derive(Debug, Clone)]
+    #[derive(Debug, Clone, Serialize)]
     /// Changes the scalar's unit.
     pub struct SetUnit {
         pub value: Arc<Expression>,
@@ -511,7 +515,7 @@ pub mod expr {
         }
     }
 
-    #[derive(Debug, Clone)]
+    #[derive(Debug, Clone, Serialize)]
     /// a + b.
     pub struct Sum {
         pub a: Arc<Expression>,
@@ -536,7 +540,7 @@ pub mod expr {
         }
     }
 
-    #[derive(Debug, Clone)]
+    #[derive(Debug, Clone, Serialize)]
     /// a - b.
     pub struct Difference {
         pub a: Arc<Expression>,
@@ -561,7 +565,7 @@ pub mod expr {
         }
     }
 
-    #[derive(Debug, Clone)]
+    #[derive(Debug, Clone, Serialize)]
     /// a * b.
     pub struct Product {
         pub a: Arc<Expression>,
@@ -586,7 +590,7 @@ pub mod expr {
         }
     }
 
-    #[derive(Debug, Clone)]
+    #[derive(Debug, Clone, Serialize)]
     /// a / b.
     pub struct Quotient {
         pub a: Arc<Expression>,
@@ -611,7 +615,7 @@ pub mod expr {
         }
     }
 
-    #[derive(Debug, Clone)]
+    #[derive(Debug, Clone, Serialize)]
     /// -v.
     pub struct Negation {
         pub value: Arc<Expression>
@@ -633,7 +637,7 @@ pub mod expr {
         }
     }
     
-    #[derive(Debug, Clone)]
+    #[derive(Debug, Clone, Serialize)]
     /// An angle defined with 3 points.
     pub struct AngleBisector {
         pub arm1: Arc<Expression>,
@@ -666,7 +670,7 @@ pub mod expr {
         }
     }
 
-    #[derive(Debug, Clone)]
+    #[derive(Debug, Clone, Serialize)]
     /// Gets the average value.
     pub struct Average {
         pub items: Vec<Arc<Expression>>
@@ -718,7 +722,7 @@ pub mod expr {
         }
     }
 
-    #[derive(Debug, Clone)]
+    #[derive(Debug, Clone, Serialize)]
     pub struct PerpendicularThrough {
         pub point: Arc<Expression>,
         pub line: Arc<Expression>
@@ -737,7 +741,7 @@ pub mod expr {
         }
     }
 
-    #[derive(Debug, Clone)]
+    #[derive(Debug, Clone, Serialize)]
     pub struct ParallelThrough {
         pub point: Arc<Expression>,
         pub line: Arc<Expression>
@@ -758,7 +762,7 @@ pub mod expr {
         }
     }
 
-    #[derive(Debug, Clone)]
+    #[derive(Debug, Clone, Serialize)]
     /// A free adjustable real.
     pub struct Real {
         pub index: usize
@@ -777,7 +781,7 @@ pub mod expr {
         }
     }
 
-    #[derive(Debug, Clone)]
+    #[derive(Debug, Clone, Serialize)]
     /// X coordinate of a point.
     pub struct PointX {
         pub point: Arc<Expression>
@@ -796,7 +800,7 @@ pub mod expr {
         }
     }
 
-    #[derive(Debug, Clone)]
+    #[derive(Debug, Clone, Serialize)]
     /// Y coordinate of a point.
     pub struct PointY {
         pub point: Arc<Expression>
@@ -817,7 +821,7 @@ pub mod expr {
 }
 
 /// Defines an expression kind.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub enum ExprKind {
     /// Euclidean distance between two points.
     PointPointDistance(PointPointDistance),

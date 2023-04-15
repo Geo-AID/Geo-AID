@@ -3,13 +3,14 @@ use std::sync::Arc;
 use std::{fs::File, io::Write, path::Path};
 
 use crate::generator::Complex;
+use crate::generator::expression::{ExprKind, Expression};
+use crate::generator::expression::expr::AnglePoint;
 use crate::projector::{Output, Rendered};
-use crate::script::Expression::{self, AngleLine, AnglePoint};
-use crate::script::{HashableArc, Weighed};
+use crate::script::HashableArc;
 
 /// Function getting the point's name (if it exists, if not then it returns the point's coordinates)
 fn get_point_name(
-    expr: &Arc<Weighed<Expression>>,
+    expr: &Arc<Expression>,
     output: &Output,
     point: Complex,
     scale: f64,
@@ -61,11 +62,11 @@ pub fn draw(target: &Path, canvas_size: (usize, usize), output: &Output) {
             }
             Rendered::Angle(angle) => {
                 let p1 = angle.points.0;
-                let origin = angle.points.1;
+                let p_origin = angle.points.1;
                 let p2 = angle.points.2;
                 let no_arcs = String::from("l"); // Requires a change later! It has to be based on info from the script
-                match &angle.expr.object {
-                    AnglePoint(point1, point2, point3) => {
+                match &angle.expr.kind {
+                    ExprKind::AnglePoint(AnglePoint{ arm1, origin, arm2 }) => {
                         content += &format!(
                             r#"
                             \begin{{scope}}
@@ -75,13 +76,13 @@ pub fn draw(target: &Path, canvas_size: (usize, usize), output: &Output) {
                             \tkzMarkAngle[size = 0.5,mark = none,arc={no_arcs},mkcolor = black](A,B,C)
                             \end{{scope}}
                             "#,
-                            get_point_name(point1, output, p1, scale),
-                            get_point_name(point2, output, origin, scale),
-                            get_point_name(point3, output, p2, scale),
+                            get_point_name(arm1, output, p1, scale),
+                            get_point_name(origin, output, p_origin, scale),
+                            get_point_name(arm2, output, p2, scale),
                         );
                     }
                     // There are hard coded values in \coordinate, it is intentional, every point has it label marked by Rendered::Point sequence above
-                    AngleLine(_ln1, _ln2) => {
+                    ExprKind::AngleLine(_) => {
                         content += &format!(
                             r#"
                             \begin{{scope}}
@@ -93,8 +94,8 @@ pub fn draw(target: &Path, canvas_size: (usize, usize), output: &Output) {
                         "#,
                             p1.real,
                             p1.imaginary,
-                            origin.real,
-                            origin.imaginary,
+                            p_origin.real,
+                            p_origin.imaginary,
                             p2.real,
                             p2.imaginary
                         );
