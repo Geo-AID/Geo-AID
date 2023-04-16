@@ -2,11 +2,11 @@ use std::{sync::Arc, cell::RefCell, collections::HashMap};
 
 use crate::{
     script::{
-        Criteria, CriteriaKind, HashableWeakArc
+        Criteria, CriteriaKind
     },
 };
 
-use super::{Logger, Flags, Adjustable, expression::{Value, Expression, ExprCache}};
+use super::{Logger, Flags, Adjustable, expression::ExprCache};
 
 type AdjustableVec = Vec<(Adjustable, f64)>;
 
@@ -77,7 +77,7 @@ fn invert(q: Quality) -> Quality {
     }
 }
 
-pub type Cache = HashMap<HashableWeakArc<Expression>, ExprCache>;
+pub type Cache = HashMap<usize, ExprCache>;
 
 pub struct EvaluationArgs<'r> {
     pub logger: &'r mut Logger,
@@ -90,7 +90,7 @@ pub struct EvaluationArgs<'r> {
 /// Evaluates a single rule in terms of quality.
 fn evaluate_single(
     crit: &CriteriaKind,
-    points: &AdjustableVec,
+    adjustables: &AdjustableVec,
     logger: &mut Logger,
     generation: u64,
     flags: &Arc<Flags>,
@@ -98,25 +98,36 @@ fn evaluate_single(
 ) -> (Quality, Vec<f64>) {
     let args = EvaluationArgs {
         logger,
-        adjustables: points,
+        adjustables,
         generation,
         flags,
         cache
     };
 
     match crit {
-        CriteriaKind::Equal(e1, e2) => {
+        CriteriaKind::EqualScalar(e1, e2) => {
             let v1 = e1.evaluate(&args);
             let v2 = e2.evaluate(&args);
 
             let weigths = e1.weights.clone() + &e2.weights;
 
             (if let (Ok(v1), Ok(v2)) = (v1, v2) {
-                let diff = match v1 {
-                    Value::Point(p) => (p.position - v2.as_point().unwrap().position).mangitude(),
-                    Value::Line(_) => unreachable!(),
-                    Value::Scalar(s) => (s.value - v2.as_scalar().unwrap().value).abs(),
-                };
+                let diff = v1 - v2;
+                // Interestingly, it's easier to calculate the quality function for != and then invert it.
+                invert(Quality::Some(smooth_0_inf(1130.0 * diff.powi(2))))
+            } else {
+                // An evaluation error means the criteria is surely not met
+                Quality::Zero
+            }, weigths.0)
+        }
+        CriteriaKind::EqualPoint(e1, e2) => {
+            let v1 = e1.evaluate(&args);
+            let v2 = e2.evaluate(&args);
+
+            let weigths = e1.weights.clone() + &e2.weights;
+
+            (if let (Ok(v1), Ok(v2)) = (v1, v2) {
+                let diff = (v1 - v2).mangitude();
                 // Interestingly, it's easier to calculate the quality function for != and then invert it.
                 invert(Quality::Some(smooth_0_inf(1130.0 * diff.powi(2))))
             } else {
@@ -132,7 +143,7 @@ fn evaluate_single(
 
             (if let (Ok(v1), Ok(v2)) = (v1, v2) {
                 // Note that the difference is not the same as with equality. This time we have to be prepared for negative diffs.
-                let (v1, v2) = (v1.as_scalar().unwrap().value, v2.as_scalar().unwrap().value);
+                let (v1, v2) = (v1, v2);
                 let diff = 1.0 - v2 / v1;
                 // logger.push(format!("Distance is {}", v1.0.real));
                 // logger.push(format!("Diff's {diff}"));
@@ -151,7 +162,7 @@ fn evaluate_single(
 
             (if let (Ok(v1), Ok(v2)) = (v1, v2) {
                 // Note that the difference is not the same as with equality. This time we have to be prepared for negative diffs.
-                let (v1, v2) = (v1.as_scalar().unwrap().value, v2.as_scalar().unwrap().value);
+                let (v1, v2) = (v1, v2);
                 let diff = 1.0 - v2 / v1;
                 // Interestingly, it's easier to calculate the quality function for != and then invert it.
                 Quality::Some(smooth_inf_inf(54.0 * f64::cbrt(diff - 0.001)))
@@ -163,7 +174,7 @@ fn evaluate_single(
         // Note: Inversed zero quality is still zero.
         CriteriaKind::Inverse(kind) => {
             let (quality, ws) =
-                evaluate_single(kind, points, args.logger, generation, flags, cache);
+                evaluate_single(kind, adjustables, args.logger, generation, flags, cache);
             (invert(quality), ws)
         }
         CriteriaKind::Bias(expr) => (Quality::Some(1.0), expr.weights.clone().0),

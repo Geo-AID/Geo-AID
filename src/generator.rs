@@ -10,7 +10,7 @@ use std::{
 
 use serde::Serialize;
 
-use crate::script::{Criteria, HashableWeakArc, unit};
+use crate::script::Criteria;
 
 use self::expression::{ExprCache, Value};
 
@@ -279,12 +279,12 @@ fn generation_cycle(
             let mut exprs = Vec::new();
             crit.object.collect(&mut exprs);
 
-            for expr in exprs.into_iter().filter(|x| !x.is_trivial() && Arc::strong_count(x) > 1) {
+            for expr in exprs {
                 // We use weak to not mess with the strong count.
                 record
-                    .entry(HashableWeakArc::new(Arc::downgrade(expr)))
+                    .entry(expr)
                     .or_insert(ExprCache {
-                        value: Value::scalar(0.0, unit::SCALAR),
+                        value: Value::scalar(0.0),
                         generation: 0,
                     });
             }

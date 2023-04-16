@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::generator::expression::Expression;
+use crate::generator::expression::{Expression, PointExpr, LineExpr, ScalarExpr};
 
 use super::{unroll::PointMeta};
 
@@ -8,11 +8,11 @@ use super::{unroll::PointMeta};
 #[derive(Debug)]
 pub struct Figure {
     /// The points to be displayed
-    pub points: Vec<(Arc<Expression>, PointMeta)>,
+    pub points: Vec<(Arc<Expression<PointExpr>>, PointMeta)>,
     /// The lines to be displayed
-    pub lines: Vec<Arc<Expression>>,
+    pub lines: Vec<Arc<Expression<LineExpr>>>,
     /// Angles to be displayed
-    pub angles: Vec<(Arc<Expression>, u8)>, // This u8 refers to number of arcs in an angle!
+    pub angles: Vec<(Arc<Expression<ScalarExpr>>, u8)>, // This u8 refers to number of arcs in an angle!
     /// The canvas size.
     pub canvas_size: (usize, usize),
 }

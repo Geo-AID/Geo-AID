@@ -5,7 +5,7 @@ use serde::Serialize;
 
 use uuid::Uuid;
 
-use crate::generator::expression::ExprKind;
+use crate::generator::expression::{PointExpr, LineExpr, ScalarExpr};
 use crate::generator::expression::expr::{AnglePoint, AngleLine};
 use crate::{
     generator::{
@@ -22,7 +22,7 @@ mod tests {
 
     use crate::{
         drawer,
-        generator::{Complex, Adjustable, expression::{Expression, ExprKind, expr::{FreePoint, LinePoint, AnglePoint}}},
+        generator::{Complex, Adjustable, expression::{Expression, expr::{FreePoint, LinePoint, AnglePoint}, PointExpr, LineExpr, ScalarExpr}},
         script::{
             figure::Figure,
             unroll::PointMeta
@@ -52,7 +52,7 @@ mod tests {
         let fig = Figure {
             points: vec![
                 (
-                    Arc::new(Expression::new(ExprKind::FreePoint(FreePoint{ index: 0 }), 1.0)),
+                    Arc::new(Expression::new(PointExpr::Free(FreePoint{ index: 0 }), 1.0)),
                     PointMeta {
                         letter: 'A',
                         primes: 0,
@@ -60,7 +60,7 @@ mod tests {
                     },
                 ),
                 (
-                    Arc::new(Expression::new(ExprKind::FreePoint(FreePoint{ index: 1 }), 1.0)),
+                    Arc::new(Expression::new(PointExpr::Free(FreePoint{ index: 1 }), 1.0)),
                     PointMeta {
                         letter: 'B',
                         primes: 0,
@@ -68,7 +68,7 @@ mod tests {
                     },
                 ),
                 (
-                    Arc::new(Expression::new(ExprKind::FreePoint(FreePoint{ index: 2 }), 1.0)),
+                    Arc::new(Expression::new(PointExpr::Free(FreePoint{ index: 2 }), 1.0)),
                     PointMeta {
                         letter: 'C',
                         primes: 0,
@@ -77,20 +77,20 @@ mod tests {
                 ),
             ],
             lines: vec![
-                Arc::new(Expression::new(ExprKind::Line(LinePoint {
-                    a: Arc::new(Expression::new(ExprKind::FreePoint(FreePoint{ index: 0 }), 1.0)),
-                    b: Arc::new(Expression::new(ExprKind::FreePoint(FreePoint{ index: 1 }), 1.0)),
+                Arc::new(Expression::new(LineExpr::Line(LinePoint {
+                    a: Arc::new(Expression::new(PointExpr::Free(FreePoint{ index: 0 }), 1.0)),
+                    b: Arc::new(Expression::new(PointExpr::Free(FreePoint{ index: 1 }), 1.0)),
                 }), 1.0)),
-                Arc::new(Expression::new(ExprKind::Line(LinePoint {
-                    a: Arc::new(Expression::new(ExprKind::FreePoint(FreePoint{ index: 1 }), 1.0)),
-                    b: Arc::new(Expression::new(ExprKind::FreePoint(FreePoint{ index: 2 }), 1.0)),
+                Arc::new(Expression::new(LineExpr::Line(LinePoint {
+                    a: Arc::new(Expression::new(PointExpr::Free(FreePoint{ index: 1 }), 1.0)),
+                    b: Arc::new(Expression::new(PointExpr::Free(FreePoint{ index: 2 }), 1.0)),
                 }), 1.0)),
             ],
             angles: vec![(
-                Arc::new(Expression::new(ExprKind::AnglePoint(AnglePoint {
-                    arm1: Arc::new(Expression::new(ExprKind::FreePoint(FreePoint{ index: 0 }), 1.0)),
-                    origin: Arc::new(Expression::new(ExprKind::FreePoint(FreePoint{ index: 1 }), 1.0)),
-                    arm2: Arc::new(Expression::new(ExprKind::FreePoint(FreePoint{ index: 2 }), 1.0)),
+                Arc::new(Expression::new(ScalarExpr::AnglePoint(AnglePoint {
+                    arm1: Arc::new(Expression::new(PointExpr::Free(FreePoint{ index: 0 }), 1.0)),
+                    origin: Arc::new(Expression::new(PointExpr::Free(FreePoint{ index: 1 }), 1.0)),
+                    arm2: Arc::new(Expression::new(PointExpr::Free(FreePoint{ index: 2 }), 1.0)),
             }), 1.0)),
                 x,
             )],
@@ -128,7 +128,7 @@ pub enum Rendered {
 #[derive(Serialize)]
 pub struct Output {
     /// Map containing Expression (points) as keys and point structs as values
-    pub map: HashMap<HashableArc<Expression>, Rc<RenderedPoint>>,
+    pub map: HashMap<HashableArc<Expression<PointExpr>>, Rc<RenderedPoint>>,
     /// final product of the project function
     pub vec_rendered: Vec<Rendered>,
 }
@@ -150,7 +150,7 @@ pub struct RenderedLine {
     /// Two ends of the line
     pub points: (Complex, Complex),
     /// Expression defining the line
-    pub expr: Arc<Expression>,
+    pub expr: Arc<Expression<LineExpr>>,
 }
 
 #[derive(Serialize)]
@@ -162,7 +162,7 @@ pub struct RenderedAngle {
     /// Number of arcs in the angle
     pub no_arcs: u8,
     /// Expression that the angle was defined by
-    pub expr: Arc<Expression>,
+    pub expr: Arc<Expression<ScalarExpr>>,
     // Value of the angle (who'd have guessed)
     pub angle_value: f64,
 }
@@ -172,20 +172,20 @@ pub struct RenderedAngle {
 /// # Panics
 /// It panics when the two lines that you are trying find crossing point of, are parallel.
 fn get_angle_points(
-    angle: &Arc<Expression>,
+    angle: &Arc<Expression<ScalarExpr>>,
     args: &EvaluationArgs,
 ) -> (Complex, Complex, Complex) {
     match &angle.kind {
-        ExprKind::AnglePoint(AnglePoint {arm1, origin, arm2}) => {
+        ScalarExpr::AnglePoint(AnglePoint {arm1, origin, arm2}) => {
             let arm1 = arm1.evaluate(args).unwrap();
             let origin = origin.evaluate(args).unwrap();
             let arm2 = arm2.evaluate(args).unwrap();
 
-            (arm1.as_point().unwrap().position, origin.as_point().unwrap().position, arm2.as_point().unwrap().position)
+            (arm1, origin, arm2)
         }
-        ExprKind::AngleLine(AngleLine {k, l}) => {
-            let ev_ln1 = k.evaluate(args).unwrap().as_line().copied().unwrap();
-            let ev_ln2 = l.evaluate(args).unwrap().as_line().copied().unwrap();
+        ScalarExpr::AngleLine(AngleLine {k, l}) => {
+            let ev_ln1 = k.evaluate(args).unwrap();
+            let ev_ln2 = l.evaluate(args).unwrap();
 
             let origin = geometry::get_intersection(
                 ev_ln1,
@@ -320,7 +320,7 @@ pub fn project(
     let points: Vec<Complex> = figure
         .points
         .iter()
-        .map(|pt| Ok(pt.0.evaluate(&args)?.as_point().unwrap().position))
+        .map(|pt| pt.0.evaluate(&args))
         .collect::<Result<Vec<Complex>, EvaluationError>>()?;
 
     #[allow(clippy::cast_precision_loss)]
@@ -392,7 +392,7 @@ pub fn project(
 
     // All the scaling and moving is just adjusting (scaling and moving by a vector) the lines to match the points to which the scale and offset were applied before.
     for ln in &figure.lines {
-        let mut ln_c = ln.evaluate(&args)?.as_line().copied().unwrap();
+        let mut ln_c = ln.evaluate(&args)?;
         // Transform
         ln_c.origin = transform(offset, scale, size005, ln_c.origin);
         let line_ends = get_line_ends(figure, ln_c);
@@ -416,7 +416,7 @@ pub fn project(
             ),
             no_arcs: ang.1,
             expr: Arc::clone(&ang.0),
-            angle_value: ang.0.evaluate(&args)?.as_scalar().unwrap().value,
+            angle_value: ang.0.evaluate(&args)?,
         });
     }
 

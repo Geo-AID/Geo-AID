@@ -3,14 +3,14 @@ use std::sync::Arc;
 use std::{fs::File, io::Write, path::Path};
 
 use crate::generator::Complex;
-use crate::generator::expression::{ExprKind, Expression};
+use crate::generator::expression::{Expression, PointExpr, ScalarExpr};
 use crate::generator::expression::expr::AnglePoint;
 use crate::projector::{Output, Rendered};
 use crate::script::HashableArc;
 
 /// Function getting the point's name (if it exists, if not then it returns the point's coordinates)
 fn get_point_name(
-    expr: &Arc<Expression>,
+    expr: &Arc<Expression<PointExpr>>,
     output: &Output,
     point: Complex,
     scale: f64,
@@ -66,7 +66,7 @@ pub fn draw(target: &Path, canvas_size: (usize, usize), output: &Output) {
                 let p2 = angle.points.2;
                 let no_arcs = String::from("l"); // Requires a change later! It has to be based on info from the script
                 match &angle.expr.kind {
-                    ExprKind::AnglePoint(AnglePoint{ arm1, origin, arm2 }) => {
+                    ScalarExpr::AnglePoint(AnglePoint{ arm1, origin, arm2 }) => {
                         content += &format!(
                             r#"
                             \begin{{scope}}
@@ -82,7 +82,7 @@ pub fn draw(target: &Path, canvas_size: (usize, usize), output: &Output) {
                         );
                     }
                     // There are hard coded values in \coordinate, it is intentional, every point has it label marked by Rendered::Point sequence above
-                    ExprKind::AngleLine(_) => {
+                    ScalarExpr::AngleLine(_) => {
                         content += &format!(
                             r#"
                             \begin{{scope}}

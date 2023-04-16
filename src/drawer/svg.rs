@@ -52,17 +52,15 @@ pub fn draw(target: &Path, canvas_size: (usize, usize), output: &Output) {
                 );
             }
             Rendered::Angle(angle) => {
-                let _no_arcs = String::from("l"); // Requires a change later! It has to be based on info from the script
-
                 let x: u32 = 5;
                 content += &format!(
                     r#"
-                <g transform="translate({}, {}) rotate({}, 0, 0)" fill="transparent" stroke="black" stroke-width="0.1">
-                    <path d="M {}, 0 A 45, 45, 0, 0, 0, {}, {}" /> 
+                <g transform="translate({}, {}) rotate({}, 0, 0)" fill="transparent">
+                    <path d="M {}, 0 A 45, 45, 0, 0, 0, {}, {}" stroke="black" stroke-width="0.4" /> 
                 </g>"#,
                     angle.points.1.real,
                     angle.points.1.imaginary,
-                    geometry::get_line(angle.points.0, angle.points.1).direction.arg().to_degrees(),
+                    geometry::get_line(angle.points.1, angle.points.0).direction.arg().to_degrees(),
                     9 * x,
                     angle.angle_value.cos() * 45.0,
                     -angle.angle_value.sin() * 45.0

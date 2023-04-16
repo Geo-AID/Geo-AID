@@ -1,0 +1,7 @@
+<svg height="200" width="200" xmlns="http://www.w3.org/2000/svg"><circle cx="47.65107913669064" cy="49.49640287769783" fill="black" r="2"/>
+                <text stroke="black" x="27.65107913669064" y="29.496402877697832">A</text><circle cx="10" cy="190" fill="black" r="2"/>
+                <text stroke="black" x="30" y="170">B</text><circle cx="36.54676258992805" cy="10" fill="black" r="2"/>
+                <text stroke="black" x="16.54676258992805" y="30">C</text><line stroke="black" x1="7.3202764976958505" x2="60.91474654377879" y1="200" y2="0"/><line stroke="black" x1="8.525179856115109" x2="38.02158273381294" y1="200" y2="0"/>
+                <g transform="translate(10, 190) rotate(-74.99876204471047, 0, 0)" fill="transparent">
+                    <path d="M 45, 0 A 45, 45, 0, 0, 0, 44.700724623781134, -5.181237121468844" stroke="black" stroke-width="0.4" /> 
+                </g></svg>

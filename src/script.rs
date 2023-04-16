@@ -8,7 +8,7 @@ use std::{
 
 use serde::Serialize;
 
-use crate::{cli::{AnnotationKind, DiagnosticData, Fix, Change}, span, generator::expression::Expression};
+use crate::{cli::{AnnotationKind, DiagnosticData, Fix, Change}, span, generator::expression::{Expression, ScalarExpr, AnyExpr, PointExpr}};
 
 use self::parser::Type;
 use self::token::{NamedIdent, Span, Token, Position};
@@ -628,28 +628,34 @@ impl DerefMut for ComplexUnit {
 #[derive(Debug)]
 pub enum CriteriaKind {
     /// Equality. Quality rises quickly as two values approach each other, drops quickly as their difference grows.
-    Equal(Arc<Expression>, Arc<Expression>),
+    EqualScalar(Arc<Expression<ScalarExpr>>, Arc<Expression<ScalarExpr>>),
+    /// Equality. Quality rises quickly as two values approach each other, drops quickly as their difference grows.
+    EqualPoint(Arc<Expression<PointExpr>>, Arc<Expression<PointExpr>>),
     /// Less. Quality starts rising on equality.
-    Less(Arc<Expression>, Arc<Expression>),
+    Less(Arc<Expression<ScalarExpr>>, Arc<Expression<ScalarExpr>>),
     /// Greater. Quality starts rising on equality.
-    Greater(Arc<Expression>, Arc<Expression>),
+    Greater(Arc<Expression<ScalarExpr>>, Arc<Expression<ScalarExpr>>),
     /// Inverts the criteria. The quality is calculated as 1 - the quality of the inverted criteria.
     Inverse(Box<CriteriaKind>),
     /// Bias. Always evaluates to 1.0. Artificially raises quality for everything contained  in the arc.
-    Bias(Arc<Expression>)
+    Bias(Arc<Expression<AnyExpr>>)
 }
 
 impl CriteriaKind {
-    pub fn collect<'r>(&'r self, exprs: &mut Vec<&'r Arc<Expression>>) {
+    pub fn collect(&self, exprs: &mut Vec<usize>) {
         match self {
-            CriteriaKind::Equal(lhs, rhs)
+            CriteriaKind::EqualScalar(lhs, rhs)
             | CriteriaKind::Less(lhs, rhs)
             | CriteriaKind::Greater(lhs, rhs) => {
                 lhs.collect(exprs);
                 rhs.collect(exprs);
             }
             CriteriaKind::Inverse(v) => v.collect(exprs),
-            CriteriaKind::Bias(v) => v.collect(exprs)
+            CriteriaKind::Bias(v) => v.collect(exprs),
+            CriteriaKind::EqualPoint(lhs, rhs) => {
+                lhs.collect(exprs);
+                rhs.collect(exprs);
+            }
         }
     }
 }
@@ -683,6 +689,7 @@ impl<T> Eq for HashableArc<T> {
     fn assert_receiver_is_total_eq(&self) {}
 }
 
+#[derive(Debug)]
 pub struct HashableRc<T: ?Sized>(Rc<T>);
 
 impl<T: ?Sized> HashableRc<T> {

@@ -1,0 +1,9 @@
+canvas size: 200 by 200
+point: label of the point - "A", x and y coordinates of the point - (47.651, 49.496)
+point: label of the point - "B", x and y coordinates of the point - (10.000, 190.000)
+point: label of the point - "C", x and y coordinates of the point - (36.547, 10.000)
+line: label - "", 
+                x and y coordinates of the two points - (7.320, 200.000) and (60.915, 0.000)
+line: label - "", 
+                x and y coordinates of the two points - (8.525, 200.000) and (38.022, 0.000)
+angle defined with 3 points: points with x and y coordinates: first point - (47.65107913669064, 49.49640287769783), origin - (10, 190), second point - (36.54676258992805, 10). Number of arcs: l
