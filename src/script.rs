@@ -8,7 +8,7 @@ use std::{
 
 use serde::Serialize;
 
-use crate::{cli::{AnnotationKind, DiagnosticData, Fix, Change}, span};
+use crate::{cli::{AnnotationKind, DiagnosticData, Fix, Change}, span, generator::expression::{Expression, ScalarExpr, AnyExpr, PointExpr}};
 
 use self::parser::Type;
 use self::token::{NamedIdent, Span, Token, Position};
@@ -457,9 +457,7 @@ impl<T> Weighed<T> {
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum SimpleUnit {
     Distance,
-    Point,
     Angle,
-    Line,
     Scalar,
 }
 
@@ -481,9 +479,7 @@ pub mod unit {
     use super::{ComplexUnit, SimpleUnit};
 
     pub const DISTANCE: ComplexUnit = ComplexUnit::new(SimpleUnit::Distance);
-    pub const POINT: ComplexUnit = ComplexUnit::new(SimpleUnit::Point);
     pub const ANGLE: ComplexUnit = ComplexUnit::new(SimpleUnit::Angle);
-    pub const LINE: ComplexUnit = ComplexUnit::new(SimpleUnit::Line);
     pub const SCALAR: ComplexUnit = ComplexUnit::new(SimpleUnit::Scalar);
 }
 
@@ -576,10 +572,10 @@ impl Mul<SimpleUnit> for ComplexUnit {
     }
 }
 
-impl Mul for ComplexUnit {
+impl Mul<&ComplexUnit> for ComplexUnit {
     type Output = ComplexUnit;
 
-    fn mul(mut self, rhs: Self) -> Self::Output {
+    fn mul(mut self, rhs: &Self) -> Self::Output {
         self.iter_mut()
             .enumerate()
             .map(|(i, x)| *x += rhs[i])
@@ -602,10 +598,10 @@ impl Div<SimpleUnit> for ComplexUnit {
     }
 }
 
-impl Div for ComplexUnit {
+impl Div<&ComplexUnit> for ComplexUnit {
     type Output = ComplexUnit;
 
-    fn div(mut self, rhs: Self) -> Self::Output {
+    fn div(mut self, rhs: &Self) -> Self::Output {
         self.iter_mut()
             .enumerate()
             .map(|(i, x)| *x -= rhs[i])
@@ -628,124 +624,38 @@ impl DerefMut for ComplexUnit {
     }
 }
 
-/// Defines an expression.
-#[derive(Debug, Clone, Serialize)]
-pub enum Expression {
-    /// Euclidean distance between two points.
-    PointPointDistance(Arc<Weighed<Expression>>, Arc<Weighed<Expression>>),
-    /// Euclidean distance between a point and its rectangular projection onto a line.
-    PointLineDistance(Arc<Weighed<Expression>>, Arc<Weighed<Expression>>),
-    /// An angle defined with 3 points.
-    AnglePoint(
-        Arc<Weighed<Expression>>,
-        Arc<Weighed<Expression>>,
-        Arc<Weighed<Expression>>,
-    ),
-    /// An angle defined with 2 lines.
-    AngleLine(Arc<Weighed<Expression>>, Arc<Weighed<Expression>>),
-    /// A real literal.
-    Literal(f64, ComplexUnit),
-    /// An adjustable indexed point in euclidean space
-    FreePoint(usize),
-    /// A line in euclidean space. defined by two points.
-    Line(Arc<Weighed<Expression>>, Arc<Weighed<Expression>>),
-    /// The point where two lines cross.
-    LineLineIntersection(Arc<Weighed<Expression>>, Arc<Weighed<Expression>>),
-    /// Changes the unit
-    SetUnit(Arc<Weighed<Expression>>, ComplexUnit),
-    /// Adds two values
-    Sum(Arc<Weighed<Expression>>, Arc<Weighed<Expression>>),
-    /// Subtracts two values
-    Difference(Arc<Weighed<Expression>>, Arc<Weighed<Expression>>),
-    /// Multiplies two values
-    Product(Arc<Weighed<Expression>>, Arc<Weighed<Expression>>),
-    /// Divides two values
-    Quotient(Arc<Weighed<Expression>>, Arc<Weighed<Expression>>),
-    /// Changes the sign
-    Negation(Arc<Weighed<Expression>>),
-    /// An angle bisector.
-    AngleBisector(
-        Arc<Weighed<Expression>>,
-        Arc<Weighed<Expression>>,
-        Arc<Weighed<Expression>>,
-    ),
-    /// Takes the average value (arithmetic mean)
-    Average(Vec<Arc<Weighed<Expression>>>),
-    /// Generates a line perpendicular to $1 going through $2
-    PerpendicularThrough(Arc<Weighed<Expression>>, Arc<Weighed<Expression>>),
-    /// Generates a line parallel to $1 going through $2
-    ParallelThrough(Arc<Weighed<Expression>>, Arc<Weighed<Expression>>),
-    /// An adjusted real value
-    Real(usize)
-}
-
-impl Expression {
-    pub fn collect<'r>(&'r self, into: &mut Vec<&'r Arc<Weighed<Expression>>>) {
-        match self {
-            Expression::PointPointDistance(e1, e2)
-            | Expression::AngleLine(e1, e2)
-            | Expression::Line(e1, e2)
-            | Expression::LineLineIntersection(e1, e2)
-            | Expression::Sum(e1, e2)
-            | Expression::Difference(e1, e2)
-            | Expression::Product(e1, e2)
-            | Expression::Quotient(e1, e2)
-            | Expression::PerpendicularThrough(e1, e2)
-            | Expression::ParallelThrough(e1, e2)
-            | Expression::PointLineDistance(e1, e2) => {
-                into.push(e1);
-                e1.object.collect(into);
-                into.push(e2);
-                e2.object.collect(into);
-            }
-            Expression::AnglePoint(e1, e2, e3) | Expression::AngleBisector(e1, e2, e3) => {
-                into.push(e1);
-                e1.object.collect(into);
-                into.push(e2);
-                e2.object.collect(into);
-                into.push(e3);
-                e3.object.collect(into);
-            }
-            Expression::Literal(_, _) | Expression::FreePoint(_) | Expression::Real(_) => (),
-            Expression::SetUnit(e, _) | Expression::Negation(e) => {
-                into.push(e);
-                e.object.collect(into);
-            }
-            Expression::Average(v) => {
-                for e in v {
-                    into.push(e);
-                    e.object.collect(into);
-                }
-            }
-        }
-    }
-}
-
 /// Defines the kind and information about criteria the figure must obey.
 #[derive(Debug)]
 pub enum CriteriaKind {
     /// Equality. Quality rises quickly as two values approach each other, drops quickly as their difference grows.
-    Equal(Arc<Weighed<Expression>>, Arc<Weighed<Expression>>),
+    EqualScalar(Arc<Expression<ScalarExpr>>, Arc<Expression<ScalarExpr>>),
+    /// Equality. Quality rises quickly as two values approach each other, drops quickly as their difference grows.
+    EqualPoint(Arc<Expression<PointExpr>>, Arc<Expression<PointExpr>>),
     /// Less. Quality starts rising on equality.
-    Less(Arc<Weighed<Expression>>, Arc<Weighed<Expression>>),
+    Less(Arc<Expression<ScalarExpr>>, Arc<Expression<ScalarExpr>>),
     /// Greater. Quality starts rising on equality.
-    Greater(Arc<Weighed<Expression>>, Arc<Weighed<Expression>>),
+    Greater(Arc<Expression<ScalarExpr>>, Arc<Expression<ScalarExpr>>),
     /// Inverts the criteria. The quality is calculated as 1 - the quality of the inverted criteria.
     Inverse(Box<CriteriaKind>),
+    /// Bias. Always evaluates to 1.0. Artificially raises quality for everything contained  in the arc.
+    Bias(Arc<Expression<AnyExpr>>)
 }
 
 impl CriteriaKind {
-    pub fn collect<'r>(&'r self, into: &mut Vec<&'r Arc<Weighed<Expression>>>) {
+    pub fn collect(&self, exprs: &mut Vec<usize>) {
         match self {
-            CriteriaKind::Equal(e1, e2)
-            | CriteriaKind::Less(e1, e2)
-            | CriteriaKind::Greater(e1, e2) => {
-                into.push(e1);
-                e1.object.collect(into);
-                into.push(e2);
-                e2.object.collect(into);
+            CriteriaKind::EqualScalar(lhs, rhs)
+            | CriteriaKind::Less(lhs, rhs)
+            | CriteriaKind::Greater(lhs, rhs) => {
+                lhs.collect(exprs);
+                rhs.collect(exprs);
             }
-            CriteriaKind::Inverse(c) => c.collect(into),
+            CriteriaKind::Inverse(v) => v.collect(exprs),
+            CriteriaKind::Bias(v) => v.collect(exprs),
+            CriteriaKind::EqualPoint(lhs, rhs) => {
+                lhs.collect(exprs);
+                rhs.collect(exprs);
+            }
         }
     }
 }
@@ -779,6 +689,7 @@ impl<T> Eq for HashableArc<T> {
     fn assert_receiver_is_total_eq(&self) {}
 }
 
+#[derive(Debug)]
 pub struct HashableRc<T: ?Sized>(Rc<T>);
 
 impl<T: ?Sized> HashableRc<T> {

@@ -28,4 +28,6 @@
 - Added identical_expressions optimization flag, allowing to optimise for calculating identical expressions.
 - Improved generator-projector pipeline.
 - Distance literals now work properly.
+- Error messages now can suggest code changes.
+- An overhaul of expressions with proper value caching and precomputed weights.
 - Improved angle support.

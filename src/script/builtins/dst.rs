@@ -15,6 +15,7 @@ use crate::{
 /// dst(number), dst(pc<2>) - distance convertible as param.
 fn dst_function_dst_convertible() -> UnrolledExpression {
     UnrolledExpression {
+        weight: 1.0,
         ty: Type::Predefined(PredefinedType::Scalar(Some(ComplexUnit::new(
             SimpleUnit::Distance,
         )))),
@@ -26,12 +27,14 @@ fn dst_function_dst_convertible() -> UnrolledExpression {
 /// dst(scalar) - converts no-unit scalar to distance.
 fn dst_function_scalar() -> UnrolledExpression {
     UnrolledExpression {
+        weight: 1.0,
         ty: Type::Predefined(PredefinedType::Scalar(Some(ComplexUnit::new(
             SimpleUnit::Distance,
         )))),
         span: span!(0, 0, 0, 0),
         data: Rc::new(UnrolledExpressionData::SetUnit(
             UnrolledExpression {
+                weight: 1.0,
                 ty: Type::Predefined(PredefinedType::Scalar(Some(ComplexUnit::new(
                     SimpleUnit::Scalar,
                 )))),
@@ -46,17 +49,20 @@ fn dst_function_scalar() -> UnrolledExpression {
 /// dst(point, point) - distance between two points.
 fn dst_function_point_point() -> UnrolledExpression {
     UnrolledExpression {
+        weight: 1.0,
         ty: Type::Predefined(PredefinedType::Scalar(Some(ComplexUnit::new(
             SimpleUnit::Distance,
         )))),
         span: span!(0, 0, 0, 0),
         data: Rc::new(UnrolledExpressionData::PointPointDistance(
             UnrolledExpression {
+                weight: 1.0,
                 ty: Type::Predefined(PredefinedType::Point),
                 span: span!(0, 0, 0, 0),
                 data: Rc::new(UnrolledExpressionData::Parameter(0)),
             },
             UnrolledExpression {
+                weight: 1.0,
                 ty: Type::Predefined(PredefinedType::Point),
                 span: span!(0, 0, 0, 0),
                 data: Rc::new(UnrolledExpressionData::Parameter(1)),
@@ -68,17 +74,20 @@ fn dst_function_point_point() -> UnrolledExpression {
 /// dst(point, line) - distance between a point and a line.
 fn dst_function_point_line() -> UnrolledExpression {
     UnrolledExpression {
+        weight: 1.0,
         ty: Type::Predefined(PredefinedType::Scalar(Some(ComplexUnit::new(
             SimpleUnit::Distance,
         )))),
         span: span!(0, 0, 0, 0),
         data: Rc::new(UnrolledExpressionData::PointLineDistance(
             UnrolledExpression {
+                weight: 1.0,
                 ty: Type::Predefined(PredefinedType::Point),
                 span: span!(0, 0, 0, 0),
                 data: Rc::new(UnrolledExpressionData::Parameter(0)),
             },
             UnrolledExpression {
+                weight: 1.0,
                 ty: Type::Predefined(PredefinedType::Line),
                 span: span!(0, 0, 0, 0),
                 data: Rc::new(UnrolledExpressionData::Parameter(1)),
@@ -90,17 +99,20 @@ fn dst_function_point_line() -> UnrolledExpression {
 /// dst(line, point) - distance between a line and a point.
 fn dst_function_line_point() -> UnrolledExpression {
     UnrolledExpression {
+        weight: 1.0,
         ty: Type::Predefined(PredefinedType::Scalar(Some(ComplexUnit::new(
             SimpleUnit::Distance,
         )))),
         span: span!(0, 0, 0, 0),
         data: Rc::new(UnrolledExpressionData::PointLineDistance(
             UnrolledExpression {
+                weight: 1.0,
                 ty: Type::Predefined(PredefinedType::Point),
                 span: span!(0, 0, 0, 0),
                 data: Rc::new(UnrolledExpressionData::Parameter(1)),
             },
             UnrolledExpression {
+                weight: 1.0,
                 ty: Type::Predefined(PredefinedType::Line),
                 span: span!(0, 0, 0, 0),
                 data: Rc::new(UnrolledExpressionData::Parameter(0)),

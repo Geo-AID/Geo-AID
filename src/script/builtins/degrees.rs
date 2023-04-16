@@ -15,18 +15,21 @@ use crate::{
 /// degrees(scalar) - converts no-unit scalar into angle
 fn degrees_function_scalar() -> UnrolledExpression {
     UnrolledExpression {
+        weight: 1.0,
         ty: Type::Predefined(PredefinedType::Scalar(Some(ComplexUnit::new(
             SimpleUnit::Angle,
         )))),
         span: span!(0, 0, 0, 0),
         data: Rc::new(UnrolledExpressionData::SetUnit(
             UnrolledExpression {
+                weight: 1.0,
                 ty: Type::Predefined(PredefinedType::Scalar(Some(ComplexUnit::new(
                     SimpleUnit::Scalar,
                 )))),
                 span: span!(0, 0, 0, 0),
                 data: Rc::new(UnrolledExpressionData::Multiply(
                     UnrolledExpression {
+                        weight: 1.0,
                         ty: Type::Predefined(PredefinedType::Scalar(Some(ComplexUnit::new(
                             SimpleUnit::Scalar,
                         )))),
@@ -34,6 +37,7 @@ fn degrees_function_scalar() -> UnrolledExpression {
                         data: Rc::new(UnrolledExpressionData::Parameter(0)),
                     },
                     UnrolledExpression {
+                        weight: 1.0,
                         ty: Type::Predefined(PredefinedType::Scalar(Some(ComplexUnit::new(
                             SimpleUnit::Scalar,
                         )))),
@@ -61,7 +65,7 @@ pub fn register_degrees_function(context: &mut CompileContext) {
                 params: vec![Type::Predefined(PredefinedType::Scalar(Some(
                     ComplexUnit::new(SimpleUnit::Scalar),
                 )))],
-                param_group: None,
+                param_group: None
             }],
         },
     );

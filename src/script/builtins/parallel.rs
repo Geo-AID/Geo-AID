@@ -15,15 +15,18 @@ use crate::{
 /// `parallel_through(line, point)` - returns a line parallel to the 1st argument going through point at 2nd argument.
 fn parallel_function_line_point() -> UnrolledExpression {
     UnrolledExpression {
+        weight: 1.0,
         ty: ty::LINE,
         span: span!(0, 0, 0, 0),
         data: Rc::new(UnrolledExpressionData::ParallelThrough(
             UnrolledExpression {
+                weight: 1.0,
                 ty: ty::LINE,
                 span: span!(0, 0, 0, 0),
                 data: Rc::new(UnrolledExpressionData::Parameter(0)),
             },
             UnrolledExpression {
+                weight: 1.0,
                 ty: ty::POINT,
                 span: span!(0, 0, 0, 0),
                 data: Rc::new(UnrolledExpressionData::Parameter(1)),
@@ -38,11 +41,13 @@ fn parallel_function_point_line() -> UnrolledExpression {
         &parallel_function_line_point(),
         &vec![
             UnrolledExpression {
+                weight: 1.0,
                 ty: ty::LINE,
                 span: span!(0, 0, 0, 0),
                 data: Rc::new(UnrolledExpressionData::Parameter(1)),
             },
             UnrolledExpression {
+                weight: 1.0,
                 ty: ty::POINT,
                 span: span!(0, 0, 0, 0),
                 data: Rc::new(UnrolledExpressionData::Parameter(0)),
