@@ -333,7 +333,7 @@ pub struct ExprBinop<const ITER: bool> {
 }
 
 /// A parsed raw number.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ExprNumber {
     /// Its value.
     pub value: f64,
@@ -1350,7 +1350,7 @@ impl Parse for Property {
 /// A property's value
 #[derive(Debug, Clone)]
 pub enum PropertyValue {
-    Number(Number),
+    Number(ExprNumber),
     Ident(NamedIdent)
 }
 
@@ -1366,7 +1366,9 @@ impl Parse for PropertyValue {
             it: &mut Peekable<I>,
             _context: &CompileContext,
         ) -> Result<Self, Error> {
-            match it.next() {
+            let peeked = it.peek().cloned();
+
+            match peeked {
                 Some(Token::Ident(Ident::Named(ident))) => Ok(Self::Ident(ident.clone())),
                 Some(Token::Number(number)) => Ok(Self::Number(*number)),
                 Some(t) => Err(Error::invalid_token(t.clone())),

@@ -10,9 +10,9 @@ use super::{
     parser::{
         BinaryOperator, ExplicitIterator, Expression, FlagStatement, ImplicitIterator,
         LetStatement, Parse, PredefinedRuleOperator, PredefinedType, Punctuated, RuleOperator,
-        RuleStatement, SimpleExpression, Statement, Type, DisplayProperties
+        RuleStatement, SimpleExpression, Statement, Type, DisplayProperties, PropertyValue
     },
-    token::{self, Ident, NamedIdent, PointCollection, Span},
+    token::{self, Ident, NamedIdent, PointCollection, Span, Number},
     ty, ComplexUnit, Error, SimpleUnit,
 };
 
@@ -1733,7 +1733,7 @@ fn create_variable_named(
                 definition_span: stat.get_span(),
                 meta: match &rhs_unrolled.ty {
                     Type::Predefined(pre) => match pre {
-                        PredefinedType::Point => VariableMeta::Point(Point { meta: None }),
+                        PredefinedType::Point => VariableMeta::Point(Point { meta: None, display: display.properties. }),
                         PredefinedType::Line => VariableMeta::Line,
                         PredefinedType::Scalar(_) => VariableMeta::Scalar,
                         PredefinedType::PointCollection(l) => {
@@ -1813,6 +1813,30 @@ fn create_variable_collection(
     }
 
     Ok(())
+}
+
+/// A value of a property.
+#[derive(Debug, Clone)]
+enum Prop {
+    String(String),
+    Integer(i64),
+    Float(f64)
+}
+
+type Properties = HashMap<String, Prop>;
+
+fn parse_properties(properties: &DisplayProperties) -> Properties {
+    properties
+        .properties
+        .iter()
+        .map(|property| {
+            (property.name.ident.clone(), match property.value {
+                PropertyValue::Ident(ident) => Prop::String(ident.ident.clone()),
+                PropertyValue::Number(number) => if number.dot.is_some() {
+                    Prop::Float(number.integral)
+                }
+            })
+        })
 }
 
 fn create_variables(
