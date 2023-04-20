@@ -10,7 +10,7 @@ use super::{
     parser::{
         BinaryOperator, ExplicitIterator, Expression, FlagStatement, ImplicitIterator,
         LetStatement, Parse, PredefinedRuleOperator, PredefinedType, Punctuated, RuleOperator,
-        RuleStatement, SimpleExpression, Statement, Type
+        RuleStatement, SimpleExpression, Statement, Type, DisplayProperties
     },
     token::{self, Ident, NamedIdent, PointCollection, Span},
     ty, ComplexUnit, Error, SimpleUnit,
@@ -39,6 +39,8 @@ pub struct PointMeta {
 pub struct Point {
     /// A point meta is optional, since not every point has a letter.
     pub meta: Option<PointMeta>,
+    /// Whether or not to display the point.
+    pub display: bool
 }
 
 /// Defines meta information about variables, mostly in regard to the displaying of them.
@@ -1713,6 +1715,7 @@ fn create_variable_named(
     stat: &LetStatement,
     context: &mut CompileContext,
     named: &NamedIdent,
+    display: &DisplayProperties,
     rhs_unrolled: UnrolledExpression,
     variables: &mut Vec<Rc<Variable>>,
 ) -> Result<(), Error> {
@@ -1870,7 +1873,7 @@ fn create_variables(
     let mut it_index = IterTreeIterator::new(&tree);
 
     // Iterate over each identifier.
-    for ident in stat.ident.iter() {
+    for def in stat.ident.iter() {
         let rhs_unrolled = unroll_expression(
             &stat.expr,
             context,
@@ -1879,7 +1882,7 @@ fn create_variables(
         )?;
         it_index.next();
 
-        match ident {
+        match &def.name {
             Ident::Named(named) => {
                 create_variable_named(stat, context, named, rhs_unrolled, &mut variables)?;
             }
@@ -1902,12 +1905,12 @@ fn unroll_let(
     // First, we construct an iterator out of lhs
     let lhs: Expression<true> = Expression::ImplicitIterator(ImplicitIterator {
         exprs: Punctuated {
-            first: Box::new(SimpleExpression::Ident(stat.ident.first.as_ref().clone())),
+            first: Box::new(SimpleExpression::Ident(stat.ident.first.name.clone())),
             collection: stat
                 .ident
                 .collection
                 .iter()
-                .map(|(p, i)| (*p, SimpleExpression::Ident(i.clone())))
+                .map(|(p, i)| (*p, SimpleExpression::Ident(i.name.clone())))
                 .collect(),
         },
     });

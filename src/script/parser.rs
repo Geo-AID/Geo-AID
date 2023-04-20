@@ -541,6 +541,15 @@ impl Parse for FlagStatement {
     }
 }
 
+/// A single variable definition. Contains its name and optional display properties
+#[derive(Debug, Clone)]
+pub struct VariableDefinition {
+    /// Name of the variable.
+    pub name: Ident,
+    /// Display properties.
+    pub display_properties: Option<DisplayProperties>
+}
+
 /// `let <something> = <something else>`.
 /// Defines variables and possibly adds rules to them.
 #[derive(Debug)]
@@ -548,7 +557,7 @@ pub struct LetStatement {
     /// The `let` token.
     pub let_token: Let,
     /// The lhs ident iterator.
-    pub ident: Punctuated<Ident, Comma>,
+    pub ident: Punctuated<VariableDefinition, Comma>,
     /// The `=` token.
     pub eq: Eq,
     /// The rhs expression.
@@ -598,7 +607,7 @@ impl Statement {
 }
 
 /// A utility struct for collections of parsed items with punctuators between them.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Punctuated<T, P> {
     /// The first parsed item.
     pub first: Box<T>,
@@ -727,6 +736,25 @@ impl Parse for RuleStatement {
 
     fn get_span(&self) -> Span {
         self.lhs.get_span().join(self.semi.span)
+    }
+}
+
+impl Parse for VariableDefinition {
+    fn get_span(&self) -> Span {
+        self.display_properties.as_ref().map_or_else(
+            || self.name.get_span(),
+            |v| self.name.get_span().join(v.get_span())
+        )
+    }
+    
+    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
+            it: &mut Peekable<I>,
+            context: &CompileContext,
+        ) -> Result<Self, Error> {
+        Ok(Self {
+            name: Ident::parse(it, context)?,
+            display_properties: Option::parse(it, context)?
+        })
     }
 }
 
@@ -1288,5 +1316,89 @@ impl Type {
         } else {
             None
         }
+    }
+}
+
+/// A property
+#[derive(Debug, Clone)]
+pub struct Property {
+    /// Property name.
+    pub name: NamedIdent,
+    /// '='
+    pub eq: Eq,
+    /// Property value.
+    pub value: PropertyValue
+}
+
+impl Parse for Property {
+    fn get_span(&self) -> Span {
+        self.name.span.join(self.value.get_span())
+    }
+
+    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
+            it: &mut Peekable<I>,
+            context: &CompileContext,
+        ) -> Result<Self, Error> {
+        Ok(Self {
+            name: NamedIdent::parse(it, context)?,
+            eq: Eq::parse(it, context)?,
+            value: PropertyValue::parse(it, context)?
+        })
+    }
+}
+
+/// A property's value
+#[derive(Debug, Clone)]
+pub enum PropertyValue {
+    Number(Number),
+    Ident(NamedIdent)
+}
+
+impl Parse for PropertyValue {
+    fn get_span(&self) -> Span {
+        match self {
+            Self::Number(n) => n.span,
+            Self::Ident(i) => i.span
+        }
+    }
+
+    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
+            it: &mut Peekable<I>,
+            _context: &CompileContext,
+        ) -> Result<Self, Error> {
+            match it.next() {
+                Some(Token::Ident(Ident::Named(ident))) => Ok(Self::Ident(ident.clone())),
+                Some(Token::Number(number)) => Ok(Self::Number(*number)),
+                Some(t) => Err(Error::invalid_token(t.clone())),
+                None => Err(Error::EndOfInput),
+            }
+    }
+}
+
+/// Properties related to displaying things.
+#[derive(Debug, Clone)]
+pub struct DisplayProperties {
+    /// '['
+    pub lbrace: LBrace,
+    /// Properties
+    pub properties: Punctuated<Property, Comma>,
+    /// ']'
+    pub rbrace: RBrace
+}
+
+impl Parse for DisplayProperties {
+    fn get_span(&self) -> Span {
+        self.lbrace.span.join(self.rbrace.span)
+    }
+
+    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
+            it: &mut Peekable<I>,
+            context: &CompileContext,
+        ) -> Result<Self, Error> {
+        Ok(Self {
+            lbrace: LBrace::parse(it, context)?,
+            properties: Punctuated::parse(it, context)?,
+            rbrace: RBrace::parse(it, context)?
+        })
     }
 }
