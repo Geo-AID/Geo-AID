@@ -10,7 +10,7 @@ use super::{
     token::{
         Ampersant, Asterisk, At, Colon, Comma, Dollar, Eq, Exclamation, Gt, Gteq, Ident, LBrace,
         LParen, Let, Lt, Lteq, Minus, NamedIdent, Number, Plus, Position, RBrace, RParen, Semi,
-        Slash, Span, Token, Vertical, Dot,
+        Slash, Span, Token, Vertical, Dot, LSquare, RSquare,
     },
     unroll::{CompileContext, RuleOperatorDefinition},
     ComplexUnit, Error, SimpleUnit,
@@ -333,12 +333,24 @@ pub struct ExprBinop<const ITER: bool> {
 }
 
 /// Floating point or an integer.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub enum FloatOrInteger {
     /// Integer version.
     Integer(i64),
     /// Floating point.
     Float(f64)
+}
+
+impl FloatOrInteger {
+    /// Returns float if is float, converts if integer.
+    #[must_use]
+    pub fn to_float(self) -> f64 {
+        match self {
+            #[allow(clippy::cast_precision_loss)]
+            FloatOrInteger::Integer(i) => i as f64,
+            FloatOrInteger::Float(f) => f,
+        }
+    }
 }
 
 /// A parsed raw number.
@@ -762,7 +774,10 @@ impl Parse for VariableDefinition {
         ) -> Result<Self, Error> {
         Ok(Self {
             name: Ident::parse(it, context)?,
-            display_properties: Option::parse(it, context)?
+            display_properties: match it.peek().copied() {
+                Some(Token::LSquare(_)) => Some(DisplayProperties::parse(it, context)?),
+                _ => None
+            }
         })
     }
 }
@@ -820,7 +835,8 @@ impl Parse for ExprNumber {
                     FloatOrInteger::Float(num.integral as f64
                         + num.decimal as f64 * f64::powi(10.0, -i32::from(num.decimal_places)))
                 } else {
-                    FloatOrInteger::Integer(num.integral as i64)
+                    #[allow(clippy::cast_precision_loss, clippy::cast_possible_wrap)]
+                    FloatOrInteger::Integer(num.integral.try_into().unwrap())
                 },
                 token: *num,
             }),
@@ -1144,6 +1160,8 @@ impl Parse for RuleOperator {
 impl_token_parse! {At}
 impl_token_parse! {LBrace}
 impl_token_parse! {RBrace}
+impl_token_parse! {LSquare}
+impl_token_parse! {RSquare}
 impl_token_parse! {Dollar}
 impl_token_parse! {Vertical}
 impl_token_parse! {Semi}
@@ -1362,18 +1380,20 @@ impl Parse for Property {
 #[derive(Debug, Clone)]
 pub enum PropertyValue {
     Number(ExprNumber),
-    Ident(NamedIdent)
+    Ident(Ident)
 }
 
 impl PropertyValue {
+    /// # Errors
+    /// Causes an error if the value is not properly convertible.
     pub fn as_bool(&self) -> Result<bool, Error> {
-        Ok(match self {
+        match self {
             PropertyValue::Ident(ident) => {
                 match ident.ident.as_str() {
-                    "enabled" | "on" | "true" => true,
-                    "disabled" | "off" | "false" => false,
+                    "enabled" | "on" | "true" => Ok(true),
+                    "disabled" | "off" | "false" => Ok(false),
                     _ => {
-                        return Err(Error::BooleanExpected {
+                        Err(Error::BooleanExpected {
                             error_span: ident.get_span(),
                         })
                     }
@@ -1381,14 +1401,25 @@ impl PropertyValue {
             },
             PropertyValue::Number(num) => {
                 match num.value {
-                    FloatOrInteger::Integer(1) => true,
-                    FloatOrInteger::Integer(0) => false,
-                    _ => return Err(Error::BooleanExpected {
+                    FloatOrInteger::Integer(1) => Ok(true),
+                    FloatOrInteger::Integer(0) => Ok(false),
+                    _ => Err(Error::BooleanExpected {
                         error_span: num.get_span(),
                     })
                 }
             },
-        })
+        }
+    }
+    
+    /// # Errors
+    /// Causes an error if the value is not properly convertible
+    pub fn as_string(&self) -> Result<String, Error> {
+        match self {
+            PropertyValue::Ident(ident) => Ok(ident..clone()),
+            PropertyValue::Number(num) => Err(Error::StringExpected {
+                error_span: num.get_span(),
+            })
+        }
     }
 }
 
@@ -1402,13 +1433,13 @@ impl Parse for PropertyValue {
 
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
             it: &mut Peekable<I>,
-            _context: &CompileContext,
+            context: &CompileContext,
         ) -> Result<Self, Error> {
-            let peeked = it.peek().cloned();
+            let peeked = it.peek().copied();
 
             match peeked {
                 Some(Token::Ident(Ident::Named(ident))) => Ok(Self::Ident(ident.clone())),
-                Some(Token::Number(number)) => Ok(Self::Number(ExprNumber::parse(it, _context)?)),
+                Some(Token::Number(_)) => Ok(Self::Number(ExprNumber::parse(it, context)?)),
                 Some(t) => Err(Error::invalid_token(t.clone())),
                 None => Err(Error::EndOfInput),
             }
@@ -1419,16 +1450,16 @@ impl Parse for PropertyValue {
 #[derive(Debug, Clone)]
 pub struct DisplayProperties {
     /// '['
-    pub lbrace: LBrace,
+    pub lsquare: LSquare,
     /// Properties
     pub properties: Punctuated<Property, Comma>,
     /// ']'
-    pub rbrace: RBrace
+    pub rsquare: RSquare
 }
 
 impl Parse for DisplayProperties {
     fn get_span(&self) -> Span {
-        self.lbrace.span.join(self.rbrace.span)
+        self.lsquare.span.join(self.rsquare.span)
     }
 
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
@@ -1436,9 +1467,9 @@ impl Parse for DisplayProperties {
             context: &CompileContext,
         ) -> Result<Self, Error> {
         Ok(Self {
-            lbrace: LBrace::parse(it, context)?,
+            lsquare: LSquare::parse(it, context)?,
             properties: Punctuated::parse(it, context)?,
-            rbrace: RBrace::parse(it, context)?
+            rsquare: RSquare::parse(it, context)?
         })
     }
 }

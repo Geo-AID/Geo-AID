@@ -10,7 +10,7 @@ use super::{
     parser::{
         BinaryOperator, ExplicitIterator, Expression, FlagStatement, ImplicitIterator,
         LetStatement, Parse, PredefinedRuleOperator, PredefinedType, Punctuated, RuleOperator,
-        RuleStatement, SimpleExpression, Statement, Type, DisplayProperties, PropertyValue, FloatOrInteger
+        RuleStatement, SimpleExpression, Statement, Type, DisplayProperties, PropertyValue
     },
     token::{self, Ident, NamedIdent, PointCollection, Span},
     ty, ComplexUnit, Error, SimpleUnit,
@@ -1426,7 +1426,7 @@ fn unroll_simple(
         SimpleExpression::Number(num) => UnrolledExpression {
             weight: 0.0, // Always zero.
             ty: Type::Predefined(PredefinedType::Scalar(None)),
-            data: Rc::new(UnrolledExpressionData::Number(num.value)),
+            data: Rc::new(UnrolledExpressionData::Number(num.value.to_float())),
             span: num.get_span(),
         },
         SimpleExpression::Call(e) => {
@@ -1718,7 +1718,7 @@ struct PointProperties {
 
 impl PointProperties {
     pub fn parse(props: Option<Properties>, default_label: String) -> Result<Self, Error> {
-        match props {
+        Ok(match props {
             Some(mut props) => {
                 let display =  props.get_bool("display", true)?;
                 let label = props.get_string("label", default_label)?;
@@ -1732,7 +1732,7 @@ impl PointProperties {
                 display: true,
                 label: default_label
             }
-        }
+        })
     }
 }
 
@@ -1740,11 +1740,11 @@ struct Properties(HashMap<String, PropertyValue>);
 
 impl Properties {
     fn get_bool(&mut self, property: &str, default: bool) -> Result<bool, Error> {
-        self.0.remove(property).as_ref().map(PropertyValue::as_bool).unwrap_or(Ok(default))
+        self.0.remove(property).as_ref().map_or(Ok(default), PropertyValue::as_bool)
     }
 
     fn get_string(&mut self, property: &str, default: String) -> Result<String, Error> {
-        self.0.remove(property).as_ref().map(PropertyValue::as_string).unwrap_or(Ok(default))
+        self.0.remove(property).as_ref().map_or(Ok(default), PropertyValue::as_string)
     }
 }
 
@@ -1757,9 +1757,9 @@ fn create_variable_named(
     variables: &mut Vec<Rc<Variable>>,
 ) -> Result<(), Error> {
     let display: Option<Properties> = display
-        .map(|v| v.properties.iter()
+        .map(|v| Properties(v.properties.iter()
             .map(|v| (v.name.ident.clone(), v.value.clone()))
-            .collect()
+            .collect())
         );
 
     match context.variables.entry(named.ident.clone()) {
@@ -1777,15 +1777,26 @@ fn create_variable_named(
                 meta: match &rhs_unrolled.ty {
                     Type::Predefined(pre) => match pre {
                         PredefinedType::Point => {
-                            let props = 
+                            let props = PointProperties::parse(display, named.ident.clone())?;
 
-                            VariableMeta::Point(Point { meta: None, display: display.properties. })
+                            VariableMeta::Point(Point {
+                                meta: Some(PointMeta {
+                                    letter: props.label.chars().next().unwrap(),
+                                    index: None,
+                                    primes: 0
+                                }),
+                                display: props.display
+                            })
                         },
                         PredefinedType::Line => VariableMeta::Line,
                         PredefinedType::Scalar(_) => VariableMeta::Scalar,
                         PredefinedType::PointCollection(l) => {
                             if *l == 1 {
-                                VariableMeta::Point(Point { meta: None })
+                                VariableMeta::Point(Point { display: true, meta: Some(PointMeta {
+                                    letter: named.ident.chars().next().unwrap(),
+                                    index: None,
+                                    primes: 0
+                                }) })
                             } else {
                                 VariableMeta::PointCollection
                             }
@@ -2480,7 +2491,7 @@ fn set_flag(set: &mut FlagSet, flag: &FlagStatement) -> Result<(), Error> {
         FlagType::Boolean => set_flag_bool(flag_ref, flag)?,
         FlagType::String => match &flag.value {
             super::parser::FlagValue::Number(_) | super::parser::FlagValue::Set(_) => {
-                return Err(Error::FlagStringExpected {
+                return Err(Error::StringExpected {
                     error_span: flag.get_span(),
                 })
             }

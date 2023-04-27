@@ -128,7 +128,7 @@ pub enum Error {
     FlagSetExpected {
         error_span: Span,
     },
-    FlagStringExpected {
+    StringExpected {
         error_span: Span,
     },
     BooleanExpected {
@@ -391,7 +391,7 @@ impl Error {
                 DiagnosticData::new(&"Expected a flag set ({...}).")
                     .add_span(error_span)
             }
-            Self::FlagStringExpected { error_span } => {
+            Self::StringExpected { error_span } => {
                 DiagnosticData::new(&"Expected a string (identifier).")
                     .add_span(error_span)
             }
