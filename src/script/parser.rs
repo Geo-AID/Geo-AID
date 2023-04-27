@@ -332,11 +332,20 @@ pub struct ExprBinop<const ITER: bool> {
     pub rhs: Box<Expression<ITER>>,
 }
 
+/// Floating point or an integer.
+#[derive(Debug, Clone)]
+pub enum FloatOrInteger {
+    /// Integer version.
+    Integer(i64),
+    /// Floating point.
+    Float(f64)
+}
+
 /// A parsed raw number.
 #[derive(Debug, Clone)]
 pub struct ExprNumber {
     /// Its value.
-    pub value: f64,
+    pub value: FloatOrInteger,
     /// Its token.
     pub token: Number,
 }
@@ -807,9 +816,11 @@ impl Parse for ExprNumber {
             // The integral and decimal parts have to be merged into one floating point number.
             #[allow(clippy::cast_precision_loss)]
             Some(Token::Number(num)) => Ok(ExprNumber {
-                value: {
-                    num.integral as f64
-                        + num.decimal as f64 * f64::powi(10.0, -i32::from(num.decimal_places))
+                value: if num.dot.is_some() {
+                    FloatOrInteger::Float(num.integral as f64
+                        + num.decimal as f64 * f64::powi(10.0, -i32::from(num.decimal_places)))
+                } else {
+                    FloatOrInteger::Integer(num.integral as i64)
                 },
                 token: *num,
             }),
@@ -1354,10 +1365,37 @@ pub enum PropertyValue {
     Ident(NamedIdent)
 }
 
+impl PropertyValue {
+    pub fn as_bool(&self) -> Result<bool, Error> {
+        Ok(match self {
+            PropertyValue::Ident(ident) => {
+                match ident.ident.as_str() {
+                    "enabled" | "on" | "true" => true,
+                    "disabled" | "off" | "false" => false,
+                    _ => {
+                        return Err(Error::BooleanExpected {
+                            error_span: ident.get_span(),
+                        })
+                    }
+                }
+            },
+            PropertyValue::Number(num) => {
+                match num.value {
+                    FloatOrInteger::Integer(1) => true,
+                    FloatOrInteger::Integer(0) => false,
+                    _ => return Err(Error::BooleanExpected {
+                        error_span: num.get_span(),
+                    })
+                }
+            },
+        })
+    }
+}
+
 impl Parse for PropertyValue {
     fn get_span(&self) -> Span {
         match self {
-            Self::Number(n) => n.span,
+            Self::Number(n) => n.get_span(),
             Self::Ident(i) => i.span
         }
     }
@@ -1370,7 +1408,7 @@ impl Parse for PropertyValue {
 
             match peeked {
                 Some(Token::Ident(Ident::Named(ident))) => Ok(Self::Ident(ident.clone())),
-                Some(Token::Number(number)) => Ok(Self::Number(*number)),
+                Some(Token::Number(number)) => Ok(Self::Number(ExprNumber::parse(it, _context)?)),
                 Some(t) => Err(Error::invalid_token(t.clone())),
                 None => Err(Error::EndOfInput),
             }

@@ -10,9 +10,9 @@ use super::{
     parser::{
         BinaryOperator, ExplicitIterator, Expression, FlagStatement, ImplicitIterator,
         LetStatement, Parse, PredefinedRuleOperator, PredefinedType, Punctuated, RuleOperator,
-        RuleStatement, SimpleExpression, Statement, Type, DisplayProperties, PropertyValue
+        RuleStatement, SimpleExpression, Statement, Type, DisplayProperties, PropertyValue, FloatOrInteger
     },
-    token::{self, Ident, NamedIdent, PointCollection, Span, Number},
+    token::{self, Ident, NamedIdent, PointCollection, Span},
     ty, ComplexUnit, Error, SimpleUnit,
 };
 
@@ -1711,14 +1711,57 @@ fn unpack_expression(
     }
 }
 
+struct PointProperties {
+    display: bool,
+    label: String
+}
+
+impl PointProperties {
+    pub fn parse(props: Option<Properties>, default_label: String) -> Result<Self, Error> {
+        match props {
+            Some(mut props) => {
+                let display =  props.get_bool("display", true)?;
+                let label = props.get_string("label", default_label)?;
+
+                PointProperties {
+                    display,
+                    label,
+                }
+            }
+            None => PointProperties {
+                display: true,
+                label: default_label
+            }
+        }
+    }
+}
+
+struct Properties(HashMap<String, PropertyValue>);
+
+impl Properties {
+    fn get_bool(&mut self, property: &str, default: bool) -> Result<bool, Error> {
+        self.0.remove(property).as_ref().map(PropertyValue::as_bool).unwrap_or(Ok(default))
+    }
+
+    fn get_string(&mut self, property: &str, default: String) -> Result<String, Error> {
+        self.0.remove(property).as_ref().map(PropertyValue::as_string).unwrap_or(Ok(default))
+    }
+}
+
 fn create_variable_named(
     stat: &LetStatement,
     context: &mut CompileContext,
     named: &NamedIdent,
-    display: &DisplayProperties,
+    display: Option<&DisplayProperties>,
     rhs_unrolled: UnrolledExpression,
     variables: &mut Vec<Rc<Variable>>,
 ) -> Result<(), Error> {
+    let display: Option<Properties> = display
+        .map(|v| v.properties.iter()
+            .map(|v| (v.name.ident.clone(), v.value.clone()))
+            .collect()
+        );
+
     match context.variables.entry(named.ident.clone()) {
         // If the variable already exists, it's a redefinition error.
         Entry::Occupied(entry) => Err(Error::redefined_variable(
@@ -1733,7 +1776,11 @@ fn create_variable_named(
                 definition_span: stat.get_span(),
                 meta: match &rhs_unrolled.ty {
                     Type::Predefined(pre) => match pre {
-                        PredefinedType::Point => VariableMeta::Point(Point { meta: None, display: display.properties. }),
+                        PredefinedType::Point => {
+                            let props = 
+
+                            VariableMeta::Point(Point { meta: None, display: display.properties. })
+                        },
                         PredefinedType::Line => VariableMeta::Line,
                         PredefinedType::Scalar(_) => VariableMeta::Scalar,
                         PredefinedType::PointCollection(l) => {
@@ -1800,6 +1847,7 @@ fn create_variable_collection(
                             primes: pt.1,
                             index: None,
                         }),
+                        display: true // True by default (PCs don't allow display properties)
                     }),
                     definition: rhs_unpacked.next().unwrap(),
                 };
@@ -1813,30 +1861,6 @@ fn create_variable_collection(
     }
 
     Ok(())
-}
-
-/// A value of a property.
-#[derive(Debug, Clone)]
-enum Prop {
-    String(String),
-    Integer(i64),
-    Float(f64)
-}
-
-type Properties = HashMap<String, Prop>;
-
-fn parse_properties(properties: &DisplayProperties) -> Properties {
-    properties
-        .properties
-        .iter()
-        .map(|property| {
-            (property.name.ident.clone(), match property.value {
-                PropertyValue::Ident(ident) => Prop::String(ident.ident.clone()),
-                PropertyValue::Number(number) => if number.dot.is_some() {
-                    Prop::Float(number.integral)
-                }
-            })
-        })
 }
 
 fn create_variables(
@@ -1908,7 +1932,7 @@ fn create_variables(
 
         match &def.name {
             Ident::Named(named) => {
-                create_variable_named(stat, context, named, rhs_unrolled, &mut variables)?;
+                create_variable_named(stat, context, named, def.display_properties.as_ref(), rhs_unrolled, &mut variables)?;
             }
             Ident::Collection(col) => {
                 create_variable_collection(stat, context, col, rhs_unrolled, &mut variables)?;
@@ -2321,7 +2345,7 @@ fn unroll_rulestat(
 fn set_flag_bool(flag: &mut Flag, stmt: &FlagStatement) -> Result<(), Error> {
     match &stmt.value {
         super::parser::FlagValue::Set(_) => {
-            return Err(Error::FlagBooleanExpected {
+            return Err(Error::BooleanExpected {
                 error_span: stmt.get_span(),
             })
         }
@@ -2333,7 +2357,7 @@ fn set_flag_bool(flag: &mut Flag, stmt: &FlagStatement) -> Result<(), Error> {
                             "enabled" | "on" | "true" => true,
                             "disabled" | "off" | "false" => false,
                             _ => {
-                                return Err(Error::FlagBooleanExpected {
+                                return Err(Error::BooleanExpected {
                                     error_span: stmt.get_span(),
                                 })
                             }
@@ -2360,7 +2384,7 @@ fn set_flag_bool(flag: &mut Flag, stmt: &FlagStatement) -> Result<(), Error> {
                                 1 => true,
                                 0 => false,
                                 _ => {
-                                    return Err(Error::FlagBooleanExpected {
+                                    return Err(Error::BooleanExpected {
                                         error_span: stmt.get_span(),
                                     })
                                 }
@@ -2368,7 +2392,7 @@ fn set_flag_bool(flag: &mut Flag, stmt: &FlagStatement) -> Result<(), Error> {
                             stmt.get_span(),
                         );
                     } else {
-                        return Err(Error::FlagBooleanExpected {
+                        return Err(Error::BooleanExpected {
                             error_span: stmt.get_span(),
                         });
                     }

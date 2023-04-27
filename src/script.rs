@@ -131,7 +131,7 @@ pub enum Error {
     FlagStringExpected {
         error_span: Span,
     },
-    FlagBooleanExpected {
+    BooleanExpected {
         error_span: Span,
     },
     RedefinedFlag {
@@ -395,7 +395,7 @@ impl Error {
                 DiagnosticData::new(&"Expected a string (identifier).")
                     .add_span(error_span)
             }
-            Self::FlagBooleanExpected { error_span } => {
+            Self::BooleanExpected { error_span } => {
                 DiagnosticData::new(&"Expected a boolean value (enabled, disabled, on, off, true, false, 1 or 0).")
                     .add_span(error_span)
             }
