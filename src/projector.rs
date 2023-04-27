@@ -144,13 +144,36 @@ mod tests {
                 )),
                 x,
             )],
+
+            segments: Vec::new(), /*vec![
+                (
+                    Arc::new(Expression::new(
+                        PointExpr::Free(FreePoint { index: (0) }),
+                        1.0,
+                    )),
+                    Arc::new(Expression::new(
+                        PointExpr::Free(FreePoint { index: (1) }),
+                        1.0,
+                    )),
+                ),
+                (
+                    Arc::new(Expression::new(
+                        PointExpr::Free(FreePoint { index: (1) }),
+                        1.0,
+                    )),
+                    Arc::new(Expression::new(
+                        PointExpr::Free(FreePoint { index: (2) }),
+                        1.0,
+                    )),
+                ),
+            ],*/
             canvas_size: (200, 200),
         };
 
-        let path_latex = PathBuf::from("testoutputs\\test.latex");
-        let path_svg = PathBuf::from("testoutputs\\test.svg");
-        let path_json = PathBuf::from("testoutputs\\test.json");
-        let path_raw = PathBuf::from("testoutputs\\test.raw");
+        let path_latex = PathBuf::from("testoutputs//test.latex");
+        let path_svg = PathBuf::from("testoutputs//test.svg");
+        let path_json = PathBuf::from("testoutputs//test.json");
+        let path_raw = PathBuf::from("testoutputs//test.raw");
 
         let pr = &project(&fig, &gen_points, &Arc::default()).unwrap();
 
@@ -172,6 +195,7 @@ pub enum Rendered {
     Point(Rc<RenderedPoint>),
     Line(RenderedLine),
     Angle(RenderedAngle),
+    Segment(RenderedSegment),
 }
 
 /// The final product passed to the drawers.
@@ -215,6 +239,14 @@ pub struct RenderedAngle {
     pub expr: Arc<Expression<ScalarExpr>>,
     // Value of the angle (who'd have guessed)
     pub angle_value: f64,
+}
+
+#[derive(Serialize)]
+pub struct RenderedSegment {
+    /// Label of the segment
+    pub label: String,
+    /// Points defining the segment
+    pub points: (Complex, Complex),
 }
 
 /// Function getting the points defining the angle from the Expression defining it.
@@ -467,6 +499,19 @@ pub fn project(
         });
     }
 
+    let mut blueprint_segments = Vec::new();
+
+    for segment in &figure.segments {
+        let vec = segment.1.evaluate(&args)? - segment.0.evaluate(&args)?;
+        let vev_trans = transform(offset, scale, size005, vec);
+        blueprint_segments.push(RenderedSegment {
+            label: String::new(),
+            points: (
+                
+            ),
+        })
+    }
+
     Ok(Output {
         map: iden,
         vec_rendered: blueprint_points
@@ -474,6 +519,7 @@ pub fn project(
             .map(Rendered::Point)
             .chain(blueprint_lines.into_iter().map(Rendered::Line))
             .chain(blueprint_angles.into_iter().map(Rendered::Angle))
+            .chain(blueprint_segments.into_iter().map(Rendered::Segment))
             .collect(),
     })
 }

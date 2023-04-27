@@ -782,6 +782,7 @@ pub fn compile(
             .collect(),
         lines: Vec::new(),
         angles: Vec::new(),
+        segments: Vec::new(),
         canvas_size,
     };
 

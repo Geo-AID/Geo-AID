@@ -103,6 +103,19 @@ pub fn draw(target: &Path, canvas_size: (usize, usize), output: &Output) {
                     _ => unreachable!(),
                 }
             }
+            Rendered::Segment(segment) => {
+                content += &format!(
+                    r#"
+                    \coordinate (A) at ({}, {});
+                    \coordinate (B) at ({}, {});
+                    \tkzDrawSegment[thin](A,B)
+                    "#,
+                    segment.points.0.real,
+                    segment.points.0.imaginary,
+                    segment.points.1.real,
+                    segment.points.1.imaginary
+                );
+            }
         }
     }
     content += "\\end{tikzpicture} \\end{document}";
