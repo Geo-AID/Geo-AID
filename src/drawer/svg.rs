@@ -1,8 +1,8 @@
 use std::{fs::File, io::Write, path::Path};
 
 use crate::{
-    generator::{Complex, geometry},
-    projector::{Output, Rendered}
+    generator::{geometry, Complex},
+    projector::{Output, Rendered},
 };
 
 /// Draws the given figure as .svg format.
@@ -35,9 +35,7 @@ pub fn draw(target: &Path, canvas_size: (usize, usize), output: &Output) {
                 content += &format!(
                     "<circle cx=\"{}\" cy=\"{}\" fill=\"black\" r=\"2\"/>
                 <text stroke=\"black\" x=\"{real}\" y=\"{imaginary}\">{}</text>",
-                    p.real,
-                    p.imaginary,
-                    pt.label
+                    p.real, p.imaginary, pt.label
                 );
             }
 
@@ -60,10 +58,22 @@ pub fn draw(target: &Path, canvas_size: (usize, usize), output: &Output) {
                 </g>"#,
                     angle.points.1.real,
                     angle.points.1.imaginary,
-                    geometry::get_line(angle.points.1, angle.points.0).direction.arg().to_degrees(),
+                    geometry::get_line(angle.points.1, angle.points.0)
+                        .direction
+                        .arg()
+                        .to_degrees(),
                     9 * x,
                     angle.angle_value.cos() * 45.0,
                     -angle.angle_value.sin() * 45.0
+                );
+            }
+            Rendered::Segment(segment) => {
+                content += &format!(
+                    "<line stroke=\"black\" x1=\"{}\" x2=\"{}\" y1=\"{}\" y2=\"{}\"/>",
+                    segment.points.0.real,
+                    segment.points.1.real,
+                    segment.points.0.imaginary,
+                    segment.points.1.imaginary
                 );
             }
         }

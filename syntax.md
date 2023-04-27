@@ -77,7 +77,7 @@ BC < 2.0;
 $0(AB, BC) < 2.0;
 ```
 
-An explicit iterator starts with the `$` symbol followed by an id and then by the iterator variants in parentheses. The id of an iterator must be ab integer smaller than 256. Implicit iterators always have an id of 0. Iterators with varying ids allow creating more levels of iteration. For example:
+An explicit iterator starts with the `$` symbol followed by an id and then by the iterator variants in parenthesis. The id of an iterator must be ab integer smaller than 256. Implicit iterators always have an id of 0. Iterators with varying ids allow creating more levels of iteration. For example:
 
 ```
 $1(AB, BC) < $2(CD, DE);

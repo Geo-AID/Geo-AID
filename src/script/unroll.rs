@@ -10,7 +10,7 @@ use super::{
     parser::{
         BinaryOperator, ExplicitIterator, Expression, FlagStatement, ImplicitIterator,
         LetStatement, Parse, PredefinedRuleOperator, PredefinedType, Punctuated, RuleOperator,
-        RuleStatement, SimpleExpression, Statement, Type
+        RuleStatement, SimpleExpression, Statement, Type,
     },
     token::{self, Ident, NamedIdent, PointCollection, Span},
     ty, ComplexUnit, Error, SimpleUnit,
@@ -249,8 +249,7 @@ impl FlagSetting {
     #[must_use]
     pub fn get_span(&self) -> Option<Span> {
         match self {
-            FlagSetting::Default(_)
-            | FlagSetting::Unset => None,
+            FlagSetting::Default(_) | FlagSetting::Unset => None,
             FlagSetting::Set(_, sp) => Some(*sp),
         }
     }
@@ -793,8 +792,7 @@ impl UnrolledExpressionData {
             | UnrolledExpressionData::UnrollParameterGroup(_)
             | UnrolledExpressionData::FreePoint
             | UnrolledExpressionData::FreeReal => None,
-            UnrolledExpressionData::PointCollection(v)
-            | UnrolledExpressionData::Average(v) => {
+            UnrolledExpressionData::PointCollection(v) | UnrolledExpressionData::Average(v) => {
                 for expr in v {
                     if let Some(sp) = expr.has_distance_literal() {
                         return Some(sp);
@@ -802,7 +800,7 @@ impl UnrolledExpressionData {
                 }
 
                 None
-            },
+            }
             UnrolledExpressionData::Boxed(v)
             | UnrolledExpressionData::IndexCollection(v, _)
             | UnrolledExpressionData::Negate(v) => v.has_distance_literal(),
@@ -825,12 +823,12 @@ impl UnrolledExpressionData {
             | UnrolledExpressionData::TwoLineAngle(v1, v2)
             | UnrolledExpressionData::Subtract(v1, v2)
             | UnrolledExpressionData::Multiply(v1, v2)
-            | UnrolledExpressionData::Divide(v1, v2) =>
-                v1.has_distance_literal()
+            | UnrolledExpressionData::Divide(v1, v2) => v1
+                .has_distance_literal()
                 .or_else(|| v2.has_distance_literal()),
             UnrolledExpressionData::ThreePointAngle(v1, v2, v3)
-            | UnrolledExpressionData::AngleBisector(v1, v2, v3) =>
-                v1.has_distance_literal()
+            | UnrolledExpressionData::AngleBisector(v1, v2, v3) => v1
+                .has_distance_literal()
                 .or_else(|| v2.has_distance_literal())
                 .or_else(|| v3.has_distance_literal()),
         }
@@ -849,7 +847,7 @@ pub struct UnrolledExpression {
     pub data: Rc<UnrolledExpressionData>,
     pub ty: Type,
     pub span: Span,
-    pub weight: f64 // Assigned weight.
+    pub weight: f64, // Assigned weight.
 }
 
 impl Display for UnrolledExpression {
@@ -876,8 +874,7 @@ impl UnrolledExpression {
             | UnrolledExpressionData::UnrollParameterGroup(_)
             | UnrolledExpressionData::FreePoint
             | UnrolledExpressionData::FreeReal => None,
-            UnrolledExpressionData::PointCollection(v)
-            | UnrolledExpressionData::Average(v) => {
+            UnrolledExpressionData::PointCollection(v) | UnrolledExpressionData::Average(v) => {
                 for expr in v {
                     if let Some(sp) = expr.has_distance_literal() {
                         return Some(sp);
@@ -885,7 +882,7 @@ impl UnrolledExpression {
                 }
 
                 None
-            },
+            }
             UnrolledExpressionData::Number(_) => {
                 if let Some(unit) = self.ty.as_predefined().unwrap().as_scalar().unwrap() {
                     if unit.0[SimpleUnit::Distance as usize] != 0 {
@@ -908,7 +905,9 @@ impl UnrolledExpression {
                 }
             }
             UnrolledExpressionData::PointPointDistance(e1, e2)
-            | UnrolledExpressionData::PointLineDistance(e1, e2) => e1.has_distance_literal().or_else(|| e2.has_distance_literal()),
+            | UnrolledExpressionData::PointLineDistance(e1, e2) => e1
+                .has_distance_literal()
+                .or_else(|| e2.has_distance_literal()),
             UnrolledExpressionData::Add(v1, v2)
             | UnrolledExpressionData::LineFromPoints(v1, v2)
             | UnrolledExpressionData::ParallelThrough(v1, v2)
@@ -917,12 +916,12 @@ impl UnrolledExpression {
             | UnrolledExpressionData::TwoLineAngle(v1, v2)
             | UnrolledExpressionData::Subtract(v1, v2)
             | UnrolledExpressionData::Multiply(v1, v2)
-            | UnrolledExpressionData::Divide(v1, v2) =>
-                v1.has_distance_literal()
+            | UnrolledExpressionData::Divide(v1, v2) => v1
+                .has_distance_literal()
                 .or_else(|| v2.has_distance_literal()),
             UnrolledExpressionData::ThreePointAngle(v1, v2, v3)
-            | UnrolledExpressionData::AngleBisector(v1, v2, v3) =>
-                v1.has_distance_literal()
+            | UnrolledExpressionData::AngleBisector(v1, v2, v3) => v1
+                .has_distance_literal()
                 .or_else(|| v2.has_distance_literal())
                 .or_else(|| v3.has_distance_literal()),
         }
@@ -1945,16 +1944,9 @@ fn unroll_eq(
     unrolled: &mut Vec<UnrolledRule>,
     full_span: Span,
 ) -> Result<(), Error> {
-    if (
-            lhs.ty == ty::collection(2)
-            && rhs.ty == ty::collection(2)
-        ) || (
-            lhs.ty == ty::collection(2)
-            && rhs.ty == ty::SCALAR_UNKNOWN
-        ) || (
-            lhs.ty == ty::SCALAR_UNKNOWN
-            && rhs.ty == ty::collection(2)
-        )
+    if (lhs.ty == ty::collection(2) && rhs.ty == ty::collection(2))
+        || (lhs.ty == ty::collection(2) && rhs.ty == ty::SCALAR_UNKNOWN)
+        || (lhs.ty == ty::SCALAR_UNKNOWN && rhs.ty == ty::collection(2))
     {
         // AB = CD must have different logic as it's implied that this means "equality of distances".
         unrolled.push(UnrolledRule {
@@ -1976,7 +1968,6 @@ fn unroll_eq(
 
         Ok(())
     } else {
-
         let (mut lhs, mut rhs) = (lhs, rhs);
         // If any of the two types can be cast onto the other, cast and compare.
         if rhs.ty.can_cast(&lhs.ty) {
@@ -2388,7 +2379,7 @@ fn set_flag(set: &mut FlagSet, flag: &FlagStatement) -> Result<(), Error> {
         } else {
             return Err(Error::FlagSetExpected {
                 error_span: flag.get_span(),
-            })
+            });
         } {
             v
         } else {
@@ -2475,7 +2466,7 @@ pub fn unroll(input: &str) -> Result<(Vec<UnrolledRule>, CompileContext), Error>
             )
             .add_ident_def(&"distance_literals", &"none")
             .add_bool_def(&"point_bounds", false)
-            .finish()
+            .finish(),
     };
 
     builtins::point::register_point_function(&mut context); // Point()

@@ -345,7 +345,7 @@ pub enum Token {
     RBrace(RBrace),
     At(At),
     Colon(Colon),
-    Dot(Dot)
+    Dot(Dot),
 }
 
 impl Display for Token {
@@ -428,7 +428,7 @@ impl Token {
             Self::RBrace(v) => v.span,
             Self::Ampersant(v) => v.span,
             Self::Colon(v) => v.span,
-            Self::Dot(v) => v.span
+            Self::Dot(v) => v.span,
         }
     }
 }

@@ -1,6 +1,6 @@
 use std::f64::consts::PI;
 
-use super::{Complex, Adjustable};
+use super::{Adjustable, Complex};
 
 /// Performs an adjustment in a random direction.
 ///
@@ -8,7 +8,10 @@ use super::{Complex, Adjustable};
 /// * `points` - a vector of complex numbers, all representing a point on a plane
 /// * `quality` - a vector of qualities assigned to each point. Epsilon in the formula.
 /// * `adjustment_magnitude` - the magnitude to apply to the adjustment (how much of a jump to allow). Eta in the formula.
-pub fn adjust(adjustables: Vec<(Adjustable, f64)>, adjustment_magnitude: f64) -> Vec<(Adjustable, f64)> {
+pub fn adjust(
+    adjustables: Vec<(Adjustable, f64)>,
+    adjustment_magnitude: f64,
+) -> Vec<(Adjustable, f64)> {
     adjustables
         .into_iter()
         .map(|(adj, quality)| {
@@ -30,8 +33,10 @@ pub fn adjust(adjustables: Vec<(Adjustable, f64)>, adjustment_magnitude: f64) ->
 
                     (
                         // Adjust by a relative value based on quality and randomly chosen direction (+/-)
-                        Adjustable::Real(val + direction * adjustment_magnitude * val * (1.0 - quality)),
-                        quality
+                        Adjustable::Real(
+                            val + direction * adjustment_magnitude * val * (1.0 - quality),
+                        ),
+                        quality,
                     )
                 }
             }
