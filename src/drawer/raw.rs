@@ -67,7 +67,7 @@ pub fn draw(target: &Path, canvas_size: (usize, usize), output: &Output) {
             Rendered::Segment(segment) => {
                 file.write_all(
                     format!(
-                        "segment defined by two points: point1 - ({:.3}, {:.3}), point2 - ({:.3}, {:.3})",
+                        "\nsegment defined by two points: point1 - ({:.3}, {:.3}), point2 - ({:.3}, {:.3})",
                         segment.points.0.real,
                         segment.points.1.real,
                         segment.points.0.imaginary,
