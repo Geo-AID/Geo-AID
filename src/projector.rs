@@ -5,13 +5,12 @@ use serde::Serialize;
 
 use uuid::Uuid;
 
-use crate::generator::expression::{PointExpr, LineExpr, ScalarExpr};
-use crate::generator::expression::expr::{AnglePoint, AngleLine};
+use crate::generator::expression::expr::{AngleLine, AnglePoint};
+use crate::generator::expression::{LineExpr, PointExpr, ScalarExpr};
 use crate::{
     generator::{
-        critic::EvaluationArgs,
-        geometry, Complex, EvaluationError, Adjustable, Flags, expression::Line,
-        expression::Expression
+        critic::EvaluationArgs, expression::Expression, expression::Line, geometry, Adjustable,
+        Complex, EvaluationError, Flags,
     },
     script::{figure::Figure, unroll, HashableArc},
 };
@@ -22,11 +21,14 @@ mod tests {
 
     use crate::{
         drawer,
-        generator::{Complex, Adjustable, expression::{Expression, expr::{FreePoint, LinePoint, AnglePoint}, PointExpr, LineExpr, ScalarExpr}},
-        script::{
-            figure::Figure,
-            unroll::PointMeta
+        generator::{
+            expression::{
+                expr::{AnglePoint, FreePoint, LinePoint},
+                Expression, LineExpr, PointExpr, ScalarExpr,
+            },
+            Adjustable, Complex,
         },
+        script::{figure::Figure, unroll::PointMeta},
     };
 
     use super::project;
@@ -35,24 +37,36 @@ mod tests {
     fn test_project() {
         let x: u8 = 1;
         let gen_points: [(Adjustable, f64); 3] = [
-            (Adjustable::Point(Complex {
-                real: 0.3463,
-                imaginary: 0.436,
-            }), 1.0),
-            (Adjustable::Point(Complex {
-                real: 0.23,
-                imaginary: 0.87,
-            }), 1.0),
-            (Adjustable::Point(Complex {
-                real: 0.312,
-                imaginary: 0.314,
-            }), 1.0),
+            (
+                Adjustable::Point(Complex {
+                    real: 0.3463,
+                    imaginary: 0.436,
+                }),
+                1.0,
+            ),
+            (
+                Adjustable::Point(Complex {
+                    real: 0.23,
+                    imaginary: 0.87,
+                }),
+                1.0,
+            ),
+            (
+                Adjustable::Point(Complex {
+                    real: 0.312,
+                    imaginary: 0.314,
+                }),
+                1.0,
+            ),
         ];
 
         let fig = Figure {
             points: vec![
                 (
-                    Arc::new(Expression::new(PointExpr::Free(FreePoint{ index: 0 }), 1.0)),
+                    Arc::new(Expression::new(
+                        PointExpr::Free(FreePoint { index: 0 }),
+                        1.0,
+                    )),
                     PointMeta {
                         letter: 'A',
                         primes: 0,
@@ -60,7 +74,10 @@ mod tests {
                     },
                 ),
                 (
-                    Arc::new(Expression::new(PointExpr::Free(FreePoint{ index: 1 }), 1.0)),
+                    Arc::new(Expression::new(
+                        PointExpr::Free(FreePoint { index: 1 }),
+                        1.0,
+                    )),
                     PointMeta {
                         letter: 'B',
                         primes: 0,
@@ -68,7 +85,10 @@ mod tests {
                     },
                 ),
                 (
-                    Arc::new(Expression::new(PointExpr::Free(FreePoint{ index: 2 }), 1.0)),
+                    Arc::new(Expression::new(
+                        PointExpr::Free(FreePoint { index: 2 }),
+                        1.0,
+                    )),
                     PointMeta {
                         letter: 'C',
                         primes: 0,
@@ -77,21 +97,51 @@ mod tests {
                 ),
             ],
             lines: vec![
-                Arc::new(Expression::new(LineExpr::Line(LinePoint {
-                    a: Arc::new(Expression::new(PointExpr::Free(FreePoint{ index: 0 }), 1.0)),
-                    b: Arc::new(Expression::new(PointExpr::Free(FreePoint{ index: 1 }), 1.0)),
-                }), 1.0)),
-                Arc::new(Expression::new(LineExpr::Line(LinePoint {
-                    a: Arc::new(Expression::new(PointExpr::Free(FreePoint{ index: 1 }), 1.0)),
-                    b: Arc::new(Expression::new(PointExpr::Free(FreePoint{ index: 2 }), 1.0)),
-                }), 1.0)),
+                Arc::new(Expression::new(
+                    LineExpr::Line(LinePoint {
+                        a: Arc::new(Expression::new(
+                            PointExpr::Free(FreePoint { index: 0 }),
+                            1.0,
+                        )),
+                        b: Arc::new(Expression::new(
+                            PointExpr::Free(FreePoint { index: 1 }),
+                            1.0,
+                        )),
+                    }),
+                    1.0,
+                )),
+                Arc::new(Expression::new(
+                    LineExpr::Line(LinePoint {
+                        a: Arc::new(Expression::new(
+                            PointExpr::Free(FreePoint { index: 1 }),
+                            1.0,
+                        )),
+                        b: Arc::new(Expression::new(
+                            PointExpr::Free(FreePoint { index: 2 }),
+                            1.0,
+                        )),
+                    }),
+                    1.0,
+                )),
             ],
             angles: vec![(
-                Arc::new(Expression::new(ScalarExpr::AnglePoint(AnglePoint {
-                    arm1: Arc::new(Expression::new(PointExpr::Free(FreePoint{ index: 0 }), 1.0)),
-                    origin: Arc::new(Expression::new(PointExpr::Free(FreePoint{ index: 1 }), 1.0)),
-                    arm2: Arc::new(Expression::new(PointExpr::Free(FreePoint{ index: 2 }), 1.0)),
-            }), 1.0)),
+                Arc::new(Expression::new(
+                    ScalarExpr::AnglePoint(AnglePoint {
+                        arm1: Arc::new(Expression::new(
+                            PointExpr::Free(FreePoint { index: 0 }),
+                            1.0,
+                        )),
+                        origin: Arc::new(Expression::new(
+                            PointExpr::Free(FreePoint { index: 1 }),
+                            1.0,
+                        )),
+                        arm2: Arc::new(Expression::new(
+                            PointExpr::Free(FreePoint { index: 2 }),
+                            1.0,
+                        )),
+                    }),
+                    1.0,
+                )),
                 x,
             )],
             canvas_size: (200, 200),
@@ -176,26 +226,23 @@ fn get_angle_points(
     args: &EvaluationArgs,
 ) -> (Complex, Complex, Complex) {
     match &angle.kind {
-        ScalarExpr::AnglePoint(AnglePoint {arm1, origin, arm2}) => {
+        ScalarExpr::AnglePoint(AnglePoint { arm1, origin, arm2 }) => {
             let arm1 = arm1.evaluate(args).unwrap();
             let origin = origin.evaluate(args).unwrap();
             let arm2 = arm2.evaluate(args).unwrap();
 
             (arm1, origin, arm2)
         }
-        ScalarExpr::AngleLine(AngleLine {k, l}) => {
+        ScalarExpr::AngleLine(AngleLine { k, l }) => {
             let ev_ln1 = k.evaluate(args).unwrap();
             let ev_ln2 = l.evaluate(args).unwrap();
 
-            let origin = geometry::get_intersection(
-                ev_ln1,
-                ev_ln2
-            ).unwrap();
+            let origin = geometry::get_intersection(ev_ln1, ev_ln2).unwrap();
 
             (
                 ev_ln1.origin + ev_ln1.direction,
                 origin,
-                ev_ln2.origin + ev_ln2.direction
+                ev_ln2.origin + ev_ln2.direction,
             )
         }
         _ => unreachable!(),
@@ -306,7 +353,7 @@ fn transform(offset: Complex, scale: f64, size: Complex, pt: Complex) -> Complex
 pub fn project(
     figure: &Figure,
     generated_points: &[(Adjustable, f64)],
-    flags: &Arc<Flags>
+    flags: &Arc<Flags>,
 ) -> Result<Output, EvaluationError> {
     let mut logger = Vec::new();
     let args = EvaluationArgs {
@@ -314,7 +361,7 @@ pub fn project(
         adjustables: generated_points,
         generation: 0,
         flags,
-        cache: None
+        cache: None,
     };
 
     let points: Vec<Complex> = figure

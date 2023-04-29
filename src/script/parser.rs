@@ -8,9 +8,9 @@ use crate::span;
 
 use super::{
     token::{
-        Ampersant, Asterisk, At, Colon, Comma, Dollar, Eq, Exclamation, Gt, Gteq, Ident, LBrace,
-        LParen, Let, Lt, Lteq, Minus, NamedIdent, Number, Plus, Position, RBrace, RParen, Semi,
-        Slash, Span, Token, Vertical, Dot, LSquare, RSquare,
+        Ampersant, Asterisk, At, Colon, Comma, Dollar, Dot, Eq, Exclamation, Gt, Gteq, Ident,
+        LBrace, LParen, LSquare, Let, Lt, Lteq, Minus, NamedIdent, Number, Plus, Position, RBrace,
+        RParen, RSquare, Semi, Slash, Span, Token, Vertical,
     },
     unroll::{CompileContext, RuleOperatorDefinition},
     ComplexUnit, Error, SimpleUnit,
@@ -338,7 +338,7 @@ pub enum FloatOrInteger {
     /// Integer version.
     Integer(i64),
     /// Floating point.
-    Float(f64)
+    Float(f64),
 }
 
 impl FloatOrInteger {
@@ -568,7 +568,7 @@ pub struct VariableDefinition {
     /// Name of the variable.
     pub name: Ident,
     /// Display properties.
-    pub display_properties: Option<DisplayProperties>
+    pub display_properties: Option<DisplayProperties>,
 }
 
 /// `let <something> = <something else>`.
@@ -764,20 +764,20 @@ impl Parse for VariableDefinition {
     fn get_span(&self) -> Span {
         self.display_properties.as_ref().map_or_else(
             || self.name.get_span(),
-            |v| self.name.get_span().join(v.get_span())
+            |v| self.name.get_span().join(v.get_span()),
         )
     }
-    
+
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-            it: &mut Peekable<I>,
-            context: &CompileContext,
-        ) -> Result<Self, Error> {
+        it: &mut Peekable<I>,
+        context: &CompileContext,
+    ) -> Result<Self, Error> {
         Ok(Self {
             name: Ident::parse(it, context)?,
             display_properties: match it.peek().copied() {
                 Some(Token::LSquare(_)) => Some(DisplayProperties::parse(it, context)?),
-                _ => None
-            }
+                _ => None,
+            },
         })
     }
 }
@@ -832,8 +832,10 @@ impl Parse for ExprNumber {
             #[allow(clippy::cast_precision_loss)]
             Some(Token::Number(num)) => Ok(ExprNumber {
                 value: if num.dot.is_some() {
-                    FloatOrInteger::Float(num.integral as f64
-                        + num.decimal as f64 * f64::powi(10.0, -i32::from(num.decimal_places)))
+                    FloatOrInteger::Float(
+                        num.integral as f64
+                            + num.decimal as f64 * f64::powi(10.0, -i32::from(num.decimal_places)),
+                    )
                 } else {
                     #[allow(clippy::cast_precision_loss, clippy::cast_possible_wrap)]
                     FloatOrInteger::Integer(num.integral.try_into().unwrap())
@@ -1356,7 +1358,7 @@ pub struct Property {
     /// '='
     pub eq: Eq,
     /// Property value.
-    pub value: PropertyValue
+    pub value: PropertyValue,
 }
 
 impl Parse for Property {
@@ -1365,13 +1367,13 @@ impl Parse for Property {
     }
 
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-            it: &mut Peekable<I>,
-            context: &CompileContext,
-        ) -> Result<Self, Error> {
+        it: &mut Peekable<I>,
+        context: &CompileContext,
+    ) -> Result<Self, Error> {
         Ok(Self {
             name: NamedIdent::parse(it, context)?,
             eq: Eq::parse(it, context)?,
-            value: PropertyValue::parse(it, context)?
+            value: PropertyValue::parse(it, context)?,
         })
     }
 }
@@ -1380,7 +1382,7 @@ impl Parse for Property {
 #[derive(Debug, Clone)]
 pub enum PropertyValue {
     Number(ExprNumber),
-    Ident(Ident)
+    Ident(Ident),
 }
 
 impl PropertyValue {
@@ -1388,37 +1390,36 @@ impl PropertyValue {
     /// Causes an error if the value is not properly convertible.
     pub fn as_bool(&self) -> Result<bool, Error> {
         match self {
-            PropertyValue::Ident(ident) => {
-                match ident.ident.as_str() {
+            PropertyValue::Ident(ident) => match ident {
+                Ident::Named(ident) => match ident.ident.as_str() {
                     "enabled" | "on" | "true" => Ok(true),
                     "disabled" | "off" | "false" => Ok(false),
-                    _ => {
-                        Err(Error::BooleanExpected {
-                            error_span: ident.get_span(),
-                        })
-                    }
-                }
-            },
-            PropertyValue::Number(num) => {
-                match num.value {
-                    FloatOrInteger::Integer(1) => Ok(true),
-                    FloatOrInteger::Integer(0) => Ok(false),
                     _ => Err(Error::BooleanExpected {
-                        error_span: num.get_span(),
-                    })
-                }
+                        error_span: ident.get_span(),
+                    }),
+                },
+                _ => Err(Error::BooleanExpected {
+                    error_span: ident.get_span(),
+                }),
+            },
+            PropertyValue::Number(num) => match num.value {
+                FloatOrInteger::Integer(1) => Ok(true),
+                FloatOrInteger::Integer(0) => Ok(false),
+                _ => Err(Error::BooleanExpected {
+                    error_span: num.get_span(),
+                }),
             },
         }
     }
-    
+
     /// # Errors
     /// Causes an error if the value is not properly convertible
     pub fn as_string(&self) -> Result<String, Error> {
         match self {
-            PropertyValue::Ident(ident) => Ok(ident..clone()),
+            PropertyValue::Ident(ident) => Ok(ident.to_string()),
             PropertyValue::Number(num) => Err(Error::StringExpected {
                 error_span: num.get_span(),
-            })
+            }),
         }
     }
 }
@@ -1427,22 +1428,22 @@ impl Parse for PropertyValue {
     fn get_span(&self) -> Span {
         match self {
             Self::Number(n) => n.get_span(),
-            Self::Ident(i) => i.span
+            Self::Ident(i) => i.get_span(),
         }
     }
 
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-            it: &mut Peekable<I>,
-            context: &CompileContext,
-        ) -> Result<Self, Error> {
-            let peeked = it.peek().copied();
+        it: &mut Peekable<I>,
+        context: &CompileContext,
+    ) -> Result<Self, Error> {
+        let peeked = it.peek().copied();
 
-            match peeked {
-                Some(Token::Ident(Ident::Named(ident))) => Ok(Self::Ident(ident.clone())),
-                Some(Token::Number(_)) => Ok(Self::Number(ExprNumber::parse(it, context)?)),
-                Some(t) => Err(Error::invalid_token(t.clone())),
-                None => Err(Error::EndOfInput),
-            }
+        match peeked {
+            Some(Token::Ident(_)) => Ok(Self::Ident(Ident::parse(it, context)?)),
+            Some(Token::Number(_)) => Ok(Self::Number(ExprNumber::parse(it, context)?)),
+            Some(t) => Err(Error::invalid_token(t.clone())),
+            None => Err(Error::EndOfInput),
+        }
     }
 }
 
@@ -1454,7 +1455,7 @@ pub struct DisplayProperties {
     /// Properties
     pub properties: Punctuated<Property, Comma>,
     /// ']'
-    pub rsquare: RSquare
+    pub rsquare: RSquare,
 }
 
 impl Parse for DisplayProperties {
@@ -1463,13 +1464,13 @@ impl Parse for DisplayProperties {
     }
 
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-            it: &mut Peekable<I>,
-            context: &CompileContext,
-        ) -> Result<Self, Error> {
+        it: &mut Peekable<I>,
+        context: &CompileContext,
+    ) -> Result<Self, Error> {
         Ok(Self {
             lsquare: LSquare::parse(it, context)?,
             properties: Punctuated::parse(it, context)?,
-            rsquare: RSquare::parse(it, context)?
+            rsquare: RSquare::parse(it, context)?,
         })
     }
 }

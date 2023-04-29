@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
-use crate::generator::expression::{Expression, PointExpr, LineExpr, ScalarExpr};
+use crate::generator::expression::{Expression, LineExpr, PointExpr, ScalarExpr};
 
-use super::{unroll::PointMeta};
+use super::unroll::PointMeta;
 
 /// Defines the visual data of the figure.
 #[derive(Debug)]

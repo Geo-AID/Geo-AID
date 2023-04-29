@@ -359,7 +359,7 @@ pub enum Token {
     RSquare(RSquare),
     At(At),
     Colon(Colon),
-    Dot(Dot)
+    Dot(Dot),
 }
 
 impl Display for Token {
@@ -446,7 +446,7 @@ impl Token {
             Self::RSquare(v) => v.span,
             Self::Ampersant(v) => v.span,
             Self::Colon(v) => v.span,
-            Self::Dot(v) => v.span
+            Self::Dot(v) => v.span,
         }
     }
 }
@@ -477,6 +477,16 @@ impl PointCollection {
     }
 }
 
+impl Display for PointCollection {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for (c, p) in &self.collection {
+            write!(f, "{c}{:'^1$}", "", usize::from(*p))?;
+        }
+
+        Ok(())
+    }
+}
+
 /// An identifier. Either a point collection or a name.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Ident {
@@ -499,7 +509,7 @@ impl Display for Ident {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Ident::Named(named) => write!(f, "{}", named.ident),
-            Ident::Collection(col) => write!(f, "{}", col.),
+            Ident::Collection(col) => write!(f, "{col}"),
         }
     }
 }

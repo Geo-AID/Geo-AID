@@ -2,9 +2,9 @@ use std::string::String;
 use std::sync::Arc;
 use std::{fs::File, io::Write, path::Path};
 
-use crate::generator::Complex;
-use crate::generator::expression::{Expression, PointExpr, ScalarExpr};
 use crate::generator::expression::expr::AnglePoint;
+use crate::generator::expression::{Expression, PointExpr, ScalarExpr};
+use crate::generator::Complex;
 use crate::projector::{Output, Rendered};
 use crate::script::HashableArc;
 
@@ -66,7 +66,7 @@ pub fn draw(target: &Path, canvas_size: (usize, usize), output: &Output) {
                 let p2 = angle.points.2;
                 let no_arcs = String::from("l"); // Requires a change later! It has to be based on info from the script
                 match &angle.expr.kind {
-                    ScalarExpr::AnglePoint(AnglePoint{ arm1, origin, arm2 }) => {
+                    ScalarExpr::AnglePoint(AnglePoint { arm1, origin, arm2 }) => {
                         content += &format!(
                             r#"
                             \begin{{scope}}

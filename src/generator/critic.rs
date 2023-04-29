@@ -1,12 +1,8 @@
-use std::{sync::Arc, cell::RefCell, collections::HashMap};
+use std::{cell::RefCell, collections::HashMap, sync::Arc};
 
-use crate::{
-    script::{
-        Criteria, CriteriaKind
-    },
-};
+use crate::script::{Criteria, CriteriaKind};
 
-use super::{Logger, Flags, Adjustable, expression::ExprCache};
+use super::{expression::ExprCache, Adjustable, Flags, Logger};
 
 type AdjustableVec = Vec<(Adjustable, f64)>;
 
@@ -84,7 +80,7 @@ pub struct EvaluationArgs<'r> {
     pub adjustables: &'r [(Adjustable, f64)],
     pub generation: u64,
     pub flags: &'r Arc<Flags>,
-    pub cache: Option<&'r RefCell<Cache>>
+    pub cache: Option<&'r RefCell<Cache>>,
 }
 
 /// Evaluates a single rule in terms of quality.
@@ -94,14 +90,14 @@ fn evaluate_single(
     logger: &mut Logger,
     generation: u64,
     flags: &Arc<Flags>,
-    cache: Option<&RefCell<Cache>>
+    cache: Option<&RefCell<Cache>>,
 ) -> (Quality, Vec<f64>) {
     let args = EvaluationArgs {
         logger,
         adjustables,
         generation,
         flags,
-        cache
+        cache,
     };
 
     match crit {
@@ -111,14 +107,17 @@ fn evaluate_single(
 
             let weigths = e1.weights.clone() + &e2.weights;
 
-            (if let (Ok(v1), Ok(v2)) = (v1, v2) {
-                let diff = v1 - v2;
-                // Interestingly, it's easier to calculate the quality function for != and then invert it.
-                invert(Quality::Some(smooth_0_inf(1130.0 * diff.powi(2))))
-            } else {
-                // An evaluation error means the criteria is surely not met
-                Quality::Zero
-            }, weigths.0)
+            (
+                if let (Ok(v1), Ok(v2)) = (v1, v2) {
+                    let diff = v1 - v2;
+                    // Interestingly, it's easier to calculate the quality function for != and then invert it.
+                    invert(Quality::Some(smooth_0_inf(1130.0 * diff.powi(2))))
+                } else {
+                    // An evaluation error means the criteria is surely not met
+                    Quality::Zero
+                },
+                weigths.0,
+            )
         }
         CriteriaKind::EqualPoint(e1, e2) => {
             let v1 = e1.evaluate(&args);
@@ -126,14 +125,17 @@ fn evaluate_single(
 
             let weigths = e1.weights.clone() + &e2.weights;
 
-            (if let (Ok(v1), Ok(v2)) = (v1, v2) {
-                let diff = (v1 - v2).mangitude();
-                // Interestingly, it's easier to calculate the quality function for != and then invert it.
-                invert(Quality::Some(smooth_0_inf(1130.0 * diff.powi(2))))
-            } else {
-                // An evaluation error means the criteria is surely not met
-                Quality::Zero
-            }, weigths.0)
+            (
+                if let (Ok(v1), Ok(v2)) = (v1, v2) {
+                    let diff = (v1 - v2).mangitude();
+                    // Interestingly, it's easier to calculate the quality function for != and then invert it.
+                    invert(Quality::Some(smooth_0_inf(1130.0 * diff.powi(2))))
+                } else {
+                    // An evaluation error means the criteria is surely not met
+                    Quality::Zero
+                },
+                weigths.0,
+            )
         }
         CriteriaKind::Less(e1, e2) => {
             let v1 = e1.evaluate(&args);
@@ -141,18 +143,21 @@ fn evaluate_single(
 
             let weigths = e1.weights.clone() + &e2.weights;
 
-            (if let (Ok(v1), Ok(v2)) = (v1, v2) {
-                // Note that the difference is not the same as with equality. This time we have to be prepared for negative diffs.
-                let (v1, v2) = (v1, v2);
-                let diff = 1.0 - v2 / v1;
-                // logger.push(format!("Distance is {}", v1.0.real));
-                // logger.push(format!("Diff's {diff}"));
-                // Interestingly, it's easier to calculate the quality function for != and then invert it.
-                Quality::Some(smooth_inf_inf(-54.0 * f64::cbrt(diff + 0.001)))
-            } else {
-                // An evaluation error means the criteria is surely not met
-                Quality::Zero
-            }, weigths.0)
+            (
+                if let (Ok(v1), Ok(v2)) = (v1, v2) {
+                    // Note that the difference is not the same as with equality. This time we have to be prepared for negative diffs.
+                    let (v1, v2) = (v1, v2);
+                    let diff = 1.0 - v2 / v1;
+                    // logger.push(format!("Distance is {}", v1.0.real));
+                    // logger.push(format!("Diff's {diff}"));
+                    // Interestingly, it's easier to calculate the quality function for != and then invert it.
+                    Quality::Some(smooth_inf_inf(-54.0 * f64::cbrt(diff + 0.001)))
+                } else {
+                    // An evaluation error means the criteria is surely not met
+                    Quality::Zero
+                },
+                weigths.0,
+            )
         }
         CriteriaKind::Greater(e1, e2) => {
             let v1 = e1.evaluate(&args);
@@ -160,16 +165,19 @@ fn evaluate_single(
 
             let weigths = e1.weights.clone() + &e2.weights;
 
-            (if let (Ok(v1), Ok(v2)) = (v1, v2) {
-                // Note that the difference is not the same as with equality. This time we have to be prepared for negative diffs.
-                let (v1, v2) = (v1, v2);
-                let diff = 1.0 - v2 / v1;
-                // Interestingly, it's easier to calculate the quality function for != and then invert it.
-                Quality::Some(smooth_inf_inf(54.0 * f64::cbrt(diff - 0.001)))
-            } else {
-                // An evaluation error means the criteria is surely not met
-                Quality::Zero
-            }, weigths.0)
+            (
+                if let (Ok(v1), Ok(v2)) = (v1, v2) {
+                    // Note that the difference is not the same as with equality. This time we have to be prepared for negative diffs.
+                    let (v1, v2) = (v1, v2);
+                    let diff = 1.0 - v2 / v1;
+                    // Interestingly, it's easier to calculate the quality function for != and then invert it.
+                    Quality::Some(smooth_inf_inf(54.0 * f64::cbrt(diff - 0.001)))
+                } else {
+                    // An evaluation error means the criteria is surely not met
+                    Quality::Zero
+                },
+                weigths.0,
+            )
         }
         // Note: Inversed zero quality is still zero.
         CriteriaKind::Inverse(kind) => {
@@ -183,9 +191,15 @@ fn evaluate_single(
 
 #[allow(clippy::implicit_hasher)]
 /// Evaluates all rules in terms of quality
-pub fn evaluate(points: &AdjustableVec, criteria: &Arc<Vec<Criteria>>, logger: &mut Logger, generation: u64, flags: &Arc<Flags>,
-    cache: Option<&RefCell<Cache>>, point_evaluation: &mut [Vec<(Quality, f64)>]
-    ) -> AdjustableVec {
+pub fn evaluate(
+    points: &AdjustableVec,
+    criteria: &Arc<Vec<Criteria>>,
+    logger: &mut Logger,
+    generation: u64,
+    flags: &Arc<Flags>,
+    cache: Option<&RefCell<Cache>>,
+    point_evaluation: &mut [Vec<(Quality, f64)>],
+) -> AdjustableVec {
     for pt in point_evaluation.iter_mut() {
         pt.clear();
     }

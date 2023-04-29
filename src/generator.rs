@@ -1,11 +1,12 @@
 use std::{
-    collections::{VecDeque, HashMap},
+    cell::RefCell,
+    collections::{HashMap, VecDeque},
     fmt::Display,
     mem,
     ops::{Add, AddAssign, Div, Mul, Neg, Sub, SubAssign},
     sync::{mpsc, Arc},
     thread::{self, JoinHandle},
-    time::{Duration, Instant}, cell::RefCell,
+    time::{Duration, Instant},
 };
 
 use serde::Serialize;
@@ -20,8 +21,8 @@ pub enum EvaluationError {
 }
 
 pub mod critic;
-pub mod geometry;
 pub mod expression;
+pub mod geometry;
 mod magic_box;
 
 /// Represents a complex number located on a "unit" plane.
@@ -231,7 +232,7 @@ pub type Logger = Vec<String>;
 #[derive(Debug, Clone)]
 pub enum Adjustable {
     Point(Complex),
-    Real(f64)
+    Real(f64),
 }
 
 impl Adjustable {
@@ -262,7 +263,7 @@ pub enum Message {
 #[derive(Debug, Clone)]
 pub struct GenerationArgs {
     pub criteria: Arc<Vec<Criteria>>,
-    pub point_count: usize
+    pub point_count: usize,
 }
 
 fn generation_cycle(
@@ -281,12 +282,10 @@ fn generation_cycle(
 
             for expr in exprs {
                 // We use weak to not mess with the strong count.
-                record
-                    .entry(expr)
-                    .or_insert(ExprCache {
-                        value: Value::scalar(0.0),
-                        generation: 0,
-                    });
+                record.entry(expr).or_insert(ExprCache {
+                    value: Value::scalar(0.0),
+                    generation: 0,
+                });
             }
         }
     }
@@ -301,7 +300,15 @@ fn generation_cycle(
         match receiver.recv().unwrap() {
             Message::Generate(adjustment, points, mut logger) => {
                 let points = magic_box::adjust(points, adjustment);
-                let points = critic::evaluate(&points, &args.criteria, &mut logger, generation, flags, Some(&record), &mut point_evaluation);
+                let points = critic::evaluate(
+                    &points,
+                    &args.criteria,
+                    &mut logger,
+                    generation,
+                    flags,
+                    Some(&record),
+                    &mut point_evaluation,
+                );
 
                 // println!("Adjustment + critic = {:#?}", points);
 
@@ -333,7 +340,7 @@ pub struct Generator {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AdjustableTemplate {
     Point,
-    Real
+    Real,
 }
 
 impl AdjustableTemplate {
@@ -364,14 +371,17 @@ impl Generator {
         Self {
             current_state: template
                 .iter()
-                .map(
-                    |temp| (
+                .map(|temp| {
+                    (
                         match temp {
-                            AdjustableTemplate::Point => Adjustable::Point(Complex::new(rand::random(), rand::random())),
-                            AdjustableTemplate::Real => Adjustable::Real(rand::random())
+                            AdjustableTemplate::Point => {
+                                Adjustable::Point(Complex::new(rand::random(), rand::random()))
+                            }
+                            AdjustableTemplate::Real => Adjustable::Real(rand::random()),
                         },
-                        0.0
-                ))
+                        0.0,
+                    )
+                })
                 .collect(),
             workers: input_receivers
                 .into_iter()
@@ -537,24 +547,24 @@ pub struct Optimizations {
 pub enum DistanceLiterals {
     Adjust,
     Solve,
-    None
+    None,
 }
 
 #[derive(Debug)]
 pub struct Flags {
     pub optimizations: Optimizations,
     pub distance_literals: DistanceLiterals,
-    pub point_bounds: bool
+    pub point_bounds: bool,
 }
 
 impl Default for Flags {
     fn default() -> Self {
         Self {
             optimizations: Optimizations {
-                identical_expressions: true
+                identical_expressions: true,
             },
             distance_literals: DistanceLiterals::None,
-            point_bounds: false
+            point_bounds: false,
         }
     }
 }
