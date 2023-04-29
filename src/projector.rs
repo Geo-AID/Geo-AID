@@ -7,6 +7,7 @@ use uuid::Uuid;
 
 use crate::generator::expression::expr::{AngleLine, AnglePoint};
 use crate::generator::expression::{LineExpr, PointExpr, ScalarExpr};
+use crate::generator::geometry::get_line;
 use crate::{
     generator::{
         critic::EvaluationArgs, expression::Expression, expression::Line, geometry, Adjustable,
@@ -133,6 +134,16 @@ fn test_project() {
                     create_point_expr(2),
                 ),
             ],
+            rays: vec![(
+                Arc::new(Expression::new(
+                    PointExpr::Free(FreePoint { index: 0 }),
+                    1.0,
+                )),
+                Arc::new(Expression::new(
+                    PointExpr::Free(FreePoint { index: 1 }),
+                    1.0,
+                )),
+            )],
             canvas_size: (200, 200),
         };
 
@@ -158,6 +169,7 @@ pub enum Rendered {
     Line(RenderedLine),
     Angle(RenderedAngle),
     Segment(RenderedSegment),
+    Ray(RenderedRay),
 }
 
 /// The final product passed to the drawers.
@@ -202,12 +214,19 @@ pub struct RenderedAngle {
     // Value of the angle (who'd have guessed)
     pub angle_value: f64,
 }
-
 #[derive(Serialize)]
 pub struct RenderedSegment {
     /// Label of the segment
     pub label: String,
     /// Points defining the segment
+    pub points: (Complex, Complex),
+}
+
+#[derive(Serialize)]
+pub struct RenderedRay {
+    /// Ray's label
+    pub label: String,
+    /// Points defining the ray
     pub points: (Complex, Complex),
 }
 

@@ -783,6 +783,7 @@ pub fn compile(
         lines: Vec::new(),
         angles: Vec::new(),
         segments: Vec::new(),
+        rays: Vec::new(),
         canvas_size,
     };
 
