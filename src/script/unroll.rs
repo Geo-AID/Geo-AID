@@ -8,9 +8,9 @@ use std::{
 use super::{
     builtins,
     parser::{
-        BinaryOperator, ExplicitIterator, Expression, FlagStatement, ImplicitIterator,
-        LetStatement, Parse, PredefinedRuleOperator, PredefinedType, Punctuated, RuleOperator,
-        RuleStatement, SimpleExpression, Statement, Type
+        BinaryOperator, DisplayProperties, ExplicitIterator, Expression, FlagStatement,
+        ImplicitIterator, LetStatement, Parse, PredefinedRuleOperator, PredefinedType,
+        PropertyValue, Punctuated, RuleOperator, RuleStatement, SimpleExpression, Statement, Type,
     },
     token::{self, Ident, NamedIdent, PointCollection, Span},
     ty, ComplexUnit, Error, SimpleUnit,
@@ -35,10 +35,12 @@ pub struct PointMeta {
 }
 
 /// A point in variable meta.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Point {
     /// A point meta is optional, since not every point has a letter.
     pub meta: Option<PointMeta>,
+    /// Whether or not to display the point.
+    pub display: bool,
 }
 
 /// Defines meta information about variables, mostly in regard to the displaying of them.
@@ -249,8 +251,7 @@ impl FlagSetting {
     #[must_use]
     pub fn get_span(&self) -> Option<Span> {
         match self {
-            FlagSetting::Default(_)
-            | FlagSetting::Unset => None,
+            FlagSetting::Default(_) | FlagSetting::Unset => None,
             FlagSetting::Set(_, sp) => Some(*sp),
         }
     }
@@ -793,8 +794,7 @@ impl UnrolledExpressionData {
             | UnrolledExpressionData::UnrollParameterGroup(_)
             | UnrolledExpressionData::FreePoint
             | UnrolledExpressionData::FreeReal => None,
-            UnrolledExpressionData::PointCollection(v)
-            | UnrolledExpressionData::Average(v) => {
+            UnrolledExpressionData::PointCollection(v) | UnrolledExpressionData::Average(v) => {
                 for expr in v {
                     if let Some(sp) = expr.has_distance_literal() {
                         return Some(sp);
@@ -802,7 +802,7 @@ impl UnrolledExpressionData {
                 }
 
                 None
-            },
+            }
             UnrolledExpressionData::Boxed(v)
             | UnrolledExpressionData::IndexCollection(v, _)
             | UnrolledExpressionData::Negate(v) => v.has_distance_literal(),
@@ -825,12 +825,12 @@ impl UnrolledExpressionData {
             | UnrolledExpressionData::TwoLineAngle(v1, v2)
             | UnrolledExpressionData::Subtract(v1, v2)
             | UnrolledExpressionData::Multiply(v1, v2)
-            | UnrolledExpressionData::Divide(v1, v2) =>
-                v1.has_distance_literal()
+            | UnrolledExpressionData::Divide(v1, v2) => v1
+                .has_distance_literal()
                 .or_else(|| v2.has_distance_literal()),
             UnrolledExpressionData::ThreePointAngle(v1, v2, v3)
-            | UnrolledExpressionData::AngleBisector(v1, v2, v3) =>
-                v1.has_distance_literal()
+            | UnrolledExpressionData::AngleBisector(v1, v2, v3) => v1
+                .has_distance_literal()
                 .or_else(|| v2.has_distance_literal())
                 .or_else(|| v3.has_distance_literal()),
         }
@@ -849,7 +849,7 @@ pub struct UnrolledExpression {
     pub data: Rc<UnrolledExpressionData>,
     pub ty: Type,
     pub span: Span,
-    pub weight: f64 // Assigned weight.
+    pub weight: f64, // Assigned weight.
 }
 
 impl Display for UnrolledExpression {
@@ -876,8 +876,7 @@ impl UnrolledExpression {
             | UnrolledExpressionData::UnrollParameterGroup(_)
             | UnrolledExpressionData::FreePoint
             | UnrolledExpressionData::FreeReal => None,
-            UnrolledExpressionData::PointCollection(v)
-            | UnrolledExpressionData::Average(v) => {
+            UnrolledExpressionData::PointCollection(v) | UnrolledExpressionData::Average(v) => {
                 for expr in v {
                     if let Some(sp) = expr.has_distance_literal() {
                         return Some(sp);
@@ -885,7 +884,7 @@ impl UnrolledExpression {
                 }
 
                 None
-            },
+            }
             UnrolledExpressionData::Number(_) => {
                 if let Some(unit) = self.ty.as_predefined().unwrap().as_scalar().unwrap() {
                     if unit.0[SimpleUnit::Distance as usize] != 0 {
@@ -908,7 +907,9 @@ impl UnrolledExpression {
                 }
             }
             UnrolledExpressionData::PointPointDistance(e1, e2)
-            | UnrolledExpressionData::PointLineDistance(e1, e2) => e1.has_distance_literal().or_else(|| e2.has_distance_literal()),
+            | UnrolledExpressionData::PointLineDistance(e1, e2) => e1
+                .has_distance_literal()
+                .or_else(|| e2.has_distance_literal()),
             UnrolledExpressionData::Add(v1, v2)
             | UnrolledExpressionData::LineFromPoints(v1, v2)
             | UnrolledExpressionData::ParallelThrough(v1, v2)
@@ -917,12 +918,12 @@ impl UnrolledExpression {
             | UnrolledExpressionData::TwoLineAngle(v1, v2)
             | UnrolledExpressionData::Subtract(v1, v2)
             | UnrolledExpressionData::Multiply(v1, v2)
-            | UnrolledExpressionData::Divide(v1, v2) =>
-                v1.has_distance_literal()
+            | UnrolledExpressionData::Divide(v1, v2) => v1
+                .has_distance_literal()
                 .or_else(|| v2.has_distance_literal()),
             UnrolledExpressionData::ThreePointAngle(v1, v2, v3)
-            | UnrolledExpressionData::AngleBisector(v1, v2, v3) =>
-                v1.has_distance_literal()
+            | UnrolledExpressionData::AngleBisector(v1, v2, v3) => v1
+                .has_distance_literal()
                 .or_else(|| v2.has_distance_literal())
                 .or_else(|| v3.has_distance_literal()),
         }
@@ -1424,7 +1425,7 @@ fn unroll_simple(
         SimpleExpression::Number(num) => UnrolledExpression {
             weight: 0.0, // Always zero.
             ty: Type::Predefined(PredefinedType::Scalar(None)),
-            data: Rc::new(UnrolledExpressionData::Number(num.value)),
+            data: Rc::new(UnrolledExpressionData::Number(num.value.to_float())),
             span: num.get_span(),
         },
         SimpleExpression::Call(e) => {
@@ -1709,13 +1710,65 @@ fn unpack_expression(
     }
 }
 
+#[derive(Debug, Clone)]
+struct PointProperties {
+    display: bool,
+    label: String,
+}
+
+impl PointProperties {
+    pub fn parse(props: Option<Properties>, default_label: String) -> Result<Self, Error> {
+        Ok(match props {
+            Some(mut props) => {
+                let display = props.get_bool("display", true)?;
+                let label = props.get_string("label", default_label)?;
+
+                PointProperties { display, label }
+            }
+            None => PointProperties {
+                display: true,
+                label: default_label,
+            },
+        })
+    }
+}
+
+#[derive(Debug, Clone)]
+struct Properties(HashMap<String, PropertyValue>);
+
+impl Properties {
+    fn get_bool(&mut self, property: &str, default: bool) -> Result<bool, Error> {
+        self.0
+            .remove(property)
+            .as_ref()
+            .map_or(Ok(default), PropertyValue::as_bool)
+    }
+
+    fn get_string(&mut self, property: &str, default: String) -> Result<String, Error> {
+        self.0
+            .remove(property)
+            .as_ref()
+            .map_or(Ok(default), PropertyValue::as_string)
+    }
+}
+
 fn create_variable_named(
     stat: &LetStatement,
     context: &mut CompileContext,
     named: &NamedIdent,
+    display: Option<&DisplayProperties>,
     rhs_unrolled: UnrolledExpression,
     variables: &mut Vec<Rc<Variable>>,
 ) -> Result<(), Error> {
+    let display: Option<Properties> = display.map(|v| {
+        Properties(
+            v.properties
+                .iter()
+                .map(|v| (v.name.ident.clone(), v.value.clone()))
+                .collect(),
+        )
+    });
+
     match context.variables.entry(named.ident.clone()) {
         // If the variable already exists, it's a redefinition error.
         Entry::Occupied(entry) => Err(Error::redefined_variable(
@@ -1730,12 +1783,32 @@ fn create_variable_named(
                 definition_span: stat.get_span(),
                 meta: match &rhs_unrolled.ty {
                     Type::Predefined(pre) => match pre {
-                        PredefinedType::Point => VariableMeta::Point(Point { meta: None }),
+                        PredefinedType::Point => {
+                            let props = PointProperties::parse(display, named.ident.clone())?;
+
+                            VariableMeta::Point(Point {
+                                meta: Some(PointMeta {
+                                    letter: props.label.chars().next().unwrap(),
+                                    index: None,
+                                    primes: 0,
+                                }),
+                                display: props.display,
+                            })
+                        }
                         PredefinedType::Line => VariableMeta::Line,
                         PredefinedType::Scalar(_) => VariableMeta::Scalar,
                         PredefinedType::PointCollection(l) => {
                             if *l == 1 {
-                                VariableMeta::Point(Point { meta: None })
+                                let props = PointProperties::parse(display, named.ident.clone())?;
+
+                                VariableMeta::Point(Point {
+                                    display: true,
+                                    meta: Some(PointMeta {
+                                        letter: props.label.chars().next().unwrap(),
+                                        index: None,
+                                        primes: 0,
+                                    }),
+                                })
                             } else {
                                 VariableMeta::PointCollection
                             }
@@ -1762,8 +1835,18 @@ fn create_variable_collection(
     context: &mut CompileContext,
     col: &PointCollection,
     rhs_unrolled: UnrolledExpression,
+    display: Option<&DisplayProperties>,
     variables: &mut Vec<Rc<Variable>>,
 ) -> Result<(), Error> {
+    let display: Option<Properties> = display.map(|v| {
+        Properties(
+            v.properties
+                .iter()
+                .map(|v| (v.name.ident.clone(), v.value.clone()))
+                .collect(),
+        )
+    });
+
     let rhs_unpacked = unpack_expression(&rhs_unrolled, context)?;
 
     if rhs_unpacked.len() != col.len() {
@@ -1772,6 +1855,17 @@ fn create_variable_collection(
             ty: rhs_unrolled.ty,
         });
     }
+
+    let pt_letter = if col.collection.len() == 1 {
+        let props = PointProperties::parse(
+            display,
+            construct_point_name(col.collection[0].0, col.collection[0].1),
+        )?;
+
+        Some((props.label.chars().next().unwrap(), props.display))
+    } else {
+        None
+    };
 
     let mut rhs_unpacked = rhs_unpacked.into_iter();
     for pt in &col.collection {
@@ -1793,10 +1887,11 @@ fn create_variable_collection(
                     definition_span: stat.get_span(),
                     meta: VariableMeta::Point(Point {
                         meta: Some(PointMeta {
-                            letter: pt.0,
-                            primes: pt.1,
+                            letter: pt_letter.map_or(pt.0, |v| v.0),
+                            primes: if pt_letter.is_some() { 0 } else { pt.1 },
                             index: None,
                         }),
+                        display: pt_letter.map_or(true, |v| v.1),
                     }),
                     definition: rhs_unpacked.next().unwrap(),
                 };
@@ -1870,7 +1965,7 @@ fn create_variables(
     let mut it_index = IterTreeIterator::new(&tree);
 
     // Iterate over each identifier.
-    for ident in stat.ident.iter() {
+    for def in stat.ident.iter() {
         let rhs_unrolled = unroll_expression(
             &stat.expr,
             context,
@@ -1879,12 +1974,26 @@ fn create_variables(
         )?;
         it_index.next();
 
-        match ident {
+        match &def.name {
             Ident::Named(named) => {
-                create_variable_named(stat, context, named, rhs_unrolled, &mut variables)?;
+                create_variable_named(
+                    stat,
+                    context,
+                    named,
+                    def.display_properties.as_ref(),
+                    rhs_unrolled,
+                    &mut variables,
+                )?;
             }
             Ident::Collection(col) => {
-                create_variable_collection(stat, context, col, rhs_unrolled, &mut variables)?;
+                create_variable_collection(
+                    stat,
+                    context,
+                    col,
+                    rhs_unrolled,
+                    def.display_properties.as_ref(),
+                    &mut variables,
+                )?;
             }
         }
     }
@@ -1902,12 +2011,12 @@ fn unroll_let(
     // First, we construct an iterator out of lhs
     let lhs: Expression<true> = Expression::ImplicitIterator(ImplicitIterator {
         exprs: Punctuated {
-            first: Box::new(SimpleExpression::Ident(stat.ident.first.as_ref().clone())),
+            first: Box::new(SimpleExpression::Ident(stat.ident.first.name.clone())),
             collection: stat
                 .ident
                 .collection
                 .iter()
-                .map(|(p, i)| (*p, SimpleExpression::Ident(i.clone())))
+                .map(|(p, i)| (*p, SimpleExpression::Ident(i.name.clone())))
                 .collect(),
         },
     });
@@ -1945,16 +2054,9 @@ fn unroll_eq(
     unrolled: &mut Vec<UnrolledRule>,
     full_span: Span,
 ) -> Result<(), Error> {
-    if (
-            lhs.ty == ty::collection(2)
-            && rhs.ty == ty::collection(2)
-        ) || (
-            lhs.ty == ty::collection(2)
-            && rhs.ty == ty::SCALAR_UNKNOWN
-        ) || (
-            lhs.ty == ty::SCALAR_UNKNOWN
-            && rhs.ty == ty::collection(2)
-        )
+    if (lhs.ty == ty::collection(2) && rhs.ty == ty::collection(2))
+        || (lhs.ty == ty::collection(2) && rhs.ty == ty::SCALAR_UNKNOWN)
+        || (lhs.ty == ty::SCALAR_UNKNOWN && rhs.ty == ty::collection(2))
     {
         // AB = CD must have different logic as it's implied that this means "equality of distances".
         unrolled.push(UnrolledRule {
@@ -1976,7 +2078,6 @@ fn unroll_eq(
 
         Ok(())
     } else {
-
         let (mut lhs, mut rhs) = (lhs, rhs);
         // If any of the two types can be cast onto the other, cast and compare.
         if rhs.ty.can_cast(&lhs.ty) {
@@ -2294,7 +2395,7 @@ fn unroll_rulestat(
 fn set_flag_bool(flag: &mut Flag, stmt: &FlagStatement) -> Result<(), Error> {
     match &stmt.value {
         super::parser::FlagValue::Set(_) => {
-            return Err(Error::FlagBooleanExpected {
+            return Err(Error::BooleanExpected {
                 error_span: stmt.get_span(),
             })
         }
@@ -2306,7 +2407,7 @@ fn set_flag_bool(flag: &mut Flag, stmt: &FlagStatement) -> Result<(), Error> {
                             "enabled" | "on" | "true" => true,
                             "disabled" | "off" | "false" => false,
                             _ => {
-                                return Err(Error::FlagBooleanExpected {
+                                return Err(Error::BooleanExpected {
                                     error_span: stmt.get_span(),
                                 })
                             }
@@ -2333,7 +2434,7 @@ fn set_flag_bool(flag: &mut Flag, stmt: &FlagStatement) -> Result<(), Error> {
                                 1 => true,
                                 0 => false,
                                 _ => {
-                                    return Err(Error::FlagBooleanExpected {
+                                    return Err(Error::BooleanExpected {
                                         error_span: stmt.get_span(),
                                     })
                                 }
@@ -2341,7 +2442,7 @@ fn set_flag_bool(flag: &mut Flag, stmt: &FlagStatement) -> Result<(), Error> {
                             stmt.get_span(),
                         );
                     } else {
-                        return Err(Error::FlagBooleanExpected {
+                        return Err(Error::BooleanExpected {
                             error_span: stmt.get_span(),
                         });
                     }
@@ -2388,7 +2489,7 @@ fn set_flag(set: &mut FlagSet, flag: &FlagStatement) -> Result<(), Error> {
         } else {
             return Err(Error::FlagSetExpected {
                 error_span: flag.get_span(),
-            })
+            });
         } {
             v
         } else {
@@ -2429,7 +2530,7 @@ fn set_flag(set: &mut FlagSet, flag: &FlagStatement) -> Result<(), Error> {
         FlagType::Boolean => set_flag_bool(flag_ref, flag)?,
         FlagType::String => match &flag.value {
             super::parser::FlagValue::Number(_) | super::parser::FlagValue::Set(_) => {
-                return Err(Error::FlagStringExpected {
+                return Err(Error::StringExpected {
                     error_span: flag.get_span(),
                 })
             }
@@ -2475,7 +2576,7 @@ pub fn unroll(input: &str) -> Result<(Vec<UnrolledRule>, CompileContext), Error>
             )
             .add_ident_def(&"distance_literals", &"none")
             .add_bool_def(&"point_bounds", false)
-            .finish()
+            .finish(),
     };
 
     builtins::point::register_point_function(&mut context); // Point()

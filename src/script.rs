@@ -8,10 +8,14 @@ use std::{
 
 use serde::Serialize;
 
-use crate::{cli::{AnnotationKind, DiagnosticData, Fix, Change}, span, generator::expression::{Expression, ScalarExpr, AnyExpr, PointExpr}};
+use crate::{
+    cli::{AnnotationKind, Change, DiagnosticData, Fix},
+    generator::expression::{AnyExpr, Expression, PointExpr, ScalarExpr},
+    span,
+};
 
 use self::parser::Type;
-use self::token::{NamedIdent, Span, Token, Position};
+use self::token::{NamedIdent, Position, Span, Token};
 
 mod builtins;
 pub mod compile;
@@ -128,28 +132,28 @@ pub enum Error {
     FlagSetExpected {
         error_span: Span,
     },
-    FlagStringExpected {
+    StringExpected {
         error_span: Span,
     },
-    FlagBooleanExpected {
+    BooleanExpected {
         error_span: Span,
     },
     RedefinedFlag {
         error_span: Span,
         first_defined: Span,
-        flag_name: String
+        flag_name: String,
     },
     FlagEnumInvalidValue {
         error_span: Span,
         available_values: &'static [&'static str],
-        received_value: String
+        received_value: String,
     },
     RequiredFlagNotSet {
         flag_name: &'static str,
         required_because: Span,
         flagdef_span: Option<Span>,
-        available_values: &'static [&'static str]
-    }
+        available_values: &'static [&'static str],
+    },
 }
 
 impl Error {
@@ -391,11 +395,11 @@ impl Error {
                 DiagnosticData::new(&"Expected a flag set ({...}).")
                     .add_span(error_span)
             }
-            Self::FlagStringExpected { error_span } => {
+            Self::StringExpected { error_span } => {
                 DiagnosticData::new(&"Expected a string (identifier).")
                     .add_span(error_span)
             }
-            Self::FlagBooleanExpected { error_span } => {
+            Self::BooleanExpected { error_span } => {
                 DiagnosticData::new(&"Expected a boolean value (enabled, disabled, on, off, true, false, 1 or 0).")
                     .add_span(error_span)
             }
@@ -638,7 +642,7 @@ pub enum CriteriaKind {
     /// Inverts the criteria. The quality is calculated as 1 - the quality of the inverted criteria.
     Inverse(Box<CriteriaKind>),
     /// Bias. Always evaluates to 1.0. Artificially raises quality for everything contained  in the arc.
-    Bias(Arc<Expression<AnyExpr>>)
+    Bias(Arc<Expression<AnyExpr>>),
 }
 
 impl CriteriaKind {

@@ -12,7 +12,8 @@ use clap::{Parser, ValueEnum};
 use crossterm::{cursor, terminal, ExecutableCommand, QueueableCommand};
 use geo_aid::{
     cli::{Diagnostic, DiagnosticKind},
-    drawer::{json, raw}, generator::GenerationArgs,
+    drawer::{json, raw},
+    generator::GenerationArgs,
 };
 use geo_aid::{
     drawer::{latex, svg},
@@ -97,10 +98,15 @@ fn main() {
     };
 
     let flags = Arc::new(flags);
-    let mut gen = Generator::new(&template, args.count_of_workers, &GenerationArgs {
-        criteria: Arc::new(criteria),
-        point_count: template.len()
-    }, &flags);
+    let mut gen = Generator::new(
+        &template,
+        args.count_of_workers,
+        &GenerationArgs {
+            criteria: Arc::new(criteria),
+            point_count: template.len(),
+        },
+        &flags,
+    );
 
     let mut stdout = io::stdout();
 
@@ -126,11 +132,7 @@ fn main() {
 
     stdout.execute(cursor::Show).unwrap();
 
-    let rendered = projector::project(
-        &figure,
-        gen.get_state(),
-        &flags,
-    ).unwrap();
+    let rendered = projector::project(&figure, gen.get_state(), &flags).unwrap();
 
     match args.renderer {
         Renderer::Latex => latex::draw(&args.output, canvas_size, &rendered),

@@ -1,7 +1,10 @@
 use std::{fs::File, io::Write, path::Path, sync::Arc};
 
 use crate::{
-    generator::{Complex, expression::{expr::AnglePoint, Expression, PointExpr, ScalarExpr}},
+    generator::{
+        expression::{expr::AnglePoint, Expression, PointExpr, ScalarExpr},
+        Complex,
+    },
     projector::{Output, Rendered},
     script::HashableArc,
 };
@@ -49,7 +52,7 @@ pub fn draw(target: &Path, canvas_size: (usize, usize), output: &Output) {
                 let p_2 = angle.points.2;
                 let no_arcs = String::from("l"); // Requires a change later! It has to be based on info from the script
                 match &angle.expr.kind {
-                    ScalarExpr::AnglePoint(AnglePoint{ arm1, origin, arm2 }) => {
+                    ScalarExpr::AnglePoint(AnglePoint { arm1, origin, arm2 }) => {
                         file.write_all(format!("\nangle defined with 3 points: points with x and y coordinates: first point - {}, origin - {}, second point - {}. Number of arcs: {no_arcs}",
                         get_point_name(arm1, output, p_1), get_point_name(origin, output, p_origin), get_point_name(arm2, output, p_2)).as_bytes()).unwrap();
                     }

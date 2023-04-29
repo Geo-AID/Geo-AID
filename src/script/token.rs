@@ -217,6 +217,18 @@ pub struct RBrace {
     pub span: Span,
 }
 
+/// A '[' token.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LSquare {
+    pub span: Span,
+}
+
+/// A ']' token.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RSquare {
+    pub span: Span,
+}
+
 /// A ',' token.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Comma {
@@ -343,9 +355,11 @@ pub enum Token {
     Ampersant(Ampersant),
     LBrace(LBrace),
     RBrace(RBrace),
+    LSquare(LSquare),
+    RSquare(RSquare),
     At(At),
     Colon(Colon),
-    Dot(Dot)
+    Dot(Dot),
 }
 
 impl Display for Token {
@@ -373,6 +387,8 @@ impl Display for Token {
             Self::At(_) => write!(f, "@"),
             Self::LBrace(_) => write!(f, "{{"),
             Self::RBrace(_) => write!(f, "}}"),
+            Self::LSquare(_) => write!(f, "["),
+            Self::RSquare(_) => write!(f, "]"),
             Self::Colon(_) => write!(f, ":"),
             Self::Ident(ident) => write!(
                 f,
@@ -426,9 +442,11 @@ impl Token {
             Self::At(v) => v.span,
             Self::LBrace(v) => v.span,
             Self::RBrace(v) => v.span,
+            Self::LSquare(v) => v.span,
+            Self::RSquare(v) => v.span,
             Self::Ampersant(v) => v.span,
             Self::Colon(v) => v.span,
-            Self::Dot(v) => v.span
+            Self::Dot(v) => v.span,
         }
     }
 }
@@ -459,6 +477,16 @@ impl PointCollection {
     }
 }
 
+impl Display for PointCollection {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for (c, p) in &self.collection {
+            write!(f, "{c}{:'^1$}", "", usize::from(*p))?;
+        }
+
+        Ok(())
+    }
+}
+
 /// An identifier. Either a point collection or a name.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Ident {
@@ -473,6 +501,15 @@ impl Ident {
             Some(v)
         } else {
             None
+        }
+    }
+}
+
+impl Display for Ident {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Ident::Named(named) => write!(f, "{}", named.ident),
+            Ident::Collection(col) => write!(f, "{col}"),
         }
     }
 }
@@ -684,6 +721,8 @@ fn tokenize_special<I: Iterator<Item = char>>(
             '@' => Token::At(At { span: sp }),
             '{' => Token::LBrace(LBrace { span: sp }),
             '}' => Token::RBrace(RBrace { span: sp }),
+            '[' => Token::LSquare(LSquare { span: sp }),
+            ']' => Token::RSquare(RSquare { span: sp }),
             ':' => Token::Colon(Colon { span: sp }),
             _ => return Err(Error::invalid_character(c, sp)),
         });

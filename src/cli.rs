@@ -51,13 +51,13 @@ pub struct Change {
     pub span: Span,
     /// Instead of a simple string, we use a vector of lines to make the
     /// rendering process more reliable.
-    pub new_content: Vec<String>
+    pub new_content: Vec<String>,
 }
 
 #[derive(Debug)]
 pub struct Fix {
     pub changes: Vec<Change>,
-    pub message: String
+    pub message: String,
 }
 
 pub struct Diagnostic<'r> {
@@ -87,7 +87,7 @@ impl DiagnosticData {
             spans: Vec::new(),
             annotations: Vec::new(),
             notes: Vec::new(),
-            fixes: Vec::new()
+            fixes: Vec::new(),
         }
     }
 
@@ -195,7 +195,7 @@ impl<'r> Diagnostic<'r> {
                                 spans: vec![at],
                                 annotations: Vec::new(),
                                 notes: Vec::new(),
-                                fixes: Vec::new()
+                                fixes: Vec::new(),
                             },
                             file,
                             script,
@@ -271,7 +271,7 @@ impl<'r> Diagnostic<'r> {
                                 spans: vec![ann.at],
                                 annotations: Vec::new(),
                                 notes: Vec::new(),
-                                fixes: Vec::new()
+                                fixes: Vec::new(),
                             },
                             file,
                             script,
@@ -315,13 +315,15 @@ impl<'r> Diagnostic<'r> {
         }
 
         // Sort by span start position in reverse (first span is the last in the vector)
-        let fixes = data.fixes.into_iter().map(
-            |mut v| {
+        let fixes = data
+            .fixes
+            .into_iter()
+            .map(|mut v| {
                 v.changes.sort_unstable_by_key(|c| c.span.start);
                 v.changes.reverse();
                 v
-            }
-        ).collect();
+            })
+            .collect();
 
         Diagnostic {
             kind,
@@ -659,14 +661,14 @@ impl<'r> Display for Diagnostic<'r> {
                     if !change.span.is_singleline() {
                         // If not single line, divide in two.
                         changes.push(Change {
-                            span: Span { 
+                            span: Span {
                                 start: Position {
                                     line: change.span.start.line + 1,
-                                    column: 1
+                                    column: 1,
                                 },
-                                end: change.span.end
+                                end: change.span.end,
                             },
-                            new_content: change.new_content
+                            new_content: change.new_content,
                         });
 
                         changes.push(Change {
@@ -674,10 +676,10 @@ impl<'r> Display for Diagnostic<'r> {
                                 start: change.span.start,
                                 end: Position {
                                     line: change.span.start.line,
-                                    column: usize::MAX
-                                }
+                                    column: usize::MAX,
+                                },
                             },
-                            new_content: Vec::new()
+                            new_content: Vec::new(),
                         });
                     } else if let Some(chars) = current_line.as_mut() {
                         // Render the line and fill in `signs`.
@@ -690,11 +692,11 @@ impl<'r> Display for Diagnostic<'r> {
                         // Render the line pre-change
                         if change.span.start.column > 1 {
                             for (i, c) in chars.by_ref() {
-
                                 write!(f, "{c}")?;
                                 signs.push(' ');
 
-                                if i+2 >= change.span.start.column { // next character is too far, break
+                                if i + 2 >= change.span.start.column {
+                                    // next character is too far, break
                                     break;
                                 }
                             }
@@ -703,7 +705,6 @@ impl<'r> Display for Diagnostic<'r> {
                         // Render the deleted span as red.
                         if !change.span.is_empty() {
                             for (i, c) in chars.by_ref() {
-
                                 write!(f, "{}", c.red())?;
                                 signs.push('-');
 
@@ -720,26 +721,18 @@ impl<'r> Display for Diagnostic<'r> {
                             // If it's not the first line of the added content, print a newline and signs
                             if !first {
                                 writeln!(f)?;
-                                write!(
-                                    f,
-                                    "{:indent$} {vertical} ",
-                                    ""
-                                )?;
+                                write!(f, "{:indent$} {vertical} ", "")?;
 
                                 for sign in &signs {
                                     match sign {
                                         '+' => write!(f, "{}", "+".green())?,
                                         '-' => write!(f, "{}", "-".red())?,
-                                        _ => write!(f, " ")?
+                                        _ => write!(f, " ")?,
                                     }
                                 }
 
                                 writeln!(f)?;
-                                write!(
-                                    f,
-                                    "{:indent$} {vertical} ",
-                                    ""
-                                )?;
+                                write!(f, "{:indent$} {vertical} ", "")?;
                             }
 
                             // Print the line
@@ -769,7 +762,7 @@ impl<'r> Display for Diagnostic<'r> {
                                 match sign {
                                     '+' => write!(f, "{}", "+".green())?,
                                     '-' => write!(f, "{}", "-".red())?,
-                                    _ => write!(f, " ")?
+                                    _ => write!(f, " ")?,
                                 }
                             }
                             writeln!(f)?;

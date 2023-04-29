@@ -8,9 +8,9 @@ use crate::span;
 
 use super::{
     token::{
-        Ampersant, Asterisk, At, Colon, Comma, Dollar, Eq, Exclamation, Gt, Gteq, Ident, LBrace,
-        LParen, Let, Lt, Lteq, Minus, NamedIdent, Number, Plus, Position, RBrace, RParen, Semi,
-        Slash, Span, Token, Vertical, Dot,
+        Ampersant, Asterisk, At, Colon, Comma, Dollar, Dot, Eq, Exclamation, Gt, Gteq, Ident,
+        LBrace, LParen, LSquare, Let, Lt, Lteq, Minus, NamedIdent, Number, Plus, Position, RBrace,
+        RParen, RSquare, Semi, Slash, Span, Token, Vertical,
     },
     unroll::{CompileContext, RuleOperatorDefinition},
     ComplexUnit, Error, SimpleUnit,
@@ -332,11 +332,32 @@ pub struct ExprBinop<const ITER: bool> {
     pub rhs: Box<Expression<ITER>>,
 }
 
+/// Floating point or an integer.
+#[derive(Debug, Clone, Copy)]
+pub enum FloatOrInteger {
+    /// Integer version.
+    Integer(i64),
+    /// Floating point.
+    Float(f64),
+}
+
+impl FloatOrInteger {
+    /// Returns float if is float, converts if integer.
+    #[must_use]
+    pub fn to_float(self) -> f64 {
+        match self {
+            #[allow(clippy::cast_precision_loss)]
+            FloatOrInteger::Integer(i) => i as f64,
+            FloatOrInteger::Float(f) => f,
+        }
+    }
+}
+
 /// A parsed raw number.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ExprNumber {
     /// Its value.
-    pub value: f64,
+    pub value: FloatOrInteger,
     /// Its token.
     pub token: Number,
 }
@@ -541,6 +562,15 @@ impl Parse for FlagStatement {
     }
 }
 
+/// A single variable definition. Contains its name and optional display properties
+#[derive(Debug, Clone)]
+pub struct VariableDefinition {
+    /// Name of the variable.
+    pub name: Ident,
+    /// Display properties.
+    pub display_properties: Option<DisplayProperties>,
+}
+
 /// `let <something> = <something else>`.
 /// Defines variables and possibly adds rules to them.
 #[derive(Debug)]
@@ -548,7 +578,7 @@ pub struct LetStatement {
     /// The `let` token.
     pub let_token: Let,
     /// The lhs ident iterator.
-    pub ident: Punctuated<Ident, Comma>,
+    pub ident: Punctuated<VariableDefinition, Comma>,
     /// The `=` token.
     pub eq: Eq,
     /// The rhs expression.
@@ -598,7 +628,7 @@ impl Statement {
 }
 
 /// A utility struct for collections of parsed items with punctuators between them.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Punctuated<T, P> {
     /// The first parsed item.
     pub first: Box<T>,
@@ -730,6 +760,28 @@ impl Parse for RuleStatement {
     }
 }
 
+impl Parse for VariableDefinition {
+    fn get_span(&self) -> Span {
+        self.display_properties.as_ref().map_or_else(
+            || self.name.get_span(),
+            |v| self.name.get_span().join(v.get_span()),
+        )
+    }
+
+    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
+        it: &mut Peekable<I>,
+        context: &CompileContext,
+    ) -> Result<Self, Error> {
+        Ok(Self {
+            name: Ident::parse(it, context)?,
+            display_properties: match it.peek().copied() {
+                Some(Token::LSquare(_)) => Some(DisplayProperties::parse(it, context)?),
+                _ => None,
+            },
+        })
+    }
+}
+
 impl Parse for LetStatement {
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
         it: &mut Peekable<I>,
@@ -779,9 +831,14 @@ impl Parse for ExprNumber {
             // The integral and decimal parts have to be merged into one floating point number.
             #[allow(clippy::cast_precision_loss)]
             Some(Token::Number(num)) => Ok(ExprNumber {
-                value: {
-                    num.integral as f64
-                        + num.decimal as f64 * f64::powi(10.0, -i32::from(num.decimal_places))
+                value: if num.dot.is_some() {
+                    FloatOrInteger::Float(
+                        num.integral as f64
+                            + num.decimal as f64 * f64::powi(10.0, -i32::from(num.decimal_places)),
+                    )
+                } else {
+                    #[allow(clippy::cast_precision_loss, clippy::cast_possible_wrap)]
+                    FloatOrInteger::Integer(num.integral.try_into().unwrap())
                 },
                 token: *num,
             }),
@@ -1105,6 +1162,8 @@ impl Parse for RuleOperator {
 impl_token_parse! {At}
 impl_token_parse! {LBrace}
 impl_token_parse! {RBrace}
+impl_token_parse! {LSquare}
+impl_token_parse! {RSquare}
 impl_token_parse! {Dollar}
 impl_token_parse! {Vertical}
 impl_token_parse! {Semi}
@@ -1288,5 +1347,130 @@ impl Type {
         } else {
             None
         }
+    }
+}
+
+/// A property
+#[derive(Debug, Clone)]
+pub struct Property {
+    /// Property name.
+    pub name: NamedIdent,
+    /// '='
+    pub eq: Eq,
+    /// Property value.
+    pub value: PropertyValue,
+}
+
+impl Parse for Property {
+    fn get_span(&self) -> Span {
+        self.name.span.join(self.value.get_span())
+    }
+
+    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
+        it: &mut Peekable<I>,
+        context: &CompileContext,
+    ) -> Result<Self, Error> {
+        Ok(Self {
+            name: NamedIdent::parse(it, context)?,
+            eq: Eq::parse(it, context)?,
+            value: PropertyValue::parse(it, context)?,
+        })
+    }
+}
+
+/// A property's value
+#[derive(Debug, Clone)]
+pub enum PropertyValue {
+    Number(ExprNumber),
+    Ident(Ident),
+}
+
+impl PropertyValue {
+    /// # Errors
+    /// Causes an error if the value is not properly convertible.
+    pub fn as_bool(&self) -> Result<bool, Error> {
+        match self {
+            PropertyValue::Ident(ident) => match ident {
+                Ident::Named(ident) => match ident.ident.as_str() {
+                    "enabled" | "on" | "true" => Ok(true),
+                    "disabled" | "off" | "false" => Ok(false),
+                    _ => Err(Error::BooleanExpected {
+                        error_span: ident.get_span(),
+                    }),
+                },
+                _ => Err(Error::BooleanExpected {
+                    error_span: ident.get_span(),
+                }),
+            },
+            PropertyValue::Number(num) => match num.value {
+                FloatOrInteger::Integer(1) => Ok(true),
+                FloatOrInteger::Integer(0) => Ok(false),
+                _ => Err(Error::BooleanExpected {
+                    error_span: num.get_span(),
+                }),
+            },
+        }
+    }
+
+    /// # Errors
+    /// Causes an error if the value is not properly convertible
+    pub fn as_string(&self) -> Result<String, Error> {
+        match self {
+            PropertyValue::Ident(ident) => Ok(ident.to_string()),
+            PropertyValue::Number(num) => Err(Error::StringExpected {
+                error_span: num.get_span(),
+            }),
+        }
+    }
+}
+
+impl Parse for PropertyValue {
+    fn get_span(&self) -> Span {
+        match self {
+            Self::Number(n) => n.get_span(),
+            Self::Ident(i) => i.get_span(),
+        }
+    }
+
+    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
+        it: &mut Peekable<I>,
+        context: &CompileContext,
+    ) -> Result<Self, Error> {
+        let peeked = it.peek().copied();
+
+        match peeked {
+            Some(Token::Ident(_)) => Ok(Self::Ident(Ident::parse(it, context)?)),
+            Some(Token::Number(_)) => Ok(Self::Number(ExprNumber::parse(it, context)?)),
+            Some(t) => Err(Error::invalid_token(t.clone())),
+            None => Err(Error::EndOfInput),
+        }
+    }
+}
+
+/// Properties related to displaying things.
+#[derive(Debug, Clone)]
+pub struct DisplayProperties {
+    /// '['
+    pub lsquare: LSquare,
+    /// Properties
+    pub properties: Punctuated<Property, Comma>,
+    /// ']'
+    pub rsquare: RSquare,
+}
+
+impl Parse for DisplayProperties {
+    fn get_span(&self) -> Span {
+        self.lsquare.span.join(self.rsquare.span)
+    }
+
+    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
+        it: &mut Peekable<I>,
+        context: &CompileContext,
+    ) -> Result<Self, Error> {
+        Ok(Self {
+            lsquare: LSquare::parse(it, context)?,
+            properties: Punctuated::parse(it, context)?,
+            rsquare: RSquare::parse(it, context)?,
+        })
     }
 }

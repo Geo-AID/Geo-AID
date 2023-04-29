@@ -1,12 +1,12 @@
 use crate::generator::Complex;
 
-use super::{EvaluationError, expression::Line};
+use super::{expression::Line, EvaluationError};
 
 #[must_use]
 pub fn get_line(p1: Complex, p2: Complex) -> Line {
     Line {
         origin: p1,
-        direction: (p2 - p1).normalize()
+        direction: (p2 - p1).normalize(),
     }
 }
 
@@ -41,11 +41,17 @@ pub fn get_intersection(l_ln: Line, k_ln: Line) -> Result<Complex, EvaluationErr
     println!("{intersection}");
     */
 
-    let Line { origin: a, direction: b } = l_ln;
-    let Line { origin: c, direction: d } = k_ln;
+    let Line {
+        origin: a,
+        direction: b,
+    } = l_ln;
+    let Line {
+        origin: c,
+        direction: d,
+    } = k_ln;
 
     let intersection = a - b * ((a - c) / d).imaginary / (b / d).imaginary;
-    
+
     Ok(intersection)
 }
 
@@ -60,7 +66,7 @@ pub fn get_angle(arm1: Complex, origin: Complex, arm2: Complex) -> f64 {
     let dot_product = arm1_vec.real * arm2_vec.real + arm1_vec.imaginary * arm2_vec.imaginary;
 
     // Get the argument
-    f64::acos(dot_product / (arm1_vec.mangitude()  * arm2_vec.mangitude()))
+    f64::acos(dot_product / (arm1_vec.mangitude() * arm2_vec.mangitude()))
 }
 
 /// Gets the directed angle between two arms and the origin

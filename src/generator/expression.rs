@@ -1,10 +1,18 @@
-use std::{ops::{Add, Mul, AddAssign}, sync::Arc, cell::RefCell};
+use std::{
+    cell::RefCell,
+    ops::{Add, AddAssign, Mul},
+    sync::Arc,
+};
 
 use serde::Serialize;
 
-use self::expr::{PointPointDistance, PointLineDistance, AnglePoint, AngleLine, Literal, FreePoint, LinePoint, LineLineIntersection, SetUnit, Sum, Difference, Product, Quotient, Negation, AngleBisector, Average, PerpendicularThrough, ParallelThrough, Real, PointX, PointY};
+use self::expr::{
+    AngleBisector, AngleLine, AnglePoint, Average, Difference, FreePoint, LineLineIntersection,
+    LinePoint, Literal, Negation, ParallelThrough, PerpendicularThrough, PointLineDistance,
+    PointPointDistance, PointX, PointY, Product, Quotient, Real, SetUnit, Sum,
+};
 
-use super::{Complex, critic::EvaluationArgs, EvaluationError};
+use super::{critic::EvaluationArgs, Complex, EvaluationError};
 
 #[derive(Debug, Clone)]
 pub struct ExprCache {
@@ -63,7 +71,7 @@ impl Mul<f64> for Weights {
     type Output = Weights;
 
     fn mul(self, rhs: f64) -> Self::Output {
-        Weights(self.0.into_iter().map(|v|  v * rhs).collect())
+        Weights(self.0.into_iter().map(|v| v * rhs).collect())
     }
 }
 
@@ -83,15 +91,18 @@ pub struct Expression<T> {
     /// Saved weights
     pub weights: Weights,
     /// Expression kind.
-    pub kind: T
+    pub kind: T,
 }
 
-impl<T: Evaluate + Kind> Expression<T> where T::Output: From<Value> + Into<Value> + Clone {
+impl<T: Evaluate + Kind> Expression<T>
+where
+    T::Output: From<Value> + Into<Value> + Clone,
+{
     #[must_use]
     pub fn new(expr: T, weight: f64) -> Self {
         Self {
             weights: expr.evaluate_weights() * weight,
-            kind: expr
+            kind: expr,
         }
     }
 
@@ -102,7 +113,7 @@ impl<T: Evaluate + Kind> Expression<T> where T::Output: From<Value> + Into<Value
     }
 
     /// Evaluates the expression.
-    /// 
+    ///
     /// # Errors
     /// Any errors related to failure when evaluating.
     pub fn evaluate(self: &Arc<Self>, args: &EvaluationArgs) -> Result<T::Output, EvaluationError> {
@@ -115,7 +126,7 @@ impl<T: Evaluate + Kind> Expression<T> where T::Output: From<Value> + Into<Value
                         return Ok(expr_cache.value.clone().into());
                     }
 
-                    mutptr = Some(expr_cache); 
+                    mutptr = Some(expr_cache);
                 }
             }
         }
@@ -123,17 +134,15 @@ impl<T: Evaluate + Kind> Expression<T> where T::Output: From<Value> + Into<Value
         let v = self.kind.evaluate(args)?;
 
         Ok(match mutptr {
-            Some(cache) => {
-                unsafe {
-                    let cache = &mut *cache;
-                    cache.generation = args.generation;
+            Some(cache) => unsafe {
+                let cache = &mut *cache;
+                cache.generation = args.generation;
 
-                    let cloned = v.clone();
-                    cache.value = v.into();
+                let cloned = v.clone();
+                cache.value = v.into();
 
-                    cloned
-                }
-            }
+                cloned
+            },
             None => v,
         })
     }
@@ -178,16 +187,13 @@ pub struct Line {
     /// Line's origin as a complex number.
     pub origin: Complex,
     /// A normalized direction vector.
-    pub direction: Complex
+    pub direction: Complex,
 }
 
 impl Line {
     #[must_use]
     pub fn new(origin: Complex, direction: Complex) -> Self {
-        Self {
-            origin,
-            direction
-        }
+        Self { origin, direction }
     }
 }
 
@@ -196,7 +202,7 @@ impl Line {
 pub enum Value {
     Point(Complex),
     Line(Line),
-    Scalar(f64)
+    Scalar(f64),
 }
 
 impl Value {
@@ -233,10 +239,7 @@ impl Value {
     /// Creates a line value.
     #[must_use]
     pub fn line(origin: Complex, direction: Complex) -> Self {
-        Self::Line(Line {
-            origin,
-            direction
-        })
+        Self::Line(Line { origin, direction })
     }
 
     #[must_use]
@@ -298,7 +301,7 @@ pub trait Evaluate {
     type Output;
 
     /// Evaluates the thing.
-    /// 
+    ///
     /// # Errors
     /// Any errors related to evaluation.
     fn evaluate(&self, args: &EvaluationArgs) -> Result<Self::Output, EvaluationError>;
@@ -309,18 +312,26 @@ pub trait Evaluate {
 
 /// All possible expressions.
 pub mod expr {
-    use std::{sync::Arc, ops::{AddAssign, Div}};
+    use std::{
+        ops::{AddAssign, Div},
+        sync::Arc,
+    };
 
     use serde::Serialize;
 
-    use crate::{generator::{critic::EvaluationArgs, EvaluationError, geometry, Complex}, script::ComplexUnit};
+    use crate::{
+        generator::{critic::EvaluationArgs, geometry, Complex, EvaluationError},
+        script::ComplexUnit,
+    };
 
-    use super::{Expression, Evaluate, Value, Weights, PointExpr, LineExpr, ScalarExpr, Line, Zero, Kind};
+    use super::{
+        Evaluate, Expression, Kind, Line, LineExpr, PointExpr, ScalarExpr, Value, Weights, Zero,
+    };
 
     #[derive(Debug, Clone, Serialize)]
     pub struct PointPointDistance {
         pub a: Arc<Expression<PointExpr>>,
-        pub b: Arc<Expression<PointExpr>>
+        pub b: Arc<Expression<PointExpr>>,
     }
 
     impl Evaluate for PointPointDistance {
@@ -343,7 +354,7 @@ pub mod expr {
     #[derive(Debug, Clone, Serialize)]
     pub struct PointLineDistance {
         pub point: Arc<Expression<PointExpr>>,
-        pub line: Arc<Expression<LineExpr>>
+        pub line: Arc<Expression<LineExpr>>,
     }
 
     impl Evaluate for PointLineDistance {
@@ -395,7 +406,7 @@ pub mod expr {
     /// An angle defined with 2 lines.
     pub struct AngleLine {
         pub k: Arc<Expression<LineExpr>>,
-        pub l: Arc<Expression<LineExpr>>
+        pub l: Arc<Expression<LineExpr>>,
     }
 
     impl Evaluate for AngleLine {
@@ -420,7 +431,7 @@ pub mod expr {
     #[derive(Debug, Clone, Serialize)]
     /// An angle defined with 2 lines.
     pub struct Literal {
-        pub value: f64
+        pub value: f64,
     }
 
     impl Evaluate for Literal {
@@ -438,7 +449,7 @@ pub mod expr {
     #[derive(Debug, Clone, Serialize)]
     /// A free adjustable point.
     pub struct FreePoint {
-        pub index: usize
+        pub index: usize,
     }
 
     impl Evaluate for FreePoint {
@@ -457,7 +468,7 @@ pub mod expr {
     /// A line defined with two points.
     pub struct LinePoint {
         pub a: Arc<Expression<PointExpr>>,
-        pub b: Arc<Expression<PointExpr>>
+        pub b: Arc<Expression<PointExpr>>,
     }
 
     impl Evaluate for LinePoint {
@@ -468,7 +479,7 @@ pub mod expr {
 
             Ok(Line::new(
                 origin,
-                (self.b.evaluate(args)? - origin).normalize()
+                (self.b.evaluate(args)? - origin).normalize(),
             ))
         }
 
@@ -481,7 +492,7 @@ pub mod expr {
     /// Line-line intersection.
     pub struct LineLineIntersection {
         pub k: Arc<Expression<LineExpr>>,
-        pub l: Arc<Expression<LineExpr>>
+        pub l: Arc<Expression<LineExpr>>,
     }
 
     impl Evaluate for LineLineIntersection {
@@ -503,7 +514,7 @@ pub mod expr {
     /// Changes the scalar's unit.
     pub struct SetUnit {
         pub value: Arc<Expression<ScalarExpr>>,
-        pub unit: ComplexUnit
+        pub unit: ComplexUnit,
     }
 
     impl Evaluate for SetUnit {
@@ -522,7 +533,7 @@ pub mod expr {
     /// a + b.
     pub struct Sum {
         pub a: Arc<Expression<ScalarExpr>>,
-        pub b: Arc<Expression<ScalarExpr>>
+        pub b: Arc<Expression<ScalarExpr>>,
     }
 
     impl Evaluate for Sum {
@@ -544,7 +555,7 @@ pub mod expr {
     /// a - b.
     pub struct Difference {
         pub a: Arc<Expression<ScalarExpr>>,
-        pub b: Arc<Expression<ScalarExpr>>
+        pub b: Arc<Expression<ScalarExpr>>,
     }
 
     impl Evaluate for Difference {
@@ -566,7 +577,7 @@ pub mod expr {
     /// a * b.
     pub struct Product {
         pub a: Arc<Expression<ScalarExpr>>,
-        pub b: Arc<Expression<ScalarExpr>>
+        pub b: Arc<Expression<ScalarExpr>>,
     }
 
     impl Evaluate for Product {
@@ -588,7 +599,7 @@ pub mod expr {
     /// a / b.
     pub struct Quotient {
         pub a: Arc<Expression<ScalarExpr>>,
-        pub b: Arc<Expression<ScalarExpr>>
+        pub b: Arc<Expression<ScalarExpr>>,
     }
 
     impl Evaluate for Quotient {
@@ -609,7 +620,7 @@ pub mod expr {
     #[derive(Debug, Clone, Serialize)]
     /// -v.
     pub struct Negation {
-        pub value: Arc<Expression<ScalarExpr>>
+        pub value: Arc<Expression<ScalarExpr>>,
     }
 
     impl Evaluate for Negation {
@@ -625,7 +636,7 @@ pub mod expr {
             self.value.weights.clone()
         }
     }
-    
+
     #[derive(Debug, Clone, Serialize)]
     /// An angle defined with 3 points.
     pub struct AngleBisector {
@@ -650,10 +661,7 @@ pub mod expr {
             // Get the bisector using the geometric mean.
             let bi_dir = (a * b).sqrt_norm();
 
-            Ok(Line::new(
-                origin,
-                bi_dir
-            ))
+            Ok(Line::new(origin, bi_dir))
         }
 
         fn evaluate_weights(&self) -> Weights {
@@ -664,11 +672,18 @@ pub mod expr {
     #[derive(Debug, Clone, Serialize)]
     /// Gets the average value.
     pub struct Average<T> {
-        pub items: Vec<Arc<Expression<T>>>
+        pub items: Vec<Arc<Expression<T>>>,
     }
 
     impl<T: Evaluate + Kind> Evaluate for Average<T>
-    where T::Output: From<Value> + Into<Value> + Clone + Zero + AddAssign<T::Output> + Div<f64, Output = T::Output> {
+    where
+        T::Output: From<Value>
+            + Into<Value>
+            + Clone
+            + Zero
+            + AddAssign<T::Output>
+            + Div<f64, Output = T::Output>,
+    {
         type Output = T::Output;
 
         fn evaluate(&self, args: &EvaluationArgs) -> Result<Self::Output, EvaluationError> {
@@ -696,7 +711,7 @@ pub mod expr {
     #[derive(Debug, Clone, Serialize)]
     pub struct PerpendicularThrough {
         pub point: Arc<Expression<PointExpr>>,
-        pub line: Arc<Expression<LineExpr>>
+        pub line: Arc<Expression<LineExpr>>,
     }
 
     impl Evaluate for PerpendicularThrough {
@@ -706,7 +721,10 @@ pub mod expr {
             // Evaluate the two points
             let point = self.point.evaluate(args)?;
 
-            Ok(Line::new(point, self.line.evaluate(args)?.direction.mul_i()))
+            Ok(Line::new(
+                point,
+                self.line.evaluate(args)?.direction.mul_i(),
+            ))
         }
 
         fn evaluate_weights(&self) -> Weights {
@@ -717,7 +735,7 @@ pub mod expr {
     #[derive(Debug, Clone, Serialize)]
     pub struct ParallelThrough {
         pub point: Arc<Expression<PointExpr>>,
-        pub line: Arc<Expression<LineExpr>>
+        pub line: Arc<Expression<LineExpr>>,
     }
 
     impl Evaluate for ParallelThrough {
@@ -739,7 +757,7 @@ pub mod expr {
     #[derive(Debug, Clone, Serialize)]
     /// A free adjustable real.
     pub struct Real {
-        pub index: usize
+        pub index: usize,
     }
 
     impl Evaluate for Real {
@@ -757,7 +775,7 @@ pub mod expr {
     #[derive(Debug, Clone, Serialize)]
     /// X coordinate of a point.
     pub struct PointX {
-        pub point: Arc<Expression<PointExpr>>
+        pub point: Arc<Expression<PointExpr>>,
     }
 
     impl Evaluate for PointX {
@@ -775,7 +793,7 @@ pub mod expr {
     #[derive(Debug, Clone, Serialize)]
     /// Y coordinate of a point.
     pub struct PointY {
-        pub point: Arc<Expression<PointExpr>>
+        pub point: Arc<Expression<PointExpr>>,
     }
 
     impl Evaluate for PointY {
@@ -935,7 +953,7 @@ pub enum ScalarExpr {
     /// Y coordinate of a point.
     PointY(PointY),
     /// Average
-    Average(Average<Self>)
+    Average(Average<Self>),
 }
 
 impl Kind for ScalarExpr {
@@ -961,12 +979,10 @@ impl Kind for ScalarExpr {
                 k.collect(exprs);
                 l.collect(exprs);
             }
-            Self::Negation(Negation { value })
-            | Self::SetUnit(SetUnit { value, unit: _ }) => {
+            Self::Negation(Negation { value }) | Self::SetUnit(SetUnit { value, unit: _ }) => {
                 value.collect(exprs);
             }
-            Self::PointY(PointY { point })
-            | Self::PointX(PointX { point }) => {
+            Self::PointY(PointY { point }) | Self::PointX(PointX { point }) => {
                 point.collect(exprs);
             }
             Self::Average(v) => {
@@ -978,19 +994,27 @@ impl Kind for ScalarExpr {
                 point.collect(exprs);
                 line.collect(exprs);
             }
-            Self::Real(_)
-            | Self::Literal(_) => (),
+            Self::Real(_) | Self::Literal(_) => (),
         }
     }
 
     fn is_trivial(&self) -> bool {
         match self {
-            Self::PointPointDistance(_) | Self::PointLineDistance(_) | Self::AnglePoint(_)
-            | Self::AngleLine(_) | Self::Sum(_) | Self::Difference(_) | Self::Product(_)
-            | Self::Quotient(_) | Self::Negation(_) | Self::Average(_) => false,
-            Self::Literal(_) | Self::SetUnit(_) | Self::Real(_)
-            | Self::PointX(_) | Self::PointY(_) => true,
-            
+            Self::PointPointDistance(_)
+            | Self::PointLineDistance(_)
+            | Self::AnglePoint(_)
+            | Self::AngleLine(_)
+            | Self::Sum(_)
+            | Self::Difference(_)
+            | Self::Product(_)
+            | Self::Quotient(_)
+            | Self::Negation(_)
+            | Self::Average(_) => false,
+            Self::Literal(_)
+            | Self::SetUnit(_)
+            | Self::Real(_)
+            | Self::PointX(_)
+            | Self::PointY(_) => true,
         }
     }
 }
@@ -1014,7 +1038,7 @@ impl Evaluate for ScalarExpr {
             Self::Real(v) => v.evaluate(args),
             Self::PointX(v) => v.evaluate(args),
             Self::PointY(v) => v.evaluate(args),
-            Self::Average(v) => v.evaluate(args)
+            Self::Average(v) => v.evaluate(args),
         }
     }
 
@@ -1034,7 +1058,7 @@ impl Evaluate for ScalarExpr {
             Self::Real(v) => v.evaluate_weights(),
             Self::PointX(v) => v.evaluate_weights(),
             Self::PointY(v) => v.evaluate_weights(),
-            Self::Average(v) => v.evaluate_weights()
+            Self::Average(v) => v.evaluate_weights(),
         }
     }
 }
@@ -1047,7 +1071,7 @@ pub enum AnyExpr {
     /// A point.
     Point(PointExpr),
     /// A line
-    Line(LineExpr)
+    Line(LineExpr),
 }
 
 impl Kind for AnyExpr {
