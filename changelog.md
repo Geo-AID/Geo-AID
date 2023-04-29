@@ -31,3 +31,4 @@
 - Error messages now can suggest code changes.
 - An overhaul of expressions with proper value caching and precomputed weights.
 - Improved angle support.
+- Added segment support.
