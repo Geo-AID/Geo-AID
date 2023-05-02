@@ -77,6 +77,9 @@ pub fn draw(target: &Path, canvas_size: (usize, usize), output: &Output) {
                 )
                 .unwrap();
             }
+            Rendered::Ray(ray) => {
+                file.write_all(format!("\nray defined with two points: first point - ({}, {}) second point - ({}. {})", ray.points.0.real, ray.points.1.imaginary, ray.draw_point.real, ray.draw_point.imaginary).as_bytes()).unwrap();
+            }
         }
     }
 }

@@ -115,6 +115,20 @@ pub fn draw(target: &Path, canvas_size: (usize, usize), output: &Output) {
                     pos1.real, pos1.imaginary, pos2.real, pos2.imaginary,
                 );
             }
+            Rendered::Ray(ray) => {
+                let pos1 = ray.points.0 * scale;
+                let pos2 = ray.points.1 * scale;
+                content += &format!(
+                    r#"
+                    \begin{{scope}}
+                    \coordinate (A) at ({}, {});
+                    \coordinate (B) at ({}, {});
+                    \tkzDrawSegment[thin](A,B)
+                    \end{{scope}}
+                "#,
+                    pos1.real, pos1.imaginary, pos2.real, pos2.imaginary
+                );
+            }
         }
     }
     content += "\\end{tikzpicture} \\end{document}";

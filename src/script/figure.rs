@@ -18,7 +18,7 @@ pub struct Figure {
     /// Segments to be displayed
     pub segments: Vec<(Point, Point)>,
     /// Rays to be displayed
-    pub rays: Vec<(Arc<Expression<PointExpr>>, Arc<Expression<PointExpr>>)>,
+    pub rays: Vec<(Point, Point)>,
     /// The canvas size.
     pub canvas_size: (usize, usize),
 }

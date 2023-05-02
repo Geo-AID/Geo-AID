@@ -228,6 +228,8 @@ pub struct RenderedRay {
     pub label: String,
     /// Points defining the ray
     pub points: (Complex, Complex),
+    /// Second drawing point
+    pub draw_point: Complex,
 }
 
 /// Function getting the points defining the angle from the Expression defining it.
@@ -418,6 +420,49 @@ fn segments(figure: &Figure, offset: Complex, scale: f64, size: Complex, args: &
     blueprint_segments
 }
 
+fn rays(
+    figure: &Figure,
+    offset: Complex,
+    scale: f64,
+    size: Complex,
+    args: &EvaluationArgs,
+) -> Vec<RenderedRay> {
+    let mut blueprint_rays = Vec::new();
+    for ray in &figure.rays {
+        let ray_a = ray.0.evaluate(args).unwrap();
+        let ray_b = ray.1.evaluate(args).unwrap();
+        let mut line = get_line(ray_a, ray_b);
+        line.origin = transform(offset, scale, size, line.origin);
+        let intercepts = get_line_ends(figure, line);
+        
+        let vec1 = (ray_a - ray_b).normalize();
+        let vec2 = (intercepts.1 - ray_a).normalize();
+        let second_point;
+
+        if vec1.real < 0.5 && vec1.real > -0.5 {
+            if (vec1.imaginary - vec2.imaginary).abs() < 1e-4 {
+                second_point = intercepts.1;
+            } else {
+                second_point = intercepts.0;
+            }
+        } else if (vec1.real - vec2.real).abs() < 1e-4 {
+            second_point = intercepts.1;
+        } else {
+            second_point = intercepts.0;
+        }
+
+        blueprint_rays.push(RenderedRay {
+            label: String::new(),
+            points: (
+                transform(offset, scale, size, ray_a),
+                second_point,
+            ),
+            draw_point: transform(offset, scale, size, ray_b),
+        });
+    }
+
+    blueprint_rays
+}
 /// Takes the figure and rendered points and attempts to design a figure that can then be rendered in chosen format.
 ///
 /// # Panics
@@ -516,6 +561,8 @@ pub fn project(
 
     let  blueprint_segments = segments(figure, offset, scale, size005, &args);
 
+    let blueprint_rays = rays(figure, offset, scale, size005, &args);
+
     Ok(Output {
         map: iden,
         vec_rendered: blueprint_points
@@ -524,6 +571,7 @@ pub fn project(
             .chain(blueprint_lines.into_iter().map(Rendered::Line))
             .chain(blueprint_angles.into_iter().map(Rendered::Angle))
             .chain(blueprint_segments.into_iter().map(Rendered::Segment))
+            .chain(blueprint_rays.into_iter().map(Rendered::Ray))
             .collect(),
     })
 }
