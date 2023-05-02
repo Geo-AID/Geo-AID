@@ -53,16 +53,29 @@ pub fn draw(target: &Path, canvas_size: (usize, usize), output: &Output) {
                 let no_arcs = String::from("l"); // Requires a change later! It has to be based on info from the script
                 match &angle.expr.kind {
                     ScalarExpr::AnglePoint(AnglePoint { arm1, origin, arm2 }) => {
-                        file.write_all(format!("\nangle defined with 3 points: points with x and y coordinates: first point - {}, origin - {}, second point - {}. Number of arcs: {no_arcs}",
+                        file.write_all(format!("\nangle defined with 3 points: points with x and y coordinates: point1 - {}, origin - {}, point2 - {}. Number of arcs: {no_arcs}",
                         get_point_name(arm1, output, p_1), get_point_name(origin, output, p_origin), get_point_name(arm2, output, p_2)).as_bytes()).unwrap();
                     }
                     ScalarExpr::AngleLine(_) => {
-                        file.write_all(format!("\nangle defined with 2 lines: coordinates of the points defining the angle: first point - ({}, {}), origin - ({}, {}), second point - ({}, {})", 
+                        file.write_all(format!("\nangle defined with 2 lines: coordinates of the points defining the angle: point1 - ({}, {}), origin - ({}, {}), point2 - ({}, {})", 
                             p_1.real, p_1. imaginary, p_origin.real, p_origin.imaginary, p_2.real, p_2.imaginary
                         ).as_bytes()).unwrap();
                     }
                     _ => unreachable!(),
                 }
+            }
+            Rendered::Segment(segment) => {
+                file.write_all(
+                    format!(
+                        "\nsegment defined by two points: point1 - ({:.3}, {:.3}), point2 - ({:.3}, {:.3})",
+                        segment.points.0.real,
+                        segment.points.1.real,
+                        segment.points.0.imaginary,
+                        segment.points.1.imaginary
+                    )
+                    .as_bytes(),
+                )
+                .unwrap();
             }
         }
     }

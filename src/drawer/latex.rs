@@ -103,6 +103,18 @@ pub fn draw(target: &Path, canvas_size: (usize, usize), output: &Output) {
                     _ => unreachable!(),
                 }
             }
+            Rendered::Segment(segment) => {
+                let pos1 = segment.points.0 * scale;
+                let pos2 = segment.points.1 * scale;
+                content += &format!(
+                    r#"
+                    \coordinate (A) at ({}, {});
+                    \coordinate (B) at ({}, {});
+                    \tkzDrawSegment[thin](A,B)
+                    "#,
+                    pos1.real, pos1.imaginary, pos2.real, pos2.imaginary,
+                );
+            }
         }
     }
     content += "\\end{tikzpicture} \\end{document}";

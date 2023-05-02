@@ -67,6 +67,15 @@ pub fn draw(target: &Path, canvas_size: (usize, usize), output: &Output) {
                     -angle.angle_value.sin() * 45.0
                 );
             }
+            Rendered::Segment(segment) => {
+                content += &format!(
+                    "<line stroke=\"black\" x1=\"{}\" x2=\"{}\" y1=\"{}\" y2=\"{}\"/>",
+                    segment.points.0.real,
+                    segment.points.1.real,
+                    segment.points.0.imaginary,
+                    segment.points.1.imaginary
+                );
+            }
         }
     }
     content += "</svg>";
