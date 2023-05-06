@@ -48,22 +48,17 @@ pub fn draw(target: &Path, canvas_size: (usize, usize), output: &Output) {
                 let position = point.position * scale;
                 content+=&format!(
                     "\\coordinate [label=left:${}$] ({}) at ({}, {}); \\fill[black] ({}) circle (1pt);",
-                    point.label, point.uuid, position.real,
-                    position.imaginary, point.uuid
+                    point.label, point.uuid, position.real, position.imaginary, point.uuid
                 );
             }
             Rendered::Line(line) => {
                 let pos1 = line.points.0 * scale;
                 let pos2 = line.points.1 * scale;
                 content += &format!(
-                    "\\draw ({},{}) -- ({},{});",
-                    pos1.real, pos1.imaginary, pos2.real, pos2.imaginary
+                    "\\draw ({},{}) -- ({},{});", pos1.real, pos1.imaginary, pos2.real, pos2.imaginary
                 );
             }
             Rendered::Angle(angle) => {
-                let p1 = angle.points.0;
-                let p_origin = angle.points.1;
-                let p2 = angle.points.2;
                 let no_arcs = String::from("l"); // Requires a change later! It has to be based on info from the script
                 match &angle.expr.kind {
                     ScalarExpr::AnglePoint(AnglePoint { arm1, origin, arm2 }) => {
@@ -76,9 +71,9 @@ pub fn draw(target: &Path, canvas_size: (usize, usize), output: &Output) {
                             \tkzMarkAngle[size = 0.5,mark = none,arc={no_arcs},mkcolor = black](A,B,C)
                             \end{{scope}}
                             "#,
-                            get_point_name(arm1, output, p1, scale),
-                            get_point_name(origin, output, p_origin, scale),
-                            get_point_name(arm2, output, p2, scale),
+                            get_point_name(arm1, output, angle.points.0, scale),
+                            get_point_name(origin, output, angle.points.1, scale),
+                            get_point_name(arm2, output, angle.points.2, scale),
                         );
                     }
                     // There are hard coded values in \coordinate, it is intentional, every point has it label marked by Rendered::Point sequence above
@@ -92,12 +87,12 @@ pub fn draw(target: &Path, canvas_size: (usize, usize), output: &Output) {
                             \tkzMarkAngle[size = 2,mark = none,arc={no_arcs},mkcolor = black](A,B,C)
                             \end{{scope}}
                         "#,
-                            p1.real,
-                            p1.imaginary,
-                            p_origin.real,
-                            p_origin.imaginary,
-                            p2.real,
-                            p2.imaginary
+                            angle.points.0.real,
+                            angle.points.0.imaginary,
+                            angle.points.1.real,
+                            angle.points.1.imaginary,
+                            angle.points.2.real,
+                            angle.points.2.imaginary
                         );
                     }
                     _ => unreachable!(),
@@ -108,9 +103,11 @@ pub fn draw(target: &Path, canvas_size: (usize, usize), output: &Output) {
                 let pos2 = segment.points.1 * scale;
                 content += &format!(
                     r#"
+                    \begin{{scope}}
                     \coordinate (A) at ({}, {});
                     \coordinate (B) at ({}, {});
                     \tkzDrawSegment[thin](A,B)
+                    \end{{scope}}
                     "#,
                     pos1.real, pos1.imaginary, pos2.real, pos2.imaginary,
                 );
