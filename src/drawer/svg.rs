@@ -76,6 +76,15 @@ pub fn draw(target: &Path, canvas_size: (usize, usize), output: &Output) {
                     segment.points.1.imaginary
                 );
             }
+            Rendered::Ray(ray) => {
+                content += &format!(
+                    "<line stroke=\"black\" x1=\"{}\" x2=\"{}\" y1=\"{}\" y2=\"{}\"/>",
+                    ray.points.0.real,
+                    ray.points.1.real,
+                    ray.points.0.imaginary,
+                    ray.points.1.imaginary
+                );
+            }
         }
     }
     content += "</svg>";

@@ -7,6 +7,7 @@ use uuid::Uuid;
 
 use crate::generator::expression::expr::{AngleLine, AnglePoint};
 use crate::generator::expression::{LineExpr, PointExpr, ScalarExpr};
+use crate::generator::geometry::get_line;
 use crate::{
     generator::{
         critic::EvaluationArgs, expression::Expression, expression::Line, geometry, Adjustable,
@@ -33,18 +34,23 @@ mod tests {
 
     use super::project;
 
-/// Utility function used in fn `test_project`(), it makes the code below less messy and more readable.
-fn create_point_expr(index: usize) -> Arc<Expression<PointExpr>> {
-    Arc::new(Expression::new(
-        PointExpr::Free(FreePoint { index }),
-        1.0,
-    ))
-}
+    /// Utility function used in fn `test_project`(), it makes the code below less messy and more readable.
+    fn create_point_expr(index: usize) -> Arc<Expression<PointExpr>> {
+        Arc::new(Expression::new(PointExpr::Free(FreePoint { index }), 1.0))
+    }
 
-#[test]
-fn test_project() {
-    let x: u8 = 1;
-    let gen_points: [(Adjustable, f64); 3] = [
+    fn create_point_meta(character: char, primes: u8, index: Option<u16>) -> PointMeta {
+        PointMeta {
+            letter: character,
+            primes,
+            index,
+        }
+    }
+
+    #[test]
+    fn test_project() {
+        let x: u8 = 1;
+        let gen_points: [(Adjustable, f64); 3] = [
             (
                 Adjustable::Point(Complex {
                     real: 0.3463,
@@ -70,30 +76,9 @@ fn test_project() {
 
         let fig = Figure {
             points: vec![
-                (
-                    create_point_expr(0),
-                    PointMeta {
-                        letter: 'A',
-                        primes: 0,
-                        index: None,
-                    },
-                ),
-                (
-                    create_point_expr(1),
-                    PointMeta {
-                        letter: 'B',
-                        primes: 0,
-                        index: None,
-                    },
-                ),
-                (
-                    create_point_expr(2),
-                    PointMeta {
-                        letter: 'C',
-                        primes: 0,
-                        index: None,
-                    },
-                ),
+                (create_point_expr(0), create_point_meta('A', 0, None)),
+                (create_point_expr(1), create_point_meta('B', 0, None)),
+                (create_point_expr(2), create_point_meta('C', 0, None)),
             ],
             lines: vec![
                 Arc::new(Expression::new(
@@ -124,15 +109,10 @@ fn test_project() {
             )],
 
             segments: vec![
-                (
-                    create_point_expr(0),
-                    create_point_expr(1),
-                ),
-                (
-                    create_point_expr(1),
-                    create_point_expr(2),
-                ),
+                (create_point_expr(0), create_point_expr(1)),
+                (create_point_expr(1), create_point_expr(2)),
             ],
+            rays: vec![(create_point_expr(0), create_point_expr(1))],
             canvas_size: (200, 200),
         };
 
@@ -158,6 +138,7 @@ pub enum Rendered {
     Line(RenderedLine),
     Angle(RenderedAngle),
     Segment(RenderedSegment),
+    Ray(RenderedRay),
 }
 
 /// The final product passed to the drawers.
@@ -202,13 +183,22 @@ pub struct RenderedAngle {
     // Value of the angle (who'd have guessed)
     pub angle_value: f64,
 }
-
 #[derive(Serialize)]
 pub struct RenderedSegment {
     /// Label of the segment
     pub label: String,
     /// Points defining the segment
     pub points: (Complex, Complex),
+}
+
+#[derive(Serialize)]
+pub struct RenderedRay {
+    /// Ray's label
+    pub label: String,
+    /// Points defining the ray
+    pub points: (Complex, Complex),
+    /// Second drawing point
+    pub draw_point: Complex,
 }
 
 /// Function getting the points defining the angle from the Expression defining it.
@@ -338,10 +328,16 @@ fn transform(offset: Complex, scale: f64, size: Complex, pt: Complex) -> Complex
 }
 
 /// Function that outputs the vector contaning the lines.
-/// /// 
-/// # Panics 
+/// ///
+/// # Panics
 /// It shouldn't panic.
-fn lines(figure: &Figure, offset: Complex, scale: f64, size: Complex, args: &EvaluationArgs) -> Vec<RenderedLine> {
+fn lines(
+    figure: &Figure,
+    offset: Complex,
+    scale: f64,
+    size: Complex,
+    args: &EvaluationArgs,
+) -> Vec<RenderedLine> {
     let mut blueprint_lines = Vec::new();
     for ln in &figure.lines {
         let mut ln_c = ln.evaluate(args).unwrap();
@@ -357,10 +353,16 @@ fn lines(figure: &Figure, offset: Complex, scale: f64, size: Complex, args: &Eva
 }
 
 /// Function that outputs the vector containing the angles.
-/// /// 
-/// # Panics 
+/// 
+/// # Panics
 /// It shouldn't panic.
-fn angles(figure: &Figure, offset: Complex, scale: f64, size: Complex, args: &EvaluationArgs) -> Vec<RenderedAngle> {
+fn angles(
+    figure: &Figure,
+    offset: Complex,
+    scale: f64,
+    size: Complex,
+    args: &EvaluationArgs,
+) -> Vec<RenderedAngle> {
     let mut blueprint_angles = Vec::new();
     for ang in &figure.angles {
         let angle_points = get_angle_points(&ang.0, args);
@@ -380,10 +382,16 @@ fn angles(figure: &Figure, offset: Complex, scale: f64, size: Complex, args: &Ev
 }
 
 /// Function that outputs the vector contaning the segments.
-/// 
-/// # Panics 
+///
+/// # Panics
 /// It shouldn't panic.
-fn segments(figure: &Figure, offset: Complex, scale: f64, size: Complex, args: &EvaluationArgs) -> Vec<RenderedSegment> {
+fn segments(
+    figure: &Figure,
+    offset: Complex,
+    scale: f64,
+    size: Complex,
+    args: &EvaluationArgs,
+) -> Vec<RenderedSegment> {
     let mut blueprint_segments = Vec::new();
     for segment in &figure.segments {
         let seg1 = segment.0.evaluate(args).unwrap();
@@ -393,12 +401,52 @@ fn segments(figure: &Figure, offset: Complex, scale: f64, size: Complex, args: &
             points: (
                 transform(offset, scale, size, seg1),
                 transform(offset, scale, size, seg2),
-            )
+            ),
         });
     }
     blueprint_segments
 }
 
+fn rays(
+    figure: &Figure,
+    offset: Complex,
+    scale: f64,
+    size: Complex,
+    args: &EvaluationArgs,
+) -> Vec<RenderedRay> {
+    let mut blueprint_rays = Vec::new();
+    for ray in &figure.rays {
+        let ray_a = ray.0.evaluate(args).unwrap();
+        let ray_b = ray.1.evaluate(args).unwrap();
+        let mut line = get_line(ray_a, ray_b);
+        line.origin = transform(offset, scale, size, line.origin);
+        let intercepts = get_line_ends(figure, line);
+
+        let vec1 = (ray_a - ray_b).normalize();
+        let vec2 = (intercepts.1 - ray_a).normalize();
+        let second_point;
+
+        if vec1.real < 0.5 && vec1.real > -0.5 {
+            if (vec1.imaginary - vec2.imaginary).abs() < 1e-4 {
+                second_point = intercepts.1;
+            } else {
+                second_point = intercepts.0;
+            }
+        } else if (vec1.real - vec2.real).abs() < 1e-4 {
+            second_point = intercepts.1;
+        } else {
+            second_point = intercepts.0;
+        }
+
+        blueprint_rays.push(RenderedRay {
+            label: String::new(),
+            points: (transform(offset, scale, size, ray_a), second_point),
+            draw_point: transform(offset, scale, size, ray_b),
+        });
+    }
+
+    blueprint_rays
+}
 /// Takes the figure and rendered points and attempts to design a figure that can then be rendered in chosen format.
 ///
 /// # Panics
@@ -495,7 +543,9 @@ pub fn project(
 
     let blueprint_angles = angles(figure, offset, scale, size005, &args);
 
-    let  blueprint_segments = segments(figure, offset, scale, size005, &args);
+    let blueprint_segments = segments(figure, offset, scale, size005, &args);
+
+    let blueprint_rays = rays(figure, offset, scale, size005, &args);
 
     Ok(Output {
         map: iden,
@@ -505,6 +555,7 @@ pub fn project(
             .chain(blueprint_lines.into_iter().map(Rendered::Line))
             .chain(blueprint_angles.into_iter().map(Rendered::Angle))
             .chain(blueprint_segments.into_iter().map(Rendered::Segment))
+            .chain(blueprint_rays.into_iter().map(Rendered::Ray))
             .collect(),
     })
 }
