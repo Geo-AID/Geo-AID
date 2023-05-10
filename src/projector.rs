@@ -353,7 +353,7 @@ fn lines(
 }
 
 /// Function that outputs the vector containing the angles.
-/// ///
+/// 
 /// # Panics
 /// It shouldn't panic.
 fn angles(
