@@ -489,26 +489,26 @@ pub mod unit {
 
 pub mod ty {
     use super::{
-        parser::{PredefinedType, Type},
+        parser::{Type, Type},
         ComplexUnit, SimpleUnit,
     };
 
-    pub const DISTANCE: Type = Type::Predefined(PredefinedType::Scalar(Some(ComplexUnit::new(
+    pub const DISTANCE: Type = Type::Predefined(Type::Scalar(Some(ComplexUnit::new(
         SimpleUnit::Distance,
     ))));
-    pub const POINT: Type = Type::Predefined(PredefinedType::Point);
-    pub const ANGLE: Type = Type::Predefined(PredefinedType::Scalar(Some(ComplexUnit::new(
+    pub const POINT: Type = Type::Predefined(Type::Point);
+    pub const ANGLE: Type = Type::Predefined(Type::Scalar(Some(ComplexUnit::new(
         SimpleUnit::Angle,
     ))));
-    pub const LINE: Type = Type::Predefined(PredefinedType::Line);
-    pub const SCALAR: Type = Type::Predefined(PredefinedType::Scalar(Some(ComplexUnit::new(
+    pub const LINE: Type = Type::Predefined(Type::Line);
+    pub const SCALAR: Type = Type::Predefined(Type::Scalar(Some(ComplexUnit::new(
         SimpleUnit::Scalar,
     ))));
-    pub const SCALAR_UNKNOWN: Type = Type::Predefined(PredefinedType::Scalar(None));
+    pub const SCALAR_UNKNOWN: Type = Type::Predefined(Type::Scalar(None));
 
     #[must_use]
     pub const fn collection(length: usize) -> Type {
-        Type::Predefined(PredefinedType::PointCollection(length))
+        Type::Predefined(Type::PointCollection(length))
     }
 }
 

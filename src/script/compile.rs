@@ -19,12 +19,12 @@ use crate::{
 
 use super::{
     figure::Figure,
-    parser::PredefinedType,
+    parser::Type,
     token::{Position, Span},
     ty,
     unroll::{
         self, Flag, PointMeta, UnrolledExpression, UnrolledExpressionData, UnrolledRule,
-        UnrolledRuleKind, Variable, VariableMeta,
+        UnrolledRuleKind, Variable, VariableMeta, CompileContext,
     },
     Criteria, CriteriaKind, Error, HashableRc, SimpleUnit, Weighed,
 };
@@ -584,30 +584,14 @@ fn read_flags(flags: &HashMap<String, Flag>) -> Result<Flags, Error> {
     })
 }
 
-/// Compiles the given script.
-///
+/// Get the distance variable.
+/// 
 /// # Errors
-/// Exact descriptions of errors are in `ScriptError` documentation.
-///
+/// Returns an error related to the distances flag.
+/// 
 /// # Panics
-/// Never
-pub fn compile(
-    input: &str,
-    canvas_size: (usize, usize),
-) -> Result<
-    (
-        Vec<Criteria>,
-        Figure,
-        Vec<AdjustableTemplate>,
-        generator::Flags,
-    ),
-    Error,
-> {
-    // First, we have to unroll the script.
-    let (unrolled, mut context) = unroll::unroll(input)?;
-
-    let flags = read_flags(&context.flags)?;
-
+/// Should never panic.
+pub fn get_dst_variable(context: &mut CompileContext, unrolled: &[UnrolledRule], flags: &Flags) -> Result<Option<Rc<Variable>>, Error> {
     // Check if there's a distance literal in variables or rules.
     // In variables
     let are_literals_present = {
@@ -630,7 +614,7 @@ pub fn compile(
             })
     };
 
-    let dst_var = if let Some(at) = are_literals_present {
+    Ok(if let Some(at) = are_literals_present {
         match flags.distance_literals {
             DistanceLiterals::Adjust => {
                 // To handle adjusted distance, we create a new adjustable variable that will pretend to be the scale.
@@ -675,7 +659,34 @@ pub fn compile(
         }
     } else {
         None
-    };
+    })
+}
+
+/// Compiles the given script.
+///
+/// # Errors
+/// Exact descriptions of errors are in `ScriptError` documentation.
+///
+/// # Panics
+/// Never
+pub fn compile(
+    input: &str,
+    canvas_size: (usize, usize),
+) -> Result<
+    (
+        Vec<Criteria>,
+        Figure,
+        Vec<AdjustableTemplate>,
+        generator::Flags,
+    ),
+    Error,
+> {
+    // First, we have to unroll the script.
+    let (unrolled, mut context) = unroll::unroll(input)?;
+
+    let flags = read_flags(&context.flags)?;
+
+    let dst_var = get_dst_variable(&mut context, &unrolled, &flags)?;
 
     // Print variables (debugging)
     // for var in context.variables.values() {
@@ -694,7 +705,7 @@ pub fn compile(
     // We precompile all variables.
     for (_, var) in context.variables {
         match var.definition.ty.as_predefined().unwrap() {
-            PredefinedType::Point => {
+            Type::Point => {
                 compile_variable::<PointExpr>(
                     &var,
                     &mut variables,
@@ -703,7 +714,7 @@ pub fn compile(
                     &dst_var,
                 );
             }
-            PredefinedType::Line => {
+            Type::Line => {
                 compile_variable::<LineExpr>(
                     &var,
                     &mut variables,
@@ -712,7 +723,7 @@ pub fn compile(
                     &dst_var,
                 );
             }
-            PredefinedType::Scalar(_) => {
+            Type::Scalar(_) => {
                 compile_variable::<ScalarExpr>(
                     &var,
                     &mut variables,
@@ -721,7 +732,7 @@ pub fn compile(
                     &dst_var,
                 );
             }
-            PredefinedType::PointCollection(_) => (),
+            Type::PointCollection(_) => (),
         }
     }
 
@@ -772,7 +783,7 @@ pub fn compile(
             .map(|(key, def)| {
                 (
                     def,
-                    key.meta.clone().unwrap_or(PointMeta {
+                    key.meta.unwrap_or(PointMeta {
                         letter: 'P',
                         primes: 0,
                         index: None,

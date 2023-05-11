@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use crate::{
     script::{
-        parser::{PredefinedType, Type},
+        parser::{Type, Type},
         token::{Position, Span},
         unroll::{
             CompileContext, Function, FunctionOverload, UnrolledExpression, UnrolledExpressionData,
@@ -16,19 +16,19 @@ use crate::{
 fn angle_function_pc3() -> UnrolledExpression {
     UnrolledExpression {
         weight: 1.0,
-        ty: Type::Predefined(PredefinedType::Scalar(Some(ComplexUnit::new(
+        ty: Type::Predefined(Type::Scalar(Some(ComplexUnit::new(
             SimpleUnit::Angle,
         )))),
         span: span!(0, 0, 0, 0),
         data: Rc::new(UnrolledExpressionData::ThreePointAngle(
             UnrolledExpression {
                 weight: 1.0,
-                ty: Type::Predefined(PredefinedType::Point),
+                ty: Type::Predefined(Type::Point),
                 span: span!(0, 0, 0, 0),
                 data: Rc::new(UnrolledExpressionData::IndexCollection(
                     UnrolledExpression {
                         weight: 1.0,
-                        ty: Type::Predefined(PredefinedType::Point),
+                        ty: Type::Predefined(Type::Point),
                         span: span!(0, 0, 0, 0),
                         data: Rc::new(UnrolledExpressionData::Parameter(0)),
                     },
@@ -37,12 +37,12 @@ fn angle_function_pc3() -> UnrolledExpression {
             },
             UnrolledExpression {
                 weight: 1.0,
-                ty: Type::Predefined(PredefinedType::Point),
+                ty: Type::Predefined(Type::Point),
                 span: span!(0, 0, 0, 0),
                 data: Rc::new(UnrolledExpressionData::IndexCollection(
                     UnrolledExpression {
                         weight: 1.0,
-                        ty: Type::Predefined(PredefinedType::Point),
+                        ty: Type::Predefined(Type::Point),
                         span: span!(0, 0, 0, 0),
                         data: Rc::new(UnrolledExpressionData::Parameter(0)),
                     },
@@ -51,12 +51,12 @@ fn angle_function_pc3() -> UnrolledExpression {
             },
             UnrolledExpression {
                 weight: 1.0,
-                ty: Type::Predefined(PredefinedType::Point),
+                ty: Type::Predefined(Type::Point),
                 span: span!(0, 0, 0, 0),
                 data: Rc::new(UnrolledExpressionData::IndexCollection(
                     UnrolledExpression {
                         weight: 1.0,
-                        ty: Type::Predefined(PredefinedType::Point),
+                        ty: Type::Predefined(Type::Point),
                         span: span!(0, 0, 0, 0),
                         data: Rc::new(UnrolledExpressionData::Parameter(0)),
                     },
@@ -71,26 +71,26 @@ fn angle_function_pc3() -> UnrolledExpression {
 fn angle_function_point_point_point() -> UnrolledExpression {
     UnrolledExpression {
         weight: 1.0,
-        ty: Type::Predefined(PredefinedType::Scalar(Some(ComplexUnit::new(
+        ty: Type::Predefined(Type::Scalar(Some(ComplexUnit::new(
             SimpleUnit::Angle,
         )))),
         span: span!(0, 0, 0, 0),
         data: Rc::new(UnrolledExpressionData::ThreePointAngle(
             UnrolledExpression {
                 weight: 1.0,
-                ty: Type::Predefined(PredefinedType::Point),
+                ty: Type::Predefined(Type::Point),
                 span: span!(0, 0, 0, 0),
                 data: Rc::new(UnrolledExpressionData::Parameter(0)),
             },
             UnrolledExpression {
                 weight: 1.0,
-                ty: Type::Predefined(PredefinedType::Point),
+                ty: Type::Predefined(Type::Point),
                 span: span!(0, 0, 0, 0),
                 data: Rc::new(UnrolledExpressionData::Parameter(1)),
             },
             UnrolledExpression {
                 weight: 1.0,
-                ty: Type::Predefined(PredefinedType::Point),
+                ty: Type::Predefined(Type::Point),
                 span: span!(0, 0, 0, 0),
                 data: Rc::new(UnrolledExpressionData::Parameter(2)),
             },
@@ -102,20 +102,20 @@ fn angle_function_point_point_point() -> UnrolledExpression {
 fn angle_function_line_line() -> UnrolledExpression {
     UnrolledExpression {
         weight: 1.0,
-        ty: Type::Predefined(PredefinedType::Scalar(Some(ComplexUnit::new(
+        ty: Type::Predefined(Type::Scalar(Some(ComplexUnit::new(
             SimpleUnit::Angle,
         )))),
         span: span!(0, 0, 0, 0),
         data: Rc::new(UnrolledExpressionData::TwoLineAngle(
             UnrolledExpression {
                 weight: 1.0,
-                ty: Type::Predefined(PredefinedType::Line),
+                ty: Type::Predefined(Type::Line),
                 span: span!(0, 0, 0, 0),
                 data: Rc::new(UnrolledExpressionData::Parameter(0)),
             },
             UnrolledExpression {
                 weight: 1.0,
-                ty: Type::Predefined(PredefinedType::Line),
+                ty: Type::Predefined(Type::Line),
                 span: span!(0, 0, 0, 0),
                 data: Rc::new(UnrolledExpressionData::Parameter(1)),
             },
@@ -130,36 +130,36 @@ pub fn register_angle_function(context: &mut CompileContext) {
             name: String::from("angle"),
             overloads: vec![
                 FunctionOverload {
-                    returned_type: Type::Predefined(PredefinedType::Scalar(Some(
+                    returned_type: Type::Predefined(Type::Scalar(Some(
                         ComplexUnit::new(SimpleUnit::Angle),
                     ))),
                     definition_span: None,
                     definition: angle_function_pc3(),
-                    params: vec![Type::Predefined(PredefinedType::PointCollection(3))],
+                    params: vec![Type::Predefined(Type::PointCollection(3))],
                     param_group: None,
                 },
                 FunctionOverload {
-                    returned_type: Type::Predefined(PredefinedType::Scalar(Some(
+                    returned_type: Type::Predefined(Type::Scalar(Some(
                         ComplexUnit::new(SimpleUnit::Angle),
                     ))),
                     definition_span: None,
                     definition: angle_function_point_point_point(),
                     params: vec![
-                        Type::Predefined(PredefinedType::Point),
-                        Type::Predefined(PredefinedType::Point),
-                        Type::Predefined(PredefinedType::Point),
+                        Type::Predefined(Type::Point),
+                        Type::Predefined(Type::Point),
+                        Type::Predefined(Type::Point),
                     ],
                     param_group: None,
                 },
                 FunctionOverload {
-                    returned_type: Type::Predefined(PredefinedType::Scalar(Some(
+                    returned_type: Type::Predefined(Type::Scalar(Some(
                         ComplexUnit::new(SimpleUnit::Angle),
                     ))),
                     definition_span: None,
                     definition: angle_function_line_line(),
                     params: vec![
-                        Type::Predefined(PredefinedType::Line),
-                        Type::Predefined(PredefinedType::Line),
+                        Type::Predefined(Type::Line),
+                        Type::Predefined(Type::Line),
                     ],
                     param_group: None,
                 },

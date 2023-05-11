@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use crate::{
     script::{
-        parser::{PredefinedType, Type},
+        parser::{Type, Type},
         token::{Position, Span},
         unroll::{
             CompileContext, Function, FunctionOverload, UnrolledExpression, UnrolledExpressionData,
@@ -16,7 +16,7 @@ use crate::{
 fn dst_function_dst_convertible() -> UnrolledExpression {
     UnrolledExpression {
         weight: 1.0,
-        ty: Type::Predefined(PredefinedType::Scalar(Some(ComplexUnit::new(
+        ty: Type::Predefined(Type::Scalar(Some(ComplexUnit::new(
             SimpleUnit::Distance,
         )))),
         span: span!(0, 0, 0, 0),
@@ -28,14 +28,14 @@ fn dst_function_dst_convertible() -> UnrolledExpression {
 fn dst_function_scalar() -> UnrolledExpression {
     UnrolledExpression {
         weight: 1.0,
-        ty: Type::Predefined(PredefinedType::Scalar(Some(ComplexUnit::new(
+        ty: Type::Predefined(Type::Scalar(Some(ComplexUnit::new(
             SimpleUnit::Distance,
         )))),
         span: span!(0, 0, 0, 0),
         data: Rc::new(UnrolledExpressionData::SetUnit(
             UnrolledExpression {
                 weight: 1.0,
-                ty: Type::Predefined(PredefinedType::Scalar(Some(ComplexUnit::new(
+                ty: Type::Predefined(Type::Scalar(Some(ComplexUnit::new(
                     SimpleUnit::Scalar,
                 )))),
                 span: span!(0, 0, 0, 0),
@@ -50,20 +50,20 @@ fn dst_function_scalar() -> UnrolledExpression {
 fn dst_function_point_point() -> UnrolledExpression {
     UnrolledExpression {
         weight: 1.0,
-        ty: Type::Predefined(PredefinedType::Scalar(Some(ComplexUnit::new(
+        ty: Type::Predefined(Type::Scalar(Some(ComplexUnit::new(
             SimpleUnit::Distance,
         )))),
         span: span!(0, 0, 0, 0),
         data: Rc::new(UnrolledExpressionData::PointPointDistance(
             UnrolledExpression {
                 weight: 1.0,
-                ty: Type::Predefined(PredefinedType::Point),
+                ty: Type::Predefined(Type::Point),
                 span: span!(0, 0, 0, 0),
                 data: Rc::new(UnrolledExpressionData::Parameter(0)),
             },
             UnrolledExpression {
                 weight: 1.0,
-                ty: Type::Predefined(PredefinedType::Point),
+                ty: Type::Predefined(Type::Point),
                 span: span!(0, 0, 0, 0),
                 data: Rc::new(UnrolledExpressionData::Parameter(1)),
             },
@@ -75,20 +75,20 @@ fn dst_function_point_point() -> UnrolledExpression {
 fn dst_function_point_line() -> UnrolledExpression {
     UnrolledExpression {
         weight: 1.0,
-        ty: Type::Predefined(PredefinedType::Scalar(Some(ComplexUnit::new(
+        ty: Type::Predefined(Type::Scalar(Some(ComplexUnit::new(
             SimpleUnit::Distance,
         )))),
         span: span!(0, 0, 0, 0),
         data: Rc::new(UnrolledExpressionData::PointLineDistance(
             UnrolledExpression {
                 weight: 1.0,
-                ty: Type::Predefined(PredefinedType::Point),
+                ty: Type::Predefined(Type::Point),
                 span: span!(0, 0, 0, 0),
                 data: Rc::new(UnrolledExpressionData::Parameter(0)),
             },
             UnrolledExpression {
                 weight: 1.0,
-                ty: Type::Predefined(PredefinedType::Line),
+                ty: Type::Predefined(Type::Line),
                 span: span!(0, 0, 0, 0),
                 data: Rc::new(UnrolledExpressionData::Parameter(1)),
             },
@@ -100,20 +100,20 @@ fn dst_function_point_line() -> UnrolledExpression {
 fn dst_function_line_point() -> UnrolledExpression {
     UnrolledExpression {
         weight: 1.0,
-        ty: Type::Predefined(PredefinedType::Scalar(Some(ComplexUnit::new(
+        ty: Type::Predefined(Type::Scalar(Some(ComplexUnit::new(
             SimpleUnit::Distance,
         )))),
         span: span!(0, 0, 0, 0),
         data: Rc::new(UnrolledExpressionData::PointLineDistance(
             UnrolledExpression {
                 weight: 1.0,
-                ty: Type::Predefined(PredefinedType::Point),
+                ty: Type::Predefined(Type::Point),
                 span: span!(0, 0, 0, 0),
                 data: Rc::new(UnrolledExpressionData::Parameter(1)),
             },
             UnrolledExpression {
                 weight: 1.0,
-                ty: Type::Predefined(PredefinedType::Line),
+                ty: Type::Predefined(Type::Line),
                 span: span!(0, 0, 0, 0),
                 data: Rc::new(UnrolledExpressionData::Parameter(0)),
             },
@@ -128,60 +128,60 @@ pub fn register_dst_function(context: &mut CompileContext) {
             name: String::from("dst"),
             overloads: vec![
                 FunctionOverload {
-                    returned_type: Type::Predefined(PredefinedType::Scalar(Some(
+                    returned_type: Type::Predefined(Type::Scalar(Some(
                         ComplexUnit::new(SimpleUnit::Distance),
                     ))),
                     definition_span: None,
                     definition: dst_function_dst_convertible(),
-                    params: vec![Type::Predefined(PredefinedType::Scalar(Some(
+                    params: vec![Type::Predefined(Type::Scalar(Some(
                         ComplexUnit::new(SimpleUnit::Distance),
                     )))],
                     param_group: None,
                 },
                 FunctionOverload {
-                    returned_type: Type::Predefined(PredefinedType::Scalar(Some(
+                    returned_type: Type::Predefined(Type::Scalar(Some(
                         ComplexUnit::new(SimpleUnit::Distance),
                     ))),
                     definition_span: None,
                     definition: dst_function_scalar(),
-                    params: vec![Type::Predefined(PredefinedType::Scalar(Some(
+                    params: vec![Type::Predefined(Type::Scalar(Some(
                         ComplexUnit::new(SimpleUnit::Scalar),
                     )))],
                     param_group: None,
                 },
                 FunctionOverload {
-                    returned_type: Type::Predefined(PredefinedType::Scalar(Some(
+                    returned_type: Type::Predefined(Type::Scalar(Some(
                         ComplexUnit::new(SimpleUnit::Distance),
                     ))),
                     definition_span: None,
                     definition: dst_function_point_point(),
                     params: vec![
-                        Type::Predefined(PredefinedType::Point),
-                        Type::Predefined(PredefinedType::Point),
+                        Type::Predefined(Type::Point),
+                        Type::Predefined(Type::Point),
                     ],
                     param_group: None,
                 },
                 FunctionOverload {
-                    returned_type: Type::Predefined(PredefinedType::Scalar(Some(
+                    returned_type: Type::Predefined(Type::Scalar(Some(
                         ComplexUnit::new(SimpleUnit::Distance),
                     ))),
                     definition_span: None,
                     definition: dst_function_point_line(),
                     params: vec![
-                        Type::Predefined(PredefinedType::Point),
-                        Type::Predefined(PredefinedType::Line),
+                        Type::Predefined(Type::Point),
+                        Type::Predefined(Type::Line),
                     ],
                     param_group: None,
                 },
                 FunctionOverload {
-                    returned_type: Type::Predefined(PredefinedType::Scalar(Some(
+                    returned_type: Type::Predefined(Type::Scalar(Some(
                         ComplexUnit::new(SimpleUnit::Distance),
                     ))),
                     definition_span: None,
                     definition: dst_function_line_point(),
                     params: vec![
-                        Type::Predefined(PredefinedType::Line),
-                        Type::Predefined(PredefinedType::Point),
+                        Type::Predefined(Type::Line),
+                        Type::Predefined(Type::Point),
                     ],
                     param_group: None,
                 },

@@ -8,3 +8,4 @@ pub mod parallel;
 pub mod perpendicular;
 pub mod point;
 pub mod radians;
+pub mod circle;

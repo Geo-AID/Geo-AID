@@ -9,7 +9,7 @@ use serde::Serialize;
 use self::expr::{
     AngleBisector, AngleLine, AnglePoint, Average, Difference, FreePoint, LineLineIntersection,
     LinePoint, Literal, Negation, ParallelThrough, PerpendicularThrough, PointLineDistance,
-    PointPointDistance, PointX, PointY, Product, Quotient, Real, SetUnit, Sum,
+    PointPointDistance, PointX, PointY, Product, Quotient, Real, SetUnit, Sum, CenterRadius,
 };
 
 use super::{critic::EvaluationArgs, Complex, EvaluationError};
@@ -197,12 +197,22 @@ impl Line {
     }
 }
 
+/// Represents a circle in a 2D euclidean space.
+#[derive(Debug, Clone, Copy)]
+pub struct Circle {
+    /// Circle's center.
+    pub center: Complex,
+    /// Its radius
+    pub radius: f64,
+}
+
 /// An evaluated value.
 #[derive(Debug, Clone)]
 pub enum Value {
     Point(Complex),
     Line(Line),
     Scalar(f64),
+    Circle(Circle)
 }
 
 impl Value {
@@ -325,7 +335,7 @@ pub mod expr {
     };
 
     use super::{
-        Evaluate, Expression, Kind, Line, LineExpr, PointExpr, ScalarExpr, Value, Weights, Zero,
+        Evaluate, Expression, Kind, Line, LineExpr, PointExpr, ScalarExpr, Value, Weights, Zero, Circle,
     };
 
     #[derive(Debug, Clone, Serialize)]
@@ -807,6 +817,28 @@ pub mod expr {
             self.point.weights.clone()
         }
     }
+
+    /// The center and the radius of the circle.
+    #[derive(Debug, Clone, Serialize)]
+    pub struct CenterRadius {
+        pub center: Arc<Expression<PointExpr>>,
+        pub radius: Arc<Expression<ScalarExpr>>
+    }
+
+    impl Evaluate for CenterRadius {
+        type Output = Circle;
+
+        fn evaluate(&self, args: &EvaluationArgs) -> Result<Self::Output, EvaluationError> {
+            Ok(Circle {
+                center: self.center.evaluate(args)?,
+                radius: self.radius.evaluate(args)?
+            })
+        }
+
+        fn evaluate_weights(&self) -> Weights {
+            self.center.weights.clone() + &self.radius.weights
+        }
+    }
 }
 
 /// Defines a point expression.
@@ -818,6 +850,29 @@ pub enum PointExpr {
     Average(Average<PointExpr>),
     /// The point where two lines cross.
     LineLineIntersection(LineLineIntersection),
+}
+
+/// Defines a circle expression.
+#[derive(Debug, Clone, Serialize)]
+pub enum CircleExpr {
+    /// A circle given the center and the radius.
+    CenterRadius(CenterRadius)
+}
+
+impl Evaluate for CircleExpr {
+    type Output = Circle;
+
+    fn evaluate(&self, args: &EvaluationArgs) -> Result<Self::Output, EvaluationError> {
+        match self {
+            Self::CenterRadius(v) => v.evaluate(args)
+        }
+    }
+
+    fn evaluate_weights(&self) -> Weights {
+        match self {
+            Self::CenterRadius(v) => v.evaluate_weights()
+        }
+    }
 }
 
 impl Evaluate for PointExpr {

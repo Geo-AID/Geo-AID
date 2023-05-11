@@ -2,7 +2,7 @@ use std::{f64::consts::PI, rc::Rc};
 
 use crate::{
     script::{
-        parser::{PredefinedType, Type},
+        parser::{Type, Type},
         token::{Position, Span},
         unroll::{
             CompileContext, Function, FunctionOverload, UnrolledExpression, UnrolledExpressionData,
@@ -16,21 +16,21 @@ use crate::{
 fn degrees_function_scalar() -> UnrolledExpression {
     UnrolledExpression {
         weight: 1.0,
-        ty: Type::Predefined(PredefinedType::Scalar(Some(ComplexUnit::new(
+        ty: Type::Predefined(Type::Scalar(Some(ComplexUnit::new(
             SimpleUnit::Angle,
         )))),
         span: span!(0, 0, 0, 0),
         data: Rc::new(UnrolledExpressionData::SetUnit(
             UnrolledExpression {
                 weight: 1.0,
-                ty: Type::Predefined(PredefinedType::Scalar(Some(ComplexUnit::new(
+                ty: Type::Predefined(Type::Scalar(Some(ComplexUnit::new(
                     SimpleUnit::Scalar,
                 )))),
                 span: span!(0, 0, 0, 0),
                 data: Rc::new(UnrolledExpressionData::Multiply(
                     UnrolledExpression {
                         weight: 1.0,
-                        ty: Type::Predefined(PredefinedType::Scalar(Some(ComplexUnit::new(
+                        ty: Type::Predefined(Type::Scalar(Some(ComplexUnit::new(
                             SimpleUnit::Scalar,
                         )))),
                         span: span!(0, 0, 0, 0),
@@ -38,7 +38,7 @@ fn degrees_function_scalar() -> UnrolledExpression {
                     },
                     UnrolledExpression {
                         weight: 1.0,
-                        ty: Type::Predefined(PredefinedType::Scalar(Some(ComplexUnit::new(
+                        ty: Type::Predefined(Type::Scalar(Some(ComplexUnit::new(
                             SimpleUnit::Scalar,
                         )))),
                         span: span!(0, 0, 0, 0),
@@ -57,12 +57,12 @@ pub fn register_degrees_function(context: &mut CompileContext) {
         Function {
             name: String::from("degrees"),
             overloads: vec![FunctionOverload {
-                returned_type: Type::Predefined(PredefinedType::Scalar(Some(ComplexUnit::new(
+                returned_type: Type::Predefined(Type::Scalar(Some(ComplexUnit::new(
                     SimpleUnit::Angle,
                 )))),
                 definition_span: None,
                 definition: degrees_function_scalar(),
-                params: vec![Type::Predefined(PredefinedType::Scalar(Some(
+                params: vec![Type::Predefined(Type::Scalar(Some(
                     ComplexUnit::new(SimpleUnit::Scalar),
                 )))],
                 param_group: None,
