@@ -2,12 +2,11 @@ use std::rc::Rc;
 
 use crate::{
     script::{
-        parser::{Type, Type},
         token::{Position, Span},
         unroll::{
             CompileContext, Function, FunctionOverload, UnrolledExpression, UnrolledExpressionData,
         },
-        ComplexUnit, SimpleUnit,
+        ty, unit,
     },
     span,
 };
@@ -16,9 +15,7 @@ use crate::{
 fn dst_function_dst_convertible() -> UnrolledExpression {
     UnrolledExpression {
         weight: 1.0,
-        ty: Type::Predefined(Type::Scalar(Some(ComplexUnit::new(
-            SimpleUnit::Distance,
-        )))),
+        ty: ty::DISTANCE,
         span: span!(0, 0, 0, 0),
         data: Rc::new(UnrolledExpressionData::Parameter(0)), // All the params are going to be converted before this is called.
     }
@@ -28,20 +25,16 @@ fn dst_function_dst_convertible() -> UnrolledExpression {
 fn dst_function_scalar() -> UnrolledExpression {
     UnrolledExpression {
         weight: 1.0,
-        ty: Type::Predefined(Type::Scalar(Some(ComplexUnit::new(
-            SimpleUnit::Distance,
-        )))),
+        ty: ty::DISTANCE,
         span: span!(0, 0, 0, 0),
         data: Rc::new(UnrolledExpressionData::SetUnit(
             UnrolledExpression {
                 weight: 1.0,
-                ty: Type::Predefined(Type::Scalar(Some(ComplexUnit::new(
-                    SimpleUnit::Scalar,
-                )))),
+                ty: ty::DISTANCE,
                 span: span!(0, 0, 0, 0),
                 data: Rc::new(UnrolledExpressionData::Parameter(0)),
             },
-            ComplexUnit::new(SimpleUnit::Distance),
+            unit::DISTANCE,
         )),
     }
 }
@@ -50,20 +43,18 @@ fn dst_function_scalar() -> UnrolledExpression {
 fn dst_function_point_point() -> UnrolledExpression {
     UnrolledExpression {
         weight: 1.0,
-        ty: Type::Predefined(Type::Scalar(Some(ComplexUnit::new(
-            SimpleUnit::Distance,
-        )))),
+        ty: ty::DISTANCE,
         span: span!(0, 0, 0, 0),
         data: Rc::new(UnrolledExpressionData::PointPointDistance(
             UnrolledExpression {
                 weight: 1.0,
-                ty: Type::Predefined(Type::Point),
+                ty: ty::POINT,
                 span: span!(0, 0, 0, 0),
                 data: Rc::new(UnrolledExpressionData::Parameter(0)),
             },
             UnrolledExpression {
                 weight: 1.0,
-                ty: Type::Predefined(Type::Point),
+                ty: ty::POINT,
                 span: span!(0, 0, 0, 0),
                 data: Rc::new(UnrolledExpressionData::Parameter(1)),
             },
@@ -75,20 +66,18 @@ fn dst_function_point_point() -> UnrolledExpression {
 fn dst_function_point_line() -> UnrolledExpression {
     UnrolledExpression {
         weight: 1.0,
-        ty: Type::Predefined(Type::Scalar(Some(ComplexUnit::new(
-            SimpleUnit::Distance,
-        )))),
+        ty: ty::DISTANCE,
         span: span!(0, 0, 0, 0),
         data: Rc::new(UnrolledExpressionData::PointLineDistance(
             UnrolledExpression {
                 weight: 1.0,
-                ty: Type::Predefined(Type::Point),
+                ty: ty::POINT,
                 span: span!(0, 0, 0, 0),
                 data: Rc::new(UnrolledExpressionData::Parameter(0)),
             },
             UnrolledExpression {
                 weight: 1.0,
-                ty: Type::Predefined(Type::Line),
+                ty: ty::LINE,
                 span: span!(0, 0, 0, 0),
                 data: Rc::new(UnrolledExpressionData::Parameter(1)),
             },
@@ -100,20 +89,18 @@ fn dst_function_point_line() -> UnrolledExpression {
 fn dst_function_line_point() -> UnrolledExpression {
     UnrolledExpression {
         weight: 1.0,
-        ty: Type::Predefined(Type::Scalar(Some(ComplexUnit::new(
-            SimpleUnit::Distance,
-        )))),
+        ty: ty::DISTANCE,
         span: span!(0, 0, 0, 0),
         data: Rc::new(UnrolledExpressionData::PointLineDistance(
             UnrolledExpression {
                 weight: 1.0,
-                ty: Type::Predefined(Type::Point),
+                ty: ty::POINT,
                 span: span!(0, 0, 0, 0),
                 data: Rc::new(UnrolledExpressionData::Parameter(1)),
             },
             UnrolledExpression {
                 weight: 1.0,
-                ty: Type::Predefined(Type::Line),
+                ty: ty::LINE,
                 span: span!(0, 0, 0, 0),
                 data: Rc::new(UnrolledExpressionData::Parameter(0)),
             },
@@ -128,60 +115,46 @@ pub fn register_dst_function(context: &mut CompileContext) {
             name: String::from("dst"),
             overloads: vec![
                 FunctionOverload {
-                    returned_type: Type::Predefined(Type::Scalar(Some(
-                        ComplexUnit::new(SimpleUnit::Distance),
-                    ))),
+                    returned_type: ty::DISTANCE,
                     definition_span: None,
                     definition: dst_function_dst_convertible(),
-                    params: vec![Type::Predefined(Type::Scalar(Some(
-                        ComplexUnit::new(SimpleUnit::Distance),
-                    )))],
+                    params: vec![ty::DISTANCE],
                     param_group: None,
                 },
                 FunctionOverload {
-                    returned_type: Type::Predefined(Type::Scalar(Some(
-                        ComplexUnit::new(SimpleUnit::Distance),
-                    ))),
+                    returned_type: ty::DISTANCE,
                     definition_span: None,
                     definition: dst_function_scalar(),
-                    params: vec![Type::Predefined(Type::Scalar(Some(
-                        ComplexUnit::new(SimpleUnit::Scalar),
-                    )))],
+                    params: vec![ty::DISTANCE],
                     param_group: None,
                 },
                 FunctionOverload {
-                    returned_type: Type::Predefined(Type::Scalar(Some(
-                        ComplexUnit::new(SimpleUnit::Distance),
-                    ))),
+                    returned_type: ty::DISTANCE,
                     definition_span: None,
                     definition: dst_function_point_point(),
                     params: vec![
-                        Type::Predefined(Type::Point),
-                        Type::Predefined(Type::Point),
+                        ty::POINT,
+                        ty::POINT,
                     ],
                     param_group: None,
                 },
                 FunctionOverload {
-                    returned_type: Type::Predefined(Type::Scalar(Some(
-                        ComplexUnit::new(SimpleUnit::Distance),
-                    ))),
+                    returned_type: ty::DISTANCE,
                     definition_span: None,
                     definition: dst_function_point_line(),
                     params: vec![
-                        Type::Predefined(Type::Point),
-                        Type::Predefined(Type::Line),
+                        ty::POINT,
+                        ty::LINE,
                     ],
                     param_group: None,
                 },
                 FunctionOverload {
-                    returned_type: Type::Predefined(Type::Scalar(Some(
-                        ComplexUnit::new(SimpleUnit::Distance),
-                    ))),
+                    returned_type: ty::DISTANCE,
                     definition_span: None,
                     definition: dst_function_line_point(),
                     params: vec![
-                        Type::Predefined(Type::Line),
-                        Type::Predefined(Type::Point),
+                        ty::LINE,
+                        ty::POINT,
                     ],
                     param_group: None,
                 },

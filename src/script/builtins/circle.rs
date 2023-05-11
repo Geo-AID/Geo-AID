@@ -2,7 +2,6 @@ use std::rc::Rc;
 
 use crate::{
     script::{
-        parser::{Type, Type},
         token::{Position, Span},
         unroll::{
             CompileContext, Function, FunctionOverload, UnrolledExpression, UnrolledExpressionData,
@@ -15,7 +14,7 @@ use crate::{
 fn circle_function() -> UnrolledExpression {
     UnrolledExpression {
         weight: 1.0,
-        ty: Type::Predefined(Type::Circle),
+        ty: ty::CIRCLE,
         data: Rc::new(UnrolledExpressionData::Circle(
             UnrolledExpression {
                 data: Rc::new(UnrolledExpressionData::Parameter(0)),
@@ -41,7 +40,7 @@ pub fn register_circle_function(context: &mut CompileContext) {
             name: String::from("Circle"),
             overloads: vec![FunctionOverload {
                 params: Vec::new(),
-                returned_type: Type::Predefined(Type::Circle),
+                returned_type: ty::CIRCLE,
                 definition_span: None,
                 definition: circle_function(),
                 param_group: None,

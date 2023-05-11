@@ -2,12 +2,11 @@ use std::rc::Rc;
 
 use crate::{
     script::{
-        parser::{Type, Type},
         token::{Position, Span},
         unroll::{
             CompileContext, Function, FunctionOverload, UnrolledExpression, UnrolledExpressionData,
         },
-        ComplexUnit, SimpleUnit,
+        ty, unit,
     },
     span,
 };
@@ -16,20 +15,16 @@ use crate::{
 fn radians_function_scalar() -> UnrolledExpression {
     UnrolledExpression {
         weight: 1.0,
-        ty: Type::Predefined(Type::Scalar(Some(ComplexUnit::new(
-            SimpleUnit::Angle,
-        )))),
+        ty: ty::ANGLE,
         span: span!(0, 0, 0, 0),
         data: Rc::new(UnrolledExpressionData::SetUnit(
             UnrolledExpression {
                 weight: 1.0,
-                ty: Type::Predefined(Type::Scalar(Some(ComplexUnit::new(
-                    SimpleUnit::Scalar,
-                )))),
+                ty: ty::SCALAR,
                 span: span!(0, 0, 0, 0),
                 data: Rc::new(UnrolledExpressionData::Parameter(0)),
             },
-            ComplexUnit::new(SimpleUnit::Angle),
+            unit::ANGLE,
         )),
     }
 }
@@ -40,14 +35,10 @@ pub fn register_radians_function(context: &mut CompileContext) {
         Function {
             name: String::from("radians"),
             overloads: vec![FunctionOverload {
-                returned_type: Type::Predefined(Type::Scalar(Some(ComplexUnit::new(
-                    SimpleUnit::Angle,
-                )))),
+                returned_type: ty::ANGLE,
                 definition_span: None,
                 definition: radians_function_scalar(),
-                params: vec![Type::Predefined(Type::Scalar(Some(
-                    ComplexUnit::new(SimpleUnit::Scalar),
-                )))],
+                params: vec![ty::SCALAR],
                 param_group: None,
             }],
         },

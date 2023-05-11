@@ -268,6 +268,14 @@ impl Value {
     pub fn is_point(&self) -> bool {
         matches!(self, Self::Point(..))
     }
+
+    pub fn as_circle(&self) -> Option<&Circle> {
+        if let Self::Circle(v) = self {
+            Some(v)
+        } else {
+            None
+        }
+    }
 }
 
 impl From<f64> for Value {
@@ -303,6 +311,18 @@ impl From<Line> for Value {
 impl From<Value> for Line {
     fn from(value: Value) -> Self {
         value.as_line().copied().unwrap()
+    }
+}
+
+impl From<Circle> for Value {
+    fn from(value: Circle) -> Self {
+        Self::Circle(value)
+    }
+}
+
+impl From<Value> for Circle {
+    fn from(value: Value) -> Self {
+        value.as_circle().copied().unwrap()
     }
 }
 

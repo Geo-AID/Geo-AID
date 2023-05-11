@@ -8,9 +8,9 @@ use crate::{
                 AngleBisector, AngleLine, AnglePoint, Average, Difference, FreePoint,
                 LineLineIntersection, LinePoint, Literal, Negation, ParallelThrough,
                 PerpendicularThrough, PointLineDistance, PointPointDistance, PointX, PointY,
-                Product, Quotient, Real, SetUnit, Sum,
+                Product, Quotient, Real, SetUnit, Sum, CenterRadius,
             },
-            AnyExpr, Expression, LineExpr, PointExpr, ScalarExpr, Weights,
+            AnyExpr, Expression, LineExpr, PointExpr, ScalarExpr, Weights, CircleExpr,
         },
         AdjustableTemplate, DistanceLiterals, Flags, Optimizations,
     },
@@ -44,6 +44,7 @@ struct ExpressionRecord {
     points: HashMap<HashableRc<UnrolledExpressionData>, Arc<Expression<PointExpr>>>,
     lines: HashMap<HashableRc<UnrolledExpressionData>, Arc<Expression<LineExpr>>>,
     scalars: HashMap<HashableRc<UnrolledExpressionData>, Arc<Expression<ScalarExpr>>>,
+    circles: HashMap<HashableRc<UnrolledExpressionData>, Arc<Expression<CircleExpr>>>
 }
 
 #[derive(Debug, Default)]
@@ -281,8 +282,39 @@ impl Compile for Expression<LineExpr> {
     }
 }
 
+impl Compile for Expression<CircleExpr> {
+    fn compile(
+            expr: &UnrolledExpression,
+            variables: &mut VariableRecord,
+            expressions: &mut ExpressionRecord,
+            template: &mut Vec<AdjustableTemplate>,
+            dst_var: &Option<Rc<Variable>>,
+        ) -> Arc<Self> {
+        // First we have to check if this expression has been compiled already.
+        let key = HashableRc::new(Rc::clone(&expr.data));
+
+        if let Some(v) = expressions.circles.get(&key) {
+            // If so, we return it.
+            return Arc::clone(v);
+        }
+
+        let compiled = match expr.data.as_ref() {
+            UnrolledExpressionData::Circle(center, radius) => Arc::new(Expression::new(
+                CircleExpr::CenterRadius(CenterRadius {
+                    center: Expression::compile(center, variables, expressions, template, dst_var),
+                    radius: Expression::compile(radius, variables, expressions, template, dst_var)
+                }),
+                1.0
+            ))
+        };
+
+        // We insert for memory.
+        expressions.circles.insert(key, Arc::clone(&compiled));
+        compiled
+    }
+}
+
 impl Compile for Expression<ScalarExpr> {
-    #[allow(clippy::too_many_lines)]
     fn compile(
         expr: &UnrolledExpression,
         variables: &mut VariableRecord,
@@ -325,8 +357,6 @@ impl Compile for Expression<ScalarExpr> {
                                     data: expr.data.clone(),
                                 },
                                 expr.ty
-                                    .as_predefined()
-                                    .unwrap()
                                     .as_scalar()
                                     .unwrap()
                                     .as_ref()
@@ -356,7 +386,7 @@ impl Compile for Expression<ScalarExpr> {
                         &fix_distance(
                             expr.clone(),
                             unit[SimpleUnit::Distance as usize]
-                                - match expr.ty.as_predefined().unwrap().as_scalar().unwrap() {
+                                - match expr.ty.as_scalar().unwrap() {
                                     Some(unit) => unit[SimpleUnit::Distance as usize],
                                     None => 0,
                                 },

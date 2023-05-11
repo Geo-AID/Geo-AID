@@ -13,7 +13,7 @@ use super::{
         RParen, RSquare, Semi, Slash, Span, Token, Vertical,
     },
     unroll::{CompileContext, RuleOperatorDefinition},
-    ComplexUnit, Error, SimpleUnit,
+    Error, unit, ComplexUnit,
 };
 
 macro_rules! impl_token_parse {
@@ -50,13 +50,12 @@ impl UnaryOperator {
     pub fn get_returned(&self, param: &Type) -> Type {
         match self {
             UnaryOperator::Neg(_) => match param {
-                Type::Predefined(pre) => match pre {
-                    Type::Point
-                    | Type::Line
-                    | Type::PointCollection(_) => Type::Undefined,
-                    t @ Type::Scalar(_) => Type::Predefined(t.clone()),
-                },
-                _ => Type::Undefined,
+                Type::Point
+                | Type::Line
+                | Type::Circle
+                | Type::Undefined
+                | Type::PointCollection(_) => Type::Undefined,
+                t @ Type::Scalar(_) => t.clone(),
             },
         }
     }
@@ -1244,7 +1243,9 @@ pub enum Type {
     /// A point collection.
     PointCollection(usize),
     /// A circle
-    Circle
+    Circle,
+    /// Undefinede type = bad
+    Undefined
 }
 
 impl Type {
@@ -1274,7 +1275,8 @@ impl Display for Type {
                 None => write!(f, "Scalar (no unit)"),
             },
             Self::PointCollection(l) => write!(f, "Point collection ({l})"),
-            Self::Circle => write!(f, "Circle")
+            Self::Circle => write!(f, "Circle"),
+            Type::Undefined => write!(f, "undefined")
         }
     }
 }
@@ -1293,7 +1295,7 @@ impl Type {
             Type::Line => matches!(into, Type::Line),
             // A scalar with a defined unit can only be cast into another scalar with the same unit.
             Type::Scalar(Some(unit1)) => {
-                if let Type::Predefined(Type::Scalar(Some(unit2))) = into {
+                if let Type::Scalar(Some(unit2)) = into {
                     unit1 == unit2
                 } else {
                     false
@@ -1301,24 +1303,22 @@ impl Type {
             }
             // A scalar with no defined unit can be cast into any other scalar, except angle.
             Type::Scalar(None) => match into {
-                Type::Predefined(Type::Scalar(unit)) => match unit {
+                Type::Scalar(unit) => match unit {
                     Some(unit) => unit.0[3] == 0, // no angle
                     None => true,
                 },
                 _ => false,
             },
             Type::PointCollection(l) => match into {
-                Type::Predefined(pre) => match pre {
-                    Type::Point => *l == 1,
-                    Type::Line => *l == 2,
-                    Type::Scalar(Some(unit)) => {
-                        unit == &ComplexUnit::new(SimpleUnit::Distance) && *l == 2
-                    }
-                    Type::Scalar(None) => false,
-                    Type::PointCollection(v) => v == l,
-                },
-                _ => false,
+                Type::Point => *l == 1,
+                Type::Line | Type::Scalar(Some(unit::DISTANCE)) => {
+                    *l == 2
+                }
+                Type::PointCollection(v) => v == l,
+                _ => false
             },
+            Type::Circle => matches!(into, Type::Circle),
+            Type::Undefined => false
         }
     }
 }
