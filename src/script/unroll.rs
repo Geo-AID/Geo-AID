@@ -785,60 +785,6 @@ impl Display for UnrolledExpressionData {
     }
 }
 
-impl UnrolledExpressionData {
-    #[must_use]
-    pub fn has_distance_literal(&self, self_span: Span) -> Option<Span> {
-        match self {
-            UnrolledExpressionData::VariableAccess(_)
-            | UnrolledExpressionData::Number(_)
-            | UnrolledExpressionData::Parameter(_)
-            | UnrolledExpressionData::UnrollParameterGroup(_)
-            | UnrolledExpressionData::FreePoint
-            | UnrolledExpressionData::PointPointDistance(_, _)
-            | UnrolledExpressionData::PointLineDistance(_, _)
-            | UnrolledExpressionData::FreeReal => None,
-            UnrolledExpressionData::PointCollection(v) | UnrolledExpressionData::Average(v) => {
-                for expr in v {
-                    if let Some(sp) = expr.has_distance_literal() {
-                        return Some(sp);
-                    }
-                }
-
-                None
-            }
-            UnrolledExpressionData::Boxed(v)
-            | UnrolledExpressionData::IndexCollection(v, _)
-            | UnrolledExpressionData::Negate(v) => v.has_distance_literal(),
-            UnrolledExpressionData::SetUnit(v, u) => {
-                if let Some(sp) = v.has_distance_literal() {
-                    Some(sp)
-                } else if u.0[SimpleUnit::Distance as usize] != 0 {
-                    Some(self_span)
-                } else {
-                    None
-                }
-            }
-            UnrolledExpressionData::Add(v1, v2)
-            | UnrolledExpressionData::Circle(v1, v2)
-            | UnrolledExpressionData::LineFromPoints(v1, v2)
-            | UnrolledExpressionData::ParallelThrough(v1, v2)
-            | UnrolledExpressionData::PerpendicularThrough(v1, v2)
-            | UnrolledExpressionData::LineLineIntersection(v1, v2)
-            | UnrolledExpressionData::TwoLineAngle(v1, v2)
-            | UnrolledExpressionData::Subtract(v1, v2)
-            | UnrolledExpressionData::Multiply(v1, v2)
-            | UnrolledExpressionData::Divide(v1, v2) => v1
-                .has_distance_literal()
-                .or_else(|| v2.has_distance_literal()),
-            UnrolledExpressionData::ThreePointAngle(v1, v2, v3)
-            | UnrolledExpressionData::AngleBisector(v1, v2, v3) => v1
-                .has_distance_literal()
-                .or_else(|| v2.has_distance_literal())
-                .or_else(|| v3.has_distance_literal()),
-        }
-    }
-}
-
 pub fn display_vec<T: Display>(v: &[T]) -> String {
     v.iter()
         .map(|x| format!("{x}"))
@@ -872,7 +818,64 @@ impl UnrolledExpression {
     /// Never.
     #[must_use]
     pub fn has_distance_literal(&self) -> Option<Span> {
-        self.data.has_distance_literal(self.span)
+        match self.data.as_ref() {
+            UnrolledExpressionData::VariableAccess(_)
+            | UnrolledExpressionData::Parameter(_)
+            | UnrolledExpressionData::UnrollParameterGroup(_)
+            | UnrolledExpressionData::FreePoint
+            | UnrolledExpressionData::FreeReal => None,
+            UnrolledExpressionData::PointCollection(v) | UnrolledExpressionData::Average(v) => {
+                for expr in v {
+                    if let Some(sp) = expr.has_distance_literal() {
+                        return Some(sp);
+                    }
+                }
+
+                None
+            }
+            UnrolledExpressionData::Number(_) => {
+                if let Some(unit) = self.ty.as_scalar().unwrap() {
+                    if unit.0[SimpleUnit::Distance as usize] != 0 {
+                        return Some(self.span);
+                    }
+                }
+
+                None
+            }
+            UnrolledExpressionData::Boxed(v)
+            | UnrolledExpressionData::IndexCollection(v, _)
+            | UnrolledExpressionData::Negate(v) => v.has_distance_literal(),
+            UnrolledExpressionData::SetUnit(v, u) => {
+                if let Some(sp) = v.has_distance_literal() {
+                    Some(sp)
+                } else if u.0[SimpleUnit::Distance as usize] != 0 {
+                    Some(self.span)
+                } else {
+                    None
+                }
+            }
+            UnrolledExpressionData::PointPointDistance(e1, e2)
+            | UnrolledExpressionData::PointLineDistance(e1, e2) => e1
+                .has_distance_literal()
+                .or_else(|| e2.has_distance_literal()),
+            UnrolledExpressionData::Add(v1, v2)
+            | UnrolledExpressionData::Circle(v1, v2)
+            | UnrolledExpressionData::LineFromPoints(v1, v2)
+            | UnrolledExpressionData::ParallelThrough(v1, v2)
+            | UnrolledExpressionData::PerpendicularThrough(v1, v2)
+            | UnrolledExpressionData::LineLineIntersection(v1, v2)
+            | UnrolledExpressionData::TwoLineAngle(v1, v2)
+            | UnrolledExpressionData::Subtract(v1, v2)
+            | UnrolledExpressionData::Multiply(v1, v2)
+            | UnrolledExpressionData::Divide(v1, v2) => v1
+                .has_distance_literal()
+                .or_else(|| v2.has_distance_literal()),
+            UnrolledExpressionData::ThreePointAngle(v1, v2, v3)
+            | UnrolledExpressionData::AngleBisector(v1, v2, v3) => v1
+                .has_distance_literal()
+                .or_else(|| v2.has_distance_literal())
+                .or_else(|| v3.has_distance_literal()),
+        }
     }
 }
 

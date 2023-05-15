@@ -1,4 +1,4 @@
-use std::{collections::HashMap, rc::Rc, sync::Arc, unreachable, println};
+use std::{collections::HashMap, rc::Rc, sync::Arc, unreachable};
 
 use crate::{
     generator::{
@@ -669,7 +669,6 @@ pub fn get_dst_variable(context: &mut CompileContext, unrolled: &[UnrolledRule],
                     .flatten()
             })
     };
-    println!("{unrolled:?}");
 
     Ok(if let Some(at) = are_literals_present {
         match flags.distance_literals {
