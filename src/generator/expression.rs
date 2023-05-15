@@ -269,6 +269,8 @@ impl Value {
         matches!(self, Self::Point(..))
     }
 
+    /// Returns a circle, if the value's a circle.
+    #[must_use]
     pub fn as_circle(&self) -> Option<&Circle> {
         if let Self::Circle(v) = self {
             Some(v)
@@ -891,6 +893,21 @@ impl Evaluate for CircleExpr {
     fn evaluate_weights(&self) -> Weights {
         match self {
             Self::CenterRadius(v) => v.evaluate_weights()
+        }
+    }
+}
+
+impl Kind for CircleExpr {
+    fn is_trivial(&self) -> bool {
+        false
+    }
+
+    fn collect(&self, exprs: &mut Vec<usize>) {
+        match self {
+            Self::CenterRadius(CenterRadius { center, radius }) => {
+                center.collect(exprs);
+                radius.collect(exprs);
+            }
         }
     }
 }

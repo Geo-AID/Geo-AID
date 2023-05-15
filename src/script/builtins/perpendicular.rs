@@ -56,7 +56,7 @@ pub fn point_line() -> UnrolledExpression {
     )
 }
 
-pub fn register_perpendicular_function(context: &mut CompileContext) {
+pub fn register(context: &mut CompileContext) {
     context.functions.insert(
         String::from("perpendicular_through"),
         Function {

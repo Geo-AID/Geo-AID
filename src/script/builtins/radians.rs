@@ -29,7 +29,7 @@ fn radians_function_scalar() -> UnrolledExpression {
     }
 }
 
-pub fn register_radians_function(context: &mut CompileContext) {
+pub fn register(context: &mut CompileContext) {
     context.functions.insert(
         String::from("radians"),
         Function {

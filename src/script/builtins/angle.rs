@@ -116,7 +116,7 @@ fn angle_function_line_line() -> UnrolledExpression {
     }
 }
 
-pub fn register_angle_function(context: &mut CompileContext) {
+pub fn register(context: &mut CompileContext) {
     context.functions.insert(
         String::from("angle"),
         Function {

@@ -794,6 +794,8 @@ impl UnrolledExpressionData {
             | UnrolledExpressionData::Parameter(_)
             | UnrolledExpressionData::UnrollParameterGroup(_)
             | UnrolledExpressionData::FreePoint
+            | UnrolledExpressionData::PointPointDistance(_, _)
+            | UnrolledExpressionData::PointLineDistance(_, _)
             | UnrolledExpressionData::FreeReal => None,
             UnrolledExpressionData::PointCollection(v) | UnrolledExpressionData::Average(v) => {
                 for expr in v {
@@ -816,8 +818,6 @@ impl UnrolledExpressionData {
                     None
                 }
             }
-            UnrolledExpressionData::PointPointDistance(_, _)
-            | UnrolledExpressionData::PointLineDistance(_, _) => Some(self_span),
             UnrolledExpressionData::Add(v1, v2)
             | UnrolledExpressionData::Circle(v1, v2)
             | UnrolledExpressionData::LineFromPoints(v1, v2)
@@ -2352,9 +2352,7 @@ fn set_flag_bool(flag: &mut Flag, stmt: &FlagStatement) -> Result<(), Error> {
 }
 
 fn set_flag(set: &mut FlagSet, flag: &FlagStatement) -> Result<(), Error> {
-    let mut flag_ref = if let Some(v) = set.get_mut(&flag.name.name.first.ident) {
-        v
-    } else {
+    let Some(mut flag_ref) = set.get_mut(&flag.name.name.first.ident) else {
         let flag_name = flag.name.name.first.ident.clone();
 
         #[allow(clippy::cast_possible_truncation)]
@@ -2468,16 +2466,17 @@ pub fn unroll(input: &str) -> Result<(Vec<UnrolledRule>, CompileContext), Error>
             .finish(),
     };
 
-    builtins::point::register_point_function(&mut context); // Point()
-    builtins::dst::register_dst_function(&mut context); // dst()
-    builtins::angle::register_angle_function(&mut context); // angle()
-    builtins::degrees::register_degrees_function(&mut context); // degrees()
-    builtins::radians::register_radians_function(&mut context); // radians()
-    builtins::mid::register_mid_function(&mut context); // mid()
-    builtins::perpendicular::register_perpendicular_function(&mut context); // perpendicular_through()
-    builtins::parallel::register_parallel_function(&mut context); // parallel_through()
-    builtins::intersection::register_intersection_function(&mut context); // intersection()
+    builtins::point::register(&mut context); // Point()
+    builtins::dst::register(&mut context); // dst()
+    builtins::angle::register(&mut context); // angle()
+    builtins::degrees::register(&mut context); // degrees()
+    builtins::radians::register(&mut context); // radians()
+    builtins::mid::register(&mut context); // mid()
+    builtins::perpendicular::register(&mut context); // perpendicular_through()
+    builtins::parallel::register(&mut context); // parallel_through()
+    builtins::intersection::register(&mut context); // intersection()
     builtins::bisector::register(&mut context); // bisector()
+    builtins::circle::register(&mut context); // Circle()
 
     let tokens = token::tokenize(input)?;
     let mut it = tokens.iter().peekable();

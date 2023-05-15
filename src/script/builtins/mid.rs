@@ -34,7 +34,7 @@ mid_function! {ty::DISTANCE, mid_function_distance}
 mid_function! {ty::ANGLE, mid_function_angle}
 mid_function! {ty::SCALAR, mid_function_scalar}
 
-pub fn register_mid_function(context: &mut CompileContext) {
+pub fn register(context: &mut CompileContext) {
     context.functions.insert(
         String::from("mid"),
         Function {

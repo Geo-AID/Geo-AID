@@ -34,7 +34,7 @@ fn intersection_function_line_line() -> UnrolledExpression {
     }
 }
 
-pub fn register_intersection_function(context: &mut CompileContext) {
+pub fn register(context: &mut CompileContext) {
     context.functions.insert(
         String::from("intersection"),
         Function {

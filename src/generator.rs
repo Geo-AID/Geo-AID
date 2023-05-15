@@ -511,14 +511,17 @@ impl Generator {
         duration
     }
 
+    #[must_use]
     pub fn get_state(&self) -> &Vec<(Adjustable, f64)> {
         &self.current_state
     }
 
+    #[must_use]
     pub fn get_delta(&self) -> f64 {
         self.delta
     }
 
+    #[must_use]
     pub fn get_total_quality(&self) -> f64 {
         self.total_quality
     }

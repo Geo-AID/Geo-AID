@@ -108,7 +108,7 @@ fn dst_function_line_point() -> UnrolledExpression {
     }
 }
 
-pub fn register_dst_function(context: &mut CompileContext) {
+pub fn register(context: &mut CompileContext) {
     context.functions.insert(
         String::from("dst"),
         Function {

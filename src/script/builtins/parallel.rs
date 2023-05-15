@@ -56,7 +56,7 @@ fn parallel_function_point_line() -> UnrolledExpression {
     )
 }
 
-pub fn register_parallel_function(context: &mut CompileContext) {
+pub fn register(context: &mut CompileContext) {
     context.functions.insert(
         String::from("parallel_through"),
         Function {

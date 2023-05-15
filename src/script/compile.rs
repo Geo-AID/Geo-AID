@@ -1,4 +1,4 @@
-use std::{collections::HashMap, rc::Rc, sync::Arc};
+use std::{collections::HashMap, rc::Rc, sync::Arc, unreachable, println};
 
 use crate::{
     generator::{
@@ -52,6 +52,7 @@ struct VariableRecord {
     points: HashMap<HashableRc<Variable>, Arc<Expression<PointExpr>>>,
     lines: HashMap<HashableRc<Variable>, Arc<Expression<LineExpr>>>,
     scalars: HashMap<HashableRc<Variable>, Arc<Expression<ScalarExpr>>>,
+    circles: HashMap<HashableRc<Variable>, Arc<Expression<CircleExpr>>>,
 }
 
 impl Mapping<Variable, PointExpr> for VariableRecord {
@@ -93,6 +94,20 @@ impl Mapping<Variable, ScalarExpr> for VariableRecord {
         value: Arc<Expression<ScalarExpr>>,
     ) -> Option<Arc<Expression<ScalarExpr>>> {
         self.scalars.insert(key, value)
+    }
+}
+
+impl Mapping<Variable, CircleExpr> for VariableRecord {
+    fn get(&self, key: &HashableRc<Variable>) -> Option<&Arc<Expression<CircleExpr>>> {
+        self.circles.get(key)
+    }
+
+    fn insert(
+        &mut self,
+        key: HashableRc<Variable>,
+        value: Arc<Expression<CircleExpr>>,
+    ) -> Option<Arc<Expression<CircleExpr>>> {
+        self.circles.insert(key, value)
     }
 }
 
@@ -305,7 +320,8 @@ impl Compile for Expression<CircleExpr> {
                     radius: Expression::compile(radius, variables, expressions, template, dst_var)
                 }),
                 1.0
-            ))
+            )),
+            _ => unreachable!("A circle should never be compiled this way"),
         };
 
         // We insert for memory.
@@ -314,7 +330,52 @@ impl Compile for Expression<CircleExpr> {
     }
 }
 
+fn compile_number(
+    expr: &UnrolledExpression,
+    v: f64,
+    variables: &mut VariableRecord,
+    expressions: &mut ExpressionRecord,
+    template: &mut Vec<AdjustableTemplate>,
+    dst_var: &Option<Rc<Variable>>
+) -> Arc<Expression<ScalarExpr>> {
+    if expr.ty == ty::SCALAR {
+        // If a scalar, we treat it as a standard literal.
+        Arc::new(Expression::new(
+            ScalarExpr::Literal(Literal { value: v }),
+            1.0,
+        ))
+    } else {
+        // Otherwise we pretend it's a scalar literal inside a SetUnit.
+        Expression::compile(
+            &UnrolledExpression {
+                weight: 1.0,
+                ty: expr.ty.clone(),
+                span: expr.span,
+                data: Rc::new(UnrolledExpressionData::SetUnit(
+                    UnrolledExpression {
+                        weight: 1.0,
+                        ty: ty::SCALAR,
+                        span: expr.span,
+                        data: expr.data.clone(),
+                    },
+                    expr.ty
+                        .as_scalar()
+                        .unwrap()
+                        .as_ref()
+                        .unwrap()
+                        .clone(),
+                )),
+            },
+            variables,
+            expressions,
+            template,
+            dst_var,
+        )
+    }
+}
+
 impl Compile for Expression<ScalarExpr> {
+    #[allow(clippy::too_many_lines)]
     fn compile(
         expr: &UnrolledExpression,
         variables: &mut VariableRecord,
@@ -335,42 +396,7 @@ impl Compile for Expression<ScalarExpr> {
             UnrolledExpressionData::VariableAccess(var) => {
                 compile_variable(var, variables, expressions, template, dst_var)
             }
-            UnrolledExpressionData::Number(v) => {
-                if expr.ty == ty::SCALAR {
-                    // If a scalar, we treat it as a standard literal.
-                    Arc::new(Expression::new(
-                        ScalarExpr::Literal(Literal { value: *v }),
-                        1.0,
-                    ))
-                } else {
-                    // Otherwise we pretend it's a scalar literal inside a SetUnit.
-                    Self::compile(
-                        &UnrolledExpression {
-                            weight: 1.0,
-                            ty: expr.ty.clone(),
-                            span: expr.span,
-                            data: Rc::new(UnrolledExpressionData::SetUnit(
-                                UnrolledExpression {
-                                    weight: 1.0,
-                                    ty: ty::SCALAR,
-                                    span: expr.span,
-                                    data: expr.data.clone(),
-                                },
-                                expr.ty
-                                    .as_scalar()
-                                    .unwrap()
-                                    .as_ref()
-                                    .unwrap()
-                                    .clone(),
-                            )),
-                        },
-                        variables,
-                        expressions,
-                        template,
-                        dst_var,
-                    )
-                }
-            }
+            UnrolledExpressionData::Number(v) => compile_number(expr, *v, variables, expressions, template, dst_var),
             UnrolledExpressionData::FreeReal => {
                 let index = template.len();
                 template.push(AdjustableTemplate::Real);
@@ -643,6 +669,7 @@ pub fn get_dst_variable(context: &mut CompileContext, unrolled: &[UnrolledRule],
                     .flatten()
             })
     };
+    println!("{unrolled:?}");
 
     Ok(if let Some(at) = are_literals_present {
         match flags.distance_literals {
@@ -734,7 +761,7 @@ pub fn compile(
 
     // We precompile all variables.
     for (_, var) in context.variables {
-        match var.definition.ty.as_predefined().unwrap() {
+        match var.definition.ty {
             Type::Point => {
                 compile_variable::<PointExpr>(
                     &var,
@@ -763,6 +790,16 @@ pub fn compile(
                 );
             }
             Type::PointCollection(_) => (),
+            Type::Circle => {
+                compile_variable::<CircleExpr>(
+                    &var,
+                    &mut variables, 
+                    &mut expressions, 
+                    &mut template, 
+                    &dst_var
+                );
+            }
+            Type::Undefined => unreachable!("Undefined should never be compiled.")
         }
     }
 

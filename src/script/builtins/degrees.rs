@@ -41,7 +41,7 @@ fn degrees_function_scalar() -> UnrolledExpression {
     }
 }
 
-pub fn register_degrees_function(context: &mut CompileContext) {
+pub fn register(context: &mut CompileContext) {
     context.functions.insert(
         String::from("degrees"),
         Function {
