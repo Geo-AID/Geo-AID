@@ -9,11 +9,11 @@ use super::{
     builtins,
     parser::{
         BinaryOperator, DisplayProperties, ExplicitIterator, Expression, FlagStatement,
-        ImplicitIterator, LetStatement, Parse, PredefinedRuleOperator, PredefinedType,
-        PropertyValue, Punctuated, RuleOperator, RuleStatement, SimpleExpression, Statement, Type,
+        ImplicitIterator, LetStatement, Parse, PredefinedRuleOperator, Type,
+        PropertyValue, Punctuated, RuleOperator, RuleStatement, SimpleExpression, Statement
     },
     token::{self, Ident, NamedIdent, PointCollection, Span},
-    ty, ComplexUnit, Error, SimpleUnit,
+    ty, ComplexUnit, Error, SimpleUnit, unit,
 };
 
 /// A definition for a user-defined rule operator.
@@ -51,8 +51,7 @@ pub enum VariableMeta {
     Scalar,
     Line,
     PointCollection,
-    /// Properties for user-defined types.
-    Properties,
+    Circle
 }
 
 impl VariableMeta {
@@ -724,6 +723,7 @@ pub enum UnrolledExpressionData {
     PerpendicularThrough(UnrolledExpression, UnrolledExpression), // Line, Point
     ParallelThrough(UnrolledExpression, UnrolledExpression),      // Line, Point
     LineLineIntersection(UnrolledExpression, UnrolledExpression),
+    Circle(UnrolledExpression, UnrolledExpression) // Center, radius
 }
 
 impl Display for UnrolledExpressionData {
@@ -779,60 +779,8 @@ impl Display for UnrolledExpressionData {
             }
             UnrolledExpressionData::LineLineIntersection(l1, l2) => {
                 write!(f, "intersection({l1}, {l2})")
-            }
-        }
-    }
-}
-
-impl UnrolledExpressionData {
-    #[must_use]
-    pub fn has_distance_literal(&self, self_span: Span) -> Option<Span> {
-        match self {
-            UnrolledExpressionData::VariableAccess(_)
-            | UnrolledExpressionData::Number(_)
-            | UnrolledExpressionData::Parameter(_)
-            | UnrolledExpressionData::UnrollParameterGroup(_)
-            | UnrolledExpressionData::FreePoint
-            | UnrolledExpressionData::FreeReal => None,
-            UnrolledExpressionData::PointCollection(v) | UnrolledExpressionData::Average(v) => {
-                for expr in v {
-                    if let Some(sp) = expr.has_distance_literal() {
-                        return Some(sp);
-                    }
-                }
-
-                None
-            }
-            UnrolledExpressionData::Boxed(v)
-            | UnrolledExpressionData::IndexCollection(v, _)
-            | UnrolledExpressionData::Negate(v) => v.has_distance_literal(),
-            UnrolledExpressionData::SetUnit(v, u) => {
-                if let Some(sp) = v.has_distance_literal() {
-                    Some(sp)
-                } else if u.0[SimpleUnit::Distance as usize] != 0 {
-                    Some(self_span)
-                } else {
-                    None
-                }
-            }
-            UnrolledExpressionData::PointPointDistance(_, _)
-            | UnrolledExpressionData::PointLineDistance(_, _) => Some(self_span),
-            UnrolledExpressionData::Add(v1, v2)
-            | UnrolledExpressionData::LineFromPoints(v1, v2)
-            | UnrolledExpressionData::ParallelThrough(v1, v2)
-            | UnrolledExpressionData::PerpendicularThrough(v1, v2)
-            | UnrolledExpressionData::LineLineIntersection(v1, v2)
-            | UnrolledExpressionData::TwoLineAngle(v1, v2)
-            | UnrolledExpressionData::Subtract(v1, v2)
-            | UnrolledExpressionData::Multiply(v1, v2)
-            | UnrolledExpressionData::Divide(v1, v2) => v1
-                .has_distance_literal()
-                .or_else(|| v2.has_distance_literal()),
-            UnrolledExpressionData::ThreePointAngle(v1, v2, v3)
-            | UnrolledExpressionData::AngleBisector(v1, v2, v3) => v1
-                .has_distance_literal()
-                .or_else(|| v2.has_distance_literal())
-                .or_else(|| v3.has_distance_literal()),
+            },
+            UnrolledExpressionData::Circle(center, radius) => write!(f, "circle({center}, {radius})")
         }
     }
 }
@@ -886,7 +834,7 @@ impl UnrolledExpression {
                 None
             }
             UnrolledExpressionData::Number(_) => {
-                if let Some(unit) = self.ty.as_predefined().unwrap().as_scalar().unwrap() {
+                if let Some(unit) = self.ty.as_scalar().unwrap() {
                     if unit.0[SimpleUnit::Distance as usize] != 0 {
                         return Some(self.span);
                     }
@@ -911,6 +859,7 @@ impl UnrolledExpression {
                 .has_distance_literal()
                 .or_else(|| e2.has_distance_literal()),
             UnrolledExpressionData::Add(v1, v2)
+            | UnrolledExpressionData::Circle(v1, v2)
             | UnrolledExpressionData::LineFromPoints(v1, v2)
             | UnrolledExpressionData::ParallelThrough(v1, v2)
             | UnrolledExpressionData::PerpendicularThrough(v1, v2)
@@ -1015,6 +964,12 @@ pub fn unroll_parameters(
                     unroll_parameters(e2, params),
                 )
             }
+            UnrolledExpressionData::Circle(e1, e2) => {
+                UnrolledExpressionData::Circle(
+                    unroll_parameters(e1, params),
+                    unroll_parameters(e2, params),
+                )
+            }
             UnrolledExpressionData::SetUnit(expr, unit) => {
                 UnrolledExpressionData::SetUnit(unroll_parameters(expr, params), unit.clone())
             }
@@ -1107,11 +1062,11 @@ fn unroll_pc_conversion(
 ) -> Result<UnrolledExpression, Error> {
     match collection_length {
         1 => {
-            if to == &Type::Predefined(PredefinedType::Point) {
+            if to == &ty::POINT {
                 Ok(UnrolledExpression {
                     weight: 1.0, // Weight is propagated through `IndexCollection`.
                     data: Rc::new(UnrolledExpressionData::IndexCollection(expr.clone(), 0)),
-                    ty: Type::Predefined(PredefinedType::Point),
+                    ty: ty::POINT,
                     span: expr.span,
                 })
             } else {
@@ -1123,69 +1078,60 @@ fn unroll_pc_conversion(
             }
         }
         2 => match to {
-            Type::Predefined(pre) => match pre {
-                PredefinedType::Line => Ok(UnrolledExpression {
-                    weight: 1.0, // Weight is propagated through `IndexCollection`.
-                    data: Rc::new(UnrolledExpressionData::LineFromPoints(
-                        UnrolledExpression {
-                            weight: 1.0, // Weight is propagated through `IndexCollection`.
-                            data: Rc::new(UnrolledExpressionData::IndexCollection(expr.clone(), 0)),
-                            ty: Type::Predefined(PredefinedType::Point),
-                            span: expr.span,
-                        },
-                        UnrolledExpression {
-                            weight: 1.0, // Weight is propagated through `IndexCollection`.
-                            data: Rc::new(UnrolledExpressionData::IndexCollection(expr.clone(), 1)),
-                            ty: Type::Predefined(PredefinedType::Point),
-                            span: expr.span,
-                        },
-                    )),
-                    ty: Type::Predefined(PredefinedType::Line),
-                    span: expr.span,
-                }),
-                PredefinedType::Scalar(unit) => {
-                    if unit == &Some(ComplexUnit::new(SimpleUnit::Distance)) {
-                        Ok(UnrolledExpression {
-                            weight: 1.0, // Weight is propagated through `IndexCollection`.
-                            data: Rc::new(UnrolledExpressionData::PointPointDistance(
-                                UnrolledExpression {
-                                    weight: 1.0, // Weight is propagated through `IndexCollection`.
-                                    data: Rc::new(UnrolledExpressionData::IndexCollection(
-                                        expr.clone(),
-                                        0,
-                                    )),
-                                    ty: Type::Predefined(PredefinedType::Point),
-                                    span: expr.span,
-                                },
-                                UnrolledExpression {
-                                    weight: 1.0, // Weight is propagated through `IndexCollection`.
-                                    data: Rc::new(UnrolledExpressionData::IndexCollection(
-                                        expr.clone(),
-                                        1,
-                                    )),
-                                    ty: Type::Predefined(PredefinedType::Point),
-                                    span: expr.span,
-                                },
-                            )),
-                            ty: Type::Predefined(PredefinedType::Scalar(Some(ComplexUnit::new(
-                                SimpleUnit::Distance,
-                            )))),
-                            span: expr.span,
-                        })
-                    } else {
-                        Err(Error::implicit_conversion_does_not_exist(
-                            expr.span,
-                            expr.ty.clone(),
-                            to.clone(),
-                        ))
-                    }
-                }
-                _ => Err(Error::implicit_conversion_does_not_exist(
-                    expr.span,
-                    expr.ty.clone(),
-                    to.clone(),
+            Type::Line => Ok(UnrolledExpression {
+                weight: 1.0, // Weight is propagated through `IndexCollection`.
+                data: Rc::new(UnrolledExpressionData::LineFromPoints(
+                    UnrolledExpression {
+                        weight: 1.0, // Weight is propagated through `IndexCollection`.
+                        data: Rc::new(UnrolledExpressionData::IndexCollection(expr.clone(), 0)),
+                        ty: ty::POINT,
+                        span: expr.span,
+                    },
+                    UnrolledExpression {
+                        weight: 1.0, // Weight is propagated through `IndexCollection`.
+                        data: Rc::new(UnrolledExpressionData::IndexCollection(expr.clone(), 1)),
+                        ty: ty::POINT,
+                        span: expr.span,
+                    },
                 )),
-            },
+                ty: ty::LINE,
+                span: expr.span,
+            }),
+            Type::Scalar(unit) => {
+                if unit == &Some(ComplexUnit::new(SimpleUnit::Distance)) {
+                    Ok(UnrolledExpression {
+                        weight: 1.0, // Weight is propagated through `IndexCollection`.
+                        data: Rc::new(UnrolledExpressionData::PointPointDistance(
+                            UnrolledExpression {
+                                weight: 1.0, // Weight is propagated through `IndexCollection`.
+                                data: Rc::new(UnrolledExpressionData::IndexCollection(
+                                    expr.clone(),
+                                    0,
+                                )),
+                                ty: ty::POINT,
+                                span: expr.span,
+                            },
+                            UnrolledExpression {
+                                weight: 1.0, // Weight is propagated through `IndexCollection`.
+                                data: Rc::new(UnrolledExpressionData::IndexCollection(
+                                    expr.clone(),
+                                    1,
+                                )),
+                                ty: ty::POINT,
+                                span: expr.span,
+                            },
+                        )),
+                        ty: ty::DISTANCE,
+                        span: expr.span,
+                    })
+                } else {
+                    Err(Error::implicit_conversion_does_not_exist(
+                        expr.span,
+                        expr.ty.clone(),
+                        to.clone(),
+                    ))
+                }
+            }
             _ => Err(Error::implicit_conversion_does_not_exist(
                 expr.span,
                 expr.ty.clone(),
@@ -1257,9 +1203,7 @@ fn unroll_conversion_to_scalar(
                 unroll_implicit_conversion(e1.clone(), to)?,
                 unroll_implicit_conversion(
                     e2.clone(),
-                    &Type::Predefined(PredefinedType::Scalar(Some(ComplexUnit::new(
-                        SimpleUnit::Scalar,
-                    )))),
+                    &ty::SCALAR,
                 )?,
             )),
         }),
@@ -1271,9 +1215,7 @@ fn unroll_conversion_to_scalar(
                 unroll_implicit_conversion(e1.clone(), to)?,
                 unroll_implicit_conversion(
                     e2.clone(),
-                    &Type::Predefined(PredefinedType::Scalar(Some(ComplexUnit::new(
-                        SimpleUnit::Scalar,
-                    )))),
+                    &ty::SCALAR,
                 )?,
             )),
         }),
@@ -1304,6 +1246,7 @@ fn unroll_conversion_to_scalar(
         | UnrolledExpressionData::PerpendicularThrough(_, _)
         | UnrolledExpressionData::ParallelThrough(_, _)
         | UnrolledExpressionData::LineLineIntersection(_, _)
+        | UnrolledExpressionData::Circle(_, _)
         | UnrolledExpressionData::TwoLineAngle(_, _) => unreachable!(
             "This data should not be of type scalar(none) and yet is: {:#?}",
             expr.data
@@ -1320,38 +1263,24 @@ fn unroll_implicit_conversion(
         Ok(expr)
     } else {
         match &expr.ty {
-            Type::Predefined(pre) => match pre {
-                PredefinedType::PointCollection(l) => unroll_pc_conversion(&expr, to, *l),
-                PredefinedType::Scalar(None) => {
-                    match to {
-                        Type::Predefined(PredefinedType::Scalar(unit)) => match unit {
-                            Some(unit) => {
-                                if unit.0[SimpleUnit::Angle as usize] == 0 {
-                                    // no angle
-                                    unroll_conversion_to_scalar(&expr, to)
-                                } else {
-                                    Err(Error::implicit_conversion_does_not_exist(
-                                        expr.span,
-                                        expr.ty,
-                                        to.clone(),
-                                    ))
-                                }
-                            }
-                            None => unroll_conversion_to_scalar(&expr, to),
-                        },
-                        _ => Err(Error::implicit_conversion_does_not_exist(
-                            expr.span,
-                            expr.ty,
-                            to.clone(),
-                        )),
+            Type::PointCollection(l) => unroll_pc_conversion(&expr, to, *l),
+            Type::Scalar(unit) => {
+                match unit {
+                    Some(unit) => {
+                        if unit.0[SimpleUnit::Angle as usize] == 0 {
+                            // no angle
+                            unroll_conversion_to_scalar(&expr, to)
+                        } else {
+                            Err(Error::implicit_conversion_does_not_exist(
+                                expr.span,
+                                expr.ty,
+                                to.clone(),
+                            ))
+                        }
                     }
+                    None => unroll_conversion_to_scalar(&expr, to),
                 }
-                _ => Err(Error::implicit_conversion_does_not_exist(
-                    expr.span,
-                    expr.ty,
-                    to.clone(),
-                )),
-            },
+            }
             _ => Err(Error::implicit_conversion_does_not_exist(
                 expr.span,
                 expr.ty,
@@ -1396,7 +1325,7 @@ fn unroll_simple(
             }
             Ident::Collection(col) => UnrolledExpression {
                 weight: 1.0, // TODO: UPDATE FOR WEIGHING SUPPORT IN GEOSCRIPT
-                ty: Type::Predefined(PredefinedType::PointCollection(col.collection.len())),
+                ty: ty::collection(col.collection.len()),
                 data: Rc::new(UnrolledExpressionData::PointCollection(
                     col.collection
                         .iter()
@@ -1424,7 +1353,7 @@ fn unroll_simple(
         },
         SimpleExpression::Number(num) => UnrolledExpression {
             weight: 0.0, // Always zero.
-            ty: Type::Predefined(PredefinedType::Scalar(None)),
+            ty: ty::SCALAR_UNKNOWN,
             data: Rc::new(UnrolledExpressionData::Number(num.value.to_float())),
             span: num.get_span(),
         },
@@ -1491,7 +1420,7 @@ fn unroll_simple(
         SimpleExpression::Unop(op) => {
             let unrolled = unroll_simple(&op.rhs, context, it_index)?;
             match &unrolled.ty {
-                Type::Predefined(PredefinedType::Scalar(_)) => UnrolledExpression {
+                Type::Scalar(_) => UnrolledExpression {
                     weight: 1.0, // TODO: UPDATE FOR WEIGHING SUPPORT IN GEOSCRIPT
                     ty: unrolled.ty.clone(),
                     span: expr.get_span(),
@@ -1540,13 +1469,11 @@ fn unroll_muldiv(
     other: &UnrolledExpression,
 ) -> Result<UnrolledExpression, Error> {
     match this.ty {
-        Type::Predefined(PredefinedType::Scalar(None)) => match &other.ty {
-            Type::Predefined(PredefinedType::Scalar(None)) => Ok(this),
+        Type::Scalar(None) => match &other.ty {
+            Type::Scalar(None) => Ok(this),
             _ => unroll_implicit_conversion(
                 this,
-                &Type::Predefined(PredefinedType::Scalar(Some(ComplexUnit::new(
-                    SimpleUnit::Scalar,
-                )))),
+                &ty::SCALAR,
             ),
         },
         _ => Ok(this),
@@ -1559,17 +1486,8 @@ fn unroll_binop(
     rhs: UnrolledExpression,
 ) -> Result<UnrolledExpression, Error> {
     let lhs = match &lhs.ty {
-        Type::Predefined(pre) => match pre {
-            PredefinedType::Scalar(_) => lhs,
-            PredefinedType::PointCollection(2) => unroll_implicit_conversion(lhs, &ty::DISTANCE)?,
-            _ => {
-                return Err(Error::InvalidOperandType {
-                    error_span: lhs.span.join(rhs.span),
-                    got: (lhs.ty, lhs.span),
-                    op: op.to_string(),
-                })
-            }
-        },
+        Type::Scalar(_) => lhs,
+        Type::PointCollection(2) => unroll_implicit_conversion(lhs, &ty::DISTANCE)?,
         _ => {
             return Err(Error::InvalidOperandType {
                 error_span: lhs.span.join(rhs.span),
@@ -1580,22 +1498,11 @@ fn unroll_binop(
     };
 
     let rhs = match &rhs.ty {
-        Type::Predefined(pre) => match pre {
-            PredefinedType::Scalar(_) => rhs,
-            PredefinedType::PointCollection(2) => unroll_implicit_conversion(
-                rhs,
-                &Type::Predefined(PredefinedType::Scalar(Some(ComplexUnit::new(
-                    SimpleUnit::Distance,
-                )))),
-            )?,
-            _ => {
-                return Err(Error::InvalidOperandType {
-                    error_span: rhs.span.join(rhs.span),
-                    got: (rhs.ty, rhs.span),
-                    op: op.to_string(),
-                })
-            }
-        },
+        Type::Scalar(_) => rhs,
+        Type::PointCollection(2) => unroll_implicit_conversion(
+            rhs,
+            &ty::DISTANCE,
+        )?,
         _ => {
             return Err(Error::InvalidOperandType {
                 error_span: rhs.span.join(rhs.span),
@@ -1608,7 +1515,7 @@ fn unroll_binop(
     match op {
         BinaryOperator::Add(_) | BinaryOperator::Sub(_) => {
             let lhs = match lhs.ty {
-                Type::Predefined(PredefinedType::Scalar(None)) => {
+                Type::Scalar(None) => {
                     unroll_implicit_conversion(lhs, &rhs.ty)?
                 }
                 _ => lhs,
@@ -1635,13 +1542,13 @@ fn unroll_binop(
             Ok(UnrolledExpression {
                 weight: 1.0, // Technically, the only way to assign weight to an arithmetic op is to parenthise it.
                 ty: match &lhs.ty {
-                    Type::Predefined(PredefinedType::Scalar(None)) => lhs.ty.clone(),
-                    Type::Predefined(PredefinedType::Scalar(Some(left_unit))) => {
-                        if let Type::Predefined(PredefinedType::Scalar(Some(right_unit))) = &rhs.ty
+                    Type::Scalar(None) => lhs.ty.clone(),
+                    Type::Scalar(Some(left_unit)) => {
+                        if let Type::Scalar(Some(right_unit)) = &rhs.ty
                         {
-                            Type::Predefined(PredefinedType::Scalar(Some(
+                            Type::Scalar(Some(
                                 left_unit.clone() * right_unit,
-                            )))
+                            ))
                         } else {
                             unreachable!()
                         }
@@ -1687,26 +1594,19 @@ fn unpack_expression(
     _context: &CompileContext,
 ) -> Result<Vec<UnrolledExpression>, Error> {
     match &expr.ty {
-        Type::Predefined(pre) => match pre {
-            PredefinedType::Point => Ok(vec![expr.clone()]),
-            PredefinedType::PointCollection(l) => Ok((0..*l)
-                .map(|i| UnrolledExpression {
-                    weight: 1.0, // Weight propagated through `IndexCollecttion`
-                    data: Rc::new(UnrolledExpressionData::IndexCollection(expr.clone(), i)),
-                    ty: Type::Predefined(PredefinedType::Point),
-                    span: expr.span,
-                })
-                .collect()),
-            ty => Err(Error::cannot_unpack(
-                expr.span,
-                Type::Predefined(ty.clone()),
-            )),
-        },
-        Type::Defined => Err(Error::feature_not_supported(
+        Type::Point => Ok(vec![expr.clone()]),
+        Type::PointCollection(l) => Ok((0..*l)
+            .map(|i| UnrolledExpression {
+                weight: 1.0, // Weight propagated through `IndexCollecttion`
+                data: Rc::new(UnrolledExpressionData::IndexCollection(expr.clone(), i)),
+                ty: ty::POINT,
+                span: expr.span,
+            })
+            .collect()),
+        ty => Err(Error::cannot_unpack(
             expr.span,
-            "unpack_custom_type",
+            ty.clone(),
         )),
-        Type::Undefined => Err(Error::cannot_unpack(expr.span, Type::Undefined)),
     }
 }
 
@@ -1782,39 +1682,37 @@ fn create_variable_named(
                 name: entry.key().clone(),
                 definition_span: stat.get_span(),
                 meta: match &rhs_unrolled.ty {
-                    Type::Predefined(pre) => match pre {
-                        PredefinedType::Point => {
+                    Type::Point => {
+                        let props = PointProperties::parse(display, named.ident.clone())?;
+
+                        VariableMeta::Point(Point {
+                            meta: Some(PointMeta {
+                                letter: props.label.chars().next().unwrap(),
+                                index: None,
+                                primes: 0,
+                            }),
+                            display: props.display,
+                        })
+                    }
+                    Type::Line => VariableMeta::Line,
+                    Type::Scalar(_) => VariableMeta::Scalar,
+                    Type::Circle => VariableMeta::Circle,
+                    Type::PointCollection(l) => {
+                        if *l == 1 {
                             let props = PointProperties::parse(display, named.ident.clone())?;
 
                             VariableMeta::Point(Point {
+                                display: true,
                                 meta: Some(PointMeta {
                                     letter: props.label.chars().next().unwrap(),
                                     index: None,
                                     primes: 0,
                                 }),
-                                display: props.display,
                             })
+                        } else {
+                            VariableMeta::PointCollection
                         }
-                        PredefinedType::Line => VariableMeta::Line,
-                        PredefinedType::Scalar(_) => VariableMeta::Scalar,
-                        PredefinedType::PointCollection(l) => {
-                            if *l == 1 {
-                                let props = PointProperties::parse(display, named.ident.clone())?;
-
-                                VariableMeta::Point(Point {
-                                    display: true,
-                                    meta: Some(PointMeta {
-                                        letter: props.label.chars().next().unwrap(),
-                                        index: None,
-                                        primes: 0,
-                                    }),
-                                })
-                            } else {
-                                VariableMeta::PointCollection
-                            }
-                        }
-                    },
-                    Type::Defined => VariableMeta::Properties,
+                    }
                     Type::Undefined => return Err(Error::undefined_type_variable(stat.get_span())),
                 },
                 definition: rhs_unrolled,
@@ -2063,15 +1961,11 @@ fn unroll_eq(
             kind: UnrolledRuleKind::Eq,
             lhs: unroll_implicit_conversion(
                 lhs,
-                &Type::Predefined(PredefinedType::Scalar(Some(ComplexUnit::new(
-                    SimpleUnit::Distance,
-                )))),
+                &ty::DISTANCE,
             )?,
             rhs: unroll_implicit_conversion(
                 rhs,
-                &Type::Predefined(PredefinedType::Scalar(Some(ComplexUnit::new(
-                    SimpleUnit::Distance,
-                )))),
+                &ty::DISTANCE,
             )?,
             inverted: false,
         });
@@ -2110,10 +2004,10 @@ fn unroll_gt(
     full_span: Span,
 ) -> Result<(), Error> {
     let left_unit = match &lhs.ty {
-        Type::Predefined(PredefinedType::Scalar(Some(unit))) => Some(unit.clone()),
-        Type::Predefined(PredefinedType::Scalar(None)) => None,
-        Type::Predefined(PredefinedType::PointCollection(2)) => {
-            Some(ComplexUnit::new(SimpleUnit::Distance))
+        Type::Scalar(Some(unit)) => Some(unit.clone()),
+        Type::Scalar(None) => None,
+        Type::PointCollection(2) => {
+            Some(unit::DISTANCE)
         }
         _ => {
             return Err(Error::InvalidOperandType {
@@ -2127,19 +2021,19 @@ fn unroll_gt(
     if let Some(ltype) = left_unit {
         if rhs
             .ty
-            .can_cast(&Type::Predefined(PredefinedType::Scalar(Some(
+            .can_cast(&Type::Scalar(Some(
                 ltype.clone(),
-            ))))
+            )))
         {
             unrolled.push(UnrolledRule {
                 kind: UnrolledRuleKind::Gt,
                 lhs: unroll_implicit_conversion(
                     lhs,
-                    &Type::Predefined(PredefinedType::Scalar(Some(ltype.clone()))),
+                    &Type::Scalar(Some(ltype.clone())),
                 )?,
                 rhs: unroll_implicit_conversion(
                     rhs,
-                    &Type::Predefined(PredefinedType::Scalar(Some(ltype))),
+                    &Type::Scalar(Some(ltype)),
                 )?,
                 inverted: false,
             });
@@ -2152,9 +2046,9 @@ fn unroll_gt(
         }
     } else {
         let right_unit = match &rhs.ty {
-            Type::Predefined(PredefinedType::Scalar(Some(unit))) => Some(unit.clone()),
-            Type::Predefined(PredefinedType::Scalar(None)) => None,
-            Type::Predefined(PredefinedType::PointCollection(2)) => {
+            Type::Scalar(Some(unit)) => Some(unit.clone()),
+            Type::Scalar(None) => None,
+            Type::PointCollection(2) => {
                 Some(ComplexUnit::new(SimpleUnit::Distance))
             }
             _ => {
@@ -2171,18 +2065,18 @@ fn unroll_gt(
                 kind: UnrolledRuleKind::Gt,
                 lhs: unroll_implicit_conversion(
                     lhs,
-                    &Type::Predefined(PredefinedType::Scalar(Some(rtype.clone()))),
+                    &Type::Scalar(Some(rtype.clone())),
                 )?,
                 rhs: unroll_implicit_conversion(
                     rhs,
-                    &Type::Predefined(PredefinedType::Scalar(Some(rtype))),
+                    &Type::Scalar(Some(rtype)),
                 )?,
                 inverted: false,
             });
         } else {
-            let common = Type::Predefined(PredefinedType::Scalar(Some(ComplexUnit::new(
+            let common = Type::Scalar(Some(ComplexUnit::new(
                 SimpleUnit::Scalar,
-            ))));
+            )));
             unrolled.push(UnrolledRule {
                 kind: UnrolledRuleKind::Gt,
                 lhs: unroll_implicit_conversion(lhs, &common)?,
@@ -2202,9 +2096,9 @@ fn unroll_lt(
     full_span: Span,
 ) -> Result<(), Error> {
     let left_unit = match &lhs.ty {
-        Type::Predefined(PredefinedType::Scalar(Some(unit))) => Some(unit.clone()),
-        Type::Predefined(PredefinedType::Scalar(None)) => None,
-        Type::Predefined(PredefinedType::PointCollection(2)) => {
+        Type::Scalar(Some(unit)) => Some(unit.clone()),
+        Type::Scalar(None) => None,
+        Type::PointCollection(2) => {
             Some(ComplexUnit::new(SimpleUnit::Distance))
         }
         _ => {
@@ -2219,19 +2113,19 @@ fn unroll_lt(
     if let Some(ltype) = left_unit {
         if rhs
             .ty
-            .can_cast(&Type::Predefined(PredefinedType::Scalar(Some(
+            .can_cast(&Type::Scalar(Some(
                 ltype.clone(),
-            ))))
+            )))
         {
             unrolled.push(UnrolledRule {
                 kind: UnrolledRuleKind::Lt,
                 lhs: unroll_implicit_conversion(
                     lhs,
-                    &Type::Predefined(PredefinedType::Scalar(Some(ltype.clone()))),
+                    &Type::Scalar(Some(ltype.clone())),
                 )?,
                 rhs: unroll_implicit_conversion(
                     rhs,
-                    &Type::Predefined(PredefinedType::Scalar(Some(ltype))),
+                    &Type::Scalar(Some(ltype)),
                 )?,
                 inverted: false,
             });
@@ -2244,9 +2138,9 @@ fn unroll_lt(
         }
     } else {
         let right_unit = match &rhs.ty {
-            Type::Predefined(PredefinedType::Scalar(Some(unit))) => Some(unit.clone()),
-            Type::Predefined(PredefinedType::Scalar(None)) => None,
-            Type::Predefined(PredefinedType::PointCollection(2)) => {
+            Type::Scalar(Some(unit)) => Some(unit.clone()),
+            Type::Scalar(None) => None,
+            Type::PointCollection(2) => {
                 Some(ComplexUnit::new(SimpleUnit::Distance))
             }
             _ => {
@@ -2263,18 +2157,16 @@ fn unroll_lt(
                 kind: UnrolledRuleKind::Lt,
                 lhs: unroll_implicit_conversion(
                     lhs,
-                    &Type::Predefined(PredefinedType::Scalar(Some(rtype.clone()))),
+                    &Type::Scalar(Some(rtype.clone())),
                 )?,
                 rhs: unroll_implicit_conversion(
                     rhs,
-                    &Type::Predefined(PredefinedType::Scalar(Some(rtype))),
+                    &Type::Scalar(Some(rtype)),
                 )?,
                 inverted: false,
             });
         } else {
-            let common = Type::Predefined(PredefinedType::Scalar(Some(ComplexUnit::new(
-                SimpleUnit::Scalar,
-            ))));
+            let common = ty::SCALAR;
             unrolled.push(UnrolledRule {
                 kind: UnrolledRuleKind::Lt,
                 lhs: unroll_implicit_conversion(lhs, &common)?,
@@ -2463,9 +2355,7 @@ fn set_flag_bool(flag: &mut Flag, stmt: &FlagStatement) -> Result<(), Error> {
 }
 
 fn set_flag(set: &mut FlagSet, flag: &FlagStatement) -> Result<(), Error> {
-    let mut flag_ref = if let Some(v) = set.get_mut(&flag.name.name.first.ident) {
-        v
-    } else {
+    let Some(mut flag_ref) = set.get_mut(&flag.name.name.first.ident) else {
         let flag_name = flag.name.name.first.ident.clone();
 
         #[allow(clippy::cast_possible_truncation)]
@@ -2579,16 +2469,17 @@ pub fn unroll(input: &str) -> Result<(Vec<UnrolledRule>, CompileContext), Error>
             .finish(),
     };
 
-    builtins::point::register_point_function(&mut context); // Point()
-    builtins::dst::register_dst_function(&mut context); // dst()
-    builtins::angle::register_angle_function(&mut context); // angle()
-    builtins::degrees::register_degrees_function(&mut context); // degrees()
-    builtins::radians::register_radians_function(&mut context); // radians()
-    builtins::mid::register_mid_function(&mut context); // mid()
-    builtins::perpendicular::register_perpendicular_function(&mut context); // perpendicular_through()
-    builtins::parallel::register_parallel_function(&mut context); // parallel_through()
-    builtins::intersection::register_intersection_function(&mut context); // intersection()
+    builtins::point::register(&mut context); // Point()
+    builtins::dst::register(&mut context); // dst()
+    builtins::angle::register(&mut context); // angle()
+    builtins::degrees::register(&mut context); // degrees()
+    builtins::radians::register(&mut context); // radians()
+    builtins::mid::register(&mut context); // mid()
+    builtins::perpendicular::register(&mut context); // perpendicular_through()
+    builtins::parallel::register(&mut context); // parallel_through()
+    builtins::intersection::register(&mut context); // intersection()
     builtins::bisector::register(&mut context); // bisector()
+    builtins::circle::register(&mut context); // Circle()
 
     let tokens = token::tokenize(input)?;
     let mut it = tokens.iter().peekable();

@@ -29,7 +29,12 @@
 - Improved generator-projector pipeline.
 - Distance literals now work properly.
 - Error messages now can suggest code changes.
+
+## Version 0.2.2
 - An overhaul of expressions with proper value caching and precomputed weights.
 - Improved angle support.
 - Added segment support.
+
+## Version 0.2.3
 - Added ray support.
+- Added circle primitive and function.

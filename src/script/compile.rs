@@ -1,4 +1,4 @@
-use std::{collections::HashMap, rc::Rc, sync::Arc};
+use std::{collections::HashMap, rc::Rc, sync::Arc, unreachable};
 
 use crate::{
     generator::{
@@ -8,9 +8,9 @@ use crate::{
                 AngleBisector, AngleLine, AnglePoint, Average, Difference, FreePoint,
                 LineLineIntersection, LinePoint, Literal, Negation, ParallelThrough,
                 PerpendicularThrough, PointLineDistance, PointPointDistance, PointX, PointY,
-                Product, Quotient, Real, SetUnit, Sum,
+                Product, Quotient, Real, SetUnit, Sum, CenterRadius,
             },
-            AnyExpr, Expression, LineExpr, PointExpr, ScalarExpr, Weights,
+            AnyExpr, Expression, LineExpr, PointExpr, ScalarExpr, Weights, CircleExpr,
         },
         AdjustableTemplate, DistanceLiterals, Flags, Optimizations,
     },
@@ -19,12 +19,12 @@ use crate::{
 
 use super::{
     figure::Figure,
-    parser::PredefinedType,
+    parser::Type,
     token::{Position, Span},
     ty,
     unroll::{
         self, Flag, PointMeta, UnrolledExpression, UnrolledExpressionData, UnrolledRule,
-        UnrolledRuleKind, Variable, VariableMeta,
+        UnrolledRuleKind, Variable, VariableMeta, CompileContext,
     },
     Criteria, CriteriaKind, Error, HashableRc, SimpleUnit, Weighed,
 };
@@ -44,6 +44,7 @@ struct ExpressionRecord {
     points: HashMap<HashableRc<UnrolledExpressionData>, Arc<Expression<PointExpr>>>,
     lines: HashMap<HashableRc<UnrolledExpressionData>, Arc<Expression<LineExpr>>>,
     scalars: HashMap<HashableRc<UnrolledExpressionData>, Arc<Expression<ScalarExpr>>>,
+    circles: HashMap<HashableRc<UnrolledExpressionData>, Arc<Expression<CircleExpr>>>
 }
 
 #[derive(Debug, Default)]
@@ -51,6 +52,7 @@ struct VariableRecord {
     points: HashMap<HashableRc<Variable>, Arc<Expression<PointExpr>>>,
     lines: HashMap<HashableRc<Variable>, Arc<Expression<LineExpr>>>,
     scalars: HashMap<HashableRc<Variable>, Arc<Expression<ScalarExpr>>>,
+    circles: HashMap<HashableRc<Variable>, Arc<Expression<CircleExpr>>>,
 }
 
 impl Mapping<Variable, PointExpr> for VariableRecord {
@@ -92,6 +94,20 @@ impl Mapping<Variable, ScalarExpr> for VariableRecord {
         value: Arc<Expression<ScalarExpr>>,
     ) -> Option<Arc<Expression<ScalarExpr>>> {
         self.scalars.insert(key, value)
+    }
+}
+
+impl Mapping<Variable, CircleExpr> for VariableRecord {
+    fn get(&self, key: &HashableRc<Variable>) -> Option<&Arc<Expression<CircleExpr>>> {
+        self.circles.get(key)
+    }
+
+    fn insert(
+        &mut self,
+        key: HashableRc<Variable>,
+        value: Arc<Expression<CircleExpr>>,
+    ) -> Option<Arc<Expression<CircleExpr>>> {
+        self.circles.insert(key, value)
     }
 }
 
@@ -281,6 +297,83 @@ impl Compile for Expression<LineExpr> {
     }
 }
 
+impl Compile for Expression<CircleExpr> {
+    fn compile(
+            expr: &UnrolledExpression,
+            variables: &mut VariableRecord,
+            expressions: &mut ExpressionRecord,
+            template: &mut Vec<AdjustableTemplate>,
+            dst_var: &Option<Rc<Variable>>,
+        ) -> Arc<Self> {
+        // First we have to check if this expression has been compiled already.
+        let key = HashableRc::new(Rc::clone(&expr.data));
+
+        if let Some(v) = expressions.circles.get(&key) {
+            // If so, we return it.
+            return Arc::clone(v);
+        }
+
+        let compiled = match expr.data.as_ref() {
+            UnrolledExpressionData::Circle(center, radius) => Arc::new(Expression::new(
+                CircleExpr::CenterRadius(CenterRadius {
+                    center: Expression::compile(center, variables, expressions, template, dst_var),
+                    radius: Expression::compile(radius, variables, expressions, template, dst_var)
+                }),
+                1.0
+            )),
+            _ => unreachable!("A circle should never be compiled this way"),
+        };
+
+        // We insert for memory.
+        expressions.circles.insert(key, Arc::clone(&compiled));
+        compiled
+    }
+}
+
+fn compile_number(
+    expr: &UnrolledExpression,
+    v: f64,
+    variables: &mut VariableRecord,
+    expressions: &mut ExpressionRecord,
+    template: &mut Vec<AdjustableTemplate>,
+    dst_var: &Option<Rc<Variable>>
+) -> Arc<Expression<ScalarExpr>> {
+    if expr.ty == ty::SCALAR {
+        // If a scalar, we treat it as a standard literal.
+        Arc::new(Expression::new(
+            ScalarExpr::Literal(Literal { value: v }),
+            1.0,
+        ))
+    } else {
+        // Otherwise we pretend it's a scalar literal inside a SetUnit.
+        Expression::compile(
+            &UnrolledExpression {
+                weight: 1.0,
+                ty: expr.ty.clone(),
+                span: expr.span,
+                data: Rc::new(UnrolledExpressionData::SetUnit(
+                    UnrolledExpression {
+                        weight: 1.0,
+                        ty: ty::SCALAR,
+                        span: expr.span,
+                        data: expr.data.clone(),
+                    },
+                    expr.ty
+                        .as_scalar()
+                        .unwrap()
+                        .as_ref()
+                        .unwrap()
+                        .clone(),
+                )),
+            },
+            variables,
+            expressions,
+            template,
+            dst_var,
+        )
+    }
+}
+
 impl Compile for Expression<ScalarExpr> {
     #[allow(clippy::too_many_lines)]
     fn compile(
@@ -303,44 +396,7 @@ impl Compile for Expression<ScalarExpr> {
             UnrolledExpressionData::VariableAccess(var) => {
                 compile_variable(var, variables, expressions, template, dst_var)
             }
-            UnrolledExpressionData::Number(v) => {
-                if expr.ty == ty::SCALAR {
-                    // If a scalar, we treat it as a standard literal.
-                    Arc::new(Expression::new(
-                        ScalarExpr::Literal(Literal { value: *v }),
-                        1.0,
-                    ))
-                } else {
-                    // Otherwise we pretend it's a scalar literal inside a SetUnit.
-                    Self::compile(
-                        &UnrolledExpression {
-                            weight: 1.0,
-                            ty: expr.ty.clone(),
-                            span: expr.span,
-                            data: Rc::new(UnrolledExpressionData::SetUnit(
-                                UnrolledExpression {
-                                    weight: 1.0,
-                                    ty: ty::SCALAR,
-                                    span: expr.span,
-                                    data: expr.data.clone(),
-                                },
-                                expr.ty
-                                    .as_predefined()
-                                    .unwrap()
-                                    .as_scalar()
-                                    .unwrap()
-                                    .as_ref()
-                                    .unwrap()
-                                    .clone(),
-                            )),
-                        },
-                        variables,
-                        expressions,
-                        template,
-                        dst_var,
-                    )
-                }
-            }
+            UnrolledExpressionData::Number(v) => compile_number(expr, *v, variables, expressions, template, dst_var),
             UnrolledExpressionData::FreeReal => {
                 let index = template.len();
                 template.push(AdjustableTemplate::Real);
@@ -356,7 +412,7 @@ impl Compile for Expression<ScalarExpr> {
                         &fix_distance(
                             expr.clone(),
                             unit[SimpleUnit::Distance as usize]
-                                - match expr.ty.as_predefined().unwrap().as_scalar().unwrap() {
+                                - match expr.ty.as_scalar().unwrap() {
                                     Some(unit) => unit[SimpleUnit::Distance as usize],
                                     None => 0,
                                 },
@@ -584,30 +640,14 @@ fn read_flags(flags: &HashMap<String, Flag>) -> Result<Flags, Error> {
     })
 }
 
-/// Compiles the given script.
-///
+/// Get the distance variable.
+/// 
 /// # Errors
-/// Exact descriptions of errors are in `ScriptError` documentation.
-///
+/// Returns an error related to the distances flag.
+/// 
 /// # Panics
-/// Never
-pub fn compile(
-    input: &str,
-    canvas_size: (usize, usize),
-) -> Result<
-    (
-        Vec<Criteria>,
-        Figure,
-        Vec<AdjustableTemplate>,
-        generator::Flags,
-    ),
-    Error,
-> {
-    // First, we have to unroll the script.
-    let (unrolled, mut context) = unroll::unroll(input)?;
-
-    let flags = read_flags(&context.flags)?;
-
+/// Should never panic.
+pub fn get_dst_variable(context: &mut CompileContext, unrolled: &[UnrolledRule], flags: &Flags) -> Result<Option<Rc<Variable>>, Error> {
     // Check if there's a distance literal in variables or rules.
     // In variables
     let are_literals_present = {
@@ -630,7 +670,7 @@ pub fn compile(
             })
     };
 
-    let dst_var = if let Some(at) = are_literals_present {
+    Ok(if let Some(at) = are_literals_present {
         match flags.distance_literals {
             DistanceLiterals::Adjust => {
                 // To handle adjusted distance, we create a new adjustable variable that will pretend to be the scale.
@@ -675,7 +715,34 @@ pub fn compile(
         }
     } else {
         None
-    };
+    })
+}
+
+/// Compiles the given script.
+///
+/// # Errors
+/// Exact descriptions of errors are in `ScriptError` documentation.
+///
+/// # Panics
+/// Never
+pub fn compile(
+    input: &str,
+    canvas_size: (usize, usize),
+) -> Result<
+    (
+        Vec<Criteria>,
+        Figure,
+        Vec<AdjustableTemplate>,
+        generator::Flags,
+    ),
+    Error,
+> {
+    // First, we have to unroll the script.
+    let (unrolled, mut context) = unroll::unroll(input)?;
+
+    let flags = read_flags(&context.flags)?;
+
+    let dst_var = get_dst_variable(&mut context, &unrolled, &flags)?;
 
     // Print variables (debugging)
     // for var in context.variables.values() {
@@ -693,8 +760,8 @@ pub fn compile(
 
     // We precompile all variables.
     for (_, var) in context.variables {
-        match var.definition.ty.as_predefined().unwrap() {
-            PredefinedType::Point => {
+        match var.definition.ty {
+            Type::Point => {
                 compile_variable::<PointExpr>(
                     &var,
                     &mut variables,
@@ -703,7 +770,7 @@ pub fn compile(
                     &dst_var,
                 );
             }
-            PredefinedType::Line => {
+            Type::Line => {
                 compile_variable::<LineExpr>(
                     &var,
                     &mut variables,
@@ -712,7 +779,7 @@ pub fn compile(
                     &dst_var,
                 );
             }
-            PredefinedType::Scalar(_) => {
+            Type::Scalar(_) => {
                 compile_variable::<ScalarExpr>(
                     &var,
                     &mut variables,
@@ -721,7 +788,17 @@ pub fn compile(
                     &dst_var,
                 );
             }
-            PredefinedType::PointCollection(_) => (),
+            Type::PointCollection(_) => (),
+            Type::Circle => {
+                compile_variable::<CircleExpr>(
+                    &var,
+                    &mut variables, 
+                    &mut expressions, 
+                    &mut template, 
+                    &dst_var
+                );
+            }
+            Type::Undefined => unreachable!("Undefined should never be compiled.")
         }
     }
 
@@ -772,7 +849,7 @@ pub fn compile(
             .map(|(key, def)| {
                 (
                     def,
-                    key.meta.clone().unwrap_or(PointMeta {
+                    key.meta.unwrap_or(PointMeta {
                         letter: 'P',
                         primes: 0,
                         index: None,

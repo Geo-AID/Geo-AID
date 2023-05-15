@@ -3,47 +3,46 @@ use std::rc::Rc;
 use crate::{
     script::{
         token::{Position, Span},
-        ty,
         unroll::{
             CompileContext, Function, FunctionOverload, UnrolledExpression, UnrolledExpressionData,
-        },
+        }, ty,
     },
     span,
 };
 
-/// `intersection(line, line)` - point where two lines intersect.
-fn intersection_function_line_line() -> UnrolledExpression {
+/// Circle constructor. Creates a circle based off of its center and radius.
+fn circle_function() -> UnrolledExpression {
     UnrolledExpression {
         weight: 1.0,
-        ty: ty::POINT,
-        span: span!(0, 0, 0, 0),
-        data: Rc::new(UnrolledExpressionData::LineLineIntersection(
+        ty: ty::CIRCLE,
+        data: Rc::new(UnrolledExpressionData::Circle(
             UnrolledExpression {
-                weight: 1.0,
-                ty: ty::LINE,
-                span: span!(0, 0, 0, 0),
                 data: Rc::new(UnrolledExpressionData::Parameter(0)),
+                ty: ty::POINT,
+                span: span!(0,0, 0,0),
+                weight: 1.0
             },
             UnrolledExpression {
-                weight: 1.0,
-                ty: ty::LINE,
-                span: span!(0, 0, 0, 0),
                 data: Rc::new(UnrolledExpressionData::Parameter(1)),
-            },
+                ty: ty::DISTANCE,
+                span: span!(0, 0, 0, 0),
+                weight: 1.0
+            }
         )),
+        span: span!(0, 0, 0, 0),
     }
 }
 
 pub fn register(context: &mut CompileContext) {
     context.functions.insert(
-        String::from("intersection"),
+        String::from("Circle"),
         Function {
-            name: String::from("intersection"),
+            name: String::from("Circle"),
             overloads: vec![FunctionOverload {
-                returned_type: ty::POINT,
+                params: Vec::new(),
+                returned_type: ty::CIRCLE,
                 definition_span: None,
-                definition: intersection_function_line_line(),
-                params: vec![ty::LINE, ty::LINE],
+                definition: circle_function(),
                 param_group: None,
             }],
         },

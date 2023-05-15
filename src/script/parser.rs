@@ -13,7 +13,7 @@ use super::{
         RParen, RSquare, Semi, Slash, Span, Token, Vertical,
     },
     unroll::{CompileContext, RuleOperatorDefinition},
-    ComplexUnit, Error, SimpleUnit,
+    Error, unit, ComplexUnit,
 };
 
 macro_rules! impl_token_parse {
@@ -50,13 +50,12 @@ impl UnaryOperator {
     pub fn get_returned(&self, param: &Type) -> Type {
         match self {
             UnaryOperator::Neg(_) => match param {
-                Type::Predefined(pre) => match pre {
-                    PredefinedType::Point
-                    | PredefinedType::Line
-                    | PredefinedType::PointCollection(_) => Type::Undefined,
-                    t @ PredefinedType::Scalar(_) => Type::Predefined(t.clone()),
-                },
-                _ => Type::Undefined,
+                Type::Point
+                | Type::Line
+                | Type::Circle
+                | Type::Undefined
+                | Type::PointCollection(_) => Type::Undefined,
+                t @ Type::Scalar(_) => t.clone(),
             },
         }
     }
@@ -1234,7 +1233,7 @@ impl<T: Parse> Parse for Box<T> {
 
 /// A builtin type.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum PredefinedType {
+pub enum Type {
     /// A point
     Point,
     /// A line
@@ -1243,9 +1242,13 @@ pub enum PredefinedType {
     Scalar(Option<ComplexUnit>),
     /// A point collection.
     PointCollection(usize),
+    /// A circle
+    Circle,
+    /// Undefinede type = bad
+    Undefined
 }
 
-impl PredefinedType {
+impl Type {
     #[must_use]
     pub fn as_scalar(&self) -> Option<&Option<ComplexUnit>> {
         if let Self::Scalar(v) = self {
@@ -1262,31 +1265,18 @@ pub struct DefinedType {
     pub name: String,
 }
 
-/// A type of an expression or a variable.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Type {
-    /// Builtin
-    Predefined(PredefinedType),
-    /// User-defined
-    Defined,
-    /// undefined, unknown
-    Undefined,
-}
-
 impl Display for Type {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Type::Predefined(pre) => match pre {
-                PredefinedType::Point => write!(f, "Point"),
-                PredefinedType::Line => write!(f, "Line"),
-                PredefinedType::Scalar(unit) => match unit {
-                    Some(unit) => write!(f, "Scalar ({unit})"),
-                    None => write!(f, "Scalar (no unit)"),
-                },
-                PredefinedType::PointCollection(l) => write!(f, "Point collection ({l})"),
+            Self::Point => write!(f, "Point"),
+            Self::Line => write!(f, "Line"),
+            Self::Scalar(unit) => match unit {
+                Some(unit) => write!(f, "Scalar ({unit})"),
+                None => write!(f, "Scalar (no unit)"),
             },
-            Type::Defined => write!(f, "Defined"),
-            Type::Undefined => write!(f, "Undefined"),
+            Self::PointCollection(l) => write!(f, "Point collection ({l})"),
+            Self::Circle => write!(f, "Circle"),
+            Type::Undefined => write!(f, "undefined")
         }
     }
 }
@@ -1296,56 +1286,39 @@ impl Type {
     #[must_use]
     pub fn can_cast(&self, into: &Type) -> bool {
         match self {
-            Type::Predefined(pre) => match pre {
-                // A point can only be cast into another point or a point collection with length one.
-                PredefinedType::Point => match into {
-                    Type::Predefined(pre) => matches!(
-                        pre,
-                        PredefinedType::Point | PredefinedType::PointCollection(1)
-                    ),
-                    _ => false,
-                },
-                // A line can only be cast into another line.
-                PredefinedType::Line => matches!(into, Type::Predefined(PredefinedType::Line)),
-                // A scalar with a defined unit can only be cast into another scalar with the same unit.
-                PredefinedType::Scalar(Some(unit1)) => {
-                    if let Type::Predefined(PredefinedType::Scalar(Some(unit2))) = into {
-                        unit1 == unit2
-                    } else {
-                        false
-                    }
+            // A point can only be cast into another point or a point collection with length one.
+            Type::Point => matches!(
+                into,
+                Type::Point | Type::PointCollection(1)
+            ),
+            // A line can only be cast into another line.
+            Type::Line => matches!(into, Type::Line),
+            // A scalar with a defined unit can only be cast into another scalar with the same unit.
+            Type::Scalar(Some(unit1)) => {
+                if let Type::Scalar(Some(unit2)) = into {
+                    unit1 == unit2
+                } else {
+                    false
                 }
-                // A scalar with no defined unit can be cast into any other scalar, except angle.
-                PredefinedType::Scalar(None) => match into {
-                    Type::Predefined(PredefinedType::Scalar(unit)) => match unit {
-                        Some(unit) => unit.0[3] == 0, // no angle
-                        None => true,
-                    },
-                    _ => false,
+            }
+            // A scalar with no defined unit can be cast into any other scalar, except angle.
+            Type::Scalar(None) => match into {
+                Type::Scalar(unit) => match unit {
+                    Some(unit) => unit.0[3] == 0, // no angle
+                    None => true,
                 },
-                PredefinedType::PointCollection(l) => match into {
-                    Type::Predefined(pre) => match pre {
-                        PredefinedType::Point => *l == 1,
-                        PredefinedType::Line => *l == 2,
-                        PredefinedType::Scalar(Some(unit)) => {
-                            unit == &ComplexUnit::new(SimpleUnit::Distance) && *l == 2
-                        }
-                        PredefinedType::Scalar(None) => false,
-                        PredefinedType::PointCollection(v) => v == l,
-                    },
-                    _ => false,
-                },
+                _ => false,
             },
-            Type::Defined | Type::Undefined => false,
-        }
-    }
-
-    #[must_use]
-    pub fn as_predefined(&self) -> Option<&PredefinedType> {
-        if let Self::Predefined(v) = self {
-            Some(v)
-        } else {
-            None
+            Type::PointCollection(l) => match into {
+                Type::Point => *l == 1,
+                Type::Line | Type::Scalar(Some(unit::DISTANCE)) => {
+                    *l == 2
+                }
+                Type::PointCollection(v) => v == l,
+                _ => false
+            },
+            Type::Circle => matches!(into, Type::Circle),
+            Type::Undefined => false
         }
     }
 }
@@ -1398,7 +1371,7 @@ impl PropertyValue {
                         error_span: ident.get_span(),
                     }),
                 },
-                _ => Err(Error::BooleanExpected {
+                Ident::Collection(_) => Err(Error::BooleanExpected {
                     error_span: ident.get_span(),
                 }),
             },

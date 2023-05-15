@@ -2,12 +2,10 @@ use std::{f64::consts::PI, rc::Rc};
 
 use crate::{
     script::{
-        parser::{PredefinedType, Type},
         token::{Position, Span},
         unroll::{
             CompileContext, Function, FunctionOverload, UnrolledExpression, UnrolledExpressionData,
-        },
-        ComplexUnit, SimpleUnit,
+        }, ty, unit,
     },
     span,
 };
@@ -16,55 +14,43 @@ use crate::{
 fn degrees_function_scalar() -> UnrolledExpression {
     UnrolledExpression {
         weight: 1.0,
-        ty: Type::Predefined(PredefinedType::Scalar(Some(ComplexUnit::new(
-            SimpleUnit::Angle,
-        )))),
+        ty: ty::ANGLE,
         span: span!(0, 0, 0, 0),
         data: Rc::new(UnrolledExpressionData::SetUnit(
             UnrolledExpression {
                 weight: 1.0,
-                ty: Type::Predefined(PredefinedType::Scalar(Some(ComplexUnit::new(
-                    SimpleUnit::Scalar,
-                )))),
+                ty: ty::SCALAR,
                 span: span!(0, 0, 0, 0),
                 data: Rc::new(UnrolledExpressionData::Multiply(
                     UnrolledExpression {
                         weight: 1.0,
-                        ty: Type::Predefined(PredefinedType::Scalar(Some(ComplexUnit::new(
-                            SimpleUnit::Scalar,
-                        )))),
+                        ty: ty::SCALAR,
                         span: span!(0, 0, 0, 0),
                         data: Rc::new(UnrolledExpressionData::Parameter(0)),
                     },
                     UnrolledExpression {
                         weight: 1.0,
-                        ty: Type::Predefined(PredefinedType::Scalar(Some(ComplexUnit::new(
-                            SimpleUnit::Scalar,
-                        )))),
+                        ty: ty::SCALAR,
                         span: span!(0, 0, 0, 0),
                         data: Rc::new(UnrolledExpressionData::Number(PI / 180.0)),
                     },
                 )),
             },
-            ComplexUnit::new(SimpleUnit::Angle),
+            unit::ANGLE
         )),
     }
 }
 
-pub fn register_degrees_function(context: &mut CompileContext) {
+pub fn register(context: &mut CompileContext) {
     context.functions.insert(
         String::from("degrees"),
         Function {
             name: String::from("degrees"),
             overloads: vec![FunctionOverload {
-                returned_type: Type::Predefined(PredefinedType::Scalar(Some(ComplexUnit::new(
-                    SimpleUnit::Angle,
-                )))),
+                returned_type: ty::ANGLE,
                 definition_span: None,
                 definition: degrees_function_scalar(),
-                params: vec![Type::Predefined(PredefinedType::Scalar(Some(
-                    ComplexUnit::new(SimpleUnit::Scalar),
-                )))],
+                params: vec![ty::SCALAR],
                 param_group: None,
             }],
         },
