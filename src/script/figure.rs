@@ -7,7 +7,7 @@ use super::unroll::PointMeta;
 type Point = Arc<Expression<PointExpr>>;
 
 /// Defines the visual data of the figure.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Figure {
     /// The points to be displayed
     pub points: Vec<(Arc<Expression<PointExpr>>, PointMeta)>,

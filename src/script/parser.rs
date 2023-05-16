@@ -1,7 +1,6 @@
 use std::{
     fmt::{Debug, Display},
-    iter::Peekable,
-    rc::Rc,
+    iter::Peekable
 };
 
 use crate::span;
@@ -12,7 +11,6 @@ use super::{
         LBrace, LParen, LSquare, Let, Lt, Lteq, Minus, NamedIdent, Number, Plus, Position, RBrace,
         RParen, RSquare, Semi, Slash, Span, Token, Vertical,
     },
-    unroll::{CompileContext, RuleOperatorDefinition},
     Error, unit, ComplexUnit,
 };
 
@@ -20,8 +18,7 @@ macro_rules! impl_token_parse {
     ($token:ident) => {
         impl Parse for $token {
             fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-                it: &mut Peekable<I>,
-                _context: &CompileContext,
+                it: &mut Peekable<I>
             ) -> Result<Self, Error> {
                 match it.next() {
                     Some(Token::$token(tok)) => Ok(*tok),
@@ -131,13 +128,13 @@ pub struct PointCollectionConstructor {
 impl Parse for PointCollectionConstructor {
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
         it: &mut Peekable<I>,
-        context: &CompileContext,
+        
     ) -> Result<Self, Error> {
         Ok(Self {
-            ampersant: Ampersant::parse(it, context)?,
-            left_paren: LParen::parse(it, context)?,
-            points: Punctuated::parse(it, context)?,
-            right_paren: RParen::parse(it, context)?,
+            ampersant: Ampersant::parse(it)?,
+            left_paren: LParen::parse(it)?,
+            points: Punctuated::parse(it)?,
+            right_paren: RParen::parse(it)?,
         })
     }
 
@@ -180,10 +177,10 @@ impl ExplicitIterator {
 impl Parse for ImplicitIterator {
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
         it: &mut Peekable<I>,
-        context: &CompileContext,
+        
     ) -> Result<Self, Error> {
         Ok(ImplicitIterator {
-            exprs: Punctuated::parse(it, context)?,
+            exprs: Punctuated::parse(it)?,
         })
     }
 
@@ -195,13 +192,13 @@ impl Parse for ImplicitIterator {
 impl Parse for ExplicitIterator {
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
         it: &mut Peekable<I>,
-        context: &CompileContext,
+        
     ) -> Result<Self, Error> {
-        let dollar = Dollar::parse(it, context)?;
-        let id_token = ExprNumber::parse(it, context)?;
-        let left_paren = LParen::parse(it, context)?;
-        let exprs = Punctuated::parse(it, context)?;
-        let right_paren = RParen::parse(it, context)?;
+        let dollar = Dollar::parse(it)?;
+        let id_token = ExprNumber::parse(it)?;
+        let left_paren = LParen::parse(it)?;
+        let exprs = Punctuated::parse(it)?;
+        let right_paren = RParen::parse(it)?;
 
         if exprs.len() == 1 {
             return Err(Error::SingleVariantExplicitIterator {
@@ -407,9 +404,7 @@ pub struct GteqOp {
 #[derive(Debug)]
 pub struct DefinedRuleOperator {
     /// The ident.
-    pub ident: NamedIdent,
-    /// Pointer to the definition.
-    pub definition: Rc<RuleOperatorDefinition>,
+    pub ident: NamedIdent
 }
 
 /// A builtin rule operator
@@ -456,12 +451,12 @@ pub struct FlagName {
 impl Parse for FlagName {
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
         it: &mut Peekable<I>,
-        context: &CompileContext,
+        
     ) -> Result<Self, Error> {
         Ok(Self {
-            at: At::parse(it, context)?,
-            name: Punctuated::parse(it, context)?,
-            colon: Colon::parse(it, context)?,
+            at: At::parse(it)?,
+            name: Punctuated::parse(it)?,
+            colon: Colon::parse(it)?,
         })
     }
 
@@ -481,20 +476,20 @@ pub struct FlagSet {
 impl Parse for FlagSet {
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
         it: &mut Peekable<I>,
-        context: &CompileContext,
+        
     ) -> Result<Self, Error> {
         let mut flags = Vec::new();
 
-        let lbrace = LBrace::parse(it, context)?;
+        let lbrace = LBrace::parse(it)?;
 
         while let Some(Token::At(_)) = it.peek().copied() {
-            flags.push(FlagStatement::parse(it, context)?);
+            flags.push(FlagStatement::parse(it)?);
         }
 
         Ok(Self {
             lbrace,
             flags,
-            rbrace: RBrace::parse(it, context)?,
+            rbrace: RBrace::parse(it)?,
         })
     }
 
@@ -514,16 +509,16 @@ pub enum FlagValue {
 impl Parse for FlagValue {
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
         it: &mut Peekable<I>,
-        context: &CompileContext,
+        
     ) -> Result<Self, Error> {
         let peeked = it.peek().copied();
 
         Ok(match peeked {
             Some(Token::Ident(Ident::Named(_))) => {
-                FlagValue::Ident(NamedIdent::parse(it, context)?)
+                FlagValue::Ident(NamedIdent::parse(it)?)
             }
-            Some(Token::LBrace(_)) => FlagValue::Set(FlagSet::parse(it, context)?),
-            Some(Token::Number(_)) => FlagValue::Number(Number::parse(it, context)?),
+            Some(Token::LBrace(_)) => FlagValue::Set(FlagSet::parse(it)?),
+            Some(Token::Number(_)) => FlagValue::Number(Number::parse(it)?),
             Some(t) => return Err(Error::InvalidToken { token: t.clone() }),
             None => return Err(Error::EndOfInput),
         })
@@ -548,11 +543,11 @@ pub struct FlagStatement {
 impl Parse for FlagStatement {
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
         it: &mut Peekable<I>,
-        context: &CompileContext,
+        
     ) -> Result<Self, Error> {
         Ok(Self {
-            name: FlagName::parse(it, context)?,
-            value: FlagValue::parse(it, context)?,
+            name: FlagName::parse(it)?,
+            value: FlagValue::parse(it)?,
         })
     }
 
@@ -680,8 +675,7 @@ pub trait Parse: Sized {
     /// # Errors
     /// Errors originate from invalid scripts.
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-        it: &mut Peekable<I>,
-        context: &CompileContext,
+        it: &mut Peekable<I>
     ) -> Result<Self, Error>;
 
     /// Gets the parsed item's span.
@@ -690,8 +684,7 @@ pub trait Parse: Sized {
 
 impl Parse for ExprCall {
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-        _it: &mut Peekable<I>,
-        _context: &CompileContext,
+        _it: &mut Peekable<I>
     ) -> Result<Self, Error> {
         unreachable!("ExprCall::parse should never be called.")
     }
@@ -704,15 +697,14 @@ impl Parse for ExprCall {
 
 impl Parse for Statement {
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-        it: &mut Peekable<I>,
-        context: &CompileContext,
+        it: &mut Peekable<I>
     ) -> Result<Self, Error> {
         let tok = it.peek().unwrap();
         Ok(match tok {
-            Token::Let(_) => Statement::Let(LetStatement::parse(it, context)?),
-            Token::Semi(_) => Statement::Noop(Noop::parse(it, context)?),
-            Token::At(_) => Statement::Flag(FlagStatement::parse(it, context)?),
-            _ => Statement::Rule(RuleStatement::parse(it, context)?),
+            Token::Let(_) => Statement::Let(LetStatement::parse(it)?),
+            Token::Semi(_) => Statement::Noop(Noop::parse(it)?),
+            Token::At(_) => Statement::Flag(FlagStatement::parse(it)?),
+            _ => Statement::Rule(RuleStatement::parse(it)?),
         })
     }
 
@@ -729,10 +721,9 @@ impl Parse for Statement {
 impl Parse for Noop {
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
         it: &mut Peekable<I>,
-        context: &CompileContext,
     ) -> Result<Self, Error> {
         Ok(Noop {
-            semi: Semi::parse(it, context)?,
+            semi: Semi::parse(it)?,
         })
     }
 
@@ -744,13 +735,13 @@ impl Parse for Noop {
 impl Parse for RuleStatement {
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
         it: &mut Peekable<I>,
-        context: &CompileContext,
+        
     ) -> Result<Self, Error> {
         Ok(RuleStatement {
-            lhs: Expression::parse(it, context)?,
-            op: RuleOperator::parse(it, context)?,
-            rhs: Expression::parse(it, context)?,
-            semi: Semi::parse(it, context)?,
+            lhs: Expression::parse(it)?,
+            op: RuleOperator::parse(it)?,
+            rhs: Expression::parse(it)?,
+            semi: Semi::parse(it)?,
         })
     }
 
@@ -769,12 +760,12 @@ impl Parse for VariableDefinition {
 
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
         it: &mut Peekable<I>,
-        context: &CompileContext,
+        
     ) -> Result<Self, Error> {
         Ok(Self {
-            name: Ident::parse(it, context)?,
+            name: Ident::parse(it)?,
             display_properties: match it.peek().copied() {
-                Some(Token::LSquare(_)) => Some(DisplayProperties::parse(it, context)?),
+                Some(Token::LSquare(_)) => Some(DisplayProperties::parse(it)?),
                 _ => None,
             },
         })
@@ -784,12 +775,12 @@ impl Parse for VariableDefinition {
 impl Parse for LetStatement {
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
         it: &mut Peekable<I>,
-        context: &CompileContext,
+        
     ) -> Result<Self, Error> {
-        let let_token = Let::parse(it, context)?;
-        let ident = Punctuated::parse(it, context)?;
-        let eq = Eq::parse(it, context)?;
-        let expr = Expression::parse(it, context)?;
+        let let_token = Let::parse(it)?;
+        let ident = Punctuated::parse(it)?;
+        let eq = Eq::parse(it)?;
+        let expr = Expression::parse(it)?;
         let mut rules = Vec::new();
 
         // After the defining expression there can be rules.
@@ -799,8 +790,8 @@ impl Parse for LetStatement {
             match next {
                 Some(Token::Semi(_)) => break,
                 Some(_) => rules.push((
-                    RuleOperator::parse(it, context)?,
-                    Expression::parse(it, context)?,
+                    RuleOperator::parse(it)?,
+                    Expression::parse(it)?,
                 )),
                 None => return Err(Error::EndOfInput),
             };
@@ -812,7 +803,7 @@ impl Parse for LetStatement {
             eq,
             expr,
             rules,
-            semi: Semi::parse(it, context)?,
+            semi: Semi::parse(it)?,
         })
     }
 
@@ -823,8 +814,7 @@ impl Parse for LetStatement {
 
 impl Parse for ExprNumber {
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-        it: &mut Peekable<I>,
-        _context: &CompileContext,
+        it: &mut Peekable<I>
     ) -> Result<Self, Error> {
         match it.next() {
             // The integral and decimal parts have to be merged into one floating point number.
@@ -854,10 +844,10 @@ impl Parse for ExprNumber {
 impl<const ITER: bool> Parse for Expression<ITER> {
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
         it: &mut Peekable<I>,
-        context: &CompileContext,
+        
     ) -> Result<Self, Error> {
         let mut expr = if ITER {
-            let punct = Punctuated::parse(it, context)?;
+            let punct = Punctuated::parse(it)?;
             if punct.len() == 1 {
                 Expression::Single(punct.first)
             } else {
@@ -866,7 +856,7 @@ impl<const ITER: bool> Parse for Expression<ITER> {
             }
         } else {
             // We can only parse one expression.
-            Expression::Single(Box::new(SimpleExpression::parse(it, context)?))
+            Expression::Single(Box::new(SimpleExpression::parse(it)?))
         };
 
         loop {
@@ -888,7 +878,7 @@ impl<const ITER: bool> Parse for Expression<ITER> {
             it.next();
 
             let rhs = {
-                let punct = Punctuated::parse(it, context)?;
+                let punct = Punctuated::parse(it)?;
                 if punct.len() == 1 {
                     Expression::Single(punct.first)
                 } else {
@@ -960,19 +950,19 @@ fn dispatch_order<const ITER: bool>(
 impl Parse for SimpleExpression {
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
         it: &mut Peekable<I>,
-        context: &CompileContext,
+        
     ) -> Result<Self, Error> {
         let next = it.peek().copied();
 
         let expr = match next {
             Some(next) => match next {
-                Token::Number(_) => SimpleExpression::Number(ExprNumber::parse(it, context)?),
+                Token::Number(_) => SimpleExpression::Number(ExprNumber::parse(it)?),
                 Token::Minus(m) => {
                     it.next();
                     // negation
                     SimpleExpression::Unop(ExprUnop {
                         operator: UnaryOperator::Neg(NegOp { minus: *m }),
-                        rhs: Box::new(SimpleExpression::parse(it, context)?),
+                        rhs: Box::new(SimpleExpression::parse(it)?),
                     })
                 }
                 Token::Ident(ident) => {
@@ -985,12 +975,12 @@ impl Parse for SimpleExpression {
                             if let Some(Token::LParen(lparen)) = next {
                                 it.next();
 
-                                let params = Option::parse(it, context)?;
+                                let params = Option::parse(it)?;
 
                                 SimpleExpression::Call(ExprCall {
                                     name: name.clone(),
                                     lparen: *lparen,
-                                    rparen: RParen::parse(it, context)?,
+                                    rparen: RParen::parse(it)?,
                                     params,
                                 })
                             } else {
@@ -1004,13 +994,13 @@ impl Parse for SimpleExpression {
                     }
                 }
                 Token::LParen(_) => {
-                    SimpleExpression::Parenthised(ExprParenthised::parse(it, context)?)
+                    SimpleExpression::Parenthised(ExprParenthised::parse(it)?)
                 }
                 Token::Dollar(_) => {
-                    SimpleExpression::ExplicitIterator(ExplicitIterator::parse(it, context)?)
+                    SimpleExpression::ExplicitIterator(ExplicitIterator::parse(it)?)
                 }
                 Token::Ampersant(_) => SimpleExpression::PointCollection(
-                    PointCollectionConstructor::parse(it, context)?,
+                    PointCollectionConstructor::parse(it)?,
                 ),
                 tok => return Err(Error::invalid_token(tok.clone())),
             },
@@ -1038,14 +1028,14 @@ impl Parse for SimpleExpression {
 impl<T: Parse, U: Parse> Parse for Punctuated<T, U> {
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
         it: &mut Peekable<I>,
-        context: &CompileContext,
+        
     ) -> Result<Self, Error> {
         let mut collection = Vec::new();
 
-        let first = Box::parse(it, context)?;
+        let first = Box::parse(it)?;
 
-        while let Some(punct) = Option::<U>::parse(it, context).unwrap() {
-            collection.push((punct, T::parse(it, context)?));
+        while let Some(punct) = Option::<U>::parse(it).unwrap() {
+            collection.push((punct, T::parse(it)?));
         }
 
         Ok(Punctuated { first, collection })
@@ -1062,11 +1052,11 @@ impl<T: Parse, U: Parse> Parse for Punctuated<T, U> {
 impl<T: Parse> Parse for Option<T> {
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
         it: &mut Peekable<I>,
-        context: &CompileContext,
+        
     ) -> Result<Self, Error> {
         let mut it_cloned = it.clone();
 
-        Ok(match T::parse(&mut it_cloned, context) {
+        Ok(match T::parse(&mut it_cloned) {
             Ok(res) => {
                 *it = it_cloned;
                 Some(res)
@@ -1086,12 +1076,12 @@ impl<T: Parse> Parse for Option<T> {
 impl Parse for ExprParenthised {
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
         it: &mut Peekable<I>,
-        context: &CompileContext,
+        
     ) -> Result<Self, Error> {
         Ok(Self {
-            lparen: LParen::parse(it, context)?,
-            content: Box::parse(it, context)?,
-            rparen: RParen::parse(it, context)?,
+            lparen: LParen::parse(it)?,
+            content: Box::parse(it)?,
+            rparen: RParen::parse(it)?,
         })
     }
 
@@ -1103,7 +1093,7 @@ impl Parse for ExprParenthised {
 impl Parse for RuleOperator {
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
         it: &mut Peekable<I>,
-        context: &CompileContext,
+        
     ) -> Result<Self, Error> {
         let next = it.next();
         match next {
@@ -1124,18 +1114,13 @@ impl Parse for RuleOperator {
                     eq: *eq,
                 }))),
                 Token::Ident(Ident::Named(name)) => {
-                    if let Some(definition) = context.rule_ops.get(&name.ident) {
-                        Ok(RuleOperator::Defined(DefinedRuleOperator {
-                            ident: name.clone(),
-                            definition: Rc::clone(definition),
-                        }))
-                    } else {
-                        Err(Error::undefined_rule_operator(name.clone()))
-                    }
+                    Ok(RuleOperator::Defined(DefinedRuleOperator {
+                        ident: name.clone()
+                    }))
                 }
                 Token::Exclamation(excl) => Ok(RuleOperator::Inverted(InvertedRuleOperator {
                     exlamation: *excl,
-                    operator: Box::new(RuleOperator::parse(it, context)?),
+                    operator: Box::new(RuleOperator::parse(it)?),
                 })),
                 t => Err(Error::invalid_token(t.clone())),
             },
@@ -1183,8 +1168,7 @@ impl_token_parse! {Dot}
 
 impl Parse for NamedIdent {
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-        it: &mut Peekable<I>,
-        _context: &CompileContext,
+        it: &mut Peekable<I>
     ) -> Result<Self, Error> {
         match it.next() {
             Some(Token::Ident(Ident::Named(named))) => Ok(named.clone()),
@@ -1200,8 +1184,7 @@ impl Parse for NamedIdent {
 
 impl Parse for Ident {
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-        it: &mut Peekable<I>,
-        _context: &CompileContext,
+        it: &mut Peekable<I>
     ) -> Result<Self, Error> {
         match it.next() {
             Some(Token::Ident(ident)) => Ok(ident.clone()),
@@ -1221,9 +1204,9 @@ impl Parse for Ident {
 impl<T: Parse> Parse for Box<T> {
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
         it: &mut Peekable<I>,
-        context: &CompileContext,
+        
     ) -> Result<Self, Error> {
-        Ok(Box::new(T::parse(it, context)?))
+        Ok(Box::new(T::parse(it)?))
     }
 
     fn get_span(&self) -> Span {
@@ -1232,7 +1215,7 @@ impl<T: Parse> Parse for Box<T> {
 }
 
 /// A builtin type.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Type {
     /// A point
     Point,
@@ -1341,12 +1324,12 @@ impl Parse for Property {
 
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
         it: &mut Peekable<I>,
-        context: &CompileContext,
+        
     ) -> Result<Self, Error> {
         Ok(Self {
-            name: NamedIdent::parse(it, context)?,
-            eq: Eq::parse(it, context)?,
-            value: PropertyValue::parse(it, context)?,
+            name: NamedIdent::parse(it)?,
+            eq: Eq::parse(it)?,
+            value: PropertyValue::parse(it)?,
         })
     }
 }
@@ -1407,13 +1390,13 @@ impl Parse for PropertyValue {
 
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
         it: &mut Peekable<I>,
-        context: &CompileContext,
+        
     ) -> Result<Self, Error> {
         let peeked = it.peek().copied();
 
         match peeked {
-            Some(Token::Ident(_)) => Ok(Self::Ident(Ident::parse(it, context)?)),
-            Some(Token::Number(_)) => Ok(Self::Number(ExprNumber::parse(it, context)?)),
+            Some(Token::Ident(_)) => Ok(Self::Ident(Ident::parse(it)?)),
+            Some(Token::Number(_)) => Ok(Self::Number(ExprNumber::parse(it)?)),
             Some(t) => Err(Error::invalid_token(t.clone())),
             None => Err(Error::EndOfInput),
         }
@@ -1438,12 +1421,12 @@ impl Parse for DisplayProperties {
 
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
         it: &mut Peekable<I>,
-        context: &CompileContext,
+        
     ) -> Result<Self, Error> {
         Ok(Self {
-            lsquare: LSquare::parse(it, context)?,
-            properties: Punctuated::parse(it, context)?,
-            rsquare: RSquare::parse(it, context)?,
+            lsquare: LSquare::parse(it)?,
+            properties: Punctuated::parse(it)?,
+            rsquare: RSquare::parse(it)?,
         })
     }
 }

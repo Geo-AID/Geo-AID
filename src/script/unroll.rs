@@ -13,7 +13,7 @@ use super::{
         PropertyValue, Punctuated, RuleOperator, RuleStatement, SimpleExpression, Statement
     },
     token::{self, Ident, NamedIdent, PointCollection, Span},
-    ty, ComplexUnit, Error, SimpleUnit, unit,
+    ty, ComplexUnit, Error, SimpleUnit, unit, figure::Figure,
 };
 
 /// A definition for a user-defined rule operator.
@@ -73,9 +73,7 @@ pub struct Variable {
     /// Variable's definition span.
     pub definition_span: Span,
     /// Variable's definition.
-    pub definition: UnrolledExpression,
-    /// Variable's metadata.
-    pub meta: VariableMeta,
+    pub definition: UnrolledExpression
 }
 
 pub type FlagSet = HashMap<String, Flag>;
@@ -1678,43 +1676,16 @@ fn create_variable_named(
         )),
         // Otherwise, create a new variable
         Entry::Vacant(entry) => {
+            match rhs_unrolled.ty {
+                Type::Point => {
+
+                }
+                _ => ()
+            }
+
             let var = Variable {
                 name: entry.key().clone(),
                 definition_span: stat.get_span(),
-                meta: match &rhs_unrolled.ty {
-                    Type::Point => {
-                        let props = PointProperties::parse(display, named.ident.clone())?;
-
-                        VariableMeta::Point(Point {
-                            meta: Some(PointMeta {
-                                letter: props.label.chars().next().unwrap(),
-                                index: None,
-                                primes: 0,
-                            }),
-                            display: props.display,
-                        })
-                    }
-                    Type::Line => VariableMeta::Line,
-                    Type::Scalar(_) => VariableMeta::Scalar,
-                    Type::Circle => VariableMeta::Circle,
-                    Type::PointCollection(l) => {
-                        if *l == 1 {
-                            let props = PointProperties::parse(display, named.ident.clone())?;
-
-                            VariableMeta::Point(Point {
-                                display: true,
-                                meta: Some(PointMeta {
-                                    letter: props.label.chars().next().unwrap(),
-                                    index: None,
-                                    primes: 0,
-                                }),
-                            })
-                        } else {
-                            VariableMeta::PointCollection
-                        }
-                    }
-                    Type::Undefined => return Err(Error::undefined_type_variable(stat.get_span())),
-                },
                 definition: rhs_unrolled,
             };
 
@@ -1783,14 +1754,6 @@ fn create_variable_collection(
                 let var = Variable {
                     name: construct_point_name(pt.0, pt.1),
                     definition_span: stat.get_span(),
-                    meta: VariableMeta::Point(Point {
-                        meta: Some(PointMeta {
-                            letter: pt_letter.map_or(pt.0, |v| v.0),
-                            primes: if pt_letter.is_some() { 0 } else { pt.1 },
-                            index: None,
-                        }),
-                        display: pt_letter.map_or(true, |v| v.1),
-                    }),
                     definition: rhs_unpacked.next().unwrap(),
                 };
 
@@ -1808,6 +1771,7 @@ fn create_variable_collection(
 fn create_variables(
     stat: &LetStatement,
     context: &mut CompileContext,
+    figure: &mut Figure
 ) -> Result<Vec<Rc<Variable>>, Error> {
     let mut variables = Vec::new();
 
@@ -1903,8 +1867,9 @@ fn unroll_let(
     stat: &LetStatement,
     context: &mut CompileContext,
     unrolled: &mut Vec<UnrolledRule>,
+    figure: &mut Figure
 ) -> Result<(), Error> {
-    create_variables(stat, context)?;
+    create_variables(stat, context, figure)?;
 
     // First, we construct an iterator out of lhs
     let lhs: Expression<true> = Expression::ImplicitIterator(ImplicitIterator {
@@ -2452,7 +2417,7 @@ fn set_flag(set: &mut FlagSet, flag: &FlagStatement) -> Result<(), Error> {
 ///
 /// # Errors
 /// Specific error descriptions are in `ScriptError` documentation.
-pub fn unroll(input: &str) -> Result<(Vec<UnrolledRule>, CompileContext), Error> {
+pub fn unroll(input: &str, figure: &mut Figure) -> Result<(Vec<UnrolledRule>, CompileContext), Error> {
     // Unfortunately, due to how context-dependent geoscript is, the code must be compiled immediately after parsing.
     let mut context = CompileContext {
         rule_ops: HashMap::new(),
@@ -2469,17 +2434,7 @@ pub fn unroll(input: &str) -> Result<(Vec<UnrolledRule>, CompileContext), Error>
             .finish(),
     };
 
-    builtins::point::register(&mut context); // Point()
-    builtins::dst::register(&mut context); // dst()
-    builtins::angle::register(&mut context); // angle()
-    builtins::degrees::register(&mut context); // degrees()
-    builtins::radians::register(&mut context); // radians()
-    builtins::mid::register(&mut context); // mid()
-    builtins::perpendicular::register(&mut context); // perpendicular_through()
-    builtins::parallel::register(&mut context); // parallel_through()
-    builtins::intersection::register(&mut context); // intersection()
-    builtins::bisector::register(&mut context); // bisector()
-    builtins::circle::register(&mut context); // Circle()
+    builtins::register(&mut context);
 
     let tokens = token::tokenize(input)?;
     let mut it = tokens.iter().peekable();
@@ -2489,7 +2444,7 @@ pub fn unroll(input: &str) -> Result<(Vec<UnrolledRule>, CompileContext), Error>
     let mut statements = Vec::new();
 
     while it.peek().is_some() {
-        statements.push(Statement::parse(&mut it, &context)?);
+        statements.push(Statement::parse(&mut it)?);
     }
 
     for flag in statements.iter().filter_map(Statement::as_flag) {
@@ -2500,7 +2455,7 @@ pub fn unroll(input: &str) -> Result<(Vec<UnrolledRule>, CompileContext), Error>
         // Unroll the statement
         match stat {
             Statement::Noop(_) | Statement::Flag(_) => (),
-            Statement::Let(stat) => unroll_let(&stat, &mut context, &mut unrolled)?,
+            Statement::Let(stat) => unroll_let(&stat, &mut context, &mut unrolled, figure)?,
             Statement::Rule(stat) => unroll_rulestat(&stat, &mut context, &mut unrolled)?,
         }
     }

@@ -23,8 +23,8 @@ use super::{
     token::{Position, Span},
     ty,
     unroll::{
-        self, Flag, PointMeta, UnrolledExpression, UnrolledExpressionData, UnrolledRule,
-        UnrolledRuleKind, Variable, VariableMeta, CompileContext,
+        self, Flag, UnrolledExpression, UnrolledExpressionData, UnrolledRule,
+        UnrolledRuleKind, Variable, CompileContext,
     },
     Criteria, CriteriaKind, Error, HashableRc, SimpleUnit, Weighed,
 };
@@ -687,8 +687,7 @@ pub fn get_dst_variable(context: &mut CompileContext, unrolled: &[UnrolledRule],
                                     data: Rc::new(UnrolledExpressionData::FreeReal),
                                     ty: ty::SCALAR,
                                     span: span!(0, 0, 0, 0),
-                                },
-                                meta: VariableMeta::Scalar,
+                                }
                             })
                         }),
                 ))
@@ -737,8 +736,13 @@ pub fn compile(
     ),
     Error,
 > {
+    let mut figure = Figure {
+        canvas_size,
+        ..Default::default()
+    };
+
     // First, we have to unroll the script.
-    let (unrolled, mut context) = unroll::unroll(input)?;
+    let (unrolled, mut context) = unroll::unroll(input, &mut figure)?;
 
     let flags = read_flags(&context.flags)?;
 
@@ -838,31 +842,6 @@ pub fn compile(
     // for rule in &criteria {
     //     println!("{rule:?}");
     // }
-
-    let figure = Figure {
-        // We're displaying every variable of type Point
-        points: variables
-            .points
-            .into_iter()
-            .map(|(key, def)| (key.meta.as_point().unwrap().clone(), def))
-            .filter(|(key, _)| key.display)
-            .map(|(key, def)| {
-                (
-                    def,
-                    key.meta.unwrap_or(PointMeta {
-                        letter: 'P',
-                        primes: 0,
-                        index: None,
-                    }),
-                )
-            })
-            .collect(),
-        lines: Vec::new(),
-        angles: Vec::new(),
-        segments: Vec::new(),
-        rays: Vec::new(),
-        canvas_size,
-    };
 
     Ok((criteria, figure, template, flags))
 }
