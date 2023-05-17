@@ -6,14 +6,14 @@ use crate::{
         ty,
         unroll::{
             unroll_parameters, CompileContext, Function, FunctionOverload, UnrolledExpression,
-            UnrolledExpressionData,
-        },
+            UnrolledExpressionData, Properties,
+        }, compile::PreFigure,
     },
     span,
 };
 
 /// `perpendicular_through(line, point)` - returns a line perpendicular to the 1st argument going through point at 2nd argument.
-pub fn line_point() -> UnrolledExpression {
+pub fn line_point(args: &Vec<UnrolledExpression>, figure: &mut PreFigure, display: Option<Properties>) -> UnrolledExpression {
     UnrolledExpression {
         weight: 1.0,
         ty: ty::LINE,

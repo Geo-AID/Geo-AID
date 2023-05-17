@@ -24,7 +24,7 @@ use super::{
     ty,
     unroll::{
         self, Flag, UnrolledExpression, UnrolledExpressionData, UnrolledRule,
-        UnrolledRuleKind, Variable, CompileContext,
+        UnrolledRuleKind, Variable, CompileContext, PointMeta,
     },
     Criteria, CriteriaKind, Error, HashableRc, SimpleUnit, Weighed,
 };
@@ -138,7 +138,7 @@ pub fn fix_distance(
     dst_var: &Rc<Variable>,
 ) -> UnrolledExpression {
     let sp = expr.span;
-    let t = expr.ty.clone();
+    let t = expr.ty;
 
     match power.cmp(&0) {
         std::cmp::Ordering::Less => UnrolledExpression {
@@ -349,7 +349,7 @@ fn compile_number(
         Expression::compile(
             &UnrolledExpression {
                 weight: 1.0,
-                ty: expr.ty.clone(),
+                ty: expr.ty,
                 span: expr.span,
                 data: Rc::new(UnrolledExpressionData::SetUnit(
                     UnrolledExpression {
@@ -358,12 +358,11 @@ fn compile_number(
                         span: expr.span,
                         data: expr.data.clone(),
                     },
-                    expr.ty
+                    *expr.ty
                         .as_scalar()
                         .unwrap()
                         .as_ref()
                         .unwrap()
-                        .clone(),
                 )),
             },
             variables,
@@ -423,7 +422,7 @@ impl Compile for Expression<ScalarExpr> {
                         template,
                         dst_var,
                     ),
-                    unit: unit.clone(),
+                    unit: *unit,
                 }),
                 1.0,
             )),
@@ -717,6 +716,57 @@ pub fn get_dst_variable(context: &mut CompileContext, unrolled: &[UnrolledRule],
     })
 }
 
+/// A figure before expression compilation.
+#[derive(Debug, Clone, Default)]
+pub struct PreFigure {
+    /// Points of the figure.
+    pub points: Vec<(UnrolledExpression, PointMeta)>,
+    /// Lines in the figure.
+    pub lines: Vec<UnrolledExpression>,
+    /// Segments in the figure.
+    pub segments: Vec<(UnrolledExpression, UnrolledExpression)>
+}
+
+impl PreFigure {
+    /// Builds an actual figure.
+    fn build(self, canvas_size: (usize, usize), variables: &mut VariableRecord, expressions: &mut ExpressionRecord, template: &mut Vec<AdjustableTemplate>, dst_var: &Option<Rc<Variable>>) -> Figure {
+        Figure {
+            canvas_size,
+            points: self.points.into_iter().map(|(expr, meta)| (Expression::compile(
+                &expr,
+                variables,
+                expressions,
+                template,
+                dst_var
+            ), meta)).collect(),
+            lines: self.lines.into_iter().map(|expr| Expression::compile(
+                &expr,
+                variables,
+                expressions,
+                template,
+                dst_var
+            )).collect(),
+            segments: self.segments.into_iter().map(|(a, b)| (
+                Expression::compile(
+                    &a,
+                    variables,
+                    expressions,
+                    template,
+                    dst_var
+                ),
+                Expression::compile(
+                    &b,
+                    variables,
+                    expressions,
+                    template,
+                    dst_var
+                )
+            )).collect(),
+            ..Default::default()
+        }
+    }
+}
+
 /// Compiles the given script.
 ///
 /// # Errors
@@ -736,10 +786,7 @@ pub fn compile(
     ),
     Error,
 > {
-    let mut figure = Figure {
-        canvas_size,
-        ..Default::default()
-    };
+    let mut figure = PreFigure::default();
 
     // First, we have to unroll the script.
     let (unrolled, mut context) = unroll::unroll(input, &mut figure)?;
@@ -843,7 +890,7 @@ pub fn compile(
     //     println!("{rule:?}");
     // }
 
-    Ok((criteria, figure, template, flags))
+    Ok((criteria, figure.build(canvas_size, &mut variables, &mut expressions, &mut template, &dst_var), template, flags))
 }
 
 /// Inequality principle and the point plane limit.

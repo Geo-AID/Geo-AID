@@ -52,7 +52,7 @@ impl UnaryOperator {
                 | Type::Circle
                 | Type::Undefined
                 | Type::PointCollection(_) => Type::Undefined,
-                t @ Type::Scalar(_) => t.clone(),
+                t @ Type::Scalar(_) => *t,
             },
         }
     }
@@ -256,7 +256,16 @@ impl<const ITER: bool> Expression<ITER> {
 
 /// A parsed simple expression.
 #[derive(Debug)]
-pub enum SimpleExpression {
+pub struct SimpleExpression {
+    /// The kind of the expression.
+    pub kind: SimpleExpressionKind,
+    /// The additional display information.
+    pub display: Option<DisplayProperties>
+}
+
+/// A parsed simple expression.
+#[derive(Debug)]
+pub enum SimpleExpressionKind {
     /// An identifier (variable access, most likely)
     Ident(Ident),
     /// A raw number
@@ -273,7 +282,7 @@ pub enum SimpleExpression {
     PointCollection(PointCollectionConstructor),
 }
 
-impl SimpleExpression {
+impl SimpleExpressionKind {
     #[must_use]
     pub fn as_ident(&self) -> Option<&Ident> {
         if let Self::Ident(v) = self {
@@ -949,6 +958,25 @@ fn dispatch_order<const ITER: bool>(
 
 impl Parse for SimpleExpression {
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
+            it: &mut Peekable<I>
+        ) -> Result<Self, Error> {
+        Ok(Self {
+            kind: SimpleExpressionKind::parse(it)?,
+            display: Option::parse(it)?
+        })
+    }
+
+    fn get_span(&self) -> Span {
+        if let Some(display) = self.display.as_ref() {
+            self.kind.get_span().join(display.get_span())
+        } else {
+            self.kind.get_span()
+        }
+    }
+}
+
+impl Parse for SimpleExpressionKind {
+    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
         it: &mut Peekable<I>,
         
     ) -> Result<Self, Error> {
@@ -956,11 +984,11 @@ impl Parse for SimpleExpression {
 
         let expr = match next {
             Some(next) => match next {
-                Token::Number(_) => SimpleExpression::Number(ExprNumber::parse(it)?),
+                Token::Number(_) => Self::Number(ExprNumber::parse(it)?),
                 Token::Minus(m) => {
                     it.next();
                     // negation
-                    SimpleExpression::Unop(ExprUnop {
+                    Self::Unop(ExprUnop {
                         operator: UnaryOperator::Neg(NegOp { minus: *m }),
                         rhs: Box::new(SimpleExpression::parse(it)?),
                     })
@@ -977,7 +1005,7 @@ impl Parse for SimpleExpression {
 
                                 let params = Option::parse(it)?;
 
-                                SimpleExpression::Call(ExprCall {
+                                Self::Call(ExprCall {
                                     name: name.clone(),
                                     lparen: *lparen,
                                     rparen: RParen::parse(it)?,
@@ -985,21 +1013,21 @@ impl Parse for SimpleExpression {
                                 })
                             } else {
                                 // or variable access.
-                                SimpleExpression::Ident(Ident::Named(name.clone()))
+                                Self::Ident(Ident::Named(name.clone()))
                             }
                         }
                         Ident::Collection(c) => {
-                            SimpleExpression::Ident(Ident::Collection(c.clone()))
+                            Self::Ident(Ident::Collection(c.clone()))
                         }
                     }
                 }
                 Token::LParen(_) => {
-                    SimpleExpression::Parenthised(ExprParenthised::parse(it)?)
+                    Self::Parenthised(ExprParenthised::parse(it)?)
                 }
                 Token::Dollar(_) => {
-                    SimpleExpression::ExplicitIterator(ExplicitIterator::parse(it)?)
+                    Self::ExplicitIterator(ExplicitIterator::parse(it)?)
                 }
-                Token::Ampersant(_) => SimpleExpression::PointCollection(
+                Token::Ampersant(_) => Self::PointCollection(
                     PointCollectionConstructor::parse(it)?,
                 ),
                 tok => return Err(Error::invalid_token(tok.clone())),
@@ -1012,13 +1040,13 @@ impl Parse for SimpleExpression {
 
     fn get_span(&self) -> Span {
         match self {
-            SimpleExpression::Ident(v) => v.get_span(),
-            SimpleExpression::Number(v) => v.get_span(),
-            SimpleExpression::Call(v) => v.name.span.join(v.rparen.get_span()),
-            SimpleExpression::Unop(v) => v.rhs.get_span().join(match &v.operator {
+            Self::Ident(v) => v.get_span(),
+            Self::Number(v) => v.get_span(),
+            Self::Call(v) => v.name.span.join(v.rparen.get_span()),
+            Self::Unop(v) => v.rhs.get_span().join(match &v.operator {
                 UnaryOperator::Neg(v) => v.minus.span,
             }),
-            SimpleExpression::Parenthised(v) => v.get_span(),
+            Self::Parenthised(v) => v.get_span(),
             Self::ExplicitIterator(v) => v.get_span(),
             Self::PointCollection(v) => v.get_span(),
         }
@@ -1409,7 +1437,7 @@ pub struct DisplayProperties {
     /// '['
     pub lsquare: LSquare,
     /// Properties
-    pub properties: Punctuated<Property, Comma>,
+    pub properties: Punctuated<Property, Semi>,
     /// ']'
     pub rsquare: RSquare,
 }

@@ -5,15 +5,18 @@ use crate::{
         token::{Position, Span},
         ty,
         unroll::{
-            CompileContext, Function, FunctionOverload, UnrolledExpression, UnrolledExpressionData,
+            CompileContext, Function, FunctionOverload, UnrolledExpression, UnrolledExpressionData, Properties
         },
+        compile::PreFigure
     },
     span,
 };
 
+use super::overload;
+
 macro_rules! mid_function {
     ($t:expr, $name:ident) => {
-        pub fn $name() -> UnrolledExpression {
+        pub fn $name(args: &Vec<UnrolledExpression>, figure: &mut PreFigure, display: Option<Properties>) -> UnrolledExpression {
             UnrolledExpression {
                 weight: 1.0,
                 ty: $t,
@@ -40,13 +43,7 @@ pub fn register(context: &mut CompileContext) {
         Function {
             name: String::from("mid"),
             overloads: vec![
-                FunctionOverload {
-                    returned_type: ty::ANGLE,
-                    definition_span: None,
-                    definition: mid_function_angle(),
-                    params: Vec::new(),
-                    param_group: Some(ty::ANGLE),
-                },
+                overload!((...ANGLE) -> ANGLE : mid_function_angle),
                 FunctionOverload {
                     returned_type: ty::DISTANCE,
                     definition_span: None,
