@@ -36,211 +36,260 @@ macro_rules! ty {
 
 macro_rules! params {
     // ($($count:literal-)? $t:ident) => ($crate::script::builtins::ty!($($count-)? $t));
-    ($($($count:literal-)? $t:ident),*) => {vec![$($crate::script::builtins::ty!($($count-)? $t)),*]}
+    ($($($count:literal-)? $t:ident),*) => {vec![$($crate::script::builtins::macros::ty!($($count-)? $t)),*]}
 }
 
 macro_rules! group {
     () => (None);
-    (...$($count:literal-)? $t:ident) => (Some($crate::script::builtins::ty!($($count-)? $t)))
+    (...$($count:literal-)? $t:ident) => (Some($crate::script::builtins::macros::ty!($($count-)? $t)))
 }
 
 macro_rules! overload {
     (($($($count:literal-)? $t:ident),* $(...$($gc:literal-)? $gt:ident)?) -> $($rcount:literal-)? $ret:ident {$content:expr}) => {
         $crate::script::unroll::FunctionOverload {
-            returned_type: $crate::script::builtins::ty!($($rcount-)? $ret),
+            returned_type: $crate::script::builtins::macros::ty!($($rcount-)? $ret),
             definition_span: None,
             definition: $crate::script::unroll::FunctionDefinition(Box::new(
                 $content
             )),
-            params: $crate::script::builtins::params!($($($count-)? $t),*),
-            param_group: $crate::script::builtins::group!()
+            params: $crate::script::builtins::macros::params!($($($count-)? $t),*),
+            param_group: $crate::script::builtins::macros::group!()
         }
     };
     (($($($count:literal-)? $t:ident),* $(...$($gc:literal-)? $gt:ident)?) -> $($rcount:literal-)? $ret:ident : $func:ident) => {
         $crate::script::unroll::FunctionOverload {
-            returned_type: $crate::script::builtins::ty!($($rcount-)? $ret),
+            returned_type: $crate::script::builtins::macros::ty!($($rcount-)? $ret),
             definition_span: None,
             definition: $crate::script::unroll::FunctionDefinition(Box::new($func)),
-            params: $crate::script::builtins::params!($($($count-)? $t),*),
-            param_group: $crate::script::builtins::group!($(...$($gc-)? $gt)?)
+            params: $crate::script::builtins::macros::params!($($($count-)? $t),*),
+            param_group: $crate::script::builtins::macros::group!($(...$($gc-)? $gt)?)
         }
     };
 }
 
-macro_rules! call {
-    ($fig:ident : $func:ident($($arg:expr),*)) => {
-        $func(&vec![$($arg),*], $fig, None)
-    };
-}
+/// Helper macros
+pub mod macros {
+    macro_rules! call {
+        ($fig:ident : $func:ident($($arg:expr),*)) => {
+            $func(&[$($arg.clone()),*], $fig, None)
+        };
+    }
 
-macro_rules! index {
-    ($col:expr, $at:literal) => {
-        $crate::script::unroll::UnrolledExpression {
-            weight: 1.0,
-            ty: $crate::script::ty::POINT,
-            span: $crate::span!(0, 0, 0, 0),
-            data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::IndexCollection(
-                $col.clone(),
-                $at
-            ))
+    macro_rules! index {
+        ($col:expr, $at:literal) => {
+            $crate::script::unroll::UnrolledExpression {
+                weight: 1.0,
+                ty: $crate::script::ty::POINT,
+                span: $crate::span!(0, 0, 0, 0),
+                data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::IndexCollection(
+                    $col.clone(),
+                    $at
+                ))
+            }
         }
     }
-}
 
-macro_rules! bisector_expr {
-    ($a:expr, $b:expr, $c:expr) => {
-        $crate::script::unroll::UnrolledExpression {
-            weight: 1.0,
-            ty: $crate::script::ty::LINE,
-            span: $crate::span!(0, 0, 0, 0),
-            data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::AngleBisector(
-                $a.clone(), $b.clone(), $c.clone()
-            ))
+    macro_rules! bisector {
+        ($a:expr, $b:expr, $c:expr) => {
+            $crate::script::unroll::UnrolledExpression {
+                weight: 1.0,
+                ty: $crate::script::ty::LINE,
+                span: $crate::span!(0, 0, 0, 0),
+                data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::AngleBisector(
+                    $a.clone(), $b.clone(), $c.clone()
+                ))
+            }
         }
     }
-}
 
-macro_rules! line_expr {
-    ($a:expr, $b:expr) => {
-        $crate::script::unroll::UnrolledExpression {
-            weight: 1.0,
-            ty: $crate::script::ty::LINE,
-            span: $crate::span!(0, 0, 0, 0),
-            data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::LineFromPoints(
-                $a.clone(), $b.clone()
-            ))
+    macro_rules! line2 {
+        ($a:expr, $b:expr) => {
+            $crate::script::unroll::UnrolledExpression {
+                weight: 1.0,
+                ty: $crate::script::ty::LINE,
+                span: $crate::span!(0, 0, 0, 0),
+                data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::LineFromPoints(
+                    $a.clone(), $b.clone()
+                ))
+            }
         }
     }
-}
 
-macro_rules! intersection_expr {
-    ($a:expr, $b:expr) => {
-        $crate::script::unroll::UnrolledExpression {
-            weight: 1.0,
-            ty: $crate::script::ty::POINT,
-            span: $crate::span!(0, 0, 0, 0),
-            data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::LineLineIntersection(
-                $a.clone(), $b.clone()
-            ))
+    macro_rules! intersection {
+        ($a:expr, $b:expr) => {
+            $crate::script::unroll::UnrolledExpression {
+                weight: 1.0,
+                ty: $crate::script::ty::POINT,
+                span: $crate::span!(0, 0, 0, 0),
+                data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::LineLineIntersection(
+                    $a.clone(), $b.clone()
+                ))
+            }
         }
     }
-}
 
-macro_rules! average {
-    ($($count:literal-)? $t:ident : $x:expr) => {
-        $crate::script::unroll::UnrolledExpression {
-            weight: 1.0,
-            ty: $crate::script::builtins::ty!($($count-)? $t),
-            span: $crate::span!(0, 0, 0, 0),
-            data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::Average(
-                $x.clone()
-            ))
-        }
-    };
-}
+    macro_rules! average {
+        ($($count:literal-)? $t:ident : $x:expr) => {
+            $crate::script::unroll::UnrolledExpression {
+                weight: 1.0,
+                ty: $crate::script::builtins::macros::ty!($($count-)? $t),
+                span: $crate::span!(0, 0, 0, 0),
+                data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::Average(
+                    $x.iter().cloned().collect()
+                ))
+            }
+        };
+    }
 
-macro_rules! angle_expr {
-    ($a:expr, $b:expr, $c:expr) => {
-        $crate::script::unroll::UnrolledExpression {
-            weight: 1.0,
-            ty: $crate::script::ty::ANGLE,
-            span: $crate::span!(0, 0, 0, 0),
-            data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::ThreePointAngle(
-                $a.clone(), $b.clone(), $c.clone()
-            ))
-        }
-    };
-    ($a:expr, $b:expr) => {
-        $crate::script::unroll::UnrolledExpression {
-            weight: 1.0,
-            ty: $crate::script::ty::ANGLE,
-            span: $crate::span!(0, 0, 0, 0),
-            data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::TwoLineAngle(
-                $a.clone(), $b.clone()
-            ))
+    macro_rules! angle_expr {
+        ($a:expr, $b:expr, $c:expr) => {
+            $crate::script::unroll::UnrolledExpression {
+                weight: 1.0,
+                ty: $crate::script::ty::ANGLE,
+                span: $crate::span!(0, 0, 0, 0),
+                data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::ThreePointAngle(
+                    $a.clone(), $b.clone(), $c.clone()
+                ))
+            }
+        };
+        ($a:expr, $b:expr) => {
+            $crate::script::unroll::UnrolledExpression {
+                weight: 1.0,
+                ty: $crate::script::ty::ANGLE,
+                span: $crate::span!(0, 0, 0, 0),
+                data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::TwoLineAngle(
+                    $a.clone(), $b.clone()
+                ))
+            }
         }
     }
-}
 
-macro_rules! circle_expr {
-    ($a:expr, $b:expr) => {
-        $crate::script::unroll::UnrolledExpression {
-            weight: 1.0,
-            ty: $crate::script::ty::CIRCLE,
-            span: $crate::span!(0, 0, 0, 0),
-            data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::Circle(
-                $a.clone(), $b.clone()
-            ))
+    macro_rules! circle_expr {
+        ($a:expr, $b:expr) => {
+            $crate::script::unroll::UnrolledExpression {
+                weight: 1.0,
+                ty: $crate::script::ty::CIRCLE,
+                span: $crate::span!(0, 0, 0, 0),
+                data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::Circle(
+                    $a.clone(), $b.clone()
+                ))
+            }
         }
     }
-}
 
-macro_rules! set_unit {
-    ($a:expr, %$unit:ident) => {
-        $crate::script::unroll::UnrolledExpression {
-            weight: 1.0,
-            ty: $crate::script::ty::$unit,
-            span: $crate::span!(0, 0, 0, 0),
-            data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::SetUnit(
-                $a.clone(), $crate::script::unit::$unit
-            ))
-        }
-    };
-    ($a:expr, $unit:expr) => {
-        $crate::script::unroll::UnrolledExpression {
-            weight: 1.0,
-            ty: $crate::script::ty::$unit,
-            span: $crate::span!(0, 0, 0, 0),
-            data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::SetUnit(
-                $a.clone(), $unit
-            ))
+    macro_rules! set_unit {
+        ($a:expr, %$unit:ident) => {
+            $crate::script::unroll::UnrolledExpression {
+                weight: 1.0,
+                ty: $crate::script::ty::$unit,
+                span: $crate::span!(0, 0, 0, 0),
+                data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::SetUnit(
+                    $a.clone(), $crate::script::unit::$unit
+                ))
+            }
+        };
+        ($a:expr, $unit:expr) => {
+            $crate::script::unroll::UnrolledExpression {
+                weight: 1.0,
+                ty: $crate::script::ty::$unit,
+                span: $crate::span!(0, 0, 0, 0),
+                data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::SetUnit(
+                    $a.clone(), $unit
+                ))
+            }
         }
     }
-}
 
-macro_rules! math {
-    (*, $a:expr, $b:expr) => {
-        $crate::script::unroll::UnrolledExpression {
-            weight: 1.0,
-            ty: $crate::script::Type::Scalar(Some($a.ty.as_scalar().unwrap().unwrap() * &$b.ty.as_scalar().unwrap().unwrap())),
-            span: $crate::span!(0, 0, 0, 0),
-            data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::Multiply(
-                $a.clone(), $b.clone()
-            ))
-        } 
-    };
-}
+    macro_rules! math {
+        (*, $a:expr, $b:expr) => {
+            $crate::script::unroll::UnrolledExpression {
+                weight: 1.0,
+                ty: $crate::script::Type::Scalar(Some($a.ty.as_scalar().unwrap().unwrap() * &$b.ty.as_scalar().unwrap().unwrap())),
+                span: $crate::span!(0, 0, 0, 0),
+                data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::Multiply(
+                    $a.clone(), $b.clone()
+                ))
+            } 
+        };
+    }
 
-macro_rules! number {
-    ($v:expr) => {
-        $crate::script::unroll::UnrolledExpression {
-            weight: 1.0,
-            ty: $crate::script::ty::SCALAR,
-            span: $crate::span!(0, 0, 0, 0),
-            data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::Number(
-                $v
-            ))
-        } 
-    };
-}
+    macro_rules! number {
+        ($v:expr) => {
+            $crate::script::unroll::UnrolledExpression {
+                weight: 1.0,
+                ty: $crate::script::ty::SCALAR,
+                span: $crate::span!(0, 0, 0, 0),
+                data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::Number(
+                    $v
+                ))
+            } 
+        };
+    }
 
-macro_rules! free {
-    (POINT) => {
-        $crate::script::unroll::UnrolledExpression {
-            weight: 1.0,
-            ty: $crate::script::ty::POINT,
-            span: $crate::span!(0, 0, 0, 0),
-            data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::FreePoint)
+    macro_rules! free {
+        (POINT) => {
+            $crate::script::unroll::UnrolledExpression {
+                weight: 1.0,
+                ty: $crate::script::ty::POINT,
+                span: $crate::span!(0, 0, 0, 0),
+                data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::FreePoint)
+            }
+        };
+    }
+
+    macro_rules! parallel_through {
+        ($a:expr, $b:expr) => {
+            $crate::script::unroll::UnrolledExpression {
+                weight: 1.0,
+                ty: $crate::script::ty::LINE,
+                span: $crate::span!(0, 0, 0, 0),
+                data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::ParallelThrough(
+                    $a.clone(), $b.clone()
+                ))
+            }
         }
+    }
+
+    macro_rules! perpendicular_through {
+        ($a:expr, $b:expr) => {
+            $crate::script::unroll::UnrolledExpression {
+                weight: 1.0,
+                ty: $crate::script::ty::LINE,
+                span: $crate::span!(0, 0, 0, 0),
+                data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::PerpendicularThrough(
+                    $a.clone(), $b.clone()
+                ))
+            }
+        }
+    }
+
+    macro_rules! distance {
+        (PP: $a:expr, $b:expr) => {
+            $crate::script::unroll::UnrolledExpression {
+                weight: 1.0,
+                ty: $crate::script::ty::DISTANCE,
+                span: $crate::span!(0, 0, 0, 0),
+                data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::PointPointDistance(
+                    $a.clone(), $b.clone()
+                ))
+            }
+        };
+        (PL: $a:expr, $b:expr) => {
+            $crate::script::unroll::UnrolledExpression {
+                weight: 1.0,
+                ty: $crate::script::ty::DISTANCE,
+                span: $crate::span!(0, 0, 0, 0),
+                data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::PointLineDistance(
+                    $a.clone(), $b.clone()
+                ))
+            }
+        };
+    }
+
+    pub(crate) use {
+        ty, overload, params, call, index, bisector, line2,
+        group, average, angle_expr, circle_expr, set_unit, math, number,
+        intersection, free, parallel_through, perpendicular_through,
+        distance
     };
 }
-
-pub(crate) use {ty, overload, params, call, index, bisector_expr, line_expr, group, average, angle_expr, circle_expr, set_unit, math, number, intersection_expr, free};
-
-// FunctionOverload {
-//     returned_type: ty::LINE,
-//     definition_span: None,
-//     definition: pc3(),
-//     params: vec![ty::collection(3)],
-//     param_group: None,
-// }

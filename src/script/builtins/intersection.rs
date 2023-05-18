@@ -5,7 +5,7 @@ use crate::script::{
     },
 };
 
-use super::{overload, intersection_expr};
+use super::macros::{overload, intersection};
 
 pub fn register(context: &mut CompileContext) {
     context.functions.insert(
@@ -14,7 +14,7 @@ pub fn register(context: &mut CompileContext) {
             name: String::from("intersection"),
             overloads: vec![
                 overload!((LINE, LINE) -> POINT {
-                    |args, _, _| intersection_expr!(args[0], args[1])
+                    |args, _, _| intersection!(args[0], args[1])
                 })
             ],
         },

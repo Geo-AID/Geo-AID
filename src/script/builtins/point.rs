@@ -5,7 +5,7 @@ use crate::script::{
     }
 };
 
-use super::{overload, free};
+use super::macros::{overload, free};
 
 pub fn register(context: &mut CompileContext) {
     context.functions.insert(

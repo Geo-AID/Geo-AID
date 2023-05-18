@@ -296,8 +296,11 @@ pub struct FunctionOverload {
     pub param_group: Option<Type>,
 }
 
+/// geoscript function declaration
+type GeoFunc = dyn Fn(&[UnrolledExpression], &mut PreFigure, Option<Properties>) -> UnrolledExpression;
+
 /// A function definition.
-pub struct FunctionDefinition(pub Box<dyn Fn(&Vec<UnrolledExpression>, &mut PreFigure, Option<Properties>) -> UnrolledExpression>);
+pub struct FunctionDefinition(pub Box<GeoFunc>);
 
 impl Debug for FunctionDefinition {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -306,7 +309,7 @@ impl Debug for FunctionDefinition {
 }
 
 impl Deref for FunctionDefinition {
-    type Target = Box<dyn Fn(&Vec<UnrolledExpression>, &mut PreFigure, Option<Properties>) -> UnrolledExpression>;
+    type Target = Box<GeoFunc>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -936,7 +939,7 @@ pub fn construct_point_name(letter: char, primes: u8) -> String {
 #[must_use]
 pub fn unroll_parameters(
     definition: &FunctionDefinition,
-    params: &Vec<UnrolledExpression>,
+    params: &[UnrolledExpression],
     figure: &mut PreFigure,
     display: Option<Properties>
 ) -> UnrolledExpression {

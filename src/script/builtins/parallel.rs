@@ -1,40 +1,19 @@
-use std::rc::Rc;
+use std::mem;
 
-use crate::{
-    script::{
-        token::{Position, Span},
-        ty,
-        unroll::{
-            unroll_parameters, CompileContext, Function, FunctionOverload, UnrolledExpression,
-            UnrolledExpressionData, Properties,
-        }, compile::PreFigure,
-    },
-    span,
+use crate::script::{
+    token::{Position, Span},
+    unroll::{
+        CompileContext, Function, UnrolledExpression,
+        Properties,
+    }, compile::PreFigure,
 };
 
-use super::{overload, call};
+use super::macros::{overload, call, parallel_through};
 
 /// `parallel_through(line, point)` - returns a line parallel to the 1st argument going through point at 2nd argument.
-fn parallel_function_line_point(args: &Vec<UnrolledExpression>, figure: &mut PreFigure, display: Option<Properties>) -> UnrolledExpression {
-    UnrolledExpression {
-        weight: 1.0,
-        ty: ty::LINE,
-        span: span!(0, 0, 0, 0),
-        data: Rc::new(UnrolledExpressionData::ParallelThrough(
-            UnrolledExpression {
-                weight: 1.0,
-                ty: ty::LINE,
-                span: span!(0, 0, 0, 0),
-                data: Rc::new(UnrolledExpressionData::Parameter(0)),
-            },
-            UnrolledExpression {
-                weight: 1.0,
-                ty: ty::POINT,
-                span: span!(0, 0, 0, 0),
-                data: Rc::new(UnrolledExpressionData::Parameter(1)),
-            },
-        )),
-    }
+fn parallel_function_line_point(args: &[UnrolledExpression], _figure: &mut PreFigure, display: Option<Properties>) -> UnrolledExpression {
+    mem::drop(display);
+    parallel_through!(args[0], args[1])
 }
 
 pub fn register(context: &mut CompileContext) {

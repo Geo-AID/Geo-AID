@@ -724,7 +724,9 @@ pub struct PreFigure {
     /// Lines in the figure.
     pub lines: Vec<UnrolledExpression>,
     /// Segments in the figure.
-    pub segments: Vec<(UnrolledExpression, UnrolledExpression)>
+    pub segments: Vec<(UnrolledExpression, UnrolledExpression)>,
+    /// Rays in the figure
+    pub rays: Vec<(UnrolledExpression, UnrolledExpression)>
 }
 
 impl PreFigure {
@@ -747,6 +749,22 @@ impl PreFigure {
                 dst_var
             )).collect(),
             segments: self.segments.into_iter().map(|(a, b)| (
+                Expression::compile(
+                    &a,
+                    variables,
+                    expressions,
+                    template,
+                    dst_var
+                ),
+                Expression::compile(
+                    &b,
+                    variables,
+                    expressions,
+                    template,
+                    dst_var
+                )
+            )).collect(),
+            rays: self.rays.into_iter().map(|(a, b)| (
                 Expression::compile(
                     &a,
                     variables,
