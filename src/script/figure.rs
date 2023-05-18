@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::generator::expression::{Expression, LineExpr, PointExpr, ScalarExpr};
+use crate::generator::expression::{CircleExpr, Expression, LineExpr, PointExpr, ScalarExpr};
 
 use super::unroll::PointMeta;
 
@@ -19,6 +19,8 @@ pub struct Figure {
     pub segments: Vec<(Point, Point)>,
     /// Rays to be displayed
     pub rays: Vec<(Point, Point)>,
+    /// Circles to be displayed
+    pub circles: Vec<Arc<Expression<CircleExpr>>>,
     /// The canvas size.
     pub canvas_size: (usize, usize),
 }

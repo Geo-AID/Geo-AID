@@ -5,12 +5,12 @@ use crate::{
         self,
         expression::{
             expr::{
-                AngleBisector, AngleLine, AnglePoint, Average, Difference, FreePoint,
+                AngleBisector, AngleLine, AnglePoint, Average, CenterRadius, Difference, FreePoint,
                 LineLineIntersection, LinePoint, Literal, Negation, ParallelThrough,
                 PerpendicularThrough, PointLineDistance, PointPointDistance, PointX, PointY,
-                Product, Quotient, Real, SetUnit, Sum, CenterRadius,
+                Product, Quotient, Real, SetUnit, Sum,
             },
-            AnyExpr, Expression, LineExpr, PointExpr, ScalarExpr, Weights, CircleExpr,
+            AnyExpr, CircleExpr, Expression, LineExpr, PointExpr, ScalarExpr, Weights,
         },
         AdjustableTemplate, DistanceLiterals, Flags, Optimizations,
     },
@@ -44,7 +44,7 @@ struct ExpressionRecord {
     points: HashMap<HashableRc<UnrolledExpressionData>, Arc<Expression<PointExpr>>>,
     lines: HashMap<HashableRc<UnrolledExpressionData>, Arc<Expression<LineExpr>>>,
     scalars: HashMap<HashableRc<UnrolledExpressionData>, Arc<Expression<ScalarExpr>>>,
-    circles: HashMap<HashableRc<UnrolledExpressionData>, Arc<Expression<CircleExpr>>>
+    circles: HashMap<HashableRc<UnrolledExpressionData>, Arc<Expression<CircleExpr>>>,
 }
 
 #[derive(Debug, Default)]
@@ -299,12 +299,12 @@ impl Compile for Expression<LineExpr> {
 
 impl Compile for Expression<CircleExpr> {
     fn compile(
-            expr: &UnrolledExpression,
-            variables: &mut VariableRecord,
-            expressions: &mut ExpressionRecord,
-            template: &mut Vec<AdjustableTemplate>,
-            dst_var: &Option<Rc<Variable>>,
-        ) -> Arc<Self> {
+        expr: &UnrolledExpression,
+        variables: &mut VariableRecord,
+        expressions: &mut ExpressionRecord,
+        template: &mut Vec<AdjustableTemplate>,
+        dst_var: &Option<Rc<Variable>>,
+    ) -> Arc<Self> {
         // First we have to check if this expression has been compiled already.
         let key = HashableRc::new(Rc::clone(&expr.data));
 
@@ -317,9 +317,9 @@ impl Compile for Expression<CircleExpr> {
             UnrolledExpressionData::Circle(center, radius) => Arc::new(Expression::new(
                 CircleExpr::CenterRadius(CenterRadius {
                     center: Expression::compile(center, variables, expressions, template, dst_var),
-                    radius: Expression::compile(radius, variables, expressions, template, dst_var)
+                    radius: Expression::compile(radius, variables, expressions, template, dst_var),
                 }),
-                1.0
+                1.0,
             )),
             _ => unreachable!("A circle should never be compiled this way"),
         };
@@ -336,7 +336,7 @@ fn compile_number(
     variables: &mut VariableRecord,
     expressions: &mut ExpressionRecord,
     template: &mut Vec<AdjustableTemplate>,
-    dst_var: &Option<Rc<Variable>>
+    dst_var: &Option<Rc<Variable>>,
 ) -> Arc<Expression<ScalarExpr>> {
     if expr.ty == ty::SCALAR {
         // If a scalar, we treat it as a standard literal.
@@ -395,7 +395,9 @@ impl Compile for Expression<ScalarExpr> {
             UnrolledExpressionData::VariableAccess(var) => {
                 compile_variable(var, variables, expressions, template, dst_var)
             }
-            UnrolledExpressionData::Number(v) => compile_number(expr, *v, variables, expressions, template, dst_var),
+            UnrolledExpressionData::Number(v) => {
+                compile_number(expr, *v, variables, expressions, template, dst_var)
+            }
             UnrolledExpressionData::FreeReal => {
                 let index = template.len();
                 template.push(AdjustableTemplate::Real);
@@ -640,13 +642,17 @@ fn read_flags(flags: &HashMap<String, Flag>) -> Result<Flags, Error> {
 }
 
 /// Get the distance variable.
-/// 
+///
 /// # Errors
 /// Returns an error related to the distances flag.
-/// 
+///
 /// # Panics
 /// Should never panic.
-pub fn get_dst_variable(context: &mut CompileContext, unrolled: &[UnrolledRule], flags: &Flags) -> Result<Option<Rc<Variable>>, Error> {
+pub fn get_dst_variable(
+    context: &mut CompileContext,
+    unrolled: &[UnrolledRule],
+    flags: &Flags,
+) -> Result<Option<Rc<Variable>>, Error> {
     // Check if there's a distance literal in variables or rules.
     // In variables
     let are_literals_present = {
@@ -861,13 +867,13 @@ pub fn compile(
             Type::Circle => {
                 compile_variable::<CircleExpr>(
                     &var,
-                    &mut variables, 
-                    &mut expressions, 
-                    &mut template, 
-                    &dst_var
+                    &mut variables,
+                    &mut expressions,
+                    &mut template,
+                    &dst_var,
                 );
             }
-            Type::Undefined => unreachable!("Undefined should never be compiled.")
+            Type::Undefined => unreachable!("Undefined should never be compiled."),
         }
     }
 

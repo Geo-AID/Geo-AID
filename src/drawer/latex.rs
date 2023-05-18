@@ -55,7 +55,8 @@ pub fn draw(target: &Path, canvas_size: (usize, usize), output: &Output) {
                 let pos1 = line.points.0 * scale;
                 let pos2 = line.points.1 * scale;
                 content += &format!(
-                    "\\draw ({},{}) -- ({},{});", pos1.real, pos1.imaginary, pos2.real, pos2.imaginary
+                    "\\draw ({},{}) -- ({},{});",
+                    pos1.real, pos1.imaginary, pos2.real, pos2.imaginary
                 );
             }
             Rendered::Angle(angle) => {
@@ -125,6 +126,20 @@ pub fn draw(target: &Path, canvas_size: (usize, usize), output: &Output) {
                 "#,
                     pos1.real, pos1.imaginary, pos2.real, pos2.imaginary
                 );
+            }
+            Rendered::Circle(circle) => {
+                let pos1 = circle.center * scale;
+                let pos2 = circle.draw_point * scale;
+
+                content += &format!(
+                    r#"
+                    \begin{{scope}}
+                    \coordinate (A) at ({}, {})
+                    \coordinate (B) at ({}, {})
+                    \end{{scope}}
+                    "#,
+                    pos1.real, pos1.imaginary, pos2.real, pos2.imaginary
+                )
             }
         }
     }
