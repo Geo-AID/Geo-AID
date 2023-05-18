@@ -3,10 +3,10 @@ use std::rc::Rc;
 use crate::{
     script::{
         token::{Position, Span},
+        ty, unit,
         unroll::{
             CompileContext, Function, FunctionOverload, UnrolledExpression, UnrolledExpressionData,
         },
-        ty, unit,
     },
     span,
 };
@@ -132,30 +132,21 @@ pub fn register(context: &mut CompileContext) {
                     returned_type: ty::DISTANCE,
                     definition_span: None,
                     definition: dst_function_point_point(),
-                    params: vec![
-                        ty::POINT,
-                        ty::POINT,
-                    ],
+                    params: vec![ty::POINT, ty::POINT],
                     param_group: None,
                 },
                 FunctionOverload {
                     returned_type: ty::DISTANCE,
                     definition_span: None,
                     definition: dst_function_point_line(),
-                    params: vec![
-                        ty::POINT,
-                        ty::LINE,
-                    ],
+                    params: vec![ty::POINT, ty::LINE],
                     param_group: None,
                 },
                 FunctionOverload {
                     returned_type: ty::DISTANCE,
                     definition_span: None,
                     definition: dst_function_line_point(),
-                    params: vec![
-                        ty::LINE,
-                        ty::POINT,
-                    ],
+                    params: vec![ty::LINE, ty::POINT],
                     param_group: None,
                 },
             ],

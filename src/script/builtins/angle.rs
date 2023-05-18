@@ -3,10 +3,10 @@ use std::rc::Rc;
 use crate::{
     script::{
         token::{Position, Span},
+        ty,
         unroll::{
             CompileContext, Function, FunctionOverload, UnrolledExpression, UnrolledExpressionData,
         },
-        ty,
     },
     span,
 };
@@ -133,21 +133,14 @@ pub fn register(context: &mut CompileContext) {
                     returned_type: ty::ANGLE,
                     definition_span: None,
                     definition: angle_function_point_point_point(),
-                    params: vec![
-                        ty::POINT,
-                        ty::POINT,
-                        ty::POINT,
-                    ],
+                    params: vec![ty::POINT, ty::POINT, ty::POINT],
                     param_group: None,
                 },
                 FunctionOverload {
                     returned_type: ty::ANGLE,
                     definition_span: None,
                     definition: angle_function_line_line(),
-                    params: vec![
-                        ty::LINE,
-                        ty::LINE,
-                    ],
+                    params: vec![ty::LINE, ty::LINE],
                     param_group: None,
                 },
             ],

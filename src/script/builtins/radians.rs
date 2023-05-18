@@ -3,10 +3,10 @@ use std::rc::Rc;
 use crate::{
     script::{
         token::{Position, Span},
+        ty, unit,
         unroll::{
             CompileContext, Function, FunctionOverload, UnrolledExpression, UnrolledExpressionData,
         },
-        ty, unit,
     },
     span,
 };

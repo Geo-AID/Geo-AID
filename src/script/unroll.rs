@@ -9,11 +9,11 @@ use super::{
     builtins,
     parser::{
         BinaryOperator, DisplayProperties, ExplicitIterator, Expression, FlagStatement,
-        ImplicitIterator, LetStatement, Parse, PredefinedRuleOperator, Type,
-        PropertyValue, Punctuated, RuleOperator, RuleStatement, SimpleExpression, Statement
+        ImplicitIterator, LetStatement, Parse, PredefinedRuleOperator, PropertyValue, Punctuated,
+        RuleOperator, RuleStatement, SimpleExpression, Statement, Type,
     },
     token::{self, Ident, NamedIdent, PointCollection, Span},
-    ty, ComplexUnit, Error, SimpleUnit, unit,
+    ty, unit, ComplexUnit, Error, SimpleUnit,
 };
 
 /// A definition for a user-defined rule operator.
@@ -51,7 +51,7 @@ pub enum VariableMeta {
     Scalar,
     Line,
     PointCollection,
-    Circle
+    Circle,
 }
 
 impl VariableMeta {
@@ -723,7 +723,7 @@ pub enum UnrolledExpressionData {
     PerpendicularThrough(UnrolledExpression, UnrolledExpression), // Line, Point
     ParallelThrough(UnrolledExpression, UnrolledExpression),      // Line, Point
     LineLineIntersection(UnrolledExpression, UnrolledExpression),
-    Circle(UnrolledExpression, UnrolledExpression) // Center, radius
+    Circle(UnrolledExpression, UnrolledExpression), // Center, radius
 }
 
 impl Display for UnrolledExpressionData {
@@ -779,8 +779,10 @@ impl Display for UnrolledExpressionData {
             }
             UnrolledExpressionData::LineLineIntersection(l1, l2) => {
                 write!(f, "intersection({l1}, {l2})")
-            },
-            UnrolledExpressionData::Circle(center, radius) => write!(f, "circle({center}, {radius})")
+            }
+            UnrolledExpressionData::Circle(center, radius) => {
+                write!(f, "circle({center}, {radius})")
+            }
         }
     }
 }
@@ -964,12 +966,10 @@ pub fn unroll_parameters(
                     unroll_parameters(e2, params),
                 )
             }
-            UnrolledExpressionData::Circle(e1, e2) => {
-                UnrolledExpressionData::Circle(
-                    unroll_parameters(e1, params),
-                    unroll_parameters(e2, params),
-                )
-            }
+            UnrolledExpressionData::Circle(e1, e2) => UnrolledExpressionData::Circle(
+                unroll_parameters(e1, params),
+                unroll_parameters(e2, params),
+            ),
             UnrolledExpressionData::SetUnit(expr, unit) => {
                 UnrolledExpressionData::SetUnit(unroll_parameters(expr, params), unit.clone())
             }
@@ -1201,10 +1201,7 @@ fn unroll_conversion_to_scalar(
             weight: expr.weight,
             data: Rc::new(UnrolledExpressionData::Multiply(
                 unroll_implicit_conversion(e1.clone(), to)?,
-                unroll_implicit_conversion(
-                    e2.clone(),
-                    &ty::SCALAR,
-                )?,
+                unroll_implicit_conversion(e2.clone(), &ty::SCALAR)?,
             )),
         }),
         UnrolledExpressionData::Divide(e1, e2) => Ok(UnrolledExpression {
@@ -1213,10 +1210,7 @@ fn unroll_conversion_to_scalar(
             weight: expr.weight,
             data: Rc::new(UnrolledExpressionData::Divide(
                 unroll_implicit_conversion(e1.clone(), to)?,
-                unroll_implicit_conversion(
-                    e2.clone(),
-                    &ty::SCALAR,
-                )?,
+                unroll_implicit_conversion(e2.clone(), &ty::SCALAR)?,
             )),
         }),
         UnrolledExpressionData::Average(exprs) => Ok(UnrolledExpression {
@@ -1471,10 +1465,7 @@ fn unroll_muldiv(
     match this.ty {
         Type::Scalar(None) => match &other.ty {
             Type::Scalar(None) => Ok(this),
-            _ => unroll_implicit_conversion(
-                this,
-                &ty::SCALAR,
-            ),
+            _ => unroll_implicit_conversion(this, &ty::SCALAR),
         },
         _ => Ok(this),
     }
@@ -1499,10 +1490,7 @@ fn unroll_binop(
 
     let rhs = match &rhs.ty {
         Type::Scalar(_) => rhs,
-        Type::PointCollection(2) => unroll_implicit_conversion(
-            rhs,
-            &ty::DISTANCE,
-        )?,
+        Type::PointCollection(2) => unroll_implicit_conversion(rhs, &ty::DISTANCE)?,
         _ => {
             return Err(Error::InvalidOperandType {
                 error_span: rhs.span.join(rhs.span),
@@ -1515,9 +1503,7 @@ fn unroll_binop(
     match op {
         BinaryOperator::Add(_) | BinaryOperator::Sub(_) => {
             let lhs = match lhs.ty {
-                Type::Scalar(None) => {
-                    unroll_implicit_conversion(lhs, &rhs.ty)?
-                }
+                Type::Scalar(None) => unroll_implicit_conversion(lhs, &rhs.ty)?,
                 _ => lhs,
             };
 
@@ -1544,11 +1530,8 @@ fn unroll_binop(
                 ty: match &lhs.ty {
                     Type::Scalar(None) => lhs.ty.clone(),
                     Type::Scalar(Some(left_unit)) => {
-                        if let Type::Scalar(Some(right_unit)) = &rhs.ty
-                        {
-                            Type::Scalar(Some(
-                                left_unit.clone() * right_unit,
-                            ))
+                        if let Type::Scalar(Some(right_unit)) = &rhs.ty {
+                            Type::Scalar(Some(left_unit.clone() * right_unit))
                         } else {
                             unreachable!()
                         }
@@ -1603,10 +1586,7 @@ fn unpack_expression(
                 span: expr.span,
             })
             .collect()),
-        ty => Err(Error::cannot_unpack(
-            expr.span,
-            ty.clone(),
-        )),
+        ty => Err(Error::cannot_unpack(expr.span, ty.clone())),
     }
 }
 
@@ -1959,14 +1939,8 @@ fn unroll_eq(
         // AB = CD must have different logic as it's implied that this means "equality of distances".
         unrolled.push(UnrolledRule {
             kind: UnrolledRuleKind::Eq,
-            lhs: unroll_implicit_conversion(
-                lhs,
-                &ty::DISTANCE,
-            )?,
-            rhs: unroll_implicit_conversion(
-                rhs,
-                &ty::DISTANCE,
-            )?,
+            lhs: unroll_implicit_conversion(lhs, &ty::DISTANCE)?,
+            rhs: unroll_implicit_conversion(rhs, &ty::DISTANCE)?,
             inverted: false,
         });
 
@@ -2006,9 +1980,7 @@ fn unroll_gt(
     let left_unit = match &lhs.ty {
         Type::Scalar(Some(unit)) => Some(unit.clone()),
         Type::Scalar(None) => None,
-        Type::PointCollection(2) => {
-            Some(unit::DISTANCE)
-        }
+        Type::PointCollection(2) => Some(unit::DISTANCE),
         _ => {
             return Err(Error::InvalidOperandType {
                 error_span: full_span,
@@ -2019,22 +1991,11 @@ fn unroll_gt(
     };
 
     if let Some(ltype) = left_unit {
-        if rhs
-            .ty
-            .can_cast(&Type::Scalar(Some(
-                ltype.clone(),
-            )))
-        {
+        if rhs.ty.can_cast(&Type::Scalar(Some(ltype.clone()))) {
             unrolled.push(UnrolledRule {
                 kind: UnrolledRuleKind::Gt,
-                lhs: unroll_implicit_conversion(
-                    lhs,
-                    &Type::Scalar(Some(ltype.clone())),
-                )?,
-                rhs: unroll_implicit_conversion(
-                    rhs,
-                    &Type::Scalar(Some(ltype)),
-                )?,
+                lhs: unroll_implicit_conversion(lhs, &Type::Scalar(Some(ltype.clone())))?,
+                rhs: unroll_implicit_conversion(rhs, &Type::Scalar(Some(ltype)))?,
                 inverted: false,
             });
         } else {
@@ -2048,9 +2009,7 @@ fn unroll_gt(
         let right_unit = match &rhs.ty {
             Type::Scalar(Some(unit)) => Some(unit.clone()),
             Type::Scalar(None) => None,
-            Type::PointCollection(2) => {
-                Some(ComplexUnit::new(SimpleUnit::Distance))
-            }
+            Type::PointCollection(2) => Some(ComplexUnit::new(SimpleUnit::Distance)),
             _ => {
                 return Err(Error::InvalidOperandType {
                     error_span: lhs.span.join(rhs.span),
@@ -2063,20 +2022,12 @@ fn unroll_gt(
         if let Some(rtype) = right_unit {
             unrolled.push(UnrolledRule {
                 kind: UnrolledRuleKind::Gt,
-                lhs: unroll_implicit_conversion(
-                    lhs,
-                    &Type::Scalar(Some(rtype.clone())),
-                )?,
-                rhs: unroll_implicit_conversion(
-                    rhs,
-                    &Type::Scalar(Some(rtype)),
-                )?,
+                lhs: unroll_implicit_conversion(lhs, &Type::Scalar(Some(rtype.clone())))?,
+                rhs: unroll_implicit_conversion(rhs, &Type::Scalar(Some(rtype)))?,
                 inverted: false,
             });
         } else {
-            let common = Type::Scalar(Some(ComplexUnit::new(
-                SimpleUnit::Scalar,
-            )));
+            let common = Type::Scalar(Some(ComplexUnit::new(SimpleUnit::Scalar)));
             unrolled.push(UnrolledRule {
                 kind: UnrolledRuleKind::Gt,
                 lhs: unroll_implicit_conversion(lhs, &common)?,
@@ -2098,9 +2049,7 @@ fn unroll_lt(
     let left_unit = match &lhs.ty {
         Type::Scalar(Some(unit)) => Some(unit.clone()),
         Type::Scalar(None) => None,
-        Type::PointCollection(2) => {
-            Some(ComplexUnit::new(SimpleUnit::Distance))
-        }
+        Type::PointCollection(2) => Some(ComplexUnit::new(SimpleUnit::Distance)),
         _ => {
             return Err(Error::InvalidOperandType {
                 error_span: lhs.span.join(rhs.span),
@@ -2111,22 +2060,11 @@ fn unroll_lt(
     };
 
     if let Some(ltype) = left_unit {
-        if rhs
-            .ty
-            .can_cast(&Type::Scalar(Some(
-                ltype.clone(),
-            )))
-        {
+        if rhs.ty.can_cast(&Type::Scalar(Some(ltype.clone()))) {
             unrolled.push(UnrolledRule {
                 kind: UnrolledRuleKind::Lt,
-                lhs: unroll_implicit_conversion(
-                    lhs,
-                    &Type::Scalar(Some(ltype.clone())),
-                )?,
-                rhs: unroll_implicit_conversion(
-                    rhs,
-                    &Type::Scalar(Some(ltype)),
-                )?,
+                lhs: unroll_implicit_conversion(lhs, &Type::Scalar(Some(ltype.clone())))?,
+                rhs: unroll_implicit_conversion(rhs, &Type::Scalar(Some(ltype)))?,
                 inverted: false,
             });
         } else {
@@ -2140,9 +2078,7 @@ fn unroll_lt(
         let right_unit = match &rhs.ty {
             Type::Scalar(Some(unit)) => Some(unit.clone()),
             Type::Scalar(None) => None,
-            Type::PointCollection(2) => {
-                Some(ComplexUnit::new(SimpleUnit::Distance))
-            }
+            Type::PointCollection(2) => Some(ComplexUnit::new(SimpleUnit::Distance)),
             _ => {
                 return Err(Error::InvalidOperandType {
                     error_span: full_span,
@@ -2155,14 +2091,8 @@ fn unroll_lt(
         if let Some(rtype) = right_unit {
             unrolled.push(UnrolledRule {
                 kind: UnrolledRuleKind::Lt,
-                lhs: unroll_implicit_conversion(
-                    lhs,
-                    &Type::Scalar(Some(rtype.clone())),
-                )?,
-                rhs: unroll_implicit_conversion(
-                    rhs,
-                    &Type::Scalar(Some(rtype)),
-                )?,
+                lhs: unroll_implicit_conversion(lhs, &Type::Scalar(Some(rtype.clone())))?,
+                rhs: unroll_implicit_conversion(rhs, &Type::Scalar(Some(rtype)))?,
                 inverted: false,
             });
         } else {

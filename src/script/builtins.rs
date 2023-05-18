@@ -1,5 +1,6 @@
 pub mod angle;
 pub mod bisector;
+pub mod circle;
 pub mod degrees;
 pub mod dst;
 pub mod intersection;
@@ -8,4 +9,3 @@ pub mod parallel;
 pub mod perpendicular;
 pub mod point;
 pub mod radians;
-pub mod circle;

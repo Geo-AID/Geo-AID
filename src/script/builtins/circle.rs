@@ -3,9 +3,10 @@ use std::rc::Rc;
 use crate::{
     script::{
         token::{Position, Span},
+        ty,
         unroll::{
             CompileContext, Function, FunctionOverload, UnrolledExpression, UnrolledExpressionData,
-        }, ty,
+        },
     },
     span,
 };
@@ -19,15 +20,15 @@ fn circle_function() -> UnrolledExpression {
             UnrolledExpression {
                 data: Rc::new(UnrolledExpressionData::Parameter(0)),
                 ty: ty::POINT,
-                span: span!(0,0, 0,0),
-                weight: 1.0
+                span: span!(0, 0, 0, 0),
+                weight: 1.0,
             },
             UnrolledExpression {
                 data: Rc::new(UnrolledExpressionData::Parameter(1)),
                 ty: ty::DISTANCE,
                 span: span!(0, 0, 0, 0),
-                weight: 1.0
-            }
+                weight: 1.0,
+            },
         )),
         span: span!(0, 0, 0, 0),
     }

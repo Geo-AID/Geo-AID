@@ -3,9 +3,10 @@ use std::{f64::consts::PI, rc::Rc};
 use crate::{
     script::{
         token::{Position, Span},
+        ty, unit,
         unroll::{
             CompileContext, Function, FunctionOverload, UnrolledExpression, UnrolledExpressionData,
-        }, ty, unit,
+        },
     },
     span,
 };
@@ -36,7 +37,7 @@ fn degrees_function_scalar() -> UnrolledExpression {
                     },
                 )),
             },
-            unit::ANGLE
+            unit::ANGLE,
         )),
     }
 }
