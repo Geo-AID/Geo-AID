@@ -1,36 +1,15 @@
-use std::rc::Rc;
-
-use crate::{
-    script::{
-        token::{Position, Span},
-        unroll::{
-            CompileContext, Function, FunctionOverload, UnrolledExpression, UnrolledExpressionData,
-        }, ty,
-    },
-    span,
+use crate::script::{
+    token::{Position, Span},
+    unroll::{
+        CompileContext, Function, UnrolledExpression, Properties,
+    }, compile::PreFigure,
 };
 
+use super::{overload, call, circle_expr};
+
 /// Circle constructor. Creates a circle based off of its center and radius.
-fn circle_function() -> UnrolledExpression {
-    UnrolledExpression {
-        weight: 1.0,
-        ty: ty::CIRCLE,
-        data: Rc::new(UnrolledExpressionData::Circle(
-            UnrolledExpression {
-                data: Rc::new(UnrolledExpressionData::Parameter(0)),
-                ty: ty::POINT,
-                span: span!(0,0, 0,0),
-                weight: 1.0
-            },
-            UnrolledExpression {
-                data: Rc::new(UnrolledExpressionData::Parameter(1)),
-                ty: ty::DISTANCE,
-                span: span!(0, 0, 0, 0),
-                weight: 1.0
-            }
-        )),
-        span: span!(0, 0, 0, 0),
-    }
+fn circle_function(args: &Vec<UnrolledExpression>, figure: &mut PreFigure, display: Option<Properties>) -> UnrolledExpression {
+    circle_expr!(args[0], args[1])
 }
 
 pub fn register(context: &mut CompileContext) {
@@ -38,13 +17,12 @@ pub fn register(context: &mut CompileContext) {
         String::from("Circle"),
         Function {
             name: String::from("Circle"),
-            overloads: vec![FunctionOverload {
-                params: Vec::new(),
-                returned_type: ty::CIRCLE,
-                definition_span: None,
-                definition: circle_function(),
-                param_group: None,
-            }],
+            overloads: vec![
+                overload!((POINT, DISTANCE) -> CIRCLE : circle_function),
+                overload!((DISTANCE, POINT) -> CIRCLE {
+                    |args, figure, _| call!(figure:circle_function(args[1], args[0]))
+                }),
+            ],
         },
     );
 }
