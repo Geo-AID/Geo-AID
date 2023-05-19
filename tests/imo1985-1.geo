@@ -6,7 +6,5 @@ let A, B, C, D = Point();
 let O = intersection(bisector(AB), bisector(BC));
 OD = OA;
 
-let X = Point();
+let X = intersection(bisector(BCD), bisector(CDA));
 AX + BX = AB;
-
-dst(X, (BC, CD)) = dst(X, AD);

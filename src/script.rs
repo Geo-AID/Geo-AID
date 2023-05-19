@@ -476,7 +476,7 @@ impl Mul for SimpleUnit {
 }
 
 /// Defines a complex unit: a product of simple units.
-#[derive(Clone, PartialEq, Eq, Debug, Serialize)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize)]
 pub struct ComplexUnit([i8; SimpleUnit::Scalar as usize]);
 
 pub mod unit {

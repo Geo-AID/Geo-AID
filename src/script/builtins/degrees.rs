@@ -1,58 +1,24 @@
-use std::{f64::consts::PI, rc::Rc};
+use std::f64::consts::PI;
 
-use crate::{
-    script::{
-        token::{Position, Span},
-        unroll::{
-            CompileContext, Function, FunctionOverload, UnrolledExpression, UnrolledExpressionData,
-        }, ty, unit,
-    },
-    span,
+use crate::script::{
+    token::{Position, Span},
+    unroll::{
+        CompileContext, Function
+    }
 };
 
-/// degrees(scalar) - converts no-unit scalar into angle
-fn degrees_function_scalar() -> UnrolledExpression {
-    UnrolledExpression {
-        weight: 1.0,
-        ty: ty::ANGLE,
-        span: span!(0, 0, 0, 0),
-        data: Rc::new(UnrolledExpressionData::SetUnit(
-            UnrolledExpression {
-                weight: 1.0,
-                ty: ty::SCALAR,
-                span: span!(0, 0, 0, 0),
-                data: Rc::new(UnrolledExpressionData::Multiply(
-                    UnrolledExpression {
-                        weight: 1.0,
-                        ty: ty::SCALAR,
-                        span: span!(0, 0, 0, 0),
-                        data: Rc::new(UnrolledExpressionData::Parameter(0)),
-                    },
-                    UnrolledExpression {
-                        weight: 1.0,
-                        ty: ty::SCALAR,
-                        span: span!(0, 0, 0, 0),
-                        data: Rc::new(UnrolledExpressionData::Number(PI / 180.0)),
-                    },
-                )),
-            },
-            unit::ANGLE
-        )),
-    }
-}
+use super::macros::{overload, set_unit, math, number};
 
 pub fn register(context: &mut CompileContext) {
     context.functions.insert(
         String::from("degrees"),
         Function {
             name: String::from("degrees"),
-            overloads: vec![FunctionOverload {
-                returned_type: ty::ANGLE,
-                definition_span: None,
-                definition: degrees_function_scalar(),
-                params: vec![ty::SCALAR],
-                param_group: None,
-            }],
+            overloads: vec![
+                overload!((SCALAR) -> ANGLE {
+                    |args, _, _| set_unit!(math!(*, args[0], number!(PI / 180.0)), %ANGLE)
+                })
+            ],
         },
     );
 }
