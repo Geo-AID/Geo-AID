@@ -11,9 +11,13 @@ use crate::script::{
 use super::macros::{overload, call, parallel_through};
 
 /// `parallel_through(line, point)` - returns a line parallel to the 1st argument going through point at 2nd argument.
-fn parallel_function_line_point(args: &[UnrolledExpression], _figure: &mut PreFigure, display: Option<Properties>) -> UnrolledExpression {
+fn parallel_function_line_point(args: &[UnrolledExpression], figure: &mut PreFigure, display: Option<Properties>) -> UnrolledExpression {
     mem::drop(display);
-    parallel_through!(args[0], args[1])
+    let expr = parallel_through!(args[0], args[1]);
+
+    figure.lines.push(expr.clone());
+
+    expr
 }
 
 pub fn register(context: &mut CompileContext) {

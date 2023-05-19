@@ -11,9 +11,13 @@ use crate::script::{
 use super::macros::{overload, call, perpendicular_through};
 
 /// `perpendicular_through(line, point)` - returns a line perpendicular to the 1st argument going through point at 2nd argument.
-pub fn line_point(args: &[UnrolledExpression], _figure: &mut PreFigure, display: Option<Properties>) -> UnrolledExpression {
+pub fn line_point(args: &[UnrolledExpression], figure: &mut PreFigure, display: Option<Properties>) -> UnrolledExpression {
     mem::drop(display);
-    perpendicular_through!(args[0], args[1])
+    let expr = perpendicular_through!(args[0], args[1]);
+
+    figure.lines.push(expr.clone());
+
+    expr
 }
 
 pub fn register(context: &mut CompileContext) {

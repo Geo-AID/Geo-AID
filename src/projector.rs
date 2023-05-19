@@ -418,11 +418,14 @@ fn rays(
     for ray in &figure.rays {
         let ray_a = ray.0.evaluate(args).unwrap();
         let ray_b = ray.1.evaluate(args).unwrap();
-        let mut line = get_line(ray_a, ray_b);
-        line.origin = transform(offset, scale, size, line.origin);
+
+        let ray_a = transform(offset, scale, size, ray_a);
+        let ray_b = transform(offset, scale, size, ray_b);
+
+        let line = get_line(ray_a, ray_b);
         let intercepts = get_line_ends(figure, line);
 
-        let vec1 = (ray_a - ray_b).normalize();
+        let vec1 = (ray_b - ray_a).normalize();
         let vec2 = (intercepts.1 - ray_a).normalize();
         let second_point;
 
@@ -440,8 +443,8 @@ fn rays(
 
         blueprint_rays.push(RenderedRay {
             label: String::new(),
-            points: (transform(offset, scale, size, ray_a), second_point),
-            draw_point: transform(offset, scale, size, ray_b),
+            points: (ray_a, second_point),
+            draw_point: ray_b,
         });
     }
 

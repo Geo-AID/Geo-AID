@@ -21,6 +21,16 @@ pub fn point_point_point(args: &[UnrolledExpression], figure: &mut PreFigure, di
         intersection!(expr, line2!(args[0], args[2]))
     ));
 
+    figure.segments.push((
+        args[0].clone(),
+        args[1].clone()
+    ));
+
+    figure.segments.push((
+        args[2].clone(),
+        args[1].clone()
+    ));
+
     expr
 }
 
@@ -30,7 +40,11 @@ pub fn point_point(args: &[UnrolledExpression], figure: &mut PreFigure, display:
     use super::mid::mid_function_point;
     mem::drop(display);
 
-    call!(figure:line_point(line2!(args[0], args[1]), call!(figure:mid_function_point(args[0], args[1]))))
+    let expr = call!(figure:line_point(line2!(args[0], args[1]), call!(figure:mid_function_point(args[0], args[1]))));
+
+    figure.lines.push(expr.clone());
+
+    expr
 }
 
 pub fn register(context: &mut CompileContext) {
