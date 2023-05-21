@@ -84,7 +84,7 @@
 
         <nav id="sidebar" class="sidebar" aria-label="Table of contents">
             <div class="sidebar-scrollbox">
-                <ol class="chapter"><li class="chapter-item expanded "><a href="introduction.html"><strong aria-hidden="true">1.</strong> Introduction</a></li><li class="chapter-item expanded "><a href="guide.html"><strong aria-hidden="true">2.</strong> Beginner guide</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="guide/getting-started.html"><strong aria-hidden="true">2.1.</strong> Getting started</a></li><li class="chapter-item expanded "><a href="guide/distances.html"><strong aria-hidden="true">2.2.</strong> Working with distances</a></li><li class="chapter-item expanded "><a href="guide/complicated-figures.html"><strong aria-hidden="true">2.3.</strong> Dealing with complicated figures</a></li></ol></li><li class="chapter-item expanded "><a href="cli.html"><strong aria-hidden="true">3.</strong> CLI Reference</a></li><li class="chapter-item expanded "><a href="renderers.html"><strong aria-hidden="true">4.</strong> Renderers</a></li><li class="chapter-item expanded "><a href="reference.html"><strong aria-hidden="true">5.</strong> GeoScript reference</a></li></ol>
+                <ol class="chapter"><li class="chapter-item expanded "><a href="introduction.html"><strong aria-hidden="true">1.</strong> Introduction</a></li><li class="chapter-item expanded "><a href="guide.html"><strong aria-hidden="true">2.</strong> Beginner guide</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="guide/getting-started.html"><strong aria-hidden="true">2.1.</strong> Getting started</a></li><li class="chapter-item expanded "><a href="guide/distances.html"><strong aria-hidden="true">2.2.</strong> Working with distances</a></li><li class="chapter-item expanded "><a href="guide/complicated-figures.html"><strong aria-hidden="true">2.3.</strong> Dealing with complicated figures</a></li></ol></li><li class="chapter-item expanded "><a href="cli.html"><strong aria-hidden="true">3.</strong> CLI Reference</a></li><li class="chapter-item expanded "><a href="renderers.html"><strong aria-hidden="true">4.</strong> Renderers</a></li><li class="chapter-item expanded "><a href="reference.html"><strong aria-hidden="true">5.</strong> GeoScript reference</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="reference/syntax.html"><strong aria-hidden="true">5.1.</strong> Syntax</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="reference/syntax/display-options.html"><strong aria-hidden="true">5.1.1.</strong> Display Options</a></li><li class="chapter-item expanded "><a href="reference/syntax/expressions.html"><strong aria-hidden="true">5.1.2.</strong> Expressions</a></li><li class="chapter-item expanded "><a href="reference/syntax/figure.html"><strong aria-hidden="true">5.1.3.</strong> Figure</a></li><li class="chapter-item expanded "><a href="reference/syntax/flags.html"><strong aria-hidden="true">5.1.4.</strong> Flags</a></li><li class="chapter-item expanded "><a href="reference/syntax/identifiers.html"><strong aria-hidden="true">5.1.5.</strong> Identifiers</a></li><li class="chapter-item expanded "><a href="reference/syntax/iterators.html"><strong aria-hidden="true">5.1.6.</strong> Iterators</a></li><li class="chapter-item expanded "><a href="reference/syntax/numbers.html"><strong aria-hidden="true">5.1.7.</strong> Numbers</a></li><li class="chapter-item expanded "><a href="reference/syntax/rules.html"><strong aria-hidden="true">5.1.8.</strong> Rules</a></li><li class="chapter-item expanded "><a href="reference/syntax/variables.html"><strong aria-hidden="true">5.1.9.</strong> Variables</a></li></ol></li><li class="chapter-item expanded "><a href="reference/types.html"><strong aria-hidden="true">5.2.</strong> Types</a></li><li class="chapter-item expanded "><a href="reference/function.html"><strong aria-hidden="true">5.3.</strong> Functions</a></li><li class="chapter-item expanded "><a href="reference/rule-operators.html"><strong aria-hidden="true">5.4.</strong> Rule operators</a></li></ol></li></ol>
             </div>
             <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
         </nav>
@@ -178,7 +178,7 @@ cd Geo-AID
 git checkout v0.2
 </code></pre>
 <p>Then, either build it with <code>cargo build --release</code> and use the produced executable or run it with <code>cargo run --release -- &lt;geo-aid arguments here&gt;</code>.</p>
-<p>Run the program with the <code>--version</code> flag to check if it works properly. You can also run <code>geo-aid --help</code> (replace <code>geo-aid</code> with <code>cargo run --release -- --version</code> if using the second way) if you want to see how to use the tool CLI (you can also check the <a href="guide/../cli.html">CLI reference</a>).</p>
+<p>Run the program with the <code>--version</code> flag to check if it works properly. You can also run <code>geo-aid --help</code> (replace <code>geo-aid</code> with <code>cargo run --release --</code> if using the second way) if you want to see how to use the tool CLI (you can also check the <a href="guide/../cli.html">CLI reference</a>).</p>
 <p>The rest of this book will assume you have the command globally available (as if it was installed).</p>
 <h2 id="your-first-figure"><a class="header" href="#your-first-figure">Your first figure</a></h2>
 <p>In order to use Geo-AID, we have to tell it exactly what we want. We can do this with a script file. Geo-AID uses a special language called GeoScript that lets us give specific instructions. Create the following file with a name of your choice, say <code>figure.geo</code>:</p>
@@ -193,16 +193,404 @@ AB = BC;
 <pre><code class="language-shell">geo-aid figure.geo figure.svg
 </code></pre>
 <p>After a short wait a new file <code>figure.svg</code> should show up. Open it in any SVG previewer (could even be your browser) and gaze at your first figure in awe:</p>
-<p><svg height="500" width="500" xmlns="http://www.w3.org/2000/svg"><circle cx="25" cy="475" fill="currentColor" r="2"/>
-                <text stroke="currentColor" x="5" y="455">B</text><circle cx="454.2741962125423" cy="318.52307811824994" fill="currentColor" r="2"/>
-                <text stroke="currentColor" x="434.2741962125423" y="298.52307811824994">C</text><circle cx="104.12383512354145" cy="25" fill="currentColor" r="2"/>
-                <text stroke="currentColor" x="84.12383512354145" y="5">A</text></svg></p>
-<p>Ok, but what exactly happened here?</p>
+<p><img style="background-color: white;" src="guide/first-figure.svg" alt="An equilateral triangle ABC"></p>
+<p>Ok, but what exactly happened here? Let's take a closer look at the script we've just given to Geo-AID:</p>
+<p>First, we have the three <code>let</code> statements. These statements are used to create variables. In our case, these variables are points created with the <code>Point()</code> function. You can also add special display parameters to the variable definitions to change how they are rendered. For example, if you change the first line to the following:</p>
+<pre><code>let A [label = G] = Point();
+</code></pre>
+<p>you should get something like this:</p>
+<p><img style="background-color: white;" src="guide/renamed-a.svg" alt="An equilateral triangle BCG"></p>
+<p>After the variable definitions, we have the two lines:</p>
+<pre><code>AB = AC;
+AB = BC;
+</code></pre>
+<p>These are called rule statements. They represent a relationship between the left hand side and the right hand side. In this case, the relationship is the equality of lengths AB, BC and AC. It's worth noting that the equality sign represents a <em>rule</em>, not a <em>definition</em> or a <em>redefinition</em>. GeoScript is a description language, not a programming one.</p>
+<p>Geo-AID takes these requirements and attempts to create a figure that meets them.</p>
+<p><code>let</code> statements and rules can be sometimes combined by adding rules <em>after</em> the left hand side of a <code>let</code> statement. For example:</p>
+<pre><code># This is a comment
+let A = Point();
+let B = Point();
+let C = Point();
+let r = BC &lt; AB;
+
+let omega = Circle(A, r);
+</code></pre>
+<p>Here, <code>r</code> is set to the distance <code>BC</code> and said to be smaller than <code>AB</code>.</p>
+<h2 id="expressions"><a class="header" href="#expressions">Expressions</a></h2>
+<p>Geo-AID mostly operates on expressions. They are variable definitions and both sides of rules. Expressions can be mathematical operations, function calls, lines, distances and literals. All expressions produce values of certain types. These can be divided into the following categories:</p>
+<ul>
+<li>primitives</li>
+<li>point collections</li>
+<li>bundle types</li>
+</ul>
+<p>Primitives are points, lines, circles and scalars. They're what the generator operates on and what everything is ultimately compiled into. Everything else is just an abstraction over these primitives. Additionally, scalars can have units. Performing addition or subtraction on scalars with incompatible units is an error.</p>
+<p>Point collections are sequences of point letters, like <code>AB</code>, <code>ABC</code>, <code>GFED</code>, <code>X</code>, <code>A'V</code>. For a name to be collectable, it has to be a single, uppercase letter with an arbitrary number of ticks (<code>'</code>) following it, that represents a point. Point collections can also be constructed using <code>&amp;(...)</code> syntax. You can use them on the left-hand side of <code>let</code> statements to unpack the rhs expression onto a point collection. Note, however, that not all types have that option.</p>
+<pre><code>let ABC = &amp;(intersection(XY, GH), mid(G, H), intersection(TU, KL));
+</code></pre>
+<p>Bundle types are essentially like structs in programming languages. They have their primitive fields and functions defined on them that can be used for more comfortable workflow.</p>
+<h3 id="implicit-conversions"><a class="header" href="#implicit-conversions">Implicit conversions</a></h3>
+<p>Geo-AID is capable of performing some implicit conversions:</p>
+<ul>
+<li>Unitless scalars (usually literals) can be converted into a scalar with any unit.</li>
+<li>A point collection consisting of two points can be converted into a line or the distance between the two points, depending on the context.</li>
+<li>A point collections of length one is always automatically converted into a point.</li>
+<li>When performing mutliplication/division over a scalar with a unit and a scalar with no unit, the latter is automatically converted into a <code>one</code> unit (standard scalar in mathematics).</li>
+<li>Any variable defined with a unitless scalar is automatically given a <code>one</code> unit.</li>
+</ul>
+<h2 id="shortening-the-code-with-iterators"><a class="header" href="#shortening-the-code-with-iterators">Shortening the code with iterators</a></h2>
+<p>Many figures feature multiple points and defining each one with a separate <code>let</code> statement can feel very verbose. To help that, GeoScript has a powerful iterator system. Iterators can be used in <code>let</code> statements and rules on both sides. A sequence of expressions separated by a comma is called an <em>implicit iterator</em>. Using these, we can collapse multiple lines of a script into a single one. For example, our first figure script becomes the following:</p>
+<pre><code>let A, B, C = Point();
+
+AB = AC, BC;
+</code></pre>
+<p>Iterators are expanded into multiple rules/statement by simply iterating over the given sequence. Note that implicit iterators take precedence over binary arithmetic operators. Here's a few examples:</p>
+<pre><code>AB, BC = CD, EF;
+
+# Becomes
+AB = CD;
+BC = EF;
+</code></pre>
+<pre><code>AB &lt; XY + YZ, OI;
+
+# Becomes.
+AB &lt; XY + YZ;
+AB &lt; XY + OI;
+</code></pre>
+<p>whereas</p>
+<pre><code>AB &lt; (XY + YZ), OI;
+
+# Becomes
+
+AB &lt; XY + YZ;
+AB &lt; OI;
+</code></pre>
+<p>To use implicit iterators inside a function call, simply put parentheses around them: <code>intersection(AB, (KL, XY))</code></p>
+<p>Another type of an iterator is an <em>explicit iterator</em>. These are written in the following way:</p>
+<pre><code>AB = $1(AC, BC);
+</code></pre>
+<p>The above example is equivalent to just writing</p>
+<pre><code>AB = AC, BC;
+</code></pre>
+<p>The number after the dollar sign is the <em>id</em> of the iterator. If you're using a single id, they function just like implicit iterators. However, when using multiple different ids, you can get some interesting results:</p>
+<pre><code>$1(AB, CD) &lt; $2(XY, YZ);
+
+# Becomes
+AB &lt; XY;
+CD &lt; XY;
+AB &lt; YZ;
+CD &lt; YZ;
+</code></pre>
+<p>Explicit iterators can also be nested, allowing for even more complicated rules. For example:</p>
+<pre><code>$1(AB, BC) &gt; $1(x, $2(a, b)), $3(9, 4, 3);
+
+# Becomes
+AB &gt; x;
+BC &gt; a;
+BC &gt; b;
+AB &gt; 9;
+AB &gt; 4;
+AB &gt; 3;
+BC &gt; 9;
+BC &gt; 4;
+BC &gt; 3;
+</code></pre>
+<p>There are a few important things to remember about iterators:</p>
+<ul>
+<li>implicit iterators have a default id of 0,</li>
+<li><code>let</code> statements only accept implicit iterators on their left hand side,</li>
+<li><code>let</code> statements only accept one level of iteration in their defining expressions,</li>
+<li>all iterators of the same id must have the same length.</li>
+</ul>
+<p>Exact rules regarding the iterators can be found here.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="working-with-distances"><a class="header" href="#working-with-distances">Working with distances</a></h1>
+<p><strong>NOTE: EVERYTHING REGARDING THIS CHAPTER IS VERY LIKELY TO CHANGE IN THE COMING UPDATES.</strong></p>
+<p>If we run the following code in Geo-AID:</p>
+<pre><code>let A, B, C = Point();
+
+AB, BC, AC = 1, 2, 3;
+</code></pre>
+<p>We'll get the following compiler error:</p>
+<pre><code>error: you must set a value for flag `distance_literals`.
+ --&gt; test.geo:3:14
+  |
+3 | AB, BC, AC = 1, 2, 3;
+  |              ^ note: Required because of this line.
+  |              ^ help: possible values: `adjust`, `solve`
+Fix: Consider defining this flag at the top of the file.
+ --&gt; test.geo:1:1
+  |
+1 | @distance_literals: adjust;
+  | +++++++++++++++++++++++++++
+  | let A, B, C = Point();
+</code></pre>
+<p>Why is that?</p>
+<p>Geo-AID operates on its own coordinate system and has to accept figures with lengths specified in thousands, as well as lengths specified in numbers lower than 1. Because of this, distance literals have to be treated in a special way. Geo-AID handles them by creating a special variable representing a distance unit. This variable then mutliplies every distance literal. For that to work, the compiler has to be informed that you are aware of using distance literals by adding a flag.</p>
+<h2 id="flags"><a class="header" href="#flags">Flags</a></h2>
+<p>Flags can modify the behavior of the generator. They are grouped in categories and can be set two different ways.</p>
+<pre><code># Way 1:
+@optimizations {
+    @identical_expressions: false;
+};
+
+# Way 2:
+@optimizations.identical_expressions: false;
+</code></pre>
+<p>This time, we'll want to set the <code>distance_literals</code> flag to <code>adjust</code>. (<code>solve</code> is currently not supported), as the fix proposal in the compiler error message suggets:</p>
+<pre><code>@distance_literals: adjust;
+let A, B, C = Point();
+
+AB, BC, AC = 1, 2, 3;
+</code></pre>
+<p>Doing so will make Geo-AID create an adjustable scalar that will serve as the distance unit.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="dealing-with-complicated-figures"><a class="header" href="#dealing-with-complicated-figures">Dealing with complicated figures</a></h1>
+<p>Every now and then you will stumble on a figure that is quite challenging to draw, even for Geo-AID. In these cases, it's worth knowing a few tricks to guide Geo-AID through them.</p>
+<p>When Geo-AID generates a figure, it does so with a certain amount of workers, over multiple cycles, until a certain condition (currently: average quality delta over the last x cycles goes below a certain value) is met. That's a lot of different generation parameters and all of them are modifiable.</p>
+<ol>
+<li>Worker count (<code>-c</code> option, 512 by default)</li>
+</ol>
+<p>By modifying this parameter, you change how many different versions of a generation cycle are created. The higher the value, the more likely Geo-AID is to find the right spot for every point. It will, however, take more time and it might make certain flaws of Geo-AID's generation more visible.</p>
+<ol start="2">
+<li>Generation break average delta treshold (<code>-d</code> option, 0.0001 by default)</li>
+</ol>
+<p>Lowering this makes Geo-AID go on with generation for a little longer, essentially postponing the moment it decides it won't really get much better.</p>
+<ol start="3">
+<li>Count of last records used in calculating the average delta (<code>-m</code> option, 128 by default)</li>
+</ol>
+<p>Increasing this makes Geo-AID take more of the last cycles into consideration when deciding whether to stop.</p>
+<ol start="4">
+<li>Maximum adjustment per generation cycle (<code>-a</code> option, 0.5 by default)</li>
+</ol>
+<p>This modifies how much can a single point/scalar be changed when adjusting for another cycle. Keep in mind that this is only a base for calculations. In reality, the amount of adjustment allowed depends on the given point's quality and is different between different workers to allow both big <em>and</em> small changes in the same generation cycle.</p>
+<hr />
+<p>Usually, the most visible effect comes from increasing the worker count. There is also a way to modify Geo-AID's behavior outside of its parameters. You can do so by modifying the <code>point_bounds</code> flag. Enabling them adds rules for points to be contained within (0,0) -&gt; (1,1) range. This will heavily afftect the generation process and severely increase the time it will tak to complete. The result might not be the desired one, so don't expect too much.</p>
+<p>Ultimately the best way of increasing odds for Geo-AID is to write the script as best as you can, relying strongly on defining points with expressions. The golden rule is: the less rules, the better.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="cli-reference"><a class="header" href="#cli-reference">CLI Reference</a></h1>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="renderers"><a class="header" href="#renderers">Renderers</a></h1>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="geoscript-reference"><a class="header" href="#geoscript-reference">GeoScript reference</a></h1>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="syntax"><a class="header" href="#syntax">Syntax</a></h1>
+<p>This chapter describes the syntax of GeoScript. The notation used is the same as deifned in <a href="https://doc.rust-lang.org/reference/notation.html">The Rust Reference</a>. Geo-AID expects utf8 encoded files. All whitespaces are ignored beyond distinguishing separate tokens</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="display-options"><a class="header" href="#display-options">Display Options</a></h1>
+<blockquote>
+<p><sup><strong>Syntax</strong></sup><br />
+<em>Display Properties</em> :<br />
+   <code>[</code> <em>Property</em> (<code>;</code> <em>Property</em>)<sup>*</sup> <code>]</code><br />
+<br />
+<em>Property</em> :<br />
+   <a href="reference/syntax/identifiers.html">NAMED_IDENT</a> <code>=</code> <em>PropertyValue</em><br />
+<br />
+<em>PropertyValue</em> :<br />
+      <a href="reference/syntax/numbers.html">NUMBER</a><br />
+   | <a href="reference/syntax/identifiers.html">IDENT</a></p>
+</blockquote>
+<p>Display options are a simple sequence of key-value pairs used to represent certain options regarding how the figure should be displayed. They're accepted in expressions and variable definitions. Display options with invalid values will cause an error and the ones with invalid names will be ignored (likely to change in the coming versions).</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="expressions-1"><a class="header" href="#expressions-1">Expressions</a></h1>
+<blockquote>
+<p><sup><strong>Syntax</strong></sup><br />
+<em>Expressions&lt;iter&gt;</em> :<br />
+      <a href="reference/syntax/iterators.html"><em>ImplicitIterator</em></a><sub>only if <em>iter</em> = <code>true</code></sub><br />
+   | <em>SimpleExpression</em><br />
+   | <em>Expression&lt;iter&gt;</em> <em>BinOp</em> <em>Expression&lt;iter&gt;</em>;<br />
+<br />
+<em>BinOp</em> :<br />
+   <code>+</code> | <code>-</code> | <code>*</code> | <code>/</code><br />
+<br />
+<em>SimpleExpression</em> :<br />
+   <em>SimpleExpressionKind</em> <em>DisplayOptions</em><sup>?</sup><br />
+<br />
+<em>SimpleExpressionKind</em> :<br />
+      <a href="reference/syntax/identifiers.html">IDENT</a><br />
+   | <a href="reference/syntax/numbers.html">NUMBER</a><br />
+   | <em>ExprCall</em><br />
+   | <em>UnOp</em> <em>SimpleExpression</em><br />
+   | <code>(</code> <em>Expression&lt;true&gt;</em> <code>)</code><br />
+   | <a href="reference/syntax/iterators.html"><em>ExplicitIterator</em></a><br />
+   | <em>PointCollectionConstructor</em><br />
+<br />
+<em>ExprCall</em> :<br />
+   <a href="reference/syntax/identifiers.html">NAMED_IDENT</a> <code>(</code> (<em>Expression&lt;false&gt;</em> (<code>,</code> <em>Expression&lt;false&gt;</em>)<sup>*</sup>)<sup>?</sup> <code>)</code><br />
+<br />
+<em>UnOp</em> :<br />
+   <code>-</code><br />
+<br />
+<em>PointCollectionConstructor</em> :<br />
+   <code>&amp;</code> <code>(</code> <em>Expression&lt;false&gt;</em> (<code>,</code> <em>Expression&lt;false&gt;</em>)<sup>*</sup> <code>)</code></p>
+</blockquote>
+<p>Expressions represent all values in GeoScript. A simple example of an expression is a variable reference with the variable's value or a number literal. After most expressions display options can be given, modifying how the expression affects the final figure visually.</p>
+<h2 id="functions"><a class="header" href="#functions">Functions</a></h2>
+<p>Using a typical call syntax (<code>funcname(arg1, arg2, ...)</code>) one can also call functions with specified parameters. Functions can modify the visual output of the figure, e. g. add a line/ray. This behavior can be usually modified using display options. Some functions accept parameter groups, allowing infinite number of parameters. All functions return a single value. Implicit iterators cannot be used in function parameters, unless surrounded by parenthesis.</p>
+<h2 id="operators"><a class="header" href="#operators">Operators</a></h2>
+<p>Binary operators all have the standard mathematical operation order. Unary operators always precede binary operators and implicit iterators always precede all operators. You can define your own order with parenthesis.</p>
+<p>Currently, Geo-AID supports only addition, subtraction, multiplication and division as binary operators and negation as unary.</p>
+<h2 id="point-collections"><a class="header" href="#point-collections">Point Collections</a></h2>
+<p>Expressions can also be used to construct point collections out of other expressions with <code>&amp;(A, B, ...)</code> syntax. All expressions inside must be convertible to points.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="figure"><a class="header" href="#figure">Figure</a></h1>
+<blockquote>
+<p><sup><strong>Syntax</strong></sup><br />
+<em>Figure</em> :<br />
+   <em>Statement</em><sup>*</sup><br />
+<br />
+<em>Statement</em> :<br />
+      <a href="reference/syntax/flags.html"><em>FlagStatement</em></a><br />
+   | <a href="reference/syntax/variables.html"><em>LetStatement</em></a><br />
+   | <a href="reference/syntax/rules.html"><em>RuleStatement</em></a>
+   | <code>;</code></p>
+</blockquote>
+<p>A <em>Figure</em> describes how a figure should be generated in terms of generator flags, variable definitions and rules.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="flags-1"><a class="header" href="#flags-1">Flags</a></h1>
+<blockquote>
+<p><sup><strong>Syntax</strong></sup><br />
+<em>FlagStatement</em> :<br />
+   <em>FlagName</em> <em>FlagValue</em><br />
+<br />
+<em>FlagName</em> :<br />
+   <code>@</code> <a href="reference/syntax/identifiers.html">NAMED_IDENT</a> (<code>.</code> <a href="reference/syntax/identifiers.html">NAMED_IDENT</a>)<sup>*</sup> <code>:</code><br />
+<br />
+<em>FlagValue</em> :<br />
+      <a href="reference/syntax/identifiers.html">NAMED_IDENT</a><br />
+   | <em>FlagSet</em><br />
+   | <a href="reference/syntax/numbers.html">NUMBER</a><br />
+<br />
+<em>FlagSet</em> :<br />
+   <code>{</code> <em>FlagStatement</em><sup>*</sup> <code>}</code></p>
+</blockquote>
+<p>Flags modify the behavior of Geo-AID's generator. They have default values, though some of them need to be explicitly specified to enable certain features (e. g. <code>distance_literals</code>).</p>
+<p>A flag statement composes of the flag's name and its value. Each flag has a predefined type and will only accept values of that type. Identifier flags accept identifiers in general, though usually only a subset of identifiers is valid, representing certain behavior options. Boolean flags are used to enable or disable certain features/modifications to the standard behavior. They accept <code>1</code>, <code>true</code>, <code>enabled</code> and <code>yes</code> as a <code>true</code> value and <code>0</code>, <code>false</code>, <code>disabled</code> and <code>no</code> as a <code>false</code> value. Number flags may accept floats or integers, depending on the flag. Flag sets are special flags that categorize other flags. If you want to modify multiple flags of the same category, simply set the value of the parent set flag to a flag set with the respective statements.</p>
+<p>Flag statements also accept a syntatic sugar for flag indexing. Instead of writing</p>
+<pre><code>@optimizations {
+    @identical_expressions: false
+}
+</code></pre>
+<p>You can simply write</p>
+<pre><code>@optimizations.identical_expressions: false
+</code></pre>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="identifiers"><a class="header" href="#identifiers">Identifiers</a></h1>
+<blockquote>
+<p><sup><strong>Lexer</strong></sup><br />
+IDENT :<br />
+      NAMED_IDENT<br />
+   | POINT_COLLECTION<br />
+<br />
+NAMED_IDENT :<br />
+   Start Continue<sup>*</sup><br />
+<br />
+POINT_COLLECTION :<br />
+   (Point <code>'</code><sup>*</sup>)<sup>+</sup></p>
+</blockquote>
+<p>Where <code>Start</code> is any unicode character with the <em>Alphabetic</em> property or an underscore (<code>_</code>) character, <code>Continue</code> is <code>Start</code> or a tick (<code>'</code>) character and <code>Point</code> is any unicode character with the <em>Uppercase</em> property.</p>
+<p>Identifiers mostly represent variables, though they may also serve as a rule operator, a function, a value for a display property or a flag value. </p>
+<p>Point collections are a special kind of identifiers. They essentially represent a sequence of variables, each being a point.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="iterators"><a class="header" href="#iterators">Iterators</a></h1>
+<blockquote>
+<p><sup><strong>Syntax</strong></sup><br />
+<em>ImplicitIterator</em> :<br />
+   <a href="reference/syntax/expressions.html"><em>Expression&lt;false&gt;</em></a> (<code>,</code> <a href="reference/syntax/expressions.html"><em>Expression&lt;false&gt;</em></a>)<sup>+</sup><br />
+<br />
+<em>ExplicitIterator</em> :<br />
+   <code>$</code> <code>(</code> <a href="reference/syntax/expressions.html"><em>Expression&lt;false&gt;</em></a> (<code>,</code> <a href="reference/syntax/expressions.html"><em>Expression&lt;false&gt;</em></a>)<sup>*</sup> <code>)</code></p>
+</blockquote>
+<p>Iterators can be used in <code>let</code> statements and rules on both sides. A sequence of expressions separated by a comma is called an <em>implicit iterator</em>. Using these, multiple lines of a script can be collapsed into a single one. For example:</p>
+<pre><code>let A, B, C = Point();
+
+AB = AC, BC;
+</code></pre>
+<p>Iterators are expanded into multiple rules/statement by simply iterating over the given sequence. Implicit iterators take precedence over any arithmetic operators. Here's a few examples:</p>
+<pre><code>AB, BC = CD, EF;
+
+# Becomes
+AB = CD;
+BC = EF;
+</code></pre>
+<pre><code>AB &lt; XY + YZ, OI;
+
+# Becomes.
+AB &lt; XY + YZ;
+AB &lt; XY + OI;
+</code></pre>
+<p>whereas</p>
+<pre><code>AB &lt; (XY + YZ), OI;
+
+# Becomes
+
+AB &lt; XY + YZ;
+AB &lt; OI;
+</code></pre>
+<p>To use implicit iterators inside a function call, simply put parentheses around them: <code>intersection(AB, (KL, XY))</code></p>
+<p>Another type of an iterator is an <em>explicit iterator</em>. These are written in the following way:</p>
+<pre><code>AB = $1(AC, BC);
+</code></pre>
+<p>The above example is equivalent to just writing</p>
+<pre><code>AB = AC, BC;
+</code></pre>
+<p>The number after the dollar sign is the <em>id</em> of the iterator. If only a single id is used, they function just like implicit iterators. However, when using multiple different ids, more complicated results can be achieved:</p>
+<pre><code>$1(AB, CD) &lt; $2(XY, YZ);
+
+# Becomes
+AB &lt; XY;
+CD &lt; XY;
+AB &lt; YZ;
+CD &lt; YZ;
+</code></pre>
+<p>Explicit iterators can also be nested, allowing for even more complicated rules. For example:</p>
+<pre><code>$1(AB, BC) &gt; $1(x, $2(a, b)), $3(9, 4, 3);
+
+# Becomes
+AB &gt; x;
+BC &gt; a;
+BC &gt; b;
+AB &gt; 9;
+AB &gt; 4;
+AB &gt; 3;
+BC &gt; 9;
+BC &gt; 4;
+BC &gt; 3;
+</code></pre>
+<p>Iterators have a few rules. Not obeying them causes compilation errors.</p>
+<ul>
+<li>All implicit iterators have an id of 0;</li>
+<li>All iterators of the same id must have the same length;</li>
+<li>The left hand side of let statements only accept implicit iterators;</li>
+<li>The right hand side of let statements accepts at most one level of iteration;</li>
+<li>The right hand side of a let statement may only contain iterators, if so does the left side;</li>
+<li>All iterators must have at least two variants;</li>
+<li>An iterator with id x must not contain another iterator with id x;</li>
+<li>Iterator length must not exceed 255;</li>
+<li>Iterator id must be an integer;</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="numbers"><a class="header" href="#numbers">Numbers</a></h1>
+<blockquote>
+<p><sup><strong>Lexer</strong></sup><br />
+NUMBER :<br />
+   Digit<sup>+</sup> (<code>.</code> Digit<sup>+</sup>)<sup>?</sup></p>
+</blockquote>
+<p>Where <em>Digit</em> is an ASCII digit (<code>0-9</code>). Either integers or decimals.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="rules"><a class="header" href="#rules">Rules</a></h1>
+<blockquote>
+<p><sup><strong>Syntax</strong></sup><br />
+<em>RuleStatement</em> :<br />
+   <em><a href="reference/syntax/expressions.html">Expression&lt;true&gt;</a></em> <em>RuleOp</em> <a href="reference/syntax/expressions.html">Expression&lt;true&gt;</a>* <code>;</code><br />
+<br />
+<em>RuleOp</em> :<br />
+      <code>&lt;</code> | <code>&lt;=</code> | <code>=</code> | <code>&gt;=</code> | <code>&gt;</code><br />
+   | <a href="reference/syntax/identifiers.html">IDENT</a><br />
+   | <code>!</code> <em>RuleOp</em></p>
+</blockquote>
+<p>Rules are the basic building blocks of a figure. They define relationships between figure objects. Geo-AID attempts to generate a figure that obeys them as best as it can. Rules tie two expressions (left and right hand side) with a relationship, otherwise known as the rule operator. Currently supported rule operators are all comparison operators. When given an identifier, a proper <em>defined rule operator</em> is looked up and compiled accordingly (currently none supported). Rules can also be inverted with an exclamation mark in front of the operator.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="variables"><a class="header" href="#variables">Variables</a></h1>
+<blockquote>
+<p><sup><strong>Syntax</strong></sup><br />
+<em>LetStatement</em> :<br />
+   <code>let</code> <em>VariableDefinition</em> (<code>,</code> <em>VariableDefinition</em>)<sup>*</sup> <code>=</code> <em><a href="reference/syntax/expressions.html">Expression&lt;true&gt;</a></em> (<a href="reference/syntax/rules.html"><em>RuleOp</em></a> <em><a href="reference/syntax/expressions.html">Expression&lt;true&gt;</a></em>)<sup>*</sup> <code>;</code><br />
+<br />
+<em>VariableDefinition</em> :<br />
+   <code>@</code> <a href="reference/syntax/identifiers.html">IDENT</a> <a href="reference/syntax/display-options.html"><em>DisplayOptions</em></a><sup>?</sup></p>
+</blockquote>
+<p>A let statement creates variables given on the left hand side. The lhs of the statement can contain multiple variables. In that, case if the rhs has no iteration, all variables will be set to the given definition (no the same value, though). If there is one level of iteration, all variables will get their respective definition. More levels of iteration are not allowed.</p>
+<p>The rhs expression of the statement can either become the variable's definition or it can be unpacked onto a point collection.</p>
+<p>After each variable name there can be display options given, modifying how the construct is displayed.</p>
+<p>The let statement accepts rules after its right hand side. They behave as if the lhs was a sequence of variable accesses in a 0-id iterator.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="types"><a class="header" href="#types">Types</a></h1>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="functions-1"><a class="header" href="#functions-1">Functions</a></h1>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="rule-operators"><a class="header" href="#rule-operators">Rule operators</a></h1>
 
                     </main>
 

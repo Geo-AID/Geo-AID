@@ -83,7 +83,7 @@
 
         <nav id="sidebar" class="sidebar" aria-label="Table of contents">
             <div class="sidebar-scrollbox">
-                <ol class="chapter"><li class="chapter-item expanded "><a href="../introduction.html"><strong aria-hidden="true">1.</strong> Introduction</a></li><li class="chapter-item expanded "><a href="../guide.html"><strong aria-hidden="true">2.</strong> Beginner guide</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../guide/getting-started.html"><strong aria-hidden="true">2.1.</strong> Getting started</a></li><li class="chapter-item expanded "><a href="../guide/distances.html"><strong aria-hidden="true">2.2.</strong> Working with distances</a></li><li class="chapter-item expanded "><a href="../guide/complicated-figures.html" class="active"><strong aria-hidden="true">2.3.</strong> Dealing with complicated figures</a></li></ol></li><li class="chapter-item expanded "><a href="../cli.html"><strong aria-hidden="true">3.</strong> CLI Reference</a></li><li class="chapter-item expanded "><a href="../renderers.html"><strong aria-hidden="true">4.</strong> Renderers</a></li><li class="chapter-item expanded "><a href="../reference.html"><strong aria-hidden="true">5.</strong> GeoScript reference</a></li></ol>
+                <ol class="chapter"><li class="chapter-item expanded "><a href="../introduction.html"><strong aria-hidden="true">1.</strong> Introduction</a></li><li class="chapter-item expanded "><a href="../guide.html"><strong aria-hidden="true">2.</strong> Beginner guide</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../guide/getting-started.html"><strong aria-hidden="true">2.1.</strong> Getting started</a></li><li class="chapter-item expanded "><a href="../guide/distances.html"><strong aria-hidden="true">2.2.</strong> Working with distances</a></li><li class="chapter-item expanded "><a href="../guide/complicated-figures.html" class="active"><strong aria-hidden="true">2.3.</strong> Dealing with complicated figures</a></li></ol></li><li class="chapter-item expanded "><a href="../cli.html"><strong aria-hidden="true">3.</strong> CLI Reference</a></li><li class="chapter-item expanded "><a href="../renderers.html"><strong aria-hidden="true">4.</strong> Renderers</a></li><li class="chapter-item expanded "><a href="../reference.html"><strong aria-hidden="true">5.</strong> GeoScript reference</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../reference/syntax.html"><strong aria-hidden="true">5.1.</strong> Syntax</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../reference/syntax/display-options.html"><strong aria-hidden="true">5.1.1.</strong> Display Options</a></li><li class="chapter-item expanded "><a href="../reference/syntax/expressions.html"><strong aria-hidden="true">5.1.2.</strong> Expressions</a></li><li class="chapter-item expanded "><a href="../reference/syntax/figure.html"><strong aria-hidden="true">5.1.3.</strong> Figure</a></li><li class="chapter-item expanded "><a href="../reference/syntax/flags.html"><strong aria-hidden="true">5.1.4.</strong> Flags</a></li><li class="chapter-item expanded "><a href="../reference/syntax/identifiers.html"><strong aria-hidden="true">5.1.5.</strong> Identifiers</a></li><li class="chapter-item expanded "><a href="../reference/syntax/iterators.html"><strong aria-hidden="true">5.1.6.</strong> Iterators</a></li><li class="chapter-item expanded "><a href="../reference/syntax/numbers.html"><strong aria-hidden="true">5.1.7.</strong> Numbers</a></li><li class="chapter-item expanded "><a href="../reference/syntax/rules.html"><strong aria-hidden="true">5.1.8.</strong> Rules</a></li><li class="chapter-item expanded "><a href="../reference/syntax/variables.html"><strong aria-hidden="true">5.1.9.</strong> Variables</a></li></ol></li><li class="chapter-item expanded "><a href="../reference/types.html"><strong aria-hidden="true">5.2.</strong> Types</a></li><li class="chapter-item expanded "><a href="../reference/function.html"><strong aria-hidden="true">5.3.</strong> Functions</a></li><li class="chapter-item expanded "><a href="../reference/rule-operators.html"><strong aria-hidden="true">5.4.</strong> Rule operators</a></li></ol></li></ol>
             </div>
             <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
         </nav>
@@ -145,6 +145,27 @@
                 <div id="content" class="content">
                     <main>
                         <h1 id="dealing-with-complicated-figures"><a class="header" href="#dealing-with-complicated-figures">Dealing with complicated figures</a></h1>
+<p>Every now and then you will stumble on a figure that is quite challenging to draw, even for Geo-AID. In these cases, it's worth knowing a few tricks to guide Geo-AID through them.</p>
+<p>When Geo-AID generates a figure, it does so with a certain amount of workers, over multiple cycles, until a certain condition (currently: average quality delta over the last x cycles goes below a certain value) is met. That's a lot of different generation parameters and all of them are modifiable.</p>
+<ol>
+<li>Worker count (<code>-c</code> option, 512 by default)</li>
+</ol>
+<p>By modifying this parameter, you change how many different versions of a generation cycle are created. The higher the value, the more likely Geo-AID is to find the right spot for every point. It will, however, take more time and it might make certain flaws of Geo-AID's generation more visible.</p>
+<ol start="2">
+<li>Generation break average delta treshold (<code>-d</code> option, 0.0001 by default)</li>
+</ol>
+<p>Lowering this makes Geo-AID go on with generation for a little longer, essentially postponing the moment it decides it won't really get much better.</p>
+<ol start="3">
+<li>Count of last records used in calculating the average delta (<code>-m</code> option, 128 by default)</li>
+</ol>
+<p>Increasing this makes Geo-AID take more of the last cycles into consideration when deciding whether to stop.</p>
+<ol start="4">
+<li>Maximum adjustment per generation cycle (<code>-a</code> option, 0.5 by default)</li>
+</ol>
+<p>This modifies how much can a single point/scalar be changed when adjusting for another cycle. Keep in mind that this is only a base for calculations. In reality, the amount of adjustment allowed depends on the given point's quality and is different between different workers to allow both big <em>and</em> small changes in the same generation cycle.</p>
+<hr />
+<p>Usually, the most visible effect comes from increasing the worker count. There is also a way to modify Geo-AID's behavior outside of its parameters. You can do so by modifying the <code>point_bounds</code> flag. Enabling them adds rules for points to be contained within (0,0) -&gt; (1,1) range. This will heavily afftect the generation process and severely increase the time it will tak to complete. The result might not be the desired one, so don't expect too much.</p>
+<p>Ultimately the best way of increasing odds for Geo-AID is to write the script as best as you can, relying strongly on defining points with expressions. The golden rule is: the less rules, the better.</p>
 
                     </main>
 
