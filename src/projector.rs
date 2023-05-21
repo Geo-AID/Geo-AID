@@ -6,7 +6,7 @@ use serde::Serialize;
 use uuid::Uuid;
 
 use crate::generator::expression::expr::{AngleLine, AnglePoint};
-use crate::generator::expression::{Circle, LineExpr, PointExpr, ScalarExpr};
+use crate::generator::expression::{LineExpr, PointExpr, ScalarExpr};
 use crate::generator::geometry::get_line;
 use crate::{
     generator::{
@@ -24,15 +24,13 @@ mod tests {
         drawer,
         generator::{
             expression::{
-                expr::{AnglePoint, CenterRadius, FreePoint, LinePoint},
+                expr::{AnglePoint, CenterRadius, FreePoint, LinePoint, Literal},
                 CircleExpr, Expression, LineExpr, PointExpr, ScalarExpr,
             },
             Adjustable, Complex,
         },
         script::{figure::Figure, unroll::PointMeta},
     };
-
-    use crate::projector::ScalarExpr::Literal;
 
     use super::project;
 
@@ -116,20 +114,16 @@ mod tests {
             ],
             rays: vec![(create_point_expr(0), create_point_expr(1))],
 
-            circles: vec![
-                Arc::new(Expression::new(
-                    CircleExpr::CenterRadius(CenterRadius {
-                        center: create_point_expr(0),
-                        radius: Arc::new(
-                            Expression::new(
-                                ScalarExpr::Literal(Literal { value: 10.0,}),
-                                1.0,
-                            )
-                        ),
-                    }), 1.0)
-                )
-                
-            ],
+            circles: vec![Arc::new(Expression::new(
+                CircleExpr::CenterRadius(CenterRadius {
+                    center: create_point_expr(0),
+                    radius: Arc::new(Expression::new(
+                        ScalarExpr::Literal(Literal { value: 0.124 }),
+                        1.0,
+                    )),
+                }),
+                1.0,
+            ))],
 
             canvas_size: (200, 200),
         };
@@ -478,7 +472,7 @@ fn rays(
     blueprint_rays
 }
 
-fn cicles(
+fn circles(
     figure: &Figure,
     offset: Complex,
     scale: f64,
@@ -487,15 +481,16 @@ fn cicles(
 ) -> Vec<RenderedCircle> {
     let mut blueprint_circles = Vec::new();
     for circle in &figure.circles {
-        let circle = circle.evaluate(&args).unwrap();
+        let circle = circle.evaluate(args).unwrap();
         let center = transform(offset, scale, size, circle.center);
         let draw_point = Complex::new(circle.center.real + circle.radius, circle.center.imaginary);
+        let sc_rad = circle.radius * scale;
         blueprint_circles.push(RenderedCircle {
             label: String::new(),
-            center: center,
+            center,
             draw_point: transform(offset, scale, size, draw_point),
-            radius: circle.radius,
-        })
+            radius: sc_rad,
+        });
     }
 
     blueprint_circles
@@ -600,7 +595,7 @@ pub fn project(
 
     let blueprint_rays = rays(figure, offset, scale, size005, &args);
 
-    let blueprint_circles = cicles(figure, offset, scale, size005, &args);
+    let blueprint_circles = circles(figure, offset, scale, size005, &args);
 
     Ok(Output {
         map: iden,

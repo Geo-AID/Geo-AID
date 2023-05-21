@@ -85,6 +85,12 @@ pub fn draw(target: &Path, canvas_size: (usize, usize), output: &Output) {
                     ray.points.1.imaginary
                 );
             }
+            Rendered::Circle(circle) => {
+                content += &format!(
+                    "<circle cx=\"{}\" cy=\"{}\" r=\"{}\" stroke=\"black\" stroke-width=\"1\" fill=\"transparent\" />",
+                    circle.center.real, circle.center.imaginary, circle.radius
+                );
+            }
         }
     }
     content += "</svg>";

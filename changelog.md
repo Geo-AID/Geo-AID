@@ -38,3 +38,4 @@
 ## Version 0.2.3
 - Added ray support.
 - Added circle primitive and function.
+- Added circle support and improved latex drawer.

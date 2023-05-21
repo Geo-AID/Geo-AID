@@ -78,9 +78,18 @@ pub fn draw(target: &Path, canvas_size: (usize, usize), output: &Output) {
                 .unwrap();
             }
             Rendered::Ray(ray) => {
-                file.write_all(format!("\nray defined with two points: first point - ({}, {}) second point - ({}. {})", ray.points.0.real, ray.points.1.imaginary, ray.draw_point.real, ray.draw_point.imaginary).as_bytes()).unwrap();
+                file.write_all(format!("\nray defined with two points: first point - ({:.3}, {:.3}) second point - ({:.3}. {:.3})", ray.points.0.real, ray.points.1.imaginary, ray.draw_point.real, ray.draw_point.imaginary).as_bytes()).unwrap();
             }
-            Rendered::Circle(circle) => todo!(),
+            Rendered::Circle(circle) => {
+                file.write_all(
+                    format!(
+                        "\ncircle: center - ({:.3}, {:.3}) radius - {:.3}",
+                        circle.center.real, circle.center.imaginary, circle.radius
+                    )
+                    .as_bytes(),
+                )
+                .unwrap();
+            }
         }
     }
 }
