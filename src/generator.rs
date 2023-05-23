@@ -6,14 +6,14 @@ use std::{
     ops::{Add, AddAssign, Div, Mul, Neg, Sub, SubAssign},
     sync::{mpsc, Arc},
     thread::{self, JoinHandle},
-    time::{Duration, Instant},
+    time::{Duration, Instant}, f64::consts::PI,
 };
 
 use serde::Serialize;
 
 use crate::script::Criteria;
 
-use self::expression::{ExprCache, Value};
+use self::expression::{ExprCache, Value, Expression, CircleExpr};
 
 #[derive(Debug)]
 pub enum EvaluationError {
@@ -229,34 +229,32 @@ impl Default for Complex {
 
 pub type Logger = Vec<String>;
 
+/// An object with quality.
 #[derive(Debug, Clone)]
-pub enum Adjustable {
-    Point(Complex),
-    Real(f64),
+pub struct WithQuality<T> {
+    pub quality: f64,
+    pub value: T
 }
 
-impl Adjustable {
-    #[must_use]
-    pub fn as_point(&self) -> Option<&Complex> {
-        if let Self::Point(v) = self {
-            Some(v)
-        } else {
-            None
-        }
-    }
+#[derive(Debug, Clone)]
+pub struct Adjustables {
+    /// Free points.
+    pub points: Vec<WithQuality<Complex>>,
+    /// Free scalars.
+    pub scalars: Vec<WithQuality<f64>>,
+    /// Circle clips
+    pub circle_clips: Vec<WithQuality<(Arc<Expression<CircleExpr>>, f64)>>
+}
 
-    #[must_use]
-    pub fn as_real(&self) -> Option<&f64> {
-        if let Self::Real(v) = self {
-            Some(v)
-        } else {
-            None
-        }
+impl Adjustables {
+    /// Get all adjustable count.
+    pub fn get_count(&self) -> usize {
+        self.points.len() + self.scalars.len() + self.circle_clips.len()
     }
 }
 
 pub enum Message {
-    Generate(f64, Vec<(Adjustable, f64)>, Logger),
+    Generate(f64, Adjustables, Logger),
     Terminate,
 }
 
@@ -268,7 +266,7 @@ pub struct GenerationArgs {
 
 fn generation_cycle(
     receiver: &mpsc::Receiver<Message>,
-    sender: &mpsc::Sender<(Vec<(Adjustable, f64)>, Logger)>,
+    sender: &mpsc::Sender<(Adjustables, Logger)>,
     args: &GenerationArgs,
     flags: &Arc<Flags>,
 ) {
@@ -324,39 +322,30 @@ fn generation_cycle(
 /// A structure responsible of generating a figure based on criteria and given points.
 pub struct Generator {
     /// Current point positions
-    current_state: Vec<(Adjustable, f64)>,
+    current_state: Adjustables,
     /// All the workers (generation cycles).
     workers: Vec<JoinHandle<()>>,
     /// Senders for the workers
     senders: Vec<mpsc::Sender<Message>>,
     /// The receiver for adjusted points from each generation cycle.
-    receiver: mpsc::Receiver<(Vec<(Adjustable, f64)>, Logger)>,
+    receiver: mpsc::Receiver<(Adjustables, Logger)>,
     /// Total quality of the points - the arithmetic mean of their qualities.
     total_quality: f64,
     /// A delta of the qualities in comparison to previous generation.
     delta: f64,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum AdjustableTemplate {
-    Point,
-    Real,
-}
-
-impl AdjustableTemplate {
-    /// Returns `true` if the adjustable template is [`Point`].
-    ///
-    /// [`Point`]: AdjustableTemplate::Point
-    #[must_use]
-    pub fn is_point(&self) -> bool {
-        matches!(self, Self::Point)
-    }
+#[derive(Debug, Clone)]
+pub struct AdjustablesTemplate {
+    pub points: usize,
+    pub scalars: usize,
+    pub circle_clips: Vec<Arc<Expression<CircleExpr>>>
 }
 
 impl Generator {
     #[must_use]
     pub fn new(
-        template: &[AdjustableTemplate],
+        template: &AdjustablesTemplate,
         cycles_per_generation: usize,
         args: &GenerationArgs,
         flags: &Arc<Flags>,
@@ -369,20 +358,20 @@ impl Generator {
         let (output_sender, output_receiver) = mpsc::channel();
 
         Self {
-            current_state: template
-                .iter()
-                .map(|temp| {
-                    (
-                        match temp {
-                            AdjustableTemplate::Point => {
-                                Adjustable::Point(Complex::new(rand::random(), rand::random()))
-                            }
-                            AdjustableTemplate::Real => Adjustable::Real(rand::random()),
-                        },
-                        0.0,
-                    )
-                })
-                .collect(),
+            current_state: Adjustables {
+                points: (0..template.points).map(|_| WithQuality {
+                    quality: 0.0,
+                    value: Complex::new(rand::random(), rand::random())
+                }).collect(),
+                scalars: (0..template.scalars).map(|_| WithQuality {
+                    quality: 0.0,
+                    value: rand::random()
+                }).collect(),
+                circle_clips: template.circle_clips.iter().map(|expr| WithQuality {
+                    quality: 0.0,
+                    value: (expr.clone(), rand::random::<f64>() * 2.0 * PI)
+                }).collect()
+            },
             workers: input_receivers
                 .into_iter()
                 .map(|rec| {
@@ -422,15 +411,20 @@ impl Generator {
         // Wait for each handle to finish and consider its outcome
         for _ in 0..self.workers.len() {
             // If the total quality is larger than the current total, replace the points.
-            let (points, logger) = self.receiver.recv().unwrap();
+            let (adjustables, logger) = self.receiver.recv().unwrap();
             #[allow(clippy::cast_precision_loss)]
-            let total_quality =
-                points.iter().map(|x| x.1).sum::<f64>() / self.current_state.len() as f64;
+            let total_quality = (
+                adjustables.points.iter().map(|x| x.quality).sum::<f64>()
+                + adjustables.scalars.iter().map(|x| x.quality).sum::<f64>()
+                + adjustables.circle_clips.iter().map(|x| x.quality).sum::<f64>()
+            ) / (
+                self.current_state.get_count() as f64
+            );
 
             // println!("Total quality: {total_quality}, points: {:#?}", points);
 
             if total_quality > self.total_quality {
-                self.current_state = points;
+                self.current_state = adjustables;
                 self.total_quality = total_quality;
                 final_logger = logger;
             }
@@ -512,7 +506,7 @@ impl Generator {
     }
 
     #[must_use]
-    pub fn get_state(&self) -> &Vec<(Adjustable, f64)> {
+    pub fn get_state(&self) -> &Adjustables {
         &self.current_state
     }
 
