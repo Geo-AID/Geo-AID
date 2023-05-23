@@ -10,9 +10,12 @@ use crate::script::{
 use super::macros::{overload, call, circle_expr};
 
 /// Circle constructor. Creates a circle based off of its center and radius.
-fn circle_function(args: &[UnrolledExpression],_figure: &mut PreFigure, display: Option<Properties>) -> UnrolledExpression {
+fn circle_function(args: &[UnrolledExpression],figure: &mut PreFigure, display: Option<Properties>) -> UnrolledExpression {
     mem::drop(display);
-    circle_expr!(args[0], args[1])
+    let expr = circle_expr!(args[0], args[1]);
+
+    figure.circles.push(expr.clone());
+    expr
 }
 
 pub fn register(context: &mut CompileContext) {

@@ -321,6 +321,9 @@ impl Compile for Expression<CircleExpr> {
                 }),
                 1.0,
             )),
+            UnrolledExpressionData::Boxed(expr) => {
+                Expression::compile(expr, variables, expressions, template, dst_var)
+            }
             _ => unreachable!("A circle should never be compiled this way"),
         };
 
@@ -732,7 +735,9 @@ pub struct PreFigure {
     /// Segments in the figure.
     pub segments: Vec<(UnrolledExpression, UnrolledExpression)>,
     /// Rays in the figure
-    pub rays: Vec<(UnrolledExpression, UnrolledExpression)>
+    pub rays: Vec<(UnrolledExpression, UnrolledExpression)>,
+    /// Circles in the figure
+    pub circles: Vec<UnrolledExpression>
 }
 
 impl PreFigure {
@@ -785,6 +790,13 @@ impl PreFigure {
                     template,
                     dst_var
                 )
+            )).collect(),
+            circles: self.circles.into_iter().map(|expr| Expression::compile(
+                &expr,
+                variables,
+                expressions,
+                template,
+                dst_var
             )).collect(),
             ..Default::default()
         }
