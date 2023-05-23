@@ -722,7 +722,6 @@ pub enum UnrolledExpressionData {
     FreePoint,
     FreeReal,
     Boxed(UnrolledExpression),
-    Parameter(usize),
     IndexCollection(UnrolledExpression, usize),
     LineFromPoints(UnrolledExpression, UnrolledExpression),
     SetUnit(UnrolledExpression, ComplexUnit),
@@ -737,7 +736,6 @@ pub enum UnrolledExpressionData {
     TwoLineAngle(UnrolledExpression, UnrolledExpression),
     AngleBisector(UnrolledExpression, UnrolledExpression, UnrolledExpression),
     Average(Vec<UnrolledExpression>),
-    UnrollParameterGroup(usize),
     PerpendicularThrough(UnrolledExpression, UnrolledExpression), // Line, Point
     ParallelThrough(UnrolledExpression, UnrolledExpression),      // Line, Point
     LineLineIntersection(UnrolledExpression, UnrolledExpression),
@@ -771,8 +769,6 @@ impl Display for UnrolledExpressionData {
             UnrolledExpressionData::Boxed(expr) | UnrolledExpressionData::SetUnit(expr, _) => {
                 write!(f, "{expr}")
             }
-            UnrolledExpressionData::Parameter(index) => write!(f, "${index}"),
-            UnrolledExpressionData::UnrollParameterGroup(index) => write!(f, "${index}..."),
             UnrolledExpressionData::IndexCollection(expr, index) => write!(f, "{expr}[{index}]"),
             UnrolledExpressionData::LineFromPoints(e1, e2) => write!(f, "line({e1}, {e2})"),
             UnrolledExpressionData::PointPointDistance(e1, e2)
@@ -840,8 +836,6 @@ impl UnrolledExpression {
     pub fn has_distance_literal(&self) -> Option<Span> {
         match self.data.as_ref() {
             UnrolledExpressionData::VariableAccess(_)
-            | UnrolledExpressionData::Parameter(_)
-            | UnrolledExpressionData::UnrollParameterGroup(_)
             | UnrolledExpressionData::FreePoint
             | UnrolledExpressionData::FreeReal => None,
             UnrolledExpressionData::PointCollection(v) | UnrolledExpressionData::Average(v) => {
@@ -937,7 +931,6 @@ pub fn construct_point_name(letter: char, primes: u8) -> String {
 
 /// Replaces all Parameter unrolled expressions with the given parameters.
 #[allow(clippy::module_name_repetitions)]
-#[allow(clippy::too_many_lines)]
 #[must_use]
 pub fn unroll_parameters(
     definition: &FunctionDefinition,
@@ -946,118 +939,6 @@ pub fn unroll_parameters(
     display: Option<Properties>
 ) -> UnrolledExpression {
     definition(params, figure, display)
-
-    // UnrolledExpression {
-    //     weight: definition.weight,
-    //     ty: definition.ty,
-    //     span: definition.span,
-    //     data: Rc::new(match definition.data.as_ref() {
-    //         UnrolledExpressionData::Boxed(expr) => {
-    //             UnrolledExpressionData::Boxed(unroll_parameters(expr, params))
-    //         }
-    //         UnrolledExpressionData::Negate(expr) => {
-    //             UnrolledExpressionData::Negate(unroll_parameters(expr, params))
-    //         }
-    //         UnrolledExpressionData::Parameter(index) => {
-    //             UnrolledExpressionData::Boxed(params[*index].clone())
-    //         }
-    //         UnrolledExpressionData::IndexCollection(expr, index) => {
-    //             UnrolledExpressionData::IndexCollection(unroll_parameters(expr, params), *index)
-    //         }
-    //         UnrolledExpressionData::LineFromPoints(e1, e2) => {
-    //             UnrolledExpressionData::LineFromPoints(
-    //                 unroll_parameters(e1, params),
-    //                 unroll_parameters(e2, params),
-    //             )
-    //         }
-    //         UnrolledExpressionData::Circle(e1, e2) => {
-    //             UnrolledExpressionData::Circle(
-    //                 unroll_parameters(e1, params),
-    //                 unroll_parameters(e2, params),
-    //             )
-    //         }
-    //         UnrolledExpressionData::SetUnit(expr, unit) => {
-    //             UnrolledExpressionData::SetUnit(unroll_parameters(expr, params), *unit)
-    //         }
-    //         UnrolledExpressionData::PointPointDistance(e1, e2) => {
-    //             UnrolledExpressionData::PointPointDistance(
-    //                 unroll_parameters(e1, params),
-    //                 unroll_parameters(e2, params),
-    //             )
-    //         }
-    //         UnrolledExpressionData::PointLineDistance(e1, e2) => {
-    //             UnrolledExpressionData::PointLineDistance(
-    //                 unroll_parameters(e1, params),
-    //                 unroll_parameters(e2, params),
-    //             )
-    //         }
-    //         UnrolledExpressionData::VariableAccess(_)
-    //         | UnrolledExpressionData::Number(_)
-    //         | UnrolledExpressionData::FreeReal
-    //         | UnrolledExpressionData::FreePoint => definition.data.as_ref().clone(),
-    //         UnrolledExpressionData::Average(exprs) => {
-    //             UnrolledExpressionData::Average(unroll_parameters_vec(exprs, params))
-    //         }
-    //         UnrolledExpressionData::PointCollection(exprs) => {
-    //             UnrolledExpressionData::PointCollection(unroll_parameters_vec(exprs, params))
-    //         }
-    //         UnrolledExpressionData::Add(e1, e2) => UnrolledExpressionData::Add(
-    //             unroll_parameters(e1, params),
-    //             unroll_parameters(e2, params),
-    //         ),
-    //         UnrolledExpressionData::Subtract(e1, e2) => UnrolledExpressionData::Subtract(
-    //             unroll_parameters(e1, params),
-    //             unroll_parameters(e2, params),
-    //         ),
-    //         UnrolledExpressionData::Multiply(e1, e2) => UnrolledExpressionData::Multiply(
-    //             unroll_parameters(e1, params),
-    //             unroll_parameters(e2, params),
-    //         ),
-    //         UnrolledExpressionData::Divide(e1, e2) => UnrolledExpressionData::Divide(
-    //             unroll_parameters(e1, params),
-    //             unroll_parameters(e2, params),
-    //         ),
-    //         UnrolledExpressionData::ThreePointAngle(e1, e2, e3) => {
-    //             UnrolledExpressionData::ThreePointAngle(
-    //                 unroll_parameters(e1, params),
-    //                 unroll_parameters(e2, params),
-    //                 unroll_parameters(e3, params),
-    //             )
-    //         }
-    //         UnrolledExpressionData::TwoLineAngle(e1, e2) => UnrolledExpressionData::TwoLineAngle(
-    //             unroll_parameters(e1, params),
-    //             unroll_parameters(e2, params),
-    //         ),
-    //         UnrolledExpressionData::AngleBisector(e1, e2, e3) => {
-    //             UnrolledExpressionData::AngleBisector(
-    //                 unroll_parameters(e1, params),
-    //                 unroll_parameters(e2, params),
-    //                 unroll_parameters(e3, params),
-    //             )
-    //         }
-    //         UnrolledExpressionData::PerpendicularThrough(e1, e2) => {
-    //             UnrolledExpressionData::PerpendicularThrough(
-    //                 unroll_parameters(e1, params),
-    //                 unroll_parameters(e2, params),
-    //             )
-    //         }
-    //         UnrolledExpressionData::ParallelThrough(e1, e2) => {
-    //             UnrolledExpressionData::ParallelThrough(
-    //                 unroll_parameters(e1, params),
-    //                 unroll_parameters(e2, params),
-    //             )
-    //         }
-    //         UnrolledExpressionData::LineLineIntersection(e1, e2) => {
-    //             UnrolledExpressionData::LineLineIntersection(
-    //                 unroll_parameters(e1, params),
-    //                 unroll_parameters(e2, params),
-    //             )
-    //         }
-    //         UnrolledExpressionData::UnrollParameterGroup(_) => {
-    //             unreachable!("This should never be unrolled as parameter.")
-    //         }
-    //     }),
-    // }
 }
 
 /// Unrolls the conversion of a point collection into the given type.
@@ -1257,7 +1138,6 @@ fn unroll_conversion_to_scalar(
         | UnrolledExpressionData::PointCollection(_)
         | UnrolledExpressionData::FreePoint
         | UnrolledExpressionData::FreeReal
-        | UnrolledExpressionData::Parameter(_)
         | UnrolledExpressionData::IndexCollection(_, _)
         | UnrolledExpressionData::LineFromPoints(_, _)
         | UnrolledExpressionData::SetUnit(_, _)
@@ -1265,7 +1145,6 @@ fn unroll_conversion_to_scalar(
         | UnrolledExpressionData::PointLineDistance(_, _)
         | UnrolledExpressionData::ThreePointAngle(_, _, _)
         | UnrolledExpressionData::AngleBisector(_, _, _)
-        | UnrolledExpressionData::UnrollParameterGroup(_)
         | UnrolledExpressionData::PerpendicularThrough(_, _)
         | UnrolledExpressionData::ParallelThrough(_, _)
         | UnrolledExpressionData::LineLineIntersection(_, _)
