@@ -11,7 +11,8 @@ use super::{
         LBrace, LParen, LSquare, Let, Lt, Lteq, Minus, NamedIdent, Number, Plus, Position, RBrace,
         RParen, RSquare, Semi, Slash, Span, Token, Vertical,
     },
-    Error, unit, ComplexUnit,
+    unit,
+    ComplexUnit, Error,
 };
 
 macro_rules! impl_token_parse {

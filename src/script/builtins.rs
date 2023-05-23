@@ -11,7 +11,6 @@ pub mod parallel;
 pub mod perpendicular;
 pub mod point;
 pub mod radians;
-pub mod circle;
 /// Registers all builtins
 pub fn register(context: &mut CompileContext) {
     point::register(context); // Point()
