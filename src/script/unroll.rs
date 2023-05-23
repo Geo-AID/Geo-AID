@@ -51,7 +51,7 @@ pub enum VariableMeta {
     Scalar,
     Line,
     PointCollection,
-    Circle
+    Circle,
 }
 
 impl VariableMeta {
@@ -741,7 +741,7 @@ pub enum UnrolledExpressionData {
     PerpendicularThrough(UnrolledExpression, UnrolledExpression), // Line, Point
     ParallelThrough(UnrolledExpression, UnrolledExpression),      // Line, Point
     LineLineIntersection(UnrolledExpression, UnrolledExpression),
-    Circle(UnrolledExpression, UnrolledExpression) // Center, radius
+    Circle(UnrolledExpression, UnrolledExpression), // Center, radius
 }
 
 impl Display for UnrolledExpressionData {
@@ -797,8 +797,10 @@ impl Display for UnrolledExpressionData {
             }
             UnrolledExpressionData::LineLineIntersection(l1, l2) => {
                 write!(f, "intersection({l1}, {l2})")
-            },
-            UnrolledExpressionData::Circle(center, radius) => write!(f, "circle({center}, {radius})")
+            }
+            UnrolledExpressionData::Circle(center, radius) => {
+                write!(f, "circle({center}, {radius})")
+            }
         }
     }
 }
@@ -2049,9 +2051,7 @@ fn unroll_gt(
     let left_unit = match &lhs.ty {
         Type::Scalar(Some(unit)) => Some(*unit),
         Type::Scalar(None) => None,
-        Type::PointCollection(2) => {
-            Some(unit::DISTANCE)
-        }
+        Type::PointCollection(2) => Some(unit::DISTANCE),
         _ => {
             return Err(Error::InvalidOperandType {
                 error_span: full_span,
@@ -2093,9 +2093,7 @@ fn unroll_gt(
         let right_unit = match &rhs.ty {
             Type::Scalar(Some(unit)) => Some(*unit),
             Type::Scalar(None) => None,
-            Type::PointCollection(2) => {
-                Some(ComplexUnit::new(SimpleUnit::Distance))
-            }
+            Type::PointCollection(2) => Some(ComplexUnit::new(SimpleUnit::Distance)),
             _ => {
                 return Err(Error::InvalidOperandType {
                     error_span: lhs.span.join(rhs.span),
@@ -2121,9 +2119,7 @@ fn unroll_gt(
                 inverted: false,
             });
         } else {
-            let common = Type::Scalar(Some(ComplexUnit::new(
-                SimpleUnit::Scalar,
-            )));
+            let common = Type::Scalar(Some(ComplexUnit::new(SimpleUnit::Scalar)));
             unrolled.push(UnrolledRule {
                 kind: UnrolledRuleKind::Gt,
                 lhs: unroll_implicit_conversion(lhs, &common, figure)?,
@@ -2146,9 +2142,7 @@ fn unroll_lt(
     let left_unit = match &lhs.ty {
         Type::Scalar(Some(unit)) => Some(*unit),
         Type::Scalar(None) => None,
-        Type::PointCollection(2) => {
-            Some(ComplexUnit::new(SimpleUnit::Distance))
-        }
+        Type::PointCollection(2) => Some(ComplexUnit::new(SimpleUnit::Distance)),
         _ => {
             return Err(Error::InvalidOperandType {
                 error_span: lhs.span.join(rhs.span),
@@ -2190,9 +2184,7 @@ fn unroll_lt(
         let right_unit = match &rhs.ty {
             Type::Scalar(Some(unit)) => Some(*unit),
             Type::Scalar(None) => None,
-            Type::PointCollection(2) => {
-                Some(ComplexUnit::new(SimpleUnit::Distance))
-            }
+            Type::PointCollection(2) => Some(ComplexUnit::new(SimpleUnit::Distance)),
             _ => {
                 return Err(Error::InvalidOperandType {
                     error_span: full_span,

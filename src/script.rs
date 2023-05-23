@@ -488,23 +488,14 @@ pub mod unit {
 }
 
 pub mod ty {
-    use super::{
-        parser::Type,
-        ComplexUnit, SimpleUnit,
-    };
+    use super::{parser::Type, ComplexUnit, SimpleUnit};
 
-    pub const DISTANCE: Type = Type::Scalar(Some(ComplexUnit::new(
-        SimpleUnit::Distance,
-    )));
+    pub const DISTANCE: Type = Type::Scalar(Some(ComplexUnit::new(SimpleUnit::Distance)));
     pub const POINT: Type = Type::Point;
-    pub const ANGLE: Type = Type::Scalar(Some(ComplexUnit::new(
-        SimpleUnit::Angle,
-    )));
+    pub const ANGLE: Type = Type::Scalar(Some(ComplexUnit::new(SimpleUnit::Angle)));
     pub const LINE: Type = Type::Line;
     pub const CIRCLE: Type = Type::Circle;
-    pub const SCALAR: Type = Type::Scalar(Some(ComplexUnit::new(
-        SimpleUnit::Scalar,
-    )));
+    pub const SCALAR: Type = Type::Scalar(Some(ComplexUnit::new(SimpleUnit::Scalar)));
     pub const SCALAR_UNKNOWN: Type = Type::Scalar(None);
 
     #[must_use]

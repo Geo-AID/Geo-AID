@@ -24,8 +24,8 @@ mod tests {
         drawer,
         generator::{
             expression::{
-                expr::{AnglePoint, FreePoint, LinePoint},
-                Expression, LineExpr, PointExpr, ScalarExpr,
+                expr::{AnglePoint, CenterRadius, FreePoint, LinePoint, Literal},
+                CircleExpr, Expression, LineExpr, PointExpr, ScalarExpr,
             },
             Adjustable, Complex,
         },
@@ -113,6 +113,18 @@ mod tests {
                 (create_point_expr(1), create_point_expr(2)),
             ],
             rays: vec![(create_point_expr(0), create_point_expr(1))],
+
+            circles: vec![Arc::new(Expression::new(
+                CircleExpr::CenterRadius(CenterRadius {
+                    center: create_point_expr(0),
+                    radius: Arc::new(Expression::new(
+                        ScalarExpr::Literal(Literal { value: 0.124 }),
+                        1.0,
+                    )),
+                }),
+                1.0,
+            ))],
+
             canvas_size: (200, 200),
         };
 
@@ -139,6 +151,7 @@ pub enum Rendered {
     Angle(RenderedAngle),
     Segment(RenderedSegment),
     Ray(RenderedRay),
+    Circle(RenderedCircle),
 }
 
 /// The final product passed to the drawers.
@@ -201,6 +214,17 @@ pub struct RenderedRay {
     pub draw_point: Complex,
 }
 
+#[derive(Serialize)]
+pub struct RenderedCircle {
+    /// Circle's label
+    pub label: String,
+    /// Center of the circle
+    pub center: Complex,
+    /// Drawing point
+    pub draw_point: Complex,
+    /// Radius
+    pub radius: f64,
+}
 /// Function getting the points defining the angle from the Expression defining it.
 ///
 /// # Panics
@@ -353,7 +377,7 @@ fn lines(
 }
 
 /// Function that outputs the vector containing the angles.
-/// 
+///
 /// # Panics
 /// It shouldn't panic.
 fn angles(
@@ -449,6 +473,30 @@ fn rays(
     }
 
     blueprint_rays
+}
+
+fn circles(
+    figure: &Figure,
+    offset: Complex,
+    scale: f64,
+    size: Complex,
+    args: &EvaluationArgs,
+) -> Vec<RenderedCircle> {
+    let mut blueprint_circles = Vec::new();
+    for circle in &figure.circles {
+        let circle = circle.evaluate(args).unwrap();
+        let center = transform(offset, scale, size, circle.center);
+        let draw_point = Complex::new(circle.center.real + circle.radius, circle.center.imaginary);
+        let sc_rad = circle.radius * scale;
+        blueprint_circles.push(RenderedCircle {
+            label: String::new(),
+            center,
+            draw_point: transform(offset, scale, size, draw_point),
+            radius: sc_rad,
+        });
+    }
+
+    blueprint_circles
 }
 /// Takes the figure and rendered points and attempts to design a figure that can then be rendered in chosen format.
 ///
@@ -550,6 +598,8 @@ pub fn project(
 
     let blueprint_rays = rays(figure, offset, scale, size005, &args);
 
+    let blueprint_circles = circles(figure, offset, scale, size005, &args);
+
     Ok(Output {
         map: iden,
         vec_rendered: blueprint_points
@@ -559,6 +609,7 @@ pub fn project(
             .chain(blueprint_angles.into_iter().map(Rendered::Angle))
             .chain(blueprint_segments.into_iter().map(Rendered::Segment))
             .chain(blueprint_rays.into_iter().map(Rendered::Ray))
+            .chain(blueprint_circles.into_iter().map(Rendered::Circle))
             .collect(),
     })
 }

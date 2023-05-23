@@ -38,6 +38,5 @@
 ## Version 0.2.3
 - Added ray support.
 - Added circle primitive and function.
-- Strongly improved the display system.
-- Improved GeoScript function definitions.
-- Improved the incentre and imo1985-1 tests.
+- Added circle support and improved latex drawer.
+- Heavily changed the display system.

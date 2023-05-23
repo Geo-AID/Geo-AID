@@ -11,7 +11,8 @@ use super::{
         LBrace, LParen, LSquare, Let, Lt, Lteq, Minus, NamedIdent, Number, Plus, Position, RBrace,
         RParen, RSquare, Semi, Slash, Span, Token, Vertical,
     },
-    Error, unit, ComplexUnit,
+    unit,
+    ComplexUnit, Error,
 };
 
 macro_rules! impl_token_parse {
@@ -1256,7 +1257,7 @@ pub enum Type {
     /// A circle
     Circle,
     /// Undefinede type = bad
-    Undefined
+    Undefined,
 }
 
 impl Type {
@@ -1287,7 +1288,7 @@ impl Display for Type {
             },
             Self::PointCollection(l) => write!(f, "Point collection ({l})"),
             Self::Circle => write!(f, "Circle"),
-            Type::Undefined => write!(f, "undefined")
+            Type::Undefined => write!(f, "undefined"),
         }
     }
 }
@@ -1298,10 +1299,7 @@ impl Type {
     pub fn can_cast(&self, into: &Type) -> bool {
         match self {
             // A point can only be cast into another point or a point collection with length one.
-            Type::Point => matches!(
-                into,
-                Type::Point | Type::PointCollection(1)
-            ),
+            Type::Point => matches!(into, Type::Point | Type::PointCollection(1)),
             // A line can only be cast into another line.
             Type::Line => matches!(into, Type::Line),
             // A scalar with a defined unit can only be cast into another scalar with the same unit.
@@ -1322,14 +1320,12 @@ impl Type {
             },
             Type::PointCollection(l) => match into {
                 Type::Point => *l == 1,
-                Type::Line | Type::Scalar(Some(unit::DISTANCE)) => {
-                    *l == 2
-                }
+                Type::Line | Type::Scalar(Some(unit::DISTANCE)) => *l == 2,
                 Type::PointCollection(v) => v == l,
-                _ => false
+                _ => false,
             },
             Type::Circle => matches!(into, Type::Circle),
-            Type::Undefined => false
+            Type::Undefined => false,
         }
     }
 }
