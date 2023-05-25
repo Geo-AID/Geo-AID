@@ -2,7 +2,9 @@ use std::{cell::RefCell, collections::HashMap, sync::Arc};
 
 use crate::script::{Criteria, CriteriaKind};
 
-use super::{expression::ExprCache, Flags, Logger, Adjustables};
+use super::{expression::ExprCache, Adjustable, Flags, Logger};
+
+type AdjustableVec = Vec<(Adjustable, f64)>;
 
 /// That's the infamous sigma function. It packs a [0, +inf) range into [0, 1).
 fn smooth_0_inf(x: f64) -> f64 {
@@ -75,7 +77,7 @@ pub type Cache = HashMap<usize, ExprCache>;
 
 pub struct EvaluationArgs<'r> {
     pub logger: &'r mut Logger,
-    pub adjustables: &'r Adjustables,
+    pub adjustables: &'r [(Adjustable, f64)],
     pub generation: u64,
     pub flags: &'r Arc<Flags>,
     pub cache: Option<&'r RefCell<Cache>>,
@@ -84,7 +86,7 @@ pub struct EvaluationArgs<'r> {
 /// Evaluates a single rule in terms of quality.
 fn evaluate_single(
     crit: &CriteriaKind,
-    adjustables: &Adjustables,
+    adjustables: &AdjustableVec,
     logger: &mut Logger,
     generation: u64,
     flags: &Arc<Flags>,
@@ -190,14 +192,14 @@ fn evaluate_single(
 #[allow(clippy::implicit_hasher)]
 /// Evaluates all rules in terms of quality
 pub fn evaluate(
-    points: &Adjustables,
+    points: &AdjustableVec,
     criteria: &Arc<Vec<Criteria>>,
     logger: &mut Logger,
     generation: u64,
     flags: &Arc<Flags>,
     cache: Option<&RefCell<Cache>>,
     point_evaluation: &mut [Vec<(Quality, f64)>],
-) -> Adjustables {
+) -> AdjustableVec {
     for pt in point_evaluation.iter_mut() {
         pt.clear();
     }
