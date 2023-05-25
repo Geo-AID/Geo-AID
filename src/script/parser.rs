@@ -8,7 +8,7 @@ use crate::span;
 use super::{
     token::{
         Ampersant, Asterisk, At, Colon, Comma, Dollar, Dot, Eq, Exclamation, Gt, Gteq, Ident,
-        LBrace, LParen, LSquare, Let, Lt, Lteq, Minus, NamedIdent, Number, Plus, Position, RBrace,
+        LBrace, LParen, LSquare, Let, Lt, Lteq, Minus, NamedIdent, Number, Plus, RBrace,
         RParen, RSquare, Semi, Slash, Span, Token, Vertical,
     },
     unit, ComplexUnit, Error, SimpleUnit,
@@ -1227,6 +1227,8 @@ pub enum Type {
     PointCollection(usize),
     /// A circle
     Circle,
+    /// A bundle type.
+    Bundle(&'static str),
     /// Undefinede type = bad
     Undefined,
 }
@@ -1259,6 +1261,7 @@ impl Display for Type {
             },
             Self::PointCollection(l) => write!(f, "Point collection ({l})"),
             Self::Circle => write!(f, "Circle"),
+            Self::Bundle(name) => write!(f, "{name}"),
             Type::Undefined => write!(f, "undefined"),
         }
     }
@@ -1296,6 +1299,11 @@ impl Type {
                 _ => false,
             },
             Type::Circle => matches!(into, Type::Circle),
+            Type::Bundle(name) => if into == self {
+                true
+            } else if let Type::PointCollection(count) = into {
+                // Stuff
+            }
             Type::Undefined => false,
         }
     }

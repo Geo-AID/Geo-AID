@@ -1,5 +1,4 @@
 use crate::script::{
-    token::{Position, Span},
     unroll::{CompileContext, Function},
 };
 
@@ -10,9 +9,11 @@ pub fn register(context: &mut CompileContext) {
         String::from("radians"),
         Function {
             name: String::from("radians"),
-            overloads: vec![overload!((SCALAR) -> ANGLE {
-                |args, _, _| set_unit!(args[0], %ANGLE)
-            })],
+            overloads: vec![
+                overload!((SCALAR) -> ANGLE {
+                    |args, _, _| set_unit!(args[0], %ANGLE)
+                })
+            ],
         },
     );
 }

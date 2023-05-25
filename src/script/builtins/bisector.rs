@@ -1,10 +1,11 @@
 use std::mem;
 
 use crate::script::{
-    compile::PreFigure,
-    token::{Position, Span},
-    unroll::{CompileContext, Function, Properties, UnrolledExpression},
-};
+        unroll::{
+            CompileContext, Function, UnrolledExpression,
+            Properties,
+        }, compile::PreFigure
+    };
 
 use super::macros::{bisector, call, index, intersection, line2, overload};
 
@@ -23,9 +24,15 @@ pub fn point_point_point(
         intersection!(expr, line2!(args[0], args[2])),
     ));
 
-    figure.segments.push((args[0].clone(), args[1].clone()));
+    figure.segments.push((
+        args[0].clone(),
+        args[1].clone()
+    ));
 
-    figure.segments.push((args[2].clone(), args[1].clone()));
+    figure.segments.push((
+        args[2].clone(),
+        args[1].clone()
+    ));
 
     expr
 }
@@ -37,7 +44,6 @@ pub fn point_point(
     display: Option<Properties>,
 ) -> UnrolledExpression {
     use super::mid::mid_function_point;
-    use super::perpendicular::line_point;
     mem::drop(display);
 
     let expr = call!(

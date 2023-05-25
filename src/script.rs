@@ -15,7 +15,7 @@ use crate::{
 };
 
 use self::parser::Type;
-use self::token::{NamedIdent, Position, Span, Token};
+use self::token::{NamedIdent, Span, Token};
 
 mod builtins;
 pub mod compile;

@@ -1,19 +1,16 @@
 use std::mem;
 
 use crate::script::{
-    compile::PreFigure,
-    token::{Position, Span},
-    unroll::{CompileContext, Function, Properties, UnrolledExpression},
+    unroll::{
+        CompileContext, Function, UnrolledExpression,
+        Properties,
+    }, compile::PreFigure
 };
 
-use super::macros::{call, overload, perpendicular_through};
+use super::macros::{overload, call, perpendicular_through};
 
 /// `perpendicular_through(line, point)` - returns a line perpendicular to the 1st argument going through point at 2nd argument.
-pub fn line_point(
-    args: &[UnrolledExpression],
-    figure: &mut PreFigure,
-    display: Option<Properties>,
-) -> UnrolledExpression {
+pub fn line_point(args: &[UnrolledExpression], figure: &mut PreFigure, display: Option<Properties>) -> UnrolledExpression {
     mem::drop(display);
     let expr = perpendicular_through!(args[0], args[1]);
 

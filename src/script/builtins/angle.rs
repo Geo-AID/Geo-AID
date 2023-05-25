@@ -1,9 +1,10 @@
 use std::mem;
 
 use crate::script::{
+    unroll::{
+        CompileContext, Function, UnrolledExpression, Properties,
+    },
     compile::PreFigure,
-    token::{Position, Span},
-    unroll::{CompileContext, Function, Properties, UnrolledExpression},
 };
 
 use super::macros::{angle_expr, call, index, overload};

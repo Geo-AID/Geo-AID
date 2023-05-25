@@ -20,7 +20,6 @@ use crate::{
 use super::{
     figure::Figure,
     parser::Type,
-    token::{Position, Span},
     ty,
     unroll::{
         self, CompileContext, Flag, PointMeta, UnrolledExpression, UnrolledExpressionData,
