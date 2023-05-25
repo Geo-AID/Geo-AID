@@ -233,6 +233,7 @@ pub type Logger = Vec<String>;
 pub enum Adjustable {
     Point(Complex),
     Real(f64),
+    Clip1D(f64)
 }
 
 impl Adjustable {
