@@ -6,14 +6,14 @@ use std::{
     ops::{Add, AddAssign, Div, Mul, Neg, Sub, SubAssign},
     sync::{mpsc, Arc},
     thread::{self, JoinHandle},
-    time::{Duration, Instant}, f64::consts::PI,
+    time::{Duration, Instant}
 };
 
 use serde::Serialize;
 
 use crate::script::Criteria;
 
-use self::expression::{ExprCache, Value, Expression, CircleExpr};
+use self::expression::{ExprCache, Value};
 
 #[derive(Debug)]
 pub enum EvaluationError {
@@ -243,13 +243,13 @@ pub struct Adjustables {
     /// Free scalars.
     pub scalars: Vec<WithQuality<f64>>,
     /// Circle clips
-    pub circle_clips: Vec<WithQuality<(Arc<Expression<CircleExpr>>, f64)>>
+    pub clips_1d: Vec<WithQuality<f64>>
 }
 
 impl Adjustables {
     /// Get all adjustable count.
     pub fn get_count(&self) -> usize {
-        self.points.len() + self.scalars.len() + self.circle_clips.len()
+        self.points.len() + self.scalars.len() + self.clips_1d.len()
     }
 }
 
@@ -339,7 +339,7 @@ pub struct Generator {
 pub struct AdjustablesTemplate {
     pub points: usize,
     pub scalars: usize,
-    pub circle_clips: Vec<Arc<Expression<CircleExpr>>>
+    pub clips_1d: usize
 }
 
 impl Generator {
@@ -367,9 +367,9 @@ impl Generator {
                     quality: 0.0,
                     value: rand::random()
                 }).collect(),
-                circle_clips: template.circle_clips.iter().map(|expr| WithQuality {
+                clips_1d: (0..template.clips_1d).map(|_| WithQuality {
                     quality: 0.0,
-                    value: (expr.clone(), rand::random::<f64>() * 2.0 * PI)
+                    value: rand::random()
                 }).collect()
             },
             workers: input_receivers
@@ -416,7 +416,7 @@ impl Generator {
             let total_quality = (
                 adjustables.points.iter().map(|x| x.quality).sum::<f64>()
                 + adjustables.scalars.iter().map(|x| x.quality).sum::<f64>()
-                + adjustables.circle_clips.iter().map(|x| x.quality).sum::<f64>()
+                + adjustables.clips_1d.iter().map(|x| x.quality).sum::<f64>()
             ) / (
                 self.current_state.get_count() as f64
             );
