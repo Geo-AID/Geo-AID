@@ -43,7 +43,7 @@ pub fn adjust(
                 }
             })
             .collect(),
-        circle_clips: adjustables.circle_clips
+        clips_1d: adjustables.clips_1d
             .into_iter()
             .map(|WithQuality {quality, value}| {
                 let direction = if rand::random::<u8>() & 1 == 0 {
