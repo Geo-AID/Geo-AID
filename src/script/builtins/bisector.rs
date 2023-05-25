@@ -1,7 +1,6 @@
 use std::mem;
 
 use crate::script::{
-        token::{Position, Span},
         unroll::{
             CompileContext, Function, UnrolledExpression,
             Properties,

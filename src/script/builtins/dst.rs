@@ -1,5 +1,4 @@
 use crate::script::{
-    token::{Position, Span},
     unroll::{
         CompileContext, Function
     }

@@ -6,7 +6,7 @@ use std::{
 };
 
 use super::{
-    builtins,
+    builtins::{self, macros::variable},
     parser::{
         BinaryOperator, DisplayProperties, ExplicitIterator, Expression, FlagStatement,
         ImplicitIterator, LetStatement, Parse, PredefinedRuleOperator, Type,
@@ -1601,20 +1601,7 @@ fn create_variable_named(
         )),
         // Otherwise, create a new variable
         Entry::Vacant(entry) => {
-            if rhs_unrolled.ty == Type::Point {
-                let props = PointProperties::parse(display, named.ident.clone())?;
-
-                if props.display {
-                    figure.points.push((
-                        rhs_unrolled.clone(),
-                        PointMeta {
-                            letter: props.label.chars().next().unwrap(),
-                            primes: 0,
-                            index: None
-                        }
-                    ));
-                }
-            }
+            let rhs_ty = rhs_unrolled.ty;
 
             let var = Variable {
                 name: entry.key().clone(),
@@ -1624,6 +1611,22 @@ fn create_variable_named(
 
             let v = Rc::new(var);
             variables.push(Rc::clone(&v));
+
+            if rhs_ty == Type::Point {
+                let props = PointProperties::parse(display, named.ident.clone())?;
+
+                if props.display {
+                    figure.points.push((
+                        variable!(v),
+                        PointMeta {
+                            letter: props.label.chars().next().unwrap(),
+                            primes: 0,
+                            index: None
+                        }
+                    ));
+                }
+            }
+
             entry.insert(v);
 
             Ok(())
@@ -1685,9 +1688,17 @@ fn create_variable_collection(
             }
             // Otherwise, create a new variable
             Entry::Vacant(entry) => {
+                let var = Variable {
+                    name: construct_point_name(pt.0, pt.1),
+                    definition_span: stat.get_span(),
+                    definition: rhs_unpacked.next().unwrap(),
+                };
+
+                let var = Rc::new(var);
+
                 if let Some((letter, true)) = pt_letter {
                     figure.points.push((
-                        rhs_unrolled.clone(),
+                        variable!(var),
                         PointMeta {
                             letter,
                             primes: 0,
@@ -1696,13 +1707,6 @@ fn create_variable_collection(
                     ));
                 }
 
-                let var = Variable {
-                    name: construct_point_name(pt.0, pt.1),
-                    definition_span: stat.get_span(),
-                    definition: rhs_unpacked.next().unwrap(),
-                };
-
-                let var = Rc::new(var);
                 context.variables.insert(var.name.clone(), Rc::clone(&var));
                 variables.push(Rc::clone(&var));
                 entry.insert(var);

@@ -1,7 +1,6 @@
 use std::f64::consts::PI;
 
 use crate::script::{
-    token::{Position, Span},
     unroll::{
         CompileContext, Function
     }

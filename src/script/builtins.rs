@@ -262,6 +262,19 @@ pub mod macros {
         }
     }
 
+    macro_rules! variable {
+        ($v:expr) => {
+            $crate::script::unroll::UnrolledExpression {
+                weight: 1.0,
+                ty: $v.definition.ty,
+                span: $crate::span!(0, 0, 0, 0),
+                data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::VariableAccess(
+                    std::rc::Rc::clone(&$v.clone())
+                ))
+            }
+        };
+    }
+
     macro_rules! distance {
         (PP: $a:expr, $b:expr) => {
             $crate::script::unroll::UnrolledExpression {
@@ -288,6 +301,6 @@ pub mod macros {
         ty, overload, params, call, index, bisector, line2,
         group, average, angle_expr, circle_expr, set_unit, math, number,
         intersection, free, parallel_through, perpendicular_through,
-        distance
+        distance, variable
     };
 }
