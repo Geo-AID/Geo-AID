@@ -307,7 +307,7 @@ impl Error {
                 error_span,
                 feature_name,
             } => {
-                DiagnosticData::new(&format!("feature `{feature_name}` of undefined type"))
+                DiagnosticData::new(&format!("feature `{feature_name}` not supported"))
                     .add_span(error_span)
             }
             Self::InvalidArgumentCount {

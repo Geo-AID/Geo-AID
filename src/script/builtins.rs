@@ -11,6 +11,12 @@ pub mod parallel;
 pub mod perpendicular;
 pub mod point;
 pub mod radians;
+
+/// Returns what size of point collection can the given bundle type be cast onto.
+pub const fn get_bundle_pc(_name: &'static str) -> usize {
+    0
+}
+
 /// Registers all builtins
 pub fn register(context: &mut CompileContext) {
     point::register(context); // Point()
@@ -232,6 +238,14 @@ pub mod macros {
                 ty: $crate::script::ty::POINT,
                 span: $crate::span!(0, 0, 0, 0),
                 data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::FreePoint)
+            }
+        };
+        (SCALAR) => {
+            $crate::script::unroll::UnrolledExpression {
+                weight: 1.0,
+                ty: $crate::script::ty::POINT,
+                span: $crate::span!(0, 0, 0, 0),
+                data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::FreeReal)
             }
         };
     }

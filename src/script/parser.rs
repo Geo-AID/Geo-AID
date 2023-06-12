@@ -12,7 +12,7 @@ use super::{
         RParen, RSquare, Semi, Slash, Span, Token, Vertical,
     },
     unit,
-    ComplexUnit, Error,
+    ComplexUnit, Error, builtins,
 };
 
 macro_rules! impl_token_parse {
@@ -52,6 +52,7 @@ impl UnaryOperator {
                 | Type::Line
                 | Type::Circle
                 | Type::Undefined
+                | Type::Bundle(_)
                 | Type::PointCollection(_) => Type::Undefined,
                 t @ Type::Scalar(_) => *t,
             },
@@ -1331,7 +1332,9 @@ impl Type {
             Type::Bundle(name) => if into == self {
                 true
             } else if let Type::PointCollection(count) = into {
-                // Stuff
+                builtins::get_bundle_pc(name) == *count
+            } else {
+                false
             }
             Type::Undefined => false,
         }
