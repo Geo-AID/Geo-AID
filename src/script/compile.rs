@@ -868,7 +868,7 @@ pub fn compile(
                     &dst_var,
                 );
             }
-            Type::PointCollection(_) => (),
+            Type::PointCollection(_) | Type::Bundle(_) => (),
             Type::Circle => {
                 compile_variable::<CircleExpr>(
                     &var,
