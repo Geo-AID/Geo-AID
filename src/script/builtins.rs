@@ -71,8 +71,7 @@ macro_rules! overload {
     ($lhs:ident $op:ident $rhs:ident : $func:ident) => {
         $crate::script::unroll::RuleOverload {
             definition: $crate::script::unroll::RuleDefinition(Box::new($func)),
-            params: $crate::script::builtins::macros::params!($($($count-)? $t),*),
-            param_group: $crate::script::builtins::macros::group!($(...$($gc-)? $gt)?)
+            params: ($crate::script::builtins::macros::ty!($lhs), $crate::script::builtins::macros::ty!($rhs))
         }
     };
 }
