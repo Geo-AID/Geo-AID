@@ -289,8 +289,6 @@ pub struct FunctionOverload {
     pub params: Vec<Type>,
     /// The returned type
     pub returned_type: Type,
-    /// The definition span (if there is one).
-    pub definition_span: Option<Span>,
     /// The definition.
     pub definition: FunctionDefinition,
     /// Possible parameter group
@@ -385,11 +383,71 @@ impl Function {
     }
 }
 
+/// An overload of a function in `GeoScript`.
+#[derive(Debug)]
+pub struct RuleOverload {
+    /// The parameter types.
+    pub params: (Type, Type),
+    /// The definition.
+    pub definition: RuleDefinition
+}
+
+/// geoscript rule declaration
+type GeoRule = dyn Fn(&UnrolledExpression, &UnrolledExpression, &mut PreFigure, Option<Properties>) -> Vec<UnrolledRule>;
+
+/// A function definition.
+pub struct RuleDefinition(pub Box<GeoRule>);
+
+impl Debug for RuleDefinition {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "function definition")
+    }
+}
+
+impl Deref for RuleDefinition {
+    type Target = Box<GeoRule>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+/// A function.
+#[derive(Debug)]
+pub struct Rule {
+    /// Rule's name
+    pub name: String,
+    /// Rule's overloads.
+    pub overloads: Vec<RuleOverload>,
+}
+
+impl Rule {
+    /// Checks if the given params can be converted into the expected params.
+    ///
+    /// # Panics
+    /// Never. Shut up, clippy.
+    #[must_use]
+    pub fn match_params(
+        expected: (&Type, &Type),
+        received: (&Type, &Type)
+    ) -> bool {
+        received.0.can_cast(expected.0) && received.1.can_cast(expected.1)
+    }
+
+    /// Tries to find an overload for the given param types.
+    #[must_use]
+    pub fn get_overload(&self, received: (&Type, &Type)) -> Option<&RuleOverload> {
+        self.overloads
+            .iter()
+            .find(|x| Rule::match_params((&x.params.0, &x.params.1), received))
+    }
+}
+
 /// The context of compilation process. It's necessary since `GeoScript` is context-dependent.
 #[derive(Debug)]
 pub struct CompileContext {
     /// The rule operators.
-    pub rule_ops: HashMap<String, Rc<RuleOperatorDefinition>>,
+    pub rule_ops: HashMap<String, Rc<Rule>>,
     /// Variables
     pub variables: HashMap<String, Rc<Variable>>,
     /// Points
@@ -2176,10 +2234,38 @@ fn unroll_rule(
             PredefinedRuleOperator::Lteq(_) => unroll_lteq(lhs, rhs, unrolled, full_span, figure),
             PredefinedRuleOperator::Gteq(_) => unroll_gteq(lhs, rhs, unrolled, full_span, figure),
         },
-        RuleOperator::Defined(_) => Err(Error::feature_not_supported(
-            op.get_span(),
-            "custom_rule_operators",
-        )),
+        RuleOperator::Defined(op) => {
+            if let Some(func) = context.rule_ops.get(&op.ident.ident) {
+                if let Some(overload) = func.get_overload((&lhs.ty, &rhs.ty)) {
+                    let lhs = unroll_implicit_conversion(lhs, &overload.params.0, figure)?;
+                    let rhs = unroll_implicit_conversion(rhs, &overload.params.1, figure)?;
+
+                    unrolled.extend((overload.definition)(&lhs, &rhs, figure, None));
+
+                    Ok(())
+                } else {
+                    Err(Error::overload_not_found(
+                        op.ident.span,
+                        op.ident.ident.clone(),
+                        vec![lhs.ty, rhs.ty],
+                    ))
+                }
+            } else {
+                #[allow(clippy::cast_possible_truncation)]
+                let suggested = context
+                    .functions
+                    .iter()
+                    .max_by_key(|v| (strsim::jaro(v.0, &op.ident.ident) * 1000.0).floor() as i64)
+                    .map(|x| x.0)
+                    .cloned();
+
+                Err(Error::UndefinedFunction {
+                    error_span: op.ident.span,
+                    function_name: op.ident.ident.clone(),
+                    suggested,
+                })
+            }
+        }
         RuleOperator::Inverted(op) => {
             unroll_invert(lhs, &op.operator, rhs, context, unrolled, full_span, figure)
         }
