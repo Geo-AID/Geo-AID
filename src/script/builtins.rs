@@ -53,7 +53,6 @@ macro_rules! overload {
     (($($($count:literal-)? $t:ident),* $(...$($gc:literal-)? $gt:ident)?) -> $($rcount:literal-)? $ret:ident {$content:expr}) => {
         $crate::script::unroll::FunctionOverload {
             returned_type: $crate::script::builtins::macros::ty!($($rcount-)? $ret),
-            definition_span: None,
             definition: $crate::script::unroll::FunctionDefinition(Box::new(
                 $content
             )),
@@ -64,8 +63,14 @@ macro_rules! overload {
     (($($($count:literal-)? $t:ident),* $(...$($gc:literal-)? $gt:ident)?) -> $($rcount:literal-)? $ret:ident : $func:ident) => {
         $crate::script::unroll::FunctionOverload {
             returned_type: $crate::script::builtins::macros::ty!($($rcount-)? $ret),
-            definition_span: None,
             definition: $crate::script::unroll::FunctionDefinition(Box::new($func)),
+            params: $crate::script::builtins::macros::params!($($($count-)? $t),*),
+            param_group: $crate::script::builtins::macros::group!($(...$($gc-)? $gt)?)
+        }
+    };
+    ($lhs:ident $op:ident $rhs:ident : $func:ident) => {
+        $crate::script::unroll::RuleOverload {
+            definition: $crate::script::unroll::RuleDefinition(Box::new($func)),
             params: $crate::script::builtins::macros::params!($($($count-)? $t),*),
             param_group: $crate::script::builtins::macros::group!($(...$($gc-)? $gt)?)
         }
@@ -311,6 +316,9 @@ pub mod macros {
             }
         };
     }
+
+
+
     pub(crate) use {
         ty, overload, params, call, index, bisector, line2,
         group, average, angle_expr, circle_expr, set_unit, math, number,
