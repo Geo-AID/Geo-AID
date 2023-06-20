@@ -11,6 +11,7 @@ pub mod parallel;
 pub mod perpendicular;
 pub mod point;
 pub mod radians;
+pub mod lies_on;
 
 /// Returns what size of point collection can the given bundle type be cast onto.
 pub const fn get_bundle_pc(_name: &'static str) -> usize {
@@ -284,7 +285,7 @@ pub mod macros {
         ($v:expr) => {
             $crate::script::unroll::UnrolledExpression {
                 weight: 1.0,
-                ty: $v.definition.ty,
+                ty: $v.borrow().definition.ty,
                 span: $crate::span!(0, 0, 0, 0),
                 data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::VariableAccess(
                     std::rc::Rc::clone(&$v.clone())
