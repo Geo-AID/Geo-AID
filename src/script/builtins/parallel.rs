@@ -1,20 +1,18 @@
 use std::mem;
 
-use crate::script::{
-    unroll::{
-        CompileContext, Function, UnrolledExpression,
-        Properties,
-    }, compile::PreFigure,
+use crate::script::unroll::{
+    CompileContext, Function, UnrolledExpression,
+    Properties,
 };
 
 use super::macros::{overload, call, parallel_through};
 
 /// `parallel_through(line, point)` - returns a line parallel to the 1st argument going through point at 2nd argument.
-fn parallel_function_line_point(args: &[UnrolledExpression], figure: &mut PreFigure, display: Option<Properties>) -> UnrolledExpression {
+fn parallel_function_line_point(args: &[UnrolledExpression], context: &mut CompileContext, display: Option<Properties>) -> UnrolledExpression {
     mem::drop(display);
     let expr = parallel_through!(args[0], args[1]);
 
-    figure.lines.push(expr.clone());
+    context.figure.lines.push(expr.clone());
 
     expr
 }

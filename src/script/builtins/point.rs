@@ -4,7 +4,7 @@ use crate::script::{
     }
 };
 
-use super::macros::{overload, free};
+use super::macros::{overload, entity};
 
 pub fn register(context: &mut CompileContext) {
     context.functions.insert(
@@ -13,7 +13,9 @@ pub fn register(context: &mut CompileContext) {
             name: String::from("Point"),
             overloads: vec![
                 overload!(() -> POINT {
-                    |_, _, _| free!(POINT)
+                    |_, context, _| {
+                        entity!(context.add_point())
+                    }
                 })
             ],
         },

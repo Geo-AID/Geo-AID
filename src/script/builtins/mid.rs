@@ -1,15 +1,12 @@
-use crate::script::{
-    unroll::{
-        CompileContext, Function, UnrolledExpression, Properties
-    },
-    compile::PreFigure
+use crate::script::unroll::{
+    CompileContext, Function, UnrolledExpression, Properties
 };
 
 use super::macros::{overload, average};
 
 macro_rules! mid_function {
     ($t:ident, $name:ident) => {
-        pub fn $name(args: &[UnrolledExpression], _figure: &mut PreFigure, _display: Option<Properties>) -> UnrolledExpression {
+        pub fn $name(args: &[UnrolledExpression], _context: &mut CompileContext, _display: Option<Properties>) -> UnrolledExpression {
             average!($t : args)
         }
     };

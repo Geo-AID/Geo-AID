@@ -236,21 +236,13 @@ pub mod macros {
         };
     }
 
-    macro_rules! free {
-        (POINT) => {
+    macro_rules! entity {
+        ($index:expr) => {
             $crate::script::unroll::UnrolledExpression {
                 weight: 1.0,
                 ty: $crate::script::ty::POINT,
                 span: $crate::span!(0, 0, 0, 0),
-                data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::FreePoint)
-            }
-        };
-        (SCALAR) => {
-            $crate::script::unroll::UnrolledExpression {
-                weight: 1.0,
-                ty: $crate::script::ty::POINT,
-                span: $crate::span!(0, 0, 0, 0),
-                data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::FreeReal)
+                data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::Entity($index))
             }
         };
     }
@@ -322,7 +314,7 @@ pub mod macros {
     pub(crate) use {
         ty, overload, params, call, index, bisector, line2,
         group, average, angle_expr, circle_expr, set_unit, math, number,
-        intersection, free, parallel_through, perpendicular_through,
+        intersection, entity, parallel_through, perpendicular_through,
         distance, variable
     };
 }

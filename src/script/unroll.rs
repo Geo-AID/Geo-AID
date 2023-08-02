@@ -295,7 +295,7 @@ pub struct FunctionOverload {
 }
 
 /// geoscript function declaration
-type GeoFunc = dyn Fn(&[UnrolledExpression], &mut PreFigure, Option<Properties>) -> UnrolledExpression;
+type GeoFunc = dyn Fn(&[UnrolledExpression], &mut CompileContext, Option<Properties>) -> UnrolledExpression;
 
 /// A function definition.
 pub struct FunctionDefinition(pub Box<GeoFunc>);
@@ -392,7 +392,7 @@ pub struct RuleOverload {
 }
 
 /// geoscript rule declaration
-type GeoRule = dyn Fn(&UnrolledExpression, &UnrolledExpression, &mut PreFigure, &mut CompileContext, Option<Properties>) -> Vec<UnrolledRule>;
+type GeoRule = dyn Fn(&UnrolledExpression, &UnrolledExpression, &mut CompileContext, Option<Properties>);
 
 /// A function definition.
 pub struct RuleDefinition(pub Box<GeoRule>);
@@ -442,7 +442,70 @@ impl Rule {
     }
 }
 
-/// The context of compilation process. It's necessary since `GeoScript` is context-dependent.
+/// Kind of an entity. Can be all primitives + a bind.
+#[derive(Debug)]
+pub enum EntityKind {
+    /// A single real value (possibly delimited).
+    Scalar,
+    Line,
+    Point,
+    /// Set of points within the same distance of the circle's origin.
+    Circle,
+    /// Given as a parent when the primitive can be given by a calculation.
+    Bind(UnrolledExpression),
+    /// Non-delimited set
+    All
+}
+
+/// An entity is a single primitive on the figure plane.
+#[derive(Debug)]
+pub struct Entity {
+    /// The kind of this entity.
+    pub kind: EntityKind,
+    /// The index of its parent.
+    pub parent: usize
+}
+
+#[derive(Debug)]
+pub struct CircleHandle<'r> {
+    index: usize,
+    context: &'r mut CompileContext
+}
+
+impl<'r> CircleHandle<'r> {
+    pub fn equals(&mut self, rhs: UnrolledExpression) {
+        match &mut self.context.entities[self.context.entities[self.index].parent].kind {
+            EntityKind::Bind(_) => todo!(),
+            v @ EntityKind::All => *v = EntityKind::Bind(rhs),
+            _ => unreachable!()
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct PointHandle<'r> {
+    index: usize,
+    context: &'r mut CompileContext
+}
+
+impl<'r> PointHandle<'r> {
+    pub fn equals(&mut self, rhs: UnrolledExpression) {
+        match &mut self.context.entities[self.context.entities[self.index].parent].kind {
+            EntityKind::Bind(_) => todo!(),
+            v @ EntityKind::All => *v = EntityKind::Bind(rhs),
+            _ => unreachable!()
+        }
+    }
+
+    pub fn lies_on(&mut self, rhs: UnrolledExpression) {
+        match &mut self.context.entities[self.context.entities[self.index].parent].kind {
+            v @ EntityKind::All => *v = EntityKind::Circle,
+            _ => todo!("If not a free, turn into a rule.")
+        }
+    }
+}
+
+/// The context of compilation process.
 #[derive(Debug)]
 pub struct CompileContext {
     /// The rule operators.
@@ -452,7 +515,97 @@ pub struct CompileContext {
     /// Functions
     pub functions: HashMap<String, Function>,
     /// Flags
-    pub flags: FlagSet
+    pub flags: FlagSet,
+    /// Entities (primitives).
+    pub entities: Vec<Entity>,
+    /// Unrolled rules
+    pub rules: Vec<UnrolledRule>,
+    /// Pre-compiled figure
+    pub figure: PreFigure
+}
+
+impl CompileContext {
+    pub fn new() ->  Self {
+        Self {
+            rule_ops: HashMap::new(),
+            variables: HashMap::new(),
+            functions: HashMap::new(),
+            flags: FlagSetConstructor::new()
+                .add_set(
+                    &"optimizations",
+                    FlagSetConstructor::new().add_bool_def(&"identical_expressions", true),
+                )
+                .add_ident_def(&"distance_literals", &"none")
+                .add_bool_def(&"point_bounds", false)
+                .finish(),
+            entities: vec![Entity {
+                kind: EntityKind::All,
+                parent: 0
+            }],
+            rules: Vec::new(),
+            figure: PreFigure::default()
+        }
+    }
+
+    pub fn add_scalar(&mut self) -> usize {
+        self.entities.push(Entity {
+            kind: EntityKind::Scalar,
+            parent: 0
+        });
+
+        self.entities.len() - 1
+    }
+
+    pub fn add_point(&mut self) -> usize {
+        self.entities.push(Entity {
+            kind: EntityKind::Point,
+            parent: 0
+        });
+
+        self.entities.len() - 1
+    }
+
+    pub fn point(&mut self, index: usize) -> PointHandle {
+        let entity = self.entities.get(index).unwrap();
+        if let EntityKind::Point = entity.kind {
+            return PointHandle {
+                index,
+                context: self
+            };
+        } else {
+            panic!("Requested entity is not a point.");
+        }
+    }
+
+    pub fn add_circle(&mut self) -> usize {
+        self.entities.push(Entity {
+            kind: EntityKind::Circle,
+            parent: 0
+        });
+
+        self.entities.len() - 1
+    }
+
+    pub fn circle(&mut self, index: usize) -> CircleHandle {
+        let entity = self.entities.get(index).unwrap();
+        if let EntityKind::Circle = entity.kind {
+            return CircleHandle {
+                index,
+                context: self
+            };
+        } else {
+            panic!("Requested entity is not a circle.");
+        }
+    }
+
+    pub fn entity_contains(&self, check: usize, entity: usize) -> bool {
+        match self.entities[self.entities[check].parent].kind {
+            EntityKind::Scalar | EntityKind::Line
+            | EntityKind::Point | EntityKind::Circle => self.entity_contains(self.entities[check].parent, entity),
+            EntityKind::Bind(expr) => expr.contains_entity(entity, self),
+            EntityKind::All => false,
+        }
+    }
 }
 
 /// Represents complicated iterator structures.
@@ -775,8 +928,7 @@ pub enum UnrolledExpressionData {
     VariableAccess(Rc<RefCell<Variable>>),
     PointCollection(Vec<UnrolledExpression>),
     Number(f64),
-    FreePoint,
-    FreeReal,
+    Entity(usize),
     Boxed(UnrolledExpression),
     IndexCollection(UnrolledExpression, usize),
     LineFromPoints(UnrolledExpression, UnrolledExpression),
@@ -820,8 +972,7 @@ impl Display for UnrolledExpressionData {
                     .join(", ")
             ),
             UnrolledExpressionData::Number(num) => write!(f, "{num}"),
-            UnrolledExpressionData::FreePoint => write!(f, "Point"),
-            UnrolledExpressionData::FreeReal => write!(f, "Real"),
+            UnrolledExpressionData::Entity(i) => write!(f, "Entity {i}"),
             UnrolledExpressionData::Boxed(expr) | UnrolledExpressionData::SetUnit(expr, _) => {
                 write!(f, "{expr}")
             }
@@ -892,8 +1043,7 @@ impl UnrolledExpression {
     pub fn has_distance_literal(&self) -> Option<Span> {
         match self.data.as_ref() {
             UnrolledExpressionData::VariableAccess(_)
-            | UnrolledExpressionData::FreePoint
-            | UnrolledExpressionData::FreeReal => None,
+            | UnrolledExpressionData::Entity(_) => None,
             UnrolledExpressionData::PointCollection(v) | UnrolledExpressionData::Average(v) => {
                 for expr in v {
                     if let Some(sp) = expr.has_distance_literal() {
@@ -947,6 +1097,51 @@ impl UnrolledExpression {
                 .or_else(|| v3.has_distance_literal()),
         }
     }
+
+    /// Checks if the expression contains a reference to the given entity
+    pub fn contains_entity(&self, entity: usize, context: &CompileContext) -> bool {
+        match self.data.as_ref() {
+            UnrolledExpressionData::VariableAccess(var) => var.borrow().definition.contains_entity(entity, context),
+            UnrolledExpressionData::Entity(id) => {
+                if *id == entity {
+                    true
+                } else {
+                    context.entity_contains(*id, entity)
+                }
+            }
+            UnrolledExpressionData::PointCollection(v) | UnrolledExpressionData::Average(v) => {
+                v.iter().any(|x| x.contains_entity(entity, context))
+            }
+            UnrolledExpressionData::Number(_) => false,
+            UnrolledExpressionData::Boxed(v)
+            | UnrolledExpressionData::IndexCollection(v, _)
+            | UnrolledExpressionData::Negate(v) => v.contains_entity(entity, context),
+            UnrolledExpressionData::SetUnit(v, u) => {
+                v.contains_entity(entity, context)
+            }
+            UnrolledExpressionData::PointPointDistance(e1, e2)
+            | UnrolledExpressionData::PointLineDistance(e1, e2) => e1
+                .contains_entity(entity, context)
+                || e2.contains_entity(entity, context),
+            UnrolledExpressionData::Add(v1, v2)
+            | UnrolledExpressionData::Circle(v1, v2)
+            | UnrolledExpressionData::LineFromPoints(v1, v2)
+            | UnrolledExpressionData::ParallelThrough(v1, v2)
+            | UnrolledExpressionData::PerpendicularThrough(v1, v2)
+            | UnrolledExpressionData::LineLineIntersection(v1, v2)
+            | UnrolledExpressionData::TwoLineAngle(v1, v2)
+            | UnrolledExpressionData::Subtract(v1, v2)
+            | UnrolledExpressionData::Multiply(v1, v2)
+            | UnrolledExpressionData::Divide(v1, v2) => v1
+                .contains_entity(entity, context)
+                || v2.contains_entity(entity, context),
+            UnrolledExpressionData::ThreePointAngle(v1, v2, v3)
+            | UnrolledExpressionData::AngleBisector(v1, v2, v3) => v1
+                .contains_entity(entity, context)
+                || v2.contains_entity(entity, context)
+                || v3.contains_entity(entity, context)
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -991,10 +1186,10 @@ pub fn construct_point_name(letter: char, primes: u8) -> String {
 pub fn unroll_parameters(
     definition: &FunctionDefinition,
     params: &[UnrolledExpression],
-    figure: &mut PreFigure,
-    display: Option<Properties>
+    display: Option<Properties>,
+    context: &mut CompileContext
 ) -> UnrolledExpression {
-    definition(params, figure, display)
+    definition(params, context, display)
 }
 
 /// Unrolls the conversion of a point collection into the given type.
@@ -1002,7 +1197,7 @@ fn unroll_pc_conversion(
     expr: &UnrolledExpression,
     to: &Type,
     collection_length: usize,
-    figure: &mut PreFigure
+    context: &mut CompileContext
 ) -> Result<UnrolledExpression, Error> {
     match collection_length {
         1 => {
@@ -1044,7 +1239,7 @@ fn unroll_pc_conversion(
                 };
 
                 // Any line constructed from a point collection should be displayed.
-                figure.lines.push(expr.clone());
+                context.figure.lines.push(expr.clone());
 
                 Ok(expr)
             }
@@ -1071,7 +1266,7 @@ fn unroll_pc_conversion(
                     };
 
                     // Anything constructed like that is treated like a segment.
-                    figure.segments.push((a.clone(), b.clone()));
+                    context.figure.segments.push((a.clone(), b.clone()));
 
                     Ok(UnrolledExpression {
                         weight: 1.0, // Weight is propagated through `IndexCollection`.
@@ -1106,7 +1301,7 @@ fn unroll_pc_conversion(
 fn unroll_conversion_to_scalar(
     expr: &UnrolledExpression,
     to: &Type,
-    figure: &mut PreFigure
+    context: &mut CompileContext
 ) -> Result<UnrolledExpression, Error> {
     match expr.data.as_ref() {
         UnrolledExpressionData::Boxed(x) => Ok(UnrolledExpression {
@@ -1116,7 +1311,7 @@ fn unroll_conversion_to_scalar(
             data: Rc::new(UnrolledExpressionData::Boxed(unroll_implicit_conversion(
                 x.clone(),
                 to,
-                figure
+                context
             )?)),
         }),
         UnrolledExpressionData::Number(_) => Ok(UnrolledExpression {
@@ -1132,7 +1327,7 @@ fn unroll_conversion_to_scalar(
             data: Rc::new(UnrolledExpressionData::Negate(unroll_implicit_conversion(
                 x.clone(),
                 to,
-                figure
+                context
             )?)),
         }),
         UnrolledExpressionData::Add(e1, e2) => Ok(UnrolledExpression {
@@ -1140,8 +1335,8 @@ fn unroll_conversion_to_scalar(
             span: expr.span,
             weight: expr.weight,
             data: Rc::new(UnrolledExpressionData::Add(
-                unroll_implicit_conversion(e1.clone(), to, figure)?,
-                unroll_implicit_conversion(e2.clone(), to, figure)?,
+                unroll_implicit_conversion(e1.clone(), to, context)?,
+                unroll_implicit_conversion(e2.clone(), to, context)?,
             )),
         }),
         UnrolledExpressionData::Subtract(e1, e2) => Ok(UnrolledExpression {
@@ -1149,8 +1344,8 @@ fn unroll_conversion_to_scalar(
             span: expr.span,
             weight: expr.weight,
             data: Rc::new(UnrolledExpressionData::Subtract(
-                unroll_implicit_conversion(e1.clone(), to, figure)?,
-                unroll_implicit_conversion(e2.clone(), to, figure)?,
+                unroll_implicit_conversion(e1.clone(), to, context)?,
+                unroll_implicit_conversion(e2.clone(), to, context)?,
             )),
         }),
         UnrolledExpressionData::Multiply(e1, e2) => Ok(UnrolledExpression {
@@ -1158,11 +1353,11 @@ fn unroll_conversion_to_scalar(
             span: expr.span,
             weight: expr.weight,
             data: Rc::new(UnrolledExpressionData::Multiply(
-                unroll_implicit_conversion(e1.clone(), to, figure)?,
+                unroll_implicit_conversion(e1.clone(), to, context)?,
                 unroll_implicit_conversion(
                     e2.clone(),
                     &ty::SCALAR,
-                    figure
+                    context
                 )?,
             )),
         }),
@@ -1171,11 +1366,11 @@ fn unroll_conversion_to_scalar(
             span: expr.span,
             weight: expr.weight,
             data: Rc::new(UnrolledExpressionData::Divide(
-                unroll_implicit_conversion(e1.clone(), to, figure)?,
+                unroll_implicit_conversion(e1.clone(), to, context)?,
                 unroll_implicit_conversion(
                     e2.clone(),
                     &ty::SCALAR,
-                    figure
+                    context
                 )?,
             )),
         }),
@@ -1186,14 +1381,13 @@ fn unroll_conversion_to_scalar(
             data: Rc::new(UnrolledExpressionData::Average(
                 exprs
                     .iter()
-                    .map(|v| unroll_conversion_to_scalar(v, to, figure))
+                    .map(|v| unroll_conversion_to_scalar(v, to, context))
                     .collect::<Result<Vec<UnrolledExpression>, Error>>()?,
             )),
         }),
         UnrolledExpressionData::VariableAccess(_)
         | UnrolledExpressionData::PointCollection(_)
-        | UnrolledExpressionData::FreePoint
-        | UnrolledExpressionData::FreeReal
+        | UnrolledExpressionData::Entity(_)
         | UnrolledExpressionData::IndexCollection(_, _)
         | UnrolledExpressionData::LineFromPoints(_, _)
         | UnrolledExpressionData::SetUnit(_, _)
@@ -1216,19 +1410,19 @@ fn unroll_conversion_to_scalar(
 fn unroll_implicit_conversion(
     expr: UnrolledExpression,
     to: &Type,
-    figure: &mut PreFigure
+    context: &mut CompileContext
 ) -> Result<UnrolledExpression, Error> {
     if to == &expr.ty {
         Ok(expr)
     } else {
         match &expr.ty {
-            Type::PointCollection(l) => unroll_pc_conversion(&expr, to, *l, figure),
+            Type::PointCollection(l) => unroll_pc_conversion(&expr, to, *l, context),
             Type::Scalar(unit) => {
                 match unit {
                     Some(unit) => {
                         if unit.0[SimpleUnit::Angle as usize] == 0 {
                             // no angle
-                            unroll_conversion_to_scalar(&expr, to, figure)
+                            unroll_conversion_to_scalar(&expr, to, context)
                         } else {
                             Err(Error::implicit_conversion_does_not_exist(
                                 expr.span,
@@ -1237,7 +1431,7 @@ fn unroll_implicit_conversion(
                             ))
                         }
                     }
-                    None => unroll_conversion_to_scalar(&expr, to, figure),
+                    None => unroll_conversion_to_scalar(&expr, to, context),
                 }
             }
             _ => Err(Error::implicit_conversion_does_not_exist(
@@ -1253,9 +1447,8 @@ fn unroll_implicit_conversion(
 #[allow(clippy::too_many_lines)]
 fn unroll_simple(
     expr: &SimpleExpression,
-    context: &CompileContext,
-    it_index: &HashMap<u8, usize>,
-    figure: &mut PreFigure
+    context: &mut CompileContext,
+    it_index: &HashMap<u8, usize>
 ) -> Result<UnrolledExpression, Error> {
     let display: Option<Properties> = expr.display.as_ref().map(|v| {
         Properties(
@@ -1331,7 +1524,7 @@ fn unroll_simple(
                 let params = match &e.params {
                     Some(params) => params
                         .iter()
-                        .map(|p| unroll_expression(p, context, it_index, figure))
+                        .map(|p| unroll_expression(p, context, it_index))
                         .collect::<Result<Vec<UnrolledExpression>, Error>>()?,
                     None => Vec::new(),
                 };
@@ -1344,12 +1537,12 @@ fn unroll_simple(
                         .enumerate()
                         .map(|(i, param)| {
                             if i < overload.params.len() {
-                                unroll_implicit_conversion(param, &overload.params[i], figure)
+                                unroll_implicit_conversion(param, &overload.params[i], context)
                             } else {
                                 unroll_implicit_conversion(
                                     param,
                                     overload.param_group.as_ref().unwrap(),
-                                    figure
+                                    context
                                 )
                             }
                         })
@@ -1361,8 +1554,8 @@ fn unroll_simple(
                         data: Rc::new(UnrolledExpressionData::Boxed(unroll_parameters(
                             &overload.definition,
                             &params,
-                            figure,
-                            display
+                            display,
+                            context
                         ))),
                         span: e.get_span(),
                     }
@@ -1390,7 +1583,7 @@ fn unroll_simple(
             }
         }
         SimpleExpressionKind::Unop(op) => {
-            let unrolled = unroll_simple(&op.rhs, context, it_index, figure)?;
+            let unrolled = unroll_simple(&op.rhs, context, it_index)?;
             match &unrolled.ty {
                 Type::Scalar(_) => UnrolledExpression {
                     weight: 1.0, // TODO: UPDATE FOR WEIGHING SUPPORT IN GEOSCRIPT
@@ -1407,9 +1600,9 @@ fn unroll_simple(
                 }
             }
         }
-        SimpleExpressionKind::Parenthised(expr) => unroll_expression(&expr.content, context, it_index, figure)?,
+        SimpleExpressionKind::Parenthised(expr) => unroll_expression(&expr.content, context, it_index)?,
         SimpleExpressionKind::ExplicitIterator(it) => {
-            unroll_expression(it.get(it_index[&it.id]).unwrap(), context, it_index, figure)?
+            unroll_expression(it.get(it_index[&it.id]).unwrap(), context, it_index)?
         }
         SimpleExpressionKind::PointCollection(col) => UnrolledExpression {
             weight: 1.0, // TODO: UPDATE FOR WEIGHING SUPPORT IN GEOSCRIPT
@@ -1419,10 +1612,10 @@ fn unroll_simple(
                 col.points
                     .iter()
                     .map(|expr| {
-                        let unrolled = unroll_expression(expr, context, it_index, figure)?;
+                        let unrolled = unroll_expression(expr, context, it_index)?;
 
                         if unrolled.ty.can_cast(&ty::POINT) {
-                            Ok(unroll_implicit_conversion(unrolled, &ty::POINT, figure)?)
+                            Ok(unroll_implicit_conversion(unrolled, &ty::POINT, context)?)
                         } else {
                             Err(Error::NonPointInPointCollection {
                                 error_span: col.get_span(),
@@ -1439,7 +1632,7 @@ fn unroll_simple(
 fn unroll_muldiv(
     this: UnrolledExpression,
     other: &UnrolledExpression,
-    figure: &mut PreFigure
+    context: &mut CompileContext
 ) -> Result<UnrolledExpression, Error> {
     match this.ty {
         Type::Scalar(None) => match &other.ty {
@@ -1447,7 +1640,7 @@ fn unroll_muldiv(
             _ => unroll_implicit_conversion(
                 this,
                 &ty::SCALAR,
-                figure
+                context
             ),
         },
         _ => Ok(this),
@@ -1458,11 +1651,11 @@ fn unroll_binop(
     lhs: UnrolledExpression,
     op: &BinaryOperator,
     rhs: UnrolledExpression,
-    figure: &mut PreFigure
+    context: &mut CompileContext
 ) -> Result<UnrolledExpression, Error> {
     let lhs = match &lhs.ty {
         Type::Scalar(_) => lhs,
-        Type::PointCollection(2) => unroll_implicit_conversion(lhs, &ty::DISTANCE, figure)?,
+        Type::PointCollection(2) => unroll_implicit_conversion(lhs, &ty::DISTANCE, context)?,
         _ => {
             return Err(Error::InvalidOperandType {
                 error_span: lhs.span.join(rhs.span),
@@ -1477,7 +1670,7 @@ fn unroll_binop(
         Type::PointCollection(2) => unroll_implicit_conversion(
             rhs,
             &ty::DISTANCE,
-            figure
+            context
         )?,
         _ => {
             return Err(Error::InvalidOperandType {
@@ -1492,12 +1685,12 @@ fn unroll_binop(
         BinaryOperator::Add(_) | BinaryOperator::Sub(_) => {
             let lhs = match lhs.ty {
                 Type::Scalar(None) => {
-                    unroll_implicit_conversion(lhs, &rhs.ty, figure)?
+                    unroll_implicit_conversion(lhs, &rhs.ty, context)?
                 }
                 _ => lhs,
             };
 
-            let rhs = unroll_implicit_conversion(rhs, &lhs.ty, figure)?;
+            let rhs = unroll_implicit_conversion(rhs, &lhs.ty, context)?;
 
             Ok(UnrolledExpression {
                 weight: 1.0, // Technically, the only way to assign weight to an arithmetic op is to parenthise it.
@@ -1511,9 +1704,9 @@ fn unroll_binop(
             })
         }
         BinaryOperator::Mul(_) | BinaryOperator::Div(_) => {
-            let lhs = unroll_muldiv(lhs, &rhs, figure)?;
+            let lhs = unroll_muldiv(lhs, &rhs, context)?;
 
-            let rhs = unroll_muldiv(rhs, &lhs, figure)?;
+            let rhs = unroll_muldiv(rhs, &lhs, context)?;
 
             Ok(UnrolledExpression {
                 weight: 1.0, // Technically, the only way to assign weight to an arithmetic op is to parenthise it.
@@ -1545,23 +1738,21 @@ fn unroll_binop(
 /// Unrolls the given expression based on the given iterator index. The index is assumed valid and an out-of-bounds access leads to a panic!().
 fn unroll_expression<const ITER: bool>(
     expr: &Expression<ITER>,
-    context: &CompileContext,
-    it_index: &HashMap<u8, usize>,
-    figure: &mut PreFigure
+    context: &mut CompileContext,
+    it_index: &HashMap<u8, usize>
 ) -> Result<UnrolledExpression, Error> {
     match expr {
-        Expression::Single(simple) => unroll_simple(simple.as_ref(), context, it_index, figure),
+        Expression::Single(simple) => unroll_simple(simple.as_ref(), context, it_index),
         Expression::ImplicitIterator(it) => unroll_simple(
             it.get(it_index[&0]).unwrap(), // Implicit iterators always have an id of 0.
             context,
-            it_index,
-            figure
+            it_index
         ),
         Expression::Binop(op) => {
-            let lhs = unroll_expression(&op.lhs, context, it_index, figure)?;
-            let rhs = unroll_expression(&op.rhs, context, it_index, figure)?;
+            let lhs = unroll_expression(&op.lhs, context, it_index)?;
+            let rhs = unroll_expression(&op.rhs, context, it_index)?;
 
-            unroll_binop(lhs, &op.operator, rhs, figure)
+            unroll_binop(lhs, &op.operator, rhs, context)
         }
     }
 }
@@ -1636,8 +1827,7 @@ fn create_variable_named(
     named: &NamedIdent,
     display: Option<&DisplayProperties>,
     rhs_unrolled: UnrolledExpression,
-    variables: &mut Vec<Rc<RefCell<Variable>>>,
-    figure: &mut PreFigure
+    variables: &mut Vec<Rc<RefCell<Variable>>>
 ) -> Result<(), Error> {
     let display: Option<Properties> = display.map(|v| {
         Properties(
@@ -1672,7 +1862,7 @@ fn create_variable_named(
                 let props = PointProperties::parse(display, named.ident.clone())?;
 
                 if props.display {
-                    figure.points.push((
+                    context.figure.points.push((
                         variable!(v),
                         PointMeta {
                             letter: props.label.chars().next().unwrap(),
@@ -1697,8 +1887,7 @@ fn create_variable_collection(
     col: &PointCollection,
     rhs_unrolled: &UnrolledExpression,
     display: Option<&DisplayProperties>,
-    variables: &mut Vec<Rc<RefCell<Variable>>>,
-    figure: &mut PreFigure
+    variables: &mut Vec<Rc<RefCell<Variable>>>
 ) -> Result<(), Error> {
     let display: Option<Properties> = display.map(|v| {
         Properties(
@@ -1753,7 +1942,7 @@ fn create_variable_collection(
                 let var = Rc::new(RefCell::new(var));
 
                 if let Some((letter, true)) = pt_letter {
-                    figure.points.push((
+                    context.figure.points.push((
                         variable!(var),
                         PointMeta {
                             letter,
@@ -1775,8 +1964,7 @@ fn create_variable_collection(
 
 fn create_variables(
     stat: &LetStatement,
-    context: &mut CompileContext,
-    figure: &mut PreFigure
+    context: &mut CompileContext
 ) -> Result<Vec<Rc<RefCell<Variable>>>, Error> {
     let mut variables = Vec::new();
 
@@ -1837,8 +2025,7 @@ fn create_variables(
             &stat.expr,
             context,
             ind.as_ref()
-                .unwrap_or_else(|| it_index.get_currents().unwrap()),
-            figure
+                .unwrap_or_else(|| it_index.get_currents().unwrap())
         )?;
         it_index.next();
 
@@ -1850,8 +2037,7 @@ fn create_variables(
                     named,
                     def.display_properties.as_ref(),
                     rhs_unrolled,
-                    &mut variables,
-                    figure
+                    &mut variables
                 )?;
             }
             Ident::Collection(col) => {
@@ -1861,8 +2047,7 @@ fn create_variables(
                     col,
                     &rhs_unrolled,
                     def.display_properties.as_ref(),
-                    &mut variables,
-                    figure
+                    &mut variables
                 )?;
             }
         }
@@ -1873,11 +2058,9 @@ fn create_variables(
 
 fn unroll_let(
     stat: &LetStatement,
-    context: &mut CompileContext,
-    unrolled: &mut Vec<UnrolledRule>,
-    figure: &mut PreFigure
+    context: &mut CompileContext
 ) -> Result<(), Error> {
-    create_variables(stat, context, figure)?;
+    create_variables(stat, context)?;
 
     // First, we construct an iterator out of lhs
     let lhs: Expression<true> = Expression::ImplicitIterator(ImplicitIterator {
@@ -1910,13 +2093,12 @@ fn unroll_let(
 
         while let Some(it_index) = index.get_currents() {
             unroll_rule(
-                unroll_expression(&lhs, context, it_index, figure)?,
+                unroll_expression(&lhs, context, it_index)?,
                 rule,
-                unroll_expression(expr, context, it_index, figure)?,
+                unroll_expression(expr, context, it_index)?,
                 context,
-                unrolled,
                 stat.get_span(),
-                figure
+                false
             )?;
 
             index.next();
@@ -1929,26 +2111,26 @@ fn unroll_let(
 fn unroll_eq(
     lhs: UnrolledExpression,
     rhs: UnrolledExpression,
-    unrolled: &mut Vec<UnrolledRule>,
+    context: &mut CompileContext,
     full_span: Span,
-    figure: &mut PreFigure
+    invert: bool
 ) -> Result<(), Error> {
     if (lhs.ty == ty::collection(2) && rhs.ty == ty::collection(2))
         || (lhs.ty == ty::collection(2) && rhs.ty == ty::SCALAR_UNKNOWN)
         || (lhs.ty == ty::SCALAR_UNKNOWN && rhs.ty == ty::collection(2))
     {
         // AB = CD must have different logic as it's implied that this means "equality of distances".
-        unrolled.push(UnrolledRule {
+        context.rules.push(UnrolledRule {
             kind: UnrolledRuleKind::Eq,
             lhs: unroll_implicit_conversion(
                 lhs,
                 &ty::DISTANCE,
-                figure
+                context
             )?,
             rhs: unroll_implicit_conversion(
                 rhs,
                 &ty::DISTANCE,
-                figure
+                context
             )?,
             inverted: false,
         });
@@ -1958,9 +2140,9 @@ fn unroll_eq(
         let (mut lhs, mut rhs) = (lhs, rhs);
         // If any of the two types can be cast onto the other, cast and compare.
         if rhs.ty.can_cast(&lhs.ty) {
-            rhs = unroll_implicit_conversion(rhs, &lhs.ty, figure)?;
+            rhs = unroll_implicit_conversion(rhs, &lhs.ty, context)?;
         } else if lhs.ty.can_cast(&rhs.ty) {
-            lhs = unroll_implicit_conversion(lhs, &rhs.ty, figure)?;
+            lhs = unroll_implicit_conversion(lhs, &rhs.ty, context)?;
         } else {
             return Err(Error::InconsistentTypes {
                 expected: (lhs.ty, Box::new(lhs.span)),
@@ -1969,7 +2151,7 @@ fn unroll_eq(
             });
         }
 
-        unrolled.push(UnrolledRule {
+        context.rules.push(UnrolledRule {
             kind: UnrolledRuleKind::Eq,
             lhs,
             rhs,
@@ -1983,9 +2165,9 @@ fn unroll_eq(
 fn unroll_gt(
     lhs: UnrolledExpression,
     rhs: UnrolledExpression,
-    unrolled: &mut Vec<UnrolledRule>,
+    context: &mut CompileContext,
     full_span: Span,
-    figure: &mut PreFigure
+    invert: bool
 ) -> Result<(), Error> {
     let left_unit = match &lhs.ty {
         Type::Scalar(Some(unit)) => Some(*unit),
@@ -2007,19 +2189,19 @@ fn unroll_gt(
                 ltype,
             )))
         {
-            unrolled.push(UnrolledRule {
+            context.rules.push(UnrolledRule {
                 kind: UnrolledRuleKind::Gt,
                 lhs: unroll_implicit_conversion(
                     lhs,
                     &Type::Scalar(Some(ltype)),
-                    figure
+                    context
                 )?,
                 rhs: unroll_implicit_conversion(
                     rhs,
                     &Type::Scalar(Some(ltype)),
-                    figure
+                    context
                 )?,
-                inverted: false,
+                inverted: invert,
             });
         } else {
             return Err(Error::InconsistentTypes {
@@ -2043,27 +2225,27 @@ fn unroll_gt(
         };
 
         if let Some(rtype) = right_unit {
-            unrolled.push(UnrolledRule {
+            context.rules.push(UnrolledRule {
                 kind: UnrolledRuleKind::Gt,
                 lhs: unroll_implicit_conversion(
                     lhs,
                     &Type::Scalar(Some(rtype)),
-                    figure
+                    context
                 )?,
                 rhs: unroll_implicit_conversion(
                     rhs,
                     &Type::Scalar(Some(rtype)),
-                    figure
+                    context
                 )?,
-                inverted: false,
+                inverted: invert,
             });
         } else {
             let common = Type::Scalar(Some(ComplexUnit::new(SimpleUnit::Scalar)));
-            unrolled.push(UnrolledRule {
+            context.rules.push(UnrolledRule {
                 kind: UnrolledRuleKind::Gt,
-                lhs: unroll_implicit_conversion(lhs, &common, figure)?,
-                rhs: unroll_implicit_conversion(rhs, &common, figure)?,
-                inverted: false,
+                lhs: unroll_implicit_conversion(lhs, &common, context)?,
+                rhs: unroll_implicit_conversion(rhs, &common, context)?,
+                inverted: invert,
             });
         }
     }
@@ -2074,9 +2256,9 @@ fn unroll_gt(
 fn unroll_lt(
     lhs: UnrolledExpression,
     rhs: UnrolledExpression,
-    unrolled: &mut Vec<UnrolledRule>,
+    context: &mut CompileContext,
     full_span: Span,
-    figure: &mut PreFigure
+    invert: bool
 ) -> Result<(), Error> {
     let left_unit = match &lhs.ty {
         Type::Scalar(Some(unit)) => Some(*unit),
@@ -2098,19 +2280,19 @@ fn unroll_lt(
                 ltype,
             )))
         {
-            unrolled.push(UnrolledRule {
+            context.rules.push(UnrolledRule {
                 kind: UnrolledRuleKind::Lt,
                 lhs: unroll_implicit_conversion(
                     lhs,
                     &Type::Scalar(Some(ltype)),
-                    figure
+                    context
                 )?,
                 rhs: unroll_implicit_conversion(
                     rhs,
                     &Type::Scalar(Some(ltype)),
-                    figure
+                    context
                 )?,
-                inverted: false,
+                inverted: invert,
             });
         } else {
             return Err(Error::InconsistentTypes {
@@ -2134,86 +2316,30 @@ fn unroll_lt(
         };
 
         if let Some(rtype) = right_unit {
-            unrolled.push(UnrolledRule {
+            context.rules.push(UnrolledRule {
                 kind: UnrolledRuleKind::Lt,
                 lhs: unroll_implicit_conversion(
                     lhs,
                     &Type::Scalar(Some(rtype)),
-                    figure
+                    context
                 )?,
                 rhs: unroll_implicit_conversion(
                     rhs,
                     &Type::Scalar(Some(rtype)),
-                    figure
+                    context
                 )?,
-                inverted: false,
+                inverted: invert,
             });
         } else {
             let common = ty::SCALAR;
-            unrolled.push(UnrolledRule {
+            context.rules.push(UnrolledRule {
                 kind: UnrolledRuleKind::Lt,
-                lhs: unroll_implicit_conversion(lhs, &common, figure)?,
-                rhs: unroll_implicit_conversion(rhs, &common, figure)?,
-                inverted: false,
+                lhs: unroll_implicit_conversion(lhs, &common, context)?,
+                rhs: unroll_implicit_conversion(rhs, &common, context)?,
+                inverted: invert,
             });
         }
     }
-
-    Ok(())
-}
-
-fn unroll_invert(
-    lhs: UnrolledExpression,
-    op: &RuleOperator,
-    rhs: UnrolledExpression,
-    context: &mut CompileContext,
-    unrolled: &mut Vec<UnrolledRule>,
-    full_span: Span,
-    figure: &mut PreFigure
-) -> Result<(), Error> {
-    let mut unrolled_content = Vec::new();
-    unroll_rule(lhs, op, rhs, context, &mut unrolled_content, full_span, figure)?;
-
-    unrolled.extend(unrolled_content.into_iter().map(|mut x| {
-        x.inverted = !x.inverted;
-        x
-    }));
-
-    Ok(())
-}
-
-fn unroll_gteq(
-    lhs: UnrolledExpression,
-    rhs: UnrolledExpression,
-    unrolled: &mut Vec<UnrolledRule>,
-    full_span: Span,
-    figure: &mut PreFigure
-) -> Result<(), Error> {
-    let mut unrolled_content = Vec::new();
-    unroll_lt(lhs, rhs, &mut unrolled_content, full_span, figure)?;
-
-    unrolled.extend(unrolled_content.into_iter().map(|mut x| {
-        x.inverted = !x.inverted;
-        x
-    }));
-
-    Ok(())
-}
-
-fn unroll_lteq(
-    lhs: UnrolledExpression,
-    rhs: UnrolledExpression,
-    unrolled: &mut Vec<UnrolledRule>,
-    full_span: Span,
-    figure: &mut PreFigure
-) -> Result<(), Error> {
-    let mut unrolled_content = Vec::new();
-    unroll_gt(lhs, rhs, &mut unrolled_content, full_span, figure)?;
-
-    unrolled.extend(unrolled_content.into_iter().map(|mut x| {
-        x.inverted = !x.inverted;
-        x
-    }));
 
     Ok(())
 }
@@ -2223,23 +2349,22 @@ fn unroll_rule(
     op: &RuleOperator,
     rhs: UnrolledExpression,
     context: &mut CompileContext,
-    unrolled: &mut Vec<UnrolledRule>,
     full_span: Span,
-    figure: &mut PreFigure
+    invert: bool
 ) -> Result<(), Error> {
     match op {
         RuleOperator::Predefined(pre) => match pre {
-            PredefinedRuleOperator::Eq(_) => unroll_eq(lhs, rhs, unrolled, full_span, figure),
-            PredefinedRuleOperator::Lt(_) => unroll_lt(lhs, rhs, unrolled, full_span, figure),
-            PredefinedRuleOperator::Gt(_) => unroll_gt(lhs, rhs, unrolled, full_span, figure),
-            PredefinedRuleOperator::Lteq(_) => unroll_lteq(lhs, rhs, unrolled, full_span, figure),
-            PredefinedRuleOperator::Gteq(_) => unroll_gteq(lhs, rhs, unrolled, full_span, figure),
+            PredefinedRuleOperator::Eq(_) => unroll_eq(lhs, rhs, context, full_span, invert),
+            PredefinedRuleOperator::Lt(_) => unroll_lt(lhs, rhs, context, full_span, invert),
+            PredefinedRuleOperator::Gt(_) => unroll_gt(lhs, rhs, context, full_span, invert),
+            PredefinedRuleOperator::Lteq(_) => unroll_gt(lhs, rhs, context, full_span, !invert),
+            PredefinedRuleOperator::Gteq(_) => unroll_lt(lhs, rhs, context, full_span, !invert),
         },
         RuleOperator::Defined(op) => {
             let (def, lhs, rhs) = if let Some(func) = context.rule_ops.get(&op.ident.ident) {
                 if let Some(overload) = func.get_overload((&lhs.ty, &rhs.ty)) {
-                    let lhs = unroll_implicit_conversion(lhs, &overload.params.0, figure)?;
-                    let rhs = unroll_implicit_conversion(rhs, &overload.params.1, figure)?;
+                    let lhs = unroll_implicit_conversion(lhs, &overload.params.0, context)?;
+                    let rhs = unroll_implicit_conversion(rhs, &overload.params.1, context)?;
 
                     (overload.definition, lhs, rhs)
                 } else {
@@ -2265,20 +2390,18 @@ fn unroll_rule(
                 });
             };
 
-            unrolled.extend(def(&lhs, &rhs, figure, context, None));
+            def(&lhs, &rhs, context, None);
             Ok(())
         }
         RuleOperator::Inverted(op) => {
-            unroll_invert(lhs, &op.operator, rhs, context, unrolled, full_span, figure)
+            unroll_rule(lhs, &op.operator, rhs, context, full_span, !invert)
         }
     }
 }
 
 fn unroll_rulestat(
     rule: &RuleStatement,
-    context: &mut CompileContext,
-    unrolled: &mut Vec<UnrolledRule>,
-    figure: &mut PreFigure
+    context: &mut CompileContext
 ) -> Result<(), Error> {
     let tree = IterNode::from2(&rule.lhs, &rule.rhs);
     tree.get_iter_lengths(&mut HashMap::new(), rule.get_span())?;
@@ -2287,13 +2410,12 @@ fn unroll_rulestat(
 
     while let Some(index) = it_index.get_currents() {
         unroll_rule(
-            unroll_expression(&rule.lhs, context, index, figure)?,
+            unroll_expression(&rule.lhs, context, index)?,
             &rule.op,
-            unroll_expression(&rule.rhs, context, index, figure)?,
+            unroll_expression(&rule.rhs, context, index)?,
             context,
-            unrolled,
             rule.get_span(),
-            figure
+            false
         )?;
 
         it_index.next();
@@ -2470,28 +2592,14 @@ fn set_flag(set: &mut FlagSet, flag: &FlagStatement) -> Result<(), Error> {
 ///
 /// # Errors
 /// Specific error descriptions are in `ScriptError` documentation.
-pub fn unroll(input: &str, figure: &mut PreFigure) -> Result<(Vec<UnrolledRule>, CompileContext), Error> {
+pub fn unroll(input: &str) -> Result<CompileContext, Error> {
     // Unfortunately, due to how context-dependent geoscript is, the code must be compiled immediately after parsing.
-    let mut context = CompileContext {
-        rule_ops: HashMap::new(),
-        variables: HashMap::new(),
-        functions: HashMap::new(),
-        flags: FlagSetConstructor::new()
-            .add_set(
-                &"optimizations",
-                FlagSetConstructor::new().add_bool_def(&"identical_expressions", true),
-            )
-            .add_ident_def(&"distance_literals", &"none")
-            .add_bool_def(&"point_bounds", false)
-            .finish()
-    };
+    let mut context = CompileContext::new();
 
     builtins::register(&mut context);
 
     let tokens = token::tokenize(input)?;
     let mut it = tokens.iter().peekable();
-
-    let mut unrolled = Vec::new();
 
     let mut statements = Vec::new();
 
@@ -2507,8 +2615,8 @@ pub fn unroll(input: &str, figure: &mut PreFigure) -> Result<(Vec<UnrolledRule>,
         // Unroll the statement
         match stat {
             Statement::Noop(_) | Statement::Flag(_) => (),
-            Statement::Let(stat) => unroll_let(&stat, &mut context, &mut unrolled, figure)?,
-            Statement::Rule(stat) => unroll_rulestat(&stat, &mut context, &mut unrolled, figure)?,
+            Statement::Let(stat) => unroll_let(&stat, &mut context)?,
+            Statement::Rule(stat) => unroll_rulestat(&stat, &mut context)?,
         }
     }
 
@@ -2520,5 +2628,5 @@ pub fn unroll(input: &str, figure: &mut PreFigure) -> Result<(Vec<UnrolledRule>,
     //     println!("{x}");
     // }
 
-    Ok((unrolled, context))
+    Ok(context)
 }
