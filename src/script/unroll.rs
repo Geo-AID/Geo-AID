@@ -2,7 +2,7 @@ use std::{
     collections::{hash_map::Entry, HashMap},
     fmt::{Display, Debug},
     ops::{Deref, DerefMut},
-    rc::Rc, write,
+    rc::Rc, write, cell::RefCell,
 };
 
 use super::{
@@ -392,7 +392,7 @@ pub struct RuleOverload {
 }
 
 /// geoscript rule declaration
-type GeoRule = dyn Fn(&UnrolledExpression, &UnrolledExpression, &mut PreFigure, Option<Properties>) -> Vec<UnrolledRule>;
+type GeoRule = dyn Fn(&UnrolledExpression, &UnrolledExpression, &mut CompileContext, Option<Properties>);
 
 /// A function definition.
 pub struct RuleDefinition(pub Box<GeoRule>);
@@ -448,13 +448,101 @@ pub struct CompileContext {
     /// The rule operators.
     pub rule_ops: HashMap<String, Rc<Rule>>,
     /// Variables
-    pub variables: HashMap<String, Rc<Variable>>,
-    /// Points
-    pub points: HashMap<u64, Rc<Variable>>,
+    pub variables: HashMap<String, Rc<RefCell<Variable>>>,
     /// Functions
     pub functions: HashMap<String, Function>,
     /// Flags
     pub flags: FlagSet,
+    /// Entities (primitives).
+    pub entities: Vec<Entity>,
+    /// Unrolled rules
+    pub rules: Vec<UnrolledRule>,
+    /// Pre-compiled figure
+    pub figure: PreFigure
+}
+
+impl CompileContext {
+    pub fn new() ->  Self {
+        Self {
+            rule_ops: HashMap::new(),
+            variables: HashMap::new(),
+            functions: HashMap::new(),
+            flags: FlagSetConstructor::new()
+                .add_set(
+                    &"optimizations",
+                    FlagSetConstructor::new().add_bool_def(&"identical_expressions", true),
+                )
+                .add_ident_def(&"distance_literals", &"none")
+                .add_bool_def(&"point_bounds", false)
+                .finish(),
+            entities: vec![Entity {
+                kind: EntityKind::All,
+                parent: 0
+            }],
+            rules: Vec::new(),
+            figure: PreFigure::default()
+        }
+    }
+
+    pub fn add_scalar(&mut self) -> usize {
+        self.entities.push(Entity {
+            kind: EntityKind::Scalar,
+            parent: 0
+        });
+
+        self.entities.len() - 1
+    }
+
+    pub fn add_point(&mut self) -> usize {
+        self.entities.push(Entity {
+            kind: EntityKind::Point,
+            parent: 0
+        });
+
+        self.entities.len() - 1
+    }
+
+    pub fn point(&mut self, index: usize) -> PointHandle {
+        let entity = self.entities.get(index).unwrap();
+        if let EntityKind::Point = entity.kind {
+            return PointHandle {
+                index,
+                context: self
+            };
+        } else {
+            panic!("Requested entity is not a point.");
+        }
+    }
+
+    pub fn add_circle(&mut self) -> usize {
+        self.entities.push(Entity {
+            kind: EntityKind::Circle,
+            parent: 0
+        });
+
+        self.entities.len() - 1
+    }
+
+    pub fn circle(&mut self, index: usize) -> CircleHandle {
+        let entity = self.entities.get(index).unwrap();
+        if let EntityKind::Circle = entity.kind {
+            return CircleHandle {
+                index,
+                context: self
+            };
+        } else {
+            panic!("Requested entity is not a circle.");
+        }
+    }
+
+    pub fn entity_contains(&self, check: usize, entity: usize) -> bool {
+        match self.entities[self.entities[check].parent].kind {
+            EntityKind::Scalar | EntityKind::Line
+            | EntityKind::Point | EntityKind::Circle => self.entity_contains(self.entities[check].parent, entity),
+            EntityKind::Bind(expr) => expr.contains_entity(entity, self),
+            EntityKind::All => false,
+        }
+    }
 }
 
 /// Represents complicated iterator structures.
@@ -774,7 +862,7 @@ pub enum UnrolledRuleKind {
 
 #[derive(Debug, Clone)]
 pub enum UnrolledExpressionData {
-    VariableAccess(Rc<Variable>),
+    VariableAccess(Rc<RefCell<Variable>>),
     PointCollection(Vec<UnrolledExpression>),
     Number(f64),
     FreePoint,
@@ -803,7 +891,7 @@ pub enum UnrolledExpressionData {
 impl Display for UnrolledExpressionData {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            UnrolledExpressionData::VariableAccess(name) => write!(f, "{}", name.name),
+            UnrolledExpressionData::VariableAccess(name) => write!(f, "{}", name.borrow().name),
             UnrolledExpressionData::PointCollection(col) => write!(
                 f,
                 "col({})",
@@ -1289,7 +1377,7 @@ fn unroll_simple(
 
                 UnrolledExpression {
                     weight: 1.0, // TODO: UPDATE FOR WEIGHING SUPPORT IN GEOSCRIPT
-                    ty: var.definition.ty,
+                    ty: var.borrow().definition.ty,
                     data: Rc::new(UnrolledExpressionData::VariableAccess(Rc::clone(var))),
                     span: named.span,
                 }
@@ -1301,7 +1389,7 @@ fn unroll_simple(
                     col.collection
                         .iter()
                         .map(|(letter, primes)| {
-                            match context.points.get(&construct_point_id(*letter, *primes)) {
+                            match context.variables.get(&construct_point_name(*letter, *primes)) {
                                 Some(var) => Ok(UnrolledExpression {
                                     weight: 1.0, // Always one.
                                     data: Rc::new(UnrolledExpressionData::VariableAccess(
@@ -1638,8 +1726,7 @@ fn create_variable_named(
     named: &NamedIdent,
     display: Option<&DisplayProperties>,
     rhs_unrolled: UnrolledExpression,
-    variables: &mut Vec<Rc<Variable>>,
-    figure: &mut PreFigure
+    variables: &mut Vec<Rc<RefCell<Variable>>>
 ) -> Result<(), Error> {
     let display: Option<Properties> = display.map(|v| {
         Properties(
@@ -1653,7 +1740,7 @@ fn create_variable_named(
     match context.variables.entry(named.ident.clone()) {
         // If the variable already exists, it's a redefinition error.
         Entry::Occupied(entry) => Err(Error::redefined_variable(
-            entry.get().definition_span,
+            entry.get().borrow().definition_span,
             stat.get_span(),
             entry.key().clone(),
         )),
@@ -1699,8 +1786,7 @@ fn create_variable_collection(
     col: &PointCollection,
     rhs_unrolled: &UnrolledExpression,
     display: Option<&DisplayProperties>,
-    variables: &mut Vec<Rc<Variable>>,
-    figure: &mut PreFigure
+    variables: &mut Vec<Rc<RefCell<Variable>>>
 ) -> Result<(), Error> {
     let display: Option<Properties> = display.map(|v| {
         Properties(
@@ -1733,13 +1819,13 @@ fn create_variable_collection(
 
     let mut rhs_unpacked = rhs_unpacked.into_iter();
     for pt in &col.collection {
-        let id = construct_point_id(pt.0, pt.1);
+        let id = construct_point_name(pt.0, pt.1);
 
-        match context.points.entry(id) {
+        match context.variables.entry(id) {
             // If the variable already exists, it's a redefinition error.
             Entry::Occupied(entry) => {
                 return Err(Error::redefined_variable(
-                    entry.get().definition_span,
+                    entry.get().borrow().definition_span,
                     stat.get_span(),
                     construct_point_name(pt.0, pt.1),
                 ))
@@ -1777,9 +1863,8 @@ fn create_variable_collection(
 
 fn create_variables(
     stat: &LetStatement,
-    context: &mut CompileContext,
-    figure: &mut PreFigure
-) -> Result<Vec<Rc<Variable>>, Error> {
+    context: &mut CompileContext
+) -> Result<Vec<Rc<RefCell<Variable>>>, Error> {
     let mut variables = Vec::new();
 
     let tree = IterNode::from(&stat.expr);
@@ -2238,20 +2323,18 @@ fn unroll_rule(
             PredefinedRuleOperator::Gteq(_) => unroll_gteq(lhs, rhs, unrolled, full_span, figure),
         },
         RuleOperator::Defined(op) => {
-            if let Some(func) = context.rule_ops.get(&op.ident.ident) {
+            let (def, lhs, rhs) = if let Some(func) = context.rule_ops.get(&op.ident.ident) {
                 if let Some(overload) = func.get_overload((&lhs.ty, &rhs.ty)) {
                     let lhs = unroll_implicit_conversion(lhs, &overload.params.0, figure)?;
                     let rhs = unroll_implicit_conversion(rhs, &overload.params.1, figure)?;
 
-                    unrolled.extend((overload.definition)(&lhs, &rhs, figure, None));
-
-                    Ok(())
+                    (overload.definition, lhs, rhs)
                 } else {
-                    Err(Error::overload_not_found(
+                    return Err(Error::overload_not_found(
                         op.ident.span,
                         op.ident.ident.clone(),
                         vec![lhs.ty, rhs.ty],
-                    ))
+                    ));
                 }
             } else {
                 #[allow(clippy::cast_possible_truncation)]
@@ -2262,12 +2345,15 @@ fn unroll_rule(
                     .map(|x| x.0)
                     .cloned();
 
-                Err(Error::UndefinedFunction {
+                return Err(Error::UndefinedFunction {
                     error_span: op.ident.span,
                     function_name: op.ident.ident.clone(),
                     suggested,
-                })
-            }
+                });
+            };
+
+            def(&lhs, &rhs, context, None);
+            Ok(())
         }
         RuleOperator::Inverted(op) => {
             unroll_invert(lhs, &op.operator, rhs, context, unrolled, full_span, figure)
@@ -2473,20 +2559,7 @@ fn set_flag(set: &mut FlagSet, flag: &FlagStatement) -> Result<(), Error> {
 /// Specific error descriptions are in `ScriptError` documentation.
 pub fn unroll(input: &str, figure: &mut PreFigure) -> Result<(Vec<UnrolledRule>, CompileContext), Error> {
     // Unfortunately, due to how context-dependent geoscript is, the code must be compiled immediately after parsing.
-    let mut context = CompileContext {
-        rule_ops: HashMap::new(),
-        variables: HashMap::new(),
-        points: HashMap::new(),
-        functions: HashMap::new(),
-        flags: FlagSetConstructor::new()
-            .add_set(
-                &"optimizations",
-                FlagSetConstructor::new().add_bool_def(&"identical_expressions", true),
-            )
-            .add_ident_def(&"distance_literals", &"none")
-            .add_bool_def(&"point_bounds", false)
-            .finish(),
-    };
+    let mut context = CompileContext::new();
 
     builtins::register(&mut context);
 

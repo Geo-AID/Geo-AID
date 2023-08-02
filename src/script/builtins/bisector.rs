@@ -7,12 +7,12 @@ use crate::script::{
         }, compile::PreFigure
     };
 
-use super::macros::{bisector, call, index, intersection, line2, overload};
+use super::macros::{overload, call, index, bisector, line2, intersection};
 
 /// bisector(point, point, point) - angle bisector.
 pub fn point_point_point(
     args: &[UnrolledExpression],
-    figure: &mut PreFigure,
+    context: &mut CompileContext,
     display: Option<Properties>,
 ) -> UnrolledExpression {
     mem::drop(display);
@@ -21,7 +21,7 @@ pub fn point_point_point(
     // Render the bisector.
     figure.rays.push((
         args[1].clone(),
-        intersection!(expr, line2!(args[0], args[2])),
+        intersection!(expr, line2!(args[0], args[2]))
     ));
 
     figure.segments.push((
@@ -40,17 +40,17 @@ pub fn point_point_point(
 /// bisector(point, point) - bisector of a segment.
 pub fn point_point(
     args: &[UnrolledExpression],
-    figure: &mut PreFigure,
+    context: &mut CompileContext,
     display: Option<Properties>,
 ) -> UnrolledExpression {
     use super::mid::mid_function_point;
     mem::drop(display);
 
     let expr = call!(
-            figure:
+            context:
                 line_point(
                     line2!(args[0], args[1]),
-                    call!(figure:mid_function_point(args[0], args[1]))
+                    call!(context:mid_function_point(args[0], args[1]))
                 )
     );
 
@@ -79,7 +79,7 @@ pub fn register(context: &mut CompileContext) {
                         index!(args[0], 1)
                     ))
                 }),
-                overload!((POINT, POINT) -> LINE : point_point),
+                overload!((POINT, POINT) -> LINE : point_point)
             ],
         },
     );

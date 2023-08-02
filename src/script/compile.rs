@@ -1,4 +1,4 @@
-use std::{collections::HashMap, rc::Rc, sync::Arc, unreachable};
+use std::{collections::HashMap, rc::Rc, sync::Arc, unreachable, cell::RefCell};
 
 use crate::{
     generator::{
@@ -48,62 +48,62 @@ struct ExpressionRecord {
 
 #[derive(Debug, Default)]
 struct VariableRecord {
-    points: HashMap<HashableRc<Variable>, Arc<Expression<PointExpr>>>,
-    lines: HashMap<HashableRc<Variable>, Arc<Expression<LineExpr>>>,
-    scalars: HashMap<HashableRc<Variable>, Arc<Expression<ScalarExpr>>>,
-    circles: HashMap<HashableRc<Variable>, Arc<Expression<CircleExpr>>>,
+    points: HashMap<HashableRc<RefCell<Variable>>, Arc<Expression<PointExpr>>>,
+    lines: HashMap<HashableRc<RefCell<Variable>>, Arc<Expression<LineExpr>>>,
+    scalars: HashMap<HashableRc<RefCell<Variable>>, Arc<Expression<ScalarExpr>>>,
+    circles: HashMap<HashableRc<RefCell<Variable>>, Arc<Expression<CircleExpr>>>,
 }
 
-impl Mapping<Variable, PointExpr> for VariableRecord {
-    fn get(&self, key: &HashableRc<Variable>) -> Option<&Arc<Expression<PointExpr>>> {
+impl Mapping<RefCell<Variable>, PointExpr> for VariableRecord {
+    fn get(&self, key: &HashableRc<RefCell<Variable>>) -> Option<&Arc<Expression<PointExpr>>> {
         self.points.get(key)
     }
 
     fn insert(
         &mut self,
-        key: HashableRc<Variable>,
+        key: HashableRc<RefCell<Variable>>,
         value: Arc<Expression<PointExpr>>,
     ) -> Option<Arc<Expression<PointExpr>>> {
         self.points.insert(key, value)
     }
 }
 
-impl Mapping<Variable, LineExpr> for VariableRecord {
-    fn get(&self, key: &HashableRc<Variable>) -> Option<&Arc<Expression<LineExpr>>> {
+impl Mapping<RefCell<Variable>, LineExpr> for VariableRecord {
+    fn get(&self, key: &HashableRc<RefCell<Variable>>) -> Option<&Arc<Expression<LineExpr>>> {
         self.lines.get(key)
     }
 
     fn insert(
         &mut self,
-        key: HashableRc<Variable>,
+        key: HashableRc<RefCell<Variable>>,
         value: Arc<Expression<LineExpr>>,
     ) -> Option<Arc<Expression<LineExpr>>> {
         self.lines.insert(key, value)
     }
 }
 
-impl Mapping<Variable, ScalarExpr> for VariableRecord {
-    fn get(&self, key: &HashableRc<Variable>) -> Option<&Arc<Expression<ScalarExpr>>> {
+impl Mapping<RefCell<Variable>, ScalarExpr> for VariableRecord {
+    fn get(&self, key: &HashableRc<RefCell<Variable>>) -> Option<&Arc<Expression<ScalarExpr>>> {
         self.scalars.get(key)
     }
 
     fn insert(
         &mut self,
-        key: HashableRc<Variable>,
+        key: HashableRc<RefCell<Variable>>,
         value: Arc<Expression<ScalarExpr>>,
     ) -> Option<Arc<Expression<ScalarExpr>>> {
         self.scalars.insert(key, value)
     }
 }
 
-impl Mapping<Variable, CircleExpr> for VariableRecord {
-    fn get(&self, key: &HashableRc<Variable>) -> Option<&Arc<Expression<CircleExpr>>> {
+impl Mapping<RefCell<Variable>, CircleExpr> for VariableRecord {
+    fn get(&self, key: &HashableRc<RefCell<Variable>>) -> Option<&Arc<Expression<CircleExpr>>> {
         self.circles.get(key)
     }
 
     fn insert(
         &mut self,
-        key: HashableRc<Variable>,
+        key: HashableRc<RefCell<Variable>>,
         value: Arc<Expression<CircleExpr>>,
     ) -> Option<Arc<Expression<CircleExpr>>> {
         self.circles.insert(key, value)
@@ -117,13 +117,14 @@ trait Compile {
         expressions: &mut ExpressionRecord,
         template: &mut Vec<AdjustableTemplate>,
         dst_var: &Option<Rc<Variable>>,
+        context: &CompileContext
     ) -> Arc<Self>;
 }
 
 /// Takes the unrolled expression of type `PointCollection` and takes the point at `index`, isolating it out of the entire expression.
 fn index_collection(expr: &UnrolledExpression, index: usize) -> &UnrolledExpression {
     match expr.data.as_ref() {
-        UnrolledExpressionData::VariableAccess(var) => index_collection(&var.definition, index),
+        UnrolledExpressionData::VariableAccess(var) => index_collection(&var.borrow().definition, index),
         UnrolledExpressionData::PointCollection(col) => col.get(index).unwrap(),
         UnrolledExpressionData::Boxed(expr) => index_collection(expr, index),
         _ => unreachable!("PointCollection should never be achievable by this expression."),
@@ -179,6 +180,7 @@ impl Compile for Expression<PointExpr> {
         expressions: &mut ExpressionRecord,
         template: &mut Vec<AdjustableTemplate>,
         dst_var: &Option<Rc<Variable>>,
+        context: &CompileContext
     ) -> Arc<Self> {
         // First we have to check if this expression has been compiled already.
         let key = HashableRc::new(Rc::clone(&expr.data));
@@ -241,6 +243,7 @@ impl Compile for Expression<LineExpr> {
         expressions: &mut ExpressionRecord,
         template: &mut Vec<AdjustableTemplate>,
         dst_var: &Option<Rc<Variable>>,
+        context: &CompileContext
     ) -> Arc<Self> {
         // First we have to check if this expression has been compiled already.
         let key = HashableRc::new(Rc::clone(&expr.data));
@@ -303,6 +306,7 @@ impl Compile for Expression<CircleExpr> {
         expressions: &mut ExpressionRecord,
         template: &mut Vec<AdjustableTemplate>,
         dst_var: &Option<Rc<Variable>>,
+        context: &CompileContext
     ) -> Arc<Self> {
         // First we have to check if this expression has been compiled already.
         let key = HashableRc::new(Rc::clone(&expr.data));
@@ -339,6 +343,7 @@ fn compile_number(
     expressions: &mut ExpressionRecord,
     template: &mut Vec<AdjustableTemplate>,
     dst_var: &Option<Rc<Variable>>,
+    context: &CompileContext
 ) -> Arc<Expression<ScalarExpr>> {
     if expr.ty == ty::SCALAR {
         // If a scalar, we treat it as a standard literal.
@@ -383,6 +388,7 @@ impl Compile for Expression<ScalarExpr> {
         expressions: &mut ExpressionRecord,
         template: &mut Vec<AdjustableTemplate>,
         dst_var: &Option<Rc<Variable>>,
+        context: &CompileContext
     ) -> Arc<Self> {
         // First we have to check if this expression has been compiled already.
         let key = HashableRc::new(Rc::clone(&expr.data));
@@ -513,14 +519,15 @@ impl Compile for Expression<ScalarExpr> {
 
 /// Attempts to compile the variable. If the variable is a `PointCollection`, leaves it unrolled. Otherwise everything is compiled properly.
 fn compile_variable<T>(
-    var: &Rc<Variable>,
+    var: &Rc<RefCell<Variable>>,
     variables: &mut VariableRecord,
     expressions: &mut ExpressionRecord,
     template: &mut Vec<AdjustableTemplate>,
     dst_var: &Option<Rc<Variable>>,
+    context: &CompileContext
 ) -> Arc<Expression<T>>
 where
-    VariableRecord: Mapping<Variable, T>,
+    VariableRecord: Mapping<RefCell<Variable>, T>,
     Expression<T>: Compile,
 {
     // We first have to see if the variable already exists.
@@ -532,7 +539,7 @@ where
     }
 
     // And otherwise compile it.
-    let compiled = Expression::compile(&var.definition, variables, expressions, template, dst_var);
+    let compiled = Expression::compile(&var.definition, variables, expressions, template, dst_var, context);
 
     // We insert for memory
     variables.insert(HashableRc::new(Rc::clone(var)), compiled.clone());
@@ -545,6 +552,7 @@ fn compile_rules(
     expressions: &mut ExpressionRecord,
     template: &mut Vec<AdjustableTemplate>,
     dst_var: &Option<Rc<Variable>>,
+    context: &CompileContext
 ) -> Vec<Criteria> {
     unrolled
         .into_iter()
@@ -654,14 +662,14 @@ pub fn get_dst_variable(
     context: &mut CompileContext,
     unrolled: &[UnrolledRule],
     flags: &Flags,
-) -> Result<Option<Rc<Variable>>, Error> {
+) -> Result<Option<Rc<RefCell<Variable>>>, Error> {
     // Check if there's a distance literal in variables or rules.
     // In variables
     let are_literals_present = {
         context
             .variables
             .values()
-            .map(|var| var.definition.has_distance_literal())
+            .map(|var| var.borrow().definition.has_distance_literal())
             .find(Option::is_some)
             .flatten()
             .or_else(|| {
@@ -686,7 +694,7 @@ pub fn get_dst_variable(
                         .variables
                         .entry(String::from("@distance"))
                         .or_insert_with(|| {
-                            Rc::new(Variable {
+                            Rc::new(RefCell::new(Variable {
                                 name: String::from("@distance"),
                                 definition_span: span!(0, 0, 0, 0),
                                 definition: UnrolledExpression {
@@ -694,7 +702,7 @@ pub fn get_dst_variable(
                                     data: Rc::new(UnrolledExpressionData::FreeReal),
                                     ty: ty::SCALAR,
                                     span: span!(0, 0, 0, 0),
-                                },
+                                }
                             }))
                         }),
                 ))
@@ -846,7 +854,7 @@ pub fn compile(
 
     // We precompile all variables.
     for (_, var) in context.variables {
-        match var.definition.ty {
+        match var.borrow().definition.ty {
             Type::Point => {
                 compile_variable::<PointExpr>(
                     &var,

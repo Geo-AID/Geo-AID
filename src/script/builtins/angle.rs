@@ -7,12 +7,12 @@ use crate::script::{
     compile::PreFigure,
 };
 
-use super::macros::{angle_expr, call, index, overload};
+use super::macros::{overload, call, index, angle_expr};
 
 /// angle(point, point, point) - angle depicted by 3 points.
 fn angle_function_point_point_point(
     args: &[UnrolledExpression],
-    _figure: &mut PreFigure,
+    _context: &mut CompileContext,
     display: Option<Properties>,
 ) -> UnrolledExpression {
     mem::drop(display);
@@ -22,7 +22,7 @@ fn angle_function_point_point_point(
 /// angle(line, line) - distance between a point and a line.
 fn angle_function_line_line(
     args: &[UnrolledExpression],
-    _figure: &mut PreFigure,
+    _context: &mut CompileContext,
     display: Option<Properties>,
 ) -> UnrolledExpression {
     mem::drop(display);

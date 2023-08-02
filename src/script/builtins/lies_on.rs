@@ -1,11 +1,11 @@
 use std::rc::Rc;
 
-use crate::script::{unroll::{CompileContext, Rule, UnrolledExpression, Properties, UnrolledRule}, compile::PreFigure};
+use crate::script::unroll::{CompileContext, Rule, UnrolledExpression, Properties};
 
 use super::macros::overload;
 
-fn pt_lies_on_circle(lhs: &UnrolledExpression, rhs: &UnrolledExpression, figure: &mut PreFigure, context: &mut CompileContext, properties: Option<Properties>) -> Vec<UnrolledRule> {
-    context.set_solver.point(lhs).lies_on(rhs)
+fn pt_lies_on_circle(lhs: &UnrolledExpression, rhs: &UnrolledExpression, context: &mut CompileContext, properties: Option<Properties>) {
+    context.point(lhs).lies_on(rhs)
 }
 
 pub fn register(context: &mut CompileContext) {
