@@ -12,7 +12,7 @@ use super::{
         RParen, RSquare, Semi, Slash, Span, Token, Vertical,
     },
     unit,
-    ComplexUnit, Error,
+    ComplexUnit, Error, SimpleUnit,
 };
 
 macro_rules! impl_token_parse {
@@ -1313,7 +1313,7 @@ impl Type {
             // A scalar with no defined unit can be cast into any other scalar, except angle.
             Type::Scalar(None) => match into {
                 Type::Scalar(unit) => match unit {
-                    Some(unit) => unit.0[3] == 0, // no angle
+                    Some(unit) => unit.0[SimpleUnit::Angle as usize] == 0, // no angle
                     None => true,
                 },
                 _ => false,

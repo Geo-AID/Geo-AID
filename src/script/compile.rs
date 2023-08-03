@@ -135,7 +135,7 @@ fn index_collection(expr: &UnrolledExpression, index: usize) -> &UnrolledExpress
 pub fn fix_distance(
     expr: UnrolledExpression,
     power: i8,
-    dst_var: &Rc<Variable>,
+    dst_var: &Option<Rc<Variable>>,
 ) -> UnrolledExpression {
     let sp = expr.span;
     let t = expr.ty;
@@ -149,7 +149,7 @@ pub fn fix_distance(
                     weight: 1.0,
                     ty: ty::SCALAR,
                     span: sp,
-                    data: Rc::new(UnrolledExpressionData::VariableAccess(Rc::clone(dst_var))),
+                    data: Rc::new(UnrolledExpressionData::VariableAccess(Rc::clone(dst_var.as_ref().unwrap()))),
                 },
             )),
             ty: t,
@@ -164,7 +164,7 @@ pub fn fix_distance(
                     weight: 1.0,
                     ty: ty::SCALAR,
                     span: sp,
-                    data: Rc::new(UnrolledExpressionData::VariableAccess(Rc::clone(dst_var))),
+                    data: Rc::new(UnrolledExpressionData::VariableAccess(Rc::clone(dst_var.as_ref().unwrap()))),
                 },
             )),
             ty: t,
@@ -420,7 +420,7 @@ impl Compile for Expression<ScalarExpr> {
                                     Some(unit) => unit[SimpleUnit::Distance as usize],
                                     None => 0,
                                 },
-                            dst_var.as_ref().unwrap(),
+                            dst_var,
                         ),
                         variables,
                         expressions,
