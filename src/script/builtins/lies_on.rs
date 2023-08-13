@@ -5,7 +5,7 @@ use crate::script::unroll::{CompileContext, Rule, UnrolledExpression, Properties
 use super::macros::overload;
 
 fn pt_lies_on_circle(lhs: &UnrolledExpression, rhs: &UnrolledExpression, context: &mut CompileContext, properties: Option<Properties>) {
-    context.point(lhs).lies_on(rhs)
+    context.get_point_by_expr(lhs).lies_on(rhs.clone());
 }
 
 pub fn register(context: &mut CompileContext) {

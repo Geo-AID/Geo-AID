@@ -5,6 +5,8 @@ use std::{
     rc::Rc, write, cell::RefCell,
 };
 
+use self::entity::{Entity, EntityKind, EntityHandle};
+
 use super::{
     builtins::{self, macros::variable},
     parser::{
@@ -15,6 +17,9 @@ use super::{
     token::{self, Ident, NamedIdent, PointCollection, Span},
     ty, ComplexUnit, Error, SimpleUnit, unit, compile::PreFigure,
 };
+
+pub mod entity;
+pub mod context;
 
 /// A definition for a user-defined rule operator.
 #[derive(Debug)]
@@ -442,69 +447,6 @@ impl Rule {
     }
 }
 
-/// Kind of an entity. Can be all primitives + a bind.
-#[derive(Debug)]
-pub enum EntityKind {
-    /// A single real value (possibly delimited).
-    Scalar,
-    Line,
-    Point,
-    /// Set of points within the same distance of the circle's origin.
-    Circle,
-    /// Given as a parent when the primitive can be given by a calculation.
-    Bind(UnrolledExpression),
-    /// Non-delimited set
-    All
-}
-
-/// An entity is a single primitive on the figure plane.
-#[derive(Debug)]
-pub struct Entity {
-    /// The kind of this entity.
-    pub kind: EntityKind,
-    /// The index of its parent.
-    pub parent: usize
-}
-
-#[derive(Debug)]
-pub struct CircleHandle<'r> {
-    index: usize,
-    context: &'r mut CompileContext
-}
-
-impl<'r> CircleHandle<'r> {
-    pub fn equals(&mut self, rhs: UnrolledExpression) {
-        match &mut self.context.entities[self.context.entities[self.index].parent].kind {
-            EntityKind::Bind(_) => todo!(),
-            v @ EntityKind::All => *v = EntityKind::Bind(rhs),
-            _ => unreachable!()
-        }
-    }
-}
-
-#[derive(Debug)]
-pub struct PointHandle<'r> {
-    index: usize,
-    context: &'r mut CompileContext
-}
-
-impl<'r> PointHandle<'r> {
-    pub fn equals(&mut self, rhs: UnrolledExpression) {
-        match &mut self.context.entities[self.context.entities[self.index].parent].kind {
-            EntityKind::Bind(_) => todo!(),
-            v @ EntityKind::All => *v = EntityKind::Bind(rhs),
-            _ => unreachable!()
-        }
-    }
-
-    pub fn lies_on(&mut self, rhs: UnrolledExpression) {
-        match &mut self.context.entities[self.context.entities[self.index].parent].kind {
-            v @ EntityKind::All => *v = EntityKind::Circle,
-            _ => todo!("If not a free, turn into a rule.")
-        }
-    }
-}
-
 /// The context of compilation process.
 #[derive(Debug)]
 pub struct CompileContext {
@@ -540,7 +482,7 @@ impl CompileContext {
                 .finish(),
             entities: vec![Entity {
                 kind: EntityKind::All,
-                parent: 0
+                parent: EntityHandle::Indexed(0)
             }],
             rules: Vec::new(),
             figure: PreFigure::default()
@@ -565,7 +507,45 @@ impl CompileContext {
         self.entities.len() - 1
     }
 
-    pub fn point(&mut self, index: usize) -> PointHandle {
+    pub fn get_point_by_index(&mut self, index: usize) -> PointHandle {
+        let entity = self.entities.get(index).unwrap();
+        if let EntityKind::Point = entity.kind {
+            return PointHandle {
+                index,
+                context: self
+            };
+        } else {
+            panic!("Requested entity is not a point.");
+        }
+    }
+
+    pub fn get_point_by_expr(&mut self, expr: &UnrolledExpression) -> PointHandle {
+        match expr.data.as_ref() {
+            UnrolledExpressionData::VariableAccess(var) => self.get_point_by_expr(&var.borrow().definition),
+            UnrolledExpressionData::Entity(index) => self.get_point_by_index(*index),
+            UnrolledExpressionData::Boxed(expr) => self.get_point_by_expr(expr),
+            UnrolledExpressionData::IndexCollection(_, _)
+            | UnrolledExpressionData::Average(_)
+            | UnrolledExpressionData::LineLineIntersection(_, _) => PointHandle::,
+            UnrolledExpressionData::Circle(_, _)
+            | UnrolledExpressionData::PerpendicularThrough(_, _)
+            | UnrolledExpressionData::ParallelThrough(_, _)
+            | UnrolledExpressionData::LineFromPoints(_, _)
+            | UnrolledExpressionData::SetUnit(_, _)
+            | UnrolledExpressionData::PointPointDistance(_, _)
+            | UnrolledExpressionData::PointLineDistance(_, _)
+            | UnrolledExpressionData::Negate(_)
+            | UnrolledExpressionData::Add(_, _)
+            | UnrolledExpressionData::Subtract(_, _)
+            | UnrolledExpressionData::Multiply(_, _)
+            | UnrolledExpressionData::Divide(_, _)
+            | UnrolledExpressionData::ThreePointAngle(_, _, _)
+            | UnrolledExpressionData::TwoLineAngle(_, _)
+            | UnrolledExpressionData::AngleBisector(_, _, _)
+            | UnrolledExpressionData::Number(_)
+            | UnrolledExpressionData::PointCollection(_) => todo!(),
+        }
+
         let entity = self.entities.get(index).unwrap();
         if let EntityKind::Point = entity.kind {
             return PointHandle {
