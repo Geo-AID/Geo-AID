@@ -111,19 +111,10 @@ impl Mapping<RefCell<Variable>, CircleExpr> for VariableRecord {
     }
 }
 
-#[derive(Debug)]
-pub enum CompiledPoint {
-    Compiled(Arc<Expression<PointExpr>>),
-    Bind(UnrolledExpression)
-}
+pub type CompiledPoint = Arc<Expression<PointExpr>>;
+pub type CompiledScalar = Arc<Expression<ScalarExpr>>;
 
-#[derive(Debug)]
-pub enum CompiledScalar {
-    Compiled(Arc<Expression<ScalarExpr>>),
-    Bind(UnrolledExpression)
-}
-
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum CompiledEntity {
     Point(CompiledPoint),
     Scalar(CompiledScalar),
@@ -153,7 +144,7 @@ trait Compile {
         expr: &UnrolledExpression,
         variables: &mut VariableRecord,
         expressions: &mut ExpressionRecord,
-        entities: &Vec<CompiledEntity>,
+        entities: &mut Vec<Option<CompiledEntity>>,
         dst_var: &Option<Rc<RefCell<Variable>>>,
         context: &CompileContext
     ) -> Arc<Self>;
@@ -216,7 +207,7 @@ impl Compile for Expression<PointExpr> {
         expr: &UnrolledExpression,
         variables: &mut VariableRecord,
         expressions: &mut ExpressionRecord,
-        entities: &Vec<CompiledEntity>,
+        entities: &mut Vec<Option<CompiledEntity>>,
         dst_var: &Option<Rc<RefCell<Variable>>>,
         context: &CompileContext
     ) -> Arc<Self> {
@@ -234,10 +225,7 @@ impl Compile for Expression<PointExpr> {
                 compile_variable(var, variables, expressions, entities, dst_var, context)
             }
             UnrolledExpressionData::Entity(i) => {
-                match entities[*i].as_point().unwrap() {
-                    CompiledPoint::Bind(expr) => Self::compile(expr, variables, expressions, entities, dst_var, context),
-                    CompiledPoint::Compiled(expr) => Arc::clone(expr)
-                }
+                compile_entity(*i, variables, expressions, entities, dst_var, context).as_point().unwrap().clone()
             }
             UnrolledExpressionData::Boxed(expr) => {
                 Self::compile(expr, variables, expressions, entities, dst_var, context)
@@ -280,7 +268,7 @@ impl Compile for Expression<LineExpr> {
         expr: &UnrolledExpression,
         variables: &mut VariableRecord,
         expressions: &mut ExpressionRecord,
-        entities: &Vec<CompiledEntity>,
+        entities: &mut Vec<Option<CompiledEntity>>,
         dst_var: &Option<Rc<RefCell<Variable>>>,
         context: &CompileContext
     ) -> Arc<Self> {
@@ -343,7 +331,7 @@ impl Compile for Expression<CircleExpr> {
         expr: &UnrolledExpression,
         variables: &mut VariableRecord,
         expressions: &mut ExpressionRecord,
-        entities: &Vec<CompiledEntity>,
+        entities: &mut Vec<Option<CompiledEntity>>,
         dst_var: &Option<Rc<RefCell<Variable>>>,
         context: &CompileContext
     ) -> Arc<Self> {
@@ -380,7 +368,7 @@ fn compile_number(
     v: f64,
     variables: &mut VariableRecord,
     expressions: &mut ExpressionRecord,
-    template: &Vec<CompiledEntity>,
+    entities: &mut Vec<Option<CompiledEntity>>,
     dst_var: &Option<Rc<RefCell<Variable>>>,
     context: &CompileContext
 ) -> Arc<Expression<ScalarExpr>> {
@@ -413,7 +401,7 @@ fn compile_number(
             },
             variables,
             expressions,
-            template,
+            entities,
             dst_var,
             context
         )
@@ -426,7 +414,7 @@ impl Compile for Expression<ScalarExpr> {
         expr: &UnrolledExpression,
         variables: &mut VariableRecord,
         expressions: &mut ExpressionRecord,
-        entities: &Vec<CompiledEntity>,
+        entities: &mut Vec<Option<CompiledEntity>>,
         dst_var: &Option<Rc<RefCell<Variable>>>,
         context: &CompileContext
     ) -> Arc<Self> {
@@ -563,7 +551,7 @@ fn compile_variable<T>(
     var: &Rc<RefCell<Variable>>,
     variables: &mut VariableRecord,
     expressions: &mut ExpressionRecord,
-    entities: &Vec<CompiledEntity>,
+    entities: &mut Vec<Option<CompiledEntity>>,
     dst_var: &Option<Rc<RefCell<Variable>>>,
     context: &CompileContext
 ) -> Arc<Expression<T>>
@@ -588,32 +576,19 @@ where
 }
 
 /// Compiles the entity by index.
-fn compile_entity<T>(
+fn compile_entity(
     entity: usize,
     variables: &mut VariableRecord,
     expressions: &mut ExpressionRecord,
-    entities: &Vec<CompiledEntity>,
+    entities: &mut Vec<Option<CompiledEntity>>,
     dst_var: &Option<Rc<RefCell<Variable>>>,
     context: &CompileContext
-) -> Arc<Expression<T>>
-where
-    VariableRecord: Mapping<RefCell<Variable>, T>,
-    Expression<T>: Compile,
-{
-    // We first have to see if the variable already exists.
-    let key = HashableRc::new(Rc::clone(var));
-
-    if let Some(v) = variables.get(&key) {
-        // So we can return it here.
-        return Arc::clone(v);
+) -> CompiledEntity {
+    // If the expression is compiled, there's no problem
+    match &mut entities[entity] {
+        Some(v) => v.clone(),
+        None => todo!()
     }
-
-    // And otherwise compile it.
-    let compiled = Expression::compile(&var.borrow().definition, variables, expressions, entities, dst_var, context);
-
-    // We insert for memory
-    variables.insert(HashableRc::new(Rc::clone(var)), compiled.clone());
-    compiled
 }
 
 fn compile_rules(
