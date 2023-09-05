@@ -1325,7 +1325,7 @@ impl Type {
             Type::PointCollection(l) => match into {
                 Type::Point => *l == 1,
                 Type::Line | Type::Scalar(Some(unit::DISTANCE)) => *l == 2,
-                Type::PointCollection(v) => v == l,
+                Type::PointCollection(v) => v == l || *v == 0,
                 _ => false,
             },
             Type::Circle => matches!(into, Type::Circle),

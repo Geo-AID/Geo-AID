@@ -1,13 +1,13 @@
 use crate::script::{
     unroll::{
-        CompileContext, Function
+        Function, Library
     },
 };
 
 use super::macros::{overload, intersection};
 
-pub fn register(context: &mut CompileContext) {
-    context.functions.insert(
+pub fn register(library: &mut Library) {
+    library.functions.insert(
         String::from("intersection"),
         Function {
             name: String::from("intersection"),

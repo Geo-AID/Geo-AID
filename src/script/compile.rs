@@ -1,4 +1,4 @@
-use std::{collections::HashMap, rc::Rc, sync::Arc, unreachable, cell::RefCell};
+use std::{collections::HashMap, rc::Rc, sync::Arc, unreachable, cell::RefCell, mem};
 
 use crate::{
     generator::{
@@ -8,7 +8,7 @@ use crate::{
                 AngleBisector, AngleLine, AnglePoint, Average, CenterRadius, Difference, FreePoint,
                 LineLineIntersection, LinePoint, Literal, Negation, ParallelThrough,
                 PerpendicularThrough, PointLineDistance, PointPointDistance, PointX, PointY,
-                Product, Quotient, Real, SetUnit, Sum,
+                Product, Quotient, SetUnit, Sum, Real, PointOnCircle,
             },
             AnyExpr, CircleExpr, Expression, LineExpr, PointExpr, ScalarExpr, Weights,
         },
@@ -23,7 +23,8 @@ use super::{
     ty,
     unroll::{
         self, Flag, UnrolledExpression, UnrolledExpressionData,
-        UnrolledRuleKind, Variable, CompileContext, PointMeta,
+        UnrolledRuleKind, Variable, CompileContext, PointMeta, Entity,
+        EntScalar, EntCircle, EntLine, EntPoint
     },
     Criteria, CriteriaKind, Error, HashableRc, SimpleUnit, Weighed,
 };
@@ -110,22 +111,59 @@ impl Mapping<RefCell<Variable>, CircleExpr> for VariableRecord {
     }
 }
 
+#[derive(Debug)]
+pub enum CompiledPoint {
+    Compiled(Arc<Expression<PointExpr>>),
+    Bind(UnrolledExpression)
+}
+
+#[derive(Debug)]
+pub enum CompiledScalar {
+    Compiled(Arc<Expression<ScalarExpr>>),
+    Bind(UnrolledExpression)
+}
+
+#[derive(Debug)]
+pub enum CompiledEntity {
+    Point(CompiledPoint),
+    Scalar(CompiledScalar),
+    None // Used for not-yet compiled entities.
+}
+
+impl CompiledEntity {
+    pub fn as_point(&self) -> Option<&CompiledPoint> {
+        if let Self::Point(v) = self {
+            Some(v)
+        } else {
+            None
+        }
+    }
+
+    pub fn as_scalar(&self) -> Option<&CompiledScalar> {
+        if let Self::Scalar(v) = self {
+            Some(v)
+        } else {
+            None
+        }
+    }
+}
+
 trait Compile {
     fn compile(
         expr: &UnrolledExpression,
         variables: &mut VariableRecord,
         expressions: &mut ExpressionRecord,
-        template: &mut Vec<AdjustableTemplate>,
+        entities: &Vec<CompiledEntity>,
         dst_var: &Option<Rc<RefCell<Variable>>>,
         context: &CompileContext
     ) -> Arc<Self>;
 }
 
 /// Takes the unrolled expression of type `PointCollection` and takes the point at `index`, isolating it out of the entire expression.
-fn index_collection(expr: &UnrolledExpression, index: usize) -> &UnrolledExpression {
+fn index_collection(expr: &UnrolledExpression, index: usize) -> UnrolledExpression {
     match expr.data.as_ref() {
         UnrolledExpressionData::VariableAccess(var) => index_collection(&var.borrow().definition, index),
-        UnrolledExpressionData::PointCollection(col) => col.get(index).unwrap(),
+        UnrolledExpressionData::PointCollection(col) => col.get(index).unwrap().clone(),
         UnrolledExpressionData::Boxed(expr) => index_collection(expr, index),
         _ => unreachable!("PointCollection should never be achievable by this expression."),
     }
@@ -178,7 +216,7 @@ impl Compile for Expression<PointExpr> {
         expr: &UnrolledExpression,
         variables: &mut VariableRecord,
         expressions: &mut ExpressionRecord,
-        template: &mut Vec<AdjustableTemplate>,
+        entities: &Vec<CompiledEntity>,
         dst_var: &Option<Rc<RefCell<Variable>>>,
         context: &CompileContext
     ) -> Arc<Self> {
@@ -193,29 +231,29 @@ impl Compile for Expression<PointExpr> {
         // Otherwise we compile.
         let compiled = match expr.data.as_ref() {
             UnrolledExpressionData::VariableAccess(var) => {
-                compile_variable(var, variables, expressions, template, dst_var, context)
+                compile_variable(var, variables, expressions, entities, dst_var, context)
             }
             UnrolledExpressionData::Entity(i) => {
-                let index = template.len();
-                template.push(AdjustableTemplate::Point);
-
-                Arc::new(Expression::new(PointExpr::Free(FreePoint { index }), 1.0))
+                match entities[*i].as_point().unwrap() {
+                    CompiledPoint::Bind(expr) => Self::compile(expr, variables, expressions, entities, dst_var, context),
+                    CompiledPoint::Compiled(expr) => Arc::clone(expr)
+                }
             }
             UnrolledExpressionData::Boxed(expr) => {
-                Self::compile(expr, variables, expressions, template, dst_var, context)
+                Self::compile(expr, variables, expressions, entities, dst_var, context)
             }
             UnrolledExpressionData::IndexCollection(expr, index) => Self::compile(
-                index_collection(expr, *index),
+                &index_collection(expr, *index),
                 variables,
                 expressions,
-                template,
+                entities,
                 dst_var,
                 context
             ),
             UnrolledExpressionData::LineLineIntersection(k, l) => Arc::new(Expression::new(
                 PointExpr::LineLineIntersection(LineLineIntersection {
-                    k: Expression::compile(k, variables, expressions, template, dst_var, context),
-                    l: Expression::compile(l, variables, expressions, template, dst_var, context),
+                    k: Expression::compile(k, variables, expressions, entities, dst_var, context),
+                    l: Expression::compile(l, variables, expressions, entities, dst_var, context),
                 }),
                 1.0,
             )),
@@ -223,7 +261,7 @@ impl Compile for Expression<PointExpr> {
                 PointExpr::Average(Average {
                     items: exprs
                         .iter()
-                        .map(|expr| Self::compile(expr, variables, expressions, template, dst_var, context))
+                        .map(|expr| Self::compile(expr, variables, expressions, entities, dst_var, context))
                         .collect(),
                 }),
                 1.0,
@@ -242,7 +280,7 @@ impl Compile for Expression<LineExpr> {
         expr: &UnrolledExpression,
         variables: &mut VariableRecord,
         expressions: &mut ExpressionRecord,
-        template: &mut Vec<AdjustableTemplate>,
+        entities: &Vec<CompiledEntity>,
         dst_var: &Option<Rc<RefCell<Variable>>>,
         context: &CompileContext
     ) -> Arc<Self> {
@@ -257,37 +295,37 @@ impl Compile for Expression<LineExpr> {
         // Otherwise we compile.
         let compiled = match expr.data.as_ref() {
             UnrolledExpressionData::VariableAccess(var) => {
-                compile_variable(var, variables, expressions, template, dst_var, context)
+                compile_variable(var, variables, expressions, entities, dst_var, context)
             }
             UnrolledExpressionData::Boxed(expr) => {
-                Expression::compile(expr, variables, expressions, template, dst_var, context)
+                Expression::compile(expr, variables, expressions, entities, dst_var, context)
             }
             UnrolledExpressionData::LineFromPoints(p1, p2) => Arc::new(Expression::new(
                 LineExpr::Line(LinePoint {
-                    a: Expression::compile(p1, variables, expressions, template, dst_var, context),
-                    b: Expression::compile(p2, variables, expressions, template, dst_var, context),
+                    a: Expression::compile(p1, variables, expressions, entities, dst_var, context),
+                    b: Expression::compile(p2, variables, expressions, entities, dst_var, context),
                 }),
                 1.0,
             )),
             UnrolledExpressionData::ParallelThrough(line, point) => Arc::new(Expression::new(
                 LineExpr::ParallelThrough(ParallelThrough {
-                    line: Expression::compile(line, variables, expressions, template, dst_var, context),
-                    point: Expression::compile(point, variables, expressions, template, dst_var, context),
+                    line: Expression::compile(line, variables, expressions, entities, dst_var, context),
+                    point: Expression::compile(point, variables, expressions, entities, dst_var, context),
                 }),
                 1.0,
             )),
             UnrolledExpressionData::PerpendicularThrough(line, point) => Arc::new(Expression::new(
                 LineExpr::PerpendicularThrough(PerpendicularThrough {
-                    line: Expression::compile(line, variables, expressions, template, dst_var, context),
-                    point: Expression::compile(point, variables, expressions, template, dst_var, context),
+                    line: Expression::compile(line, variables, expressions, entities, dst_var, context),
+                    point: Expression::compile(point, variables, expressions, entities, dst_var, context),
                 }),
                 1.0,
             )),
             UnrolledExpressionData::AngleBisector(v1, v2, v3) => Arc::new(Expression::new(
                 LineExpr::AngleBisector(AngleBisector {
-                    arm1: Expression::compile(v1, variables, expressions, template, dst_var, context),
-                    origin: Expression::compile(v2, variables, expressions, template, dst_var, context),
-                    arm2: Expression::compile(v3, variables, expressions, template, dst_var, context),
+                    arm1: Expression::compile(v1, variables, expressions, entities, dst_var, context),
+                    origin: Expression::compile(v2, variables, expressions, entities, dst_var, context),
+                    arm2: Expression::compile(v3, variables, expressions, entities, dst_var, context),
                 }),
                 1.0,
             )),
@@ -305,7 +343,7 @@ impl Compile for Expression<CircleExpr> {
         expr: &UnrolledExpression,
         variables: &mut VariableRecord,
         expressions: &mut ExpressionRecord,
-        template: &mut Vec<AdjustableTemplate>,
+        entities: &Vec<CompiledEntity>,
         dst_var: &Option<Rc<RefCell<Variable>>>,
         context: &CompileContext
     ) -> Arc<Self> {
@@ -320,13 +358,13 @@ impl Compile for Expression<CircleExpr> {
         let compiled = match expr.data.as_ref() {
             UnrolledExpressionData::Circle(center, radius) => Arc::new(Expression::new(
                 CircleExpr::CenterRadius(CenterRadius {
-                    center: Expression::compile(center, variables, expressions, template, dst_var, context),
-                    radius: Expression::compile(radius, variables, expressions, template, dst_var, context),
+                    center: Expression::compile(center, variables, expressions, entities, dst_var, context),
+                    radius: Expression::compile(radius, variables, expressions, entities, dst_var, context),
                 }),
                 1.0,
             )),
             UnrolledExpressionData::Boxed(expr) => {
-                Expression::compile(expr, variables, expressions, template, dst_var, context)
+                Expression::compile(expr, variables, expressions, entities, dst_var, context)
             }
             _ => unreachable!("A circle should never be compiled this way"),
         };
@@ -342,7 +380,7 @@ fn compile_number(
     v: f64,
     variables: &mut VariableRecord,
     expressions: &mut ExpressionRecord,
-    template: &mut Vec<AdjustableTemplate>,
+    template: &Vec<CompiledEntity>,
     dst_var: &Option<Rc<RefCell<Variable>>>,
     context: &CompileContext
 ) -> Arc<Expression<ScalarExpr>> {
@@ -388,7 +426,7 @@ impl Compile for Expression<ScalarExpr> {
         expr: &UnrolledExpression,
         variables: &mut VariableRecord,
         expressions: &mut ExpressionRecord,
-        template: &mut Vec<AdjustableTemplate>,
+        entities: &Vec<CompiledEntity>,
         dst_var: &Option<Rc<RefCell<Variable>>>,
         context: &CompileContext
     ) -> Arc<Self> {
@@ -403,19 +441,19 @@ impl Compile for Expression<ScalarExpr> {
         // Otherwise we compile.
         let compiled = match expr.data.as_ref() {
             UnrolledExpressionData::VariableAccess(var) => {
-                compile_variable(var, variables, expressions, template, dst_var, context)
+                compile_variable(var, variables, expressions, entities, dst_var, context)
             }
             UnrolledExpressionData::Number(v) => {
-                compile_number(expr, *v, variables, expressions, template, dst_var, context)
+                compile_number(expr, *v, variables, expressions, entities, dst_var, context)
             }
             UnrolledExpressionData::Entity(i) => {
-                let index = template.len();
-                template.push(AdjustableTemplate::Real);
-
-                Arc::new(Expression::new(ScalarExpr::Real(Real { index }), 1.0))
+                match entities[*i].as_scalar().unwrap() {
+                    CompiledScalar::Bind(expr) => Self::compile(expr, variables, expressions, entities, dst_var, context),
+                    CompiledScalar::Compiled(expr) => Arc::clone(expr)
+                }
             }
             UnrolledExpressionData::Boxed(expr) => {
-                Self::compile(expr, variables, expressions, template, dst_var, context)
+                Self::compile(expr, variables, expressions, entities, dst_var, context)
             }
             UnrolledExpressionData::SetUnit(expr, unit) => Arc::new(Expression::new(
                 ScalarExpr::SetUnit(SetUnit {
@@ -431,7 +469,7 @@ impl Compile for Expression<ScalarExpr> {
                         ),
                         variables,
                         expressions,
-                        template,
+                        entities,
                         dst_var,
                         context
                     ),
@@ -441,64 +479,64 @@ impl Compile for Expression<ScalarExpr> {
             )),
             UnrolledExpressionData::PointPointDistance(p1, p2) => Arc::new(Expression::new(
                 ScalarExpr::PointPointDistance(PointPointDistance {
-                    a: Expression::compile(p1, variables, expressions, template, dst_var, context),
-                    b: Expression::compile(p2, variables, expressions, template, dst_var, context),
+                    a: Expression::compile(p1, variables, expressions, entities, dst_var, context),
+                    b: Expression::compile(p2, variables, expressions, entities, dst_var, context),
                 }),
                 1.0,
             )),
             UnrolledExpressionData::PointLineDistance(p, l) => Arc::new(Expression::new(
                 ScalarExpr::PointLineDistance(PointLineDistance {
-                    point: Expression::compile(p, variables, expressions, template, dst_var, context),
-                    line: Expression::compile(l, variables, expressions, template, dst_var, context),
+                    point: Expression::compile(p, variables, expressions, entities, dst_var, context),
+                    line: Expression::compile(l, variables, expressions, entities, dst_var, context),
                 }),
                 1.0,
             )),
             UnrolledExpressionData::Negate(expr) => Arc::new(Expression::new(
                 ScalarExpr::Negation(Negation {
-                    value: Self::compile(expr, variables, expressions, template, dst_var, context),
+                    value: Self::compile(expr, variables, expressions, entities, dst_var, context),
                 }),
                 1.0,
             )),
             UnrolledExpressionData::Add(v1, v2) => Arc::new(Expression::new(
                 ScalarExpr::Sum(Sum {
-                    a: Self::compile(v1, variables, expressions, template, dst_var, context),
-                    b: Self::compile(v2, variables, expressions, template, dst_var, context),
+                    a: Self::compile(v1, variables, expressions, entities, dst_var, context),
+                    b: Self::compile(v2, variables, expressions, entities, dst_var, context),
                 }),
                 1.0,
             )),
             UnrolledExpressionData::Subtract(v1, v2) => Arc::new(Expression::new(
                 ScalarExpr::Difference(Difference {
-                    a: Self::compile(v1, variables, expressions, template, dst_var, context),
-                    b: Self::compile(v2, variables, expressions, template, dst_var, context),
+                    a: Self::compile(v1, variables, expressions, entities, dst_var, context),
+                    b: Self::compile(v2, variables, expressions, entities, dst_var, context),
                 }),
                 1.0,
             )),
             UnrolledExpressionData::Multiply(v1, v2) => Arc::new(Expression::new(
                 ScalarExpr::Product(Product {
-                    a: Self::compile(v1, variables, expressions, template, dst_var, context),
-                    b: Self::compile(v2, variables, expressions, template, dst_var, context),
+                    a: Self::compile(v1, variables, expressions, entities, dst_var, context),
+                    b: Self::compile(v2, variables, expressions, entities, dst_var, context),
                 }),
                 1.0,
             )),
             UnrolledExpressionData::Divide(v1, v2) => Arc::new(Expression::new(
                 ScalarExpr::Quotient(Quotient {
-                    a: Self::compile(v1, variables, expressions, template, dst_var, context),
-                    b: Self::compile(v2, variables, expressions, template, dst_var, context),
+                    a: Self::compile(v1, variables, expressions, entities, dst_var, context),
+                    b: Self::compile(v2, variables, expressions, entities, dst_var, context),
                 }),
                 1.0,
             )),
             UnrolledExpressionData::ThreePointAngle(v1, v2, v3) => Arc::new(Expression::new(
                 ScalarExpr::AnglePoint(AnglePoint {
-                    arm1: Expression::compile(v1, variables, expressions, template, dst_var, context),
-                    origin: Expression::compile(v2, variables, expressions, template, dst_var, context),
-                    arm2: Expression::compile(v3, variables, expressions, template, dst_var, context),
+                    arm1: Expression::compile(v1, variables, expressions, entities, dst_var, context),
+                    origin: Expression::compile(v2, variables, expressions, entities, dst_var, context),
+                    arm2: Expression::compile(v3, variables, expressions, entities, dst_var, context),
                 }),
                 1.0,
             )),
             UnrolledExpressionData::TwoLineAngle(v1, v2) => Arc::new(Expression::new(
                 ScalarExpr::AngleLine(AngleLine {
-                    k: Expression::compile(v1, variables, expressions, template, dst_var, context),
-                    l: Expression::compile(v2, variables, expressions, template, dst_var, context),
+                    k: Expression::compile(v1, variables, expressions, entities, dst_var, context),
+                    l: Expression::compile(v2, variables, expressions, entities, dst_var, context),
                 }),
                 1.0,
             )),
@@ -506,7 +544,7 @@ impl Compile for Expression<ScalarExpr> {
                 ScalarExpr::Average(Average {
                     items: exprs
                         .iter()
-                        .map(|expr| Self::compile(expr, variables, expressions, template, dst_var, context))
+                        .map(|expr| Self::compile(expr, variables, expressions, entities, dst_var, context))
                         .collect(),
                 }),
                 1.0,
@@ -525,7 +563,7 @@ fn compile_variable<T>(
     var: &Rc<RefCell<Variable>>,
     variables: &mut VariableRecord,
     expressions: &mut ExpressionRecord,
-    template: &mut Vec<AdjustableTemplate>,
+    entities: &Vec<CompiledEntity>,
     dst_var: &Option<Rc<RefCell<Variable>>>,
     context: &CompileContext
 ) -> Arc<Expression<T>>
@@ -542,7 +580,36 @@ where
     }
 
     // And otherwise compile it.
-    let compiled = Expression::compile(&var.borrow().definition, variables, expressions, template, dst_var, context);
+    let compiled = Expression::compile(&var.borrow().definition, variables, expressions, entities, dst_var, context);
+
+    // We insert for memory
+    variables.insert(HashableRc::new(Rc::clone(var)), compiled.clone());
+    compiled
+}
+
+/// Compiles the entity by index.
+fn compile_entity<T>(
+    entity: usize,
+    variables: &mut VariableRecord,
+    expressions: &mut ExpressionRecord,
+    entities: &Vec<CompiledEntity>,
+    dst_var: &Option<Rc<RefCell<Variable>>>,
+    context: &CompileContext
+) -> Arc<Expression<T>>
+where
+    VariableRecord: Mapping<RefCell<Variable>, T>,
+    Expression<T>: Compile,
+{
+    // We first have to see if the variable already exists.
+    let key = HashableRc::new(Rc::clone(var));
+
+    if let Some(v) = variables.get(&key) {
+        // So we can return it here.
+        return Arc::clone(v);
+    }
+
+    // And otherwise compile it.
+    let compiled = Expression::compile(&var.borrow().definition, variables, expressions, entities, dst_var, context);
 
     // We insert for memory
     variables.insert(HashableRc::new(Rc::clone(var)), compiled.clone());
@@ -552,7 +619,7 @@ where
 fn compile_rules(
     variables: &mut VariableRecord,
     expressions: &mut ExpressionRecord,
-    template: &mut Vec<AdjustableTemplate>,
+    entities: &Vec<CompiledEntity>,
     dst_var: &Option<Rc<RefCell<Variable>>>,
     context: &CompileContext
 ) -> Vec<Criteria> {
@@ -566,7 +633,7 @@ fn compile_rules(
                             &rule.lhs,
                             variables,
                             expressions,
-                            template,
+                            entities,
                             dst_var,
                             context
                         );
@@ -574,7 +641,7 @@ fn compile_rules(
                             &rule.rhs,
                             variables,
                             expressions,
-                            template,
+                            entities,
                             dst_var,
                             context
                         );
@@ -585,7 +652,7 @@ fn compile_rules(
                             &rule.lhs,
                             variables,
                             expressions,
-                            template,
+                            entities,
                             dst_var,
                             context
                         );
@@ -593,7 +660,7 @@ fn compile_rules(
                             &rule.rhs,
                             variables,
                             expressions,
-                            template,
+                            entities,
                             dst_var,
                             context
                         );
@@ -603,17 +670,17 @@ fn compile_rules(
                 }
                 UnrolledRuleKind::Gt => {
                     let lhs =
-                        Expression::compile(&rule.lhs, variables, expressions, template, dst_var, context);
+                        Expression::compile(&rule.lhs, variables, expressions, entities, dst_var, context);
                     let rhs =
-                        Expression::compile(&rule.rhs, variables, expressions, template, dst_var, context);
+                        Expression::compile(&rule.rhs, variables, expressions, entities, dst_var, context);
 
                     Weighed::one(CriteriaKind::Greater(lhs, rhs))
                 }
                 UnrolledRuleKind::Lt => {
                     let lhs =
-                        Expression::compile(&rule.lhs, variables, expressions, template, dst_var, context);
+                        Expression::compile(&rule.lhs, variables, expressions, entities, dst_var, context);
                     let rhs =
-                        Expression::compile(&rule.rhs, variables, expressions, template, dst_var, context);
+                        Expression::compile(&rule.rhs, variables, expressions, entities, dst_var, context);
 
                     Weighed::one(CriteriaKind::Less(lhs, rhs))
                 }
@@ -760,7 +827,7 @@ impl PreFigure {
         canvas_size: (usize, usize),
         variables: &mut VariableRecord,
         expressions: &mut ExpressionRecord,
-        template: &mut Vec<AdjustableTemplate>,
+        entities: &Vec<CompiledEntity>,
         dst_var: &Option<Rc<RefCell<Variable>>>,
         context: &CompileContext
     ) -> Figure {
@@ -770,7 +837,7 @@ impl PreFigure {
                 &expr,
                 variables,
                 expressions,
-                template,
+                entities,
                 dst_var,
                 context
             ), meta)).collect(),
@@ -778,7 +845,7 @@ impl PreFigure {
                 &expr,
                 variables,
                 expressions,
-                template,
+                entities,
                 dst_var,
                 context
             )).collect(),
@@ -787,7 +854,7 @@ impl PreFigure {
                     &a,
                     variables,
                     expressions,
-                    template,
+                    entities,
                     dst_var,
                     context
                 ),
@@ -795,7 +862,7 @@ impl PreFigure {
                     &b,
                     variables,
                     expressions,
-                    template,
+                    entities,
                     dst_var,
                     context
                 )
@@ -805,7 +872,7 @@ impl PreFigure {
                     &a,
                     variables,
                     expressions,
-                    template,
+                    entities,
                     dst_var,
                     context
                 ),
@@ -813,7 +880,7 @@ impl PreFigure {
                     &b,
                     variables,
                     expressions,
-                    template,
+                    entities,
                     dst_var,
                     context
                 )
@@ -822,7 +889,7 @@ impl PreFigure {
                 &expr,
                 variables,
                 expressions,
-                template,
+                entities,
                 dst_var,
                 context
             )).collect(),
@@ -869,37 +936,94 @@ pub fn compile(
 
     let mut variables = VariableRecord::default();
     let mut expressions = ExpressionRecord::default();
+    let mut entities = Vec::new();
+
     let mut template = Vec::new();
 
+    for entity in &context.entities {
+        let compiled = match entity {
+            Entity::Scalar(v) => CompiledEntity::Scalar(match v {
+                EntScalar::Free => {
+                    template.push(AdjustableTemplate::Real);
+                    CompiledScalar::Compiled(
+                        Arc::new(Expression::new(
+                            ScalarExpr::Real(Real {
+                                index: template.len() - 1
+                            }),
+                            1.0
+                        ))
+                    )
+                }
+                EntScalar::Bind(expr) => CompiledScalar::Bind(expr.clone()),
+            }),
+            Entity::Point(v) => CompiledEntity::Point(match v {
+                EntPoint::Free => {
+                    template.push(AdjustableTemplate::Point);
+                    CompiledPoint::Compiled(
+                        Arc::new(Expression::new(
+                            PointExpr::Free(FreePoint {
+                                index: template.len() - 1
+                            }),
+                            1.0
+                        ))
+                    )
+                }
+                EntPoint::OnCircle(circle) => {
+                    template.push(AdjustableTemplate::PointOnCircle);
+                    CompiledPoint::Compiled(
+                        Arc::new(Expression::new(
+                            PointExpr::OnCircle(PointOnCircle {
+                                index: template.len() - 1
+                            }),
+                            1.0
+                        ))
+                    )
+                }
+                EntPoint::Bind(expr) => CompiledPoint::Bind(expr.clone()),
+            }),
+            Entity::Line(v) => match v {
+                EntLine::Bind(_) => todo!(),
+            },
+            Entity::Circle(v) => match v {
+                EntCircle::Bind(_) => todo!(),
+                EntCircle::Temporary => unreachable!(),
+            },
+        };
+
+        entities.push(compiled);
+    }
+
+    let entities = entities;
+
     // We precompile all variables.
-    for (_, var) in context.variables {
+    for (_, var) in &context.variables {
         match var.borrow().definition.ty {
             Type::Point => {
                 compile_variable::<PointExpr>(
-                    &var,
+                    var,
                     &mut variables,
                     &mut expressions,
-                    &mut template,
+                    &entities,
                     &dst_var,
                     &context
                 );
             }
             Type::Line => {
                 compile_variable::<LineExpr>(
-                    &var,
+                    var,
                     &mut variables,
                     &mut expressions,
-                    &mut template,
+                    &entities,
                     &dst_var,
                     &context
                 );
             }
             Type::Scalar(_) => {
                 compile_variable::<ScalarExpr>(
-                    &var,
+                    var,
                     &mut variables,
                     &mut expressions,
-                    &mut template,
+                    &entities,
                     &dst_var,
                     &context
                 );
@@ -907,10 +1031,10 @@ pub fn compile(
             Type::PointCollection(_) | Type::Bundle(_) => (),
             Type::Circle => {
                 compile_variable::<CircleExpr>(
-                    &var,
+                    var,
                     &mut variables,
                     &mut expressions,
-                    &mut template,
+                    &entities,
                     &dst_var,
                     &context
                 );
@@ -923,7 +1047,7 @@ pub fn compile(
     let mut criteria = compile_rules(
         &mut variables,
         &mut expressions,
-        &mut template,
+        &entities,
         &dst_var,
         &context
     );
@@ -934,7 +1058,7 @@ pub fn compile(
             dst,
             &mut variables,
             &mut expressions,
-            &mut template,
+            &entities,
             &dst_var,
             &context
         );
@@ -957,7 +1081,9 @@ pub fn compile(
     //     println!("{rule:?}");
     // }
 
-    Ok((criteria, context.figure.build(canvas_size, &mut variables, &mut expressions, &mut template, &dst_var, &context), template, flags))
+    let figure = mem::take(&mut context.figure);
+
+    Ok((criteria, figure.build(canvas_size, &mut variables, &mut expressions, &entities, &dst_var, &context), template, flags))
 }
 
 /// Inequality principle and the point plane limit.

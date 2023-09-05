@@ -1,4 +1,4 @@
-use super::unroll::CompileContext;
+use super::unroll::Library;
 
 pub mod angle;
 pub mod bisector;
@@ -19,18 +19,20 @@ pub const fn get_bundle_pc(_name: &'static str) -> usize {
 }
 
 /// Registers all builtins
-pub fn register(context: &mut CompileContext) {
-    point::register(context); // Point()
-    dst::register(context); // dst()
-    angle::register(context); // angle()
-    degrees::register(context); // degrees()
-    radians::register(context); // radians()
-    mid::register(context); // mid()
-    perpendicular::register(context); // perpendicular_through()
-    parallel::register(context); // parallel_through()
-    intersection::register(context); // intersection()
-    bisector::register(context); // bisector()
-    circle::register(context); // Circle()
+pub fn register(library: &mut Library) {
+    point::register(library); // Point()
+    dst::register(library); // dst()
+    angle::register(library); // angle()
+    degrees::register(library); // degrees()
+    radians::register(library); // radians()
+    mid::register(library); // mid()
+    perpendicular::register(library); // perpendicular_through()
+    parallel::register(library); // parallel_through()
+    intersection::register(library); // intersection()
+    bisector::register(library); // bisector()
+    circle::register(library); // Circle()
+
+    lies_on::register(library); // lies_on
 }
 
 macro_rules! ty {
@@ -69,10 +71,13 @@ macro_rules! overload {
             param_group: $crate::script::builtins::macros::group!($(...$($gc-)? $gt)?)
         }
     };
-    ($lhs:ident $op:ident $rhs:ident : $func:ident) => {
+    ($($lcount:literal-)? $lt:ident $op:ident $($rcount:literal-)? $rt:ident : $func:ident) => {
         $crate::script::unroll::RuleOverload {
             definition: $crate::script::unroll::RuleDefinition(Box::new($func)),
-            params: ($crate::script::builtins::macros::ty!($lhs), $crate::script::builtins::macros::ty!($rhs))
+            params: (
+                $crate::script::builtins::macros::ty!($($lcount-)? $lt),
+                $crate::script::builtins::macros::ty!($($rcount-)? $rt)
+            )
         }
     };
 }
@@ -86,7 +91,7 @@ pub mod macros {
     }
 
     macro_rules! index {
-        ($col:expr, $at:literal) => {
+        ($col:expr, $at:expr) => {
             $crate::script::unroll::UnrolledExpression {
                 weight: 1.0,
                 ty: $crate::script::ty::POINT,
@@ -162,6 +167,16 @@ pub mod macros {
                 ))
             }
         };
+        (dir $a:expr, $b:expr, $c:expr) => {
+            $crate::script::unroll::UnrolledExpression {
+                weight: 1.0,
+                ty: $crate::script::ty::ANGLE,
+                span: $crate::span!(0, 0, 0, 0),
+                data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::ThreePointAngleDir(
+                    $a.clone(), $b.clone(), $c.clone()
+                ))
+            }
+        };
         ($a:expr, $b:expr) => {
             $crate::script::unroll::UnrolledExpression {
                 weight: 1.0,
@@ -221,6 +236,16 @@ pub mod macros {
                 ))
             } 
         };
+        (/, $a:expr, $b:expr) => {
+            $crate::script::unroll::UnrolledExpression {
+                weight: 1.0,
+                ty: $crate::script::Type::Scalar(Some($a.ty.as_scalar().unwrap().unwrap() * &$b.ty.as_scalar().unwrap().unwrap())),
+                span: $crate::span!(0, 0, 0, 0),
+                data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::Divide(
+                    $a.clone(), $b.clone()
+                ))
+            } 
+        };
     }
 
     macro_rules! number {
@@ -228,6 +253,16 @@ pub mod macros {
             $crate::script::unroll::UnrolledExpression {
                 weight: 1.0,
                 ty: $crate::script::ty::SCALAR,
+                span: $crate::span!(0, 0, 0, 0),
+                data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::Number(
+                    $v
+                ))
+            } 
+        };
+        ($t:ident $v:expr) => {
+            $crate::script::unroll::UnrolledExpression {
+                weight: 1.0,
+                ty: $crate::script::builtins::macros::ty!($t),
                 span: $crate::span!(0, 0, 0, 0),
                 data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::Number(
                     $v
@@ -309,12 +344,27 @@ pub mod macros {
         };
     }
 
-
+    macro_rules! rule {
+        ($context:ident : $rule_op:ident($lhs:expr, $rhs:expr)) => {
+            $rule_op(&$lhs, &$rhs, $context, None)
+        };
+        ($context:ident : $rule_op:ident($lhs:expr, $rhs:expr); $props:expr) => {
+            $rule_op(&$lhs, &$rhs, $context, $props)
+        };
+        ($context:ident : > ($lhs:expr, $rhs:expr)) => {
+            $context.rules.push($crate::script::unroll::UnrolledRule {
+                kind: $crate::script::unroll::UnrolledRuleKind::Gt,
+                lhs: $lhs.clone(),
+                rhs: $rhs.clone(),
+                inverted: false
+            })
+        };
+    }
 
     pub(crate) use {
         ty, overload, params, call, index, bisector, line2,
         group, average, angle_expr, circle_expr, set_unit, math, number,
         intersection, entity, parallel_through, perpendicular_through,
-        distance, variable
+        distance, variable, rule
     };
 }

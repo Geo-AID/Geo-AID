@@ -3,7 +3,7 @@ use std::mem;
 use crate::script::{
         unroll::{
             CompileContext, Function, UnrolledExpression,
-            Properties,
+            Properties, Library,
         }
     };
 
@@ -46,8 +46,8 @@ pub fn point_point(args: &[UnrolledExpression], context: &mut CompileContext, di
     expr
 }
 
-pub fn register(context: &mut CompileContext) {
-    context.functions.insert(
+pub fn register(library: &mut Library) {
+    library.functions.insert(
         String::from("bisector"),
         Function {
             name: String::from("bisector"),

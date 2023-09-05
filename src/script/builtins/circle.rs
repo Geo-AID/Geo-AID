@@ -1,7 +1,7 @@
 use std::mem;
 
 use crate::script::unroll::{
-    CompileContext, Function, UnrolledExpression, Properties,
+    CompileContext, Function, UnrolledExpression, Properties, Library,
 };
 
 use super::macros::{overload, call, circle_expr, entity};
@@ -15,8 +15,8 @@ fn circle_function(args: &[UnrolledExpression], context: &mut CompileContext, di
     expr
 }
 
-pub fn register(context: &mut CompileContext) {
-    context.functions.insert(
+pub fn register(library: &mut Library) {
+    library.functions.insert(
         String::from("Circle"),
         Function {
             name: String::from("Circle"),

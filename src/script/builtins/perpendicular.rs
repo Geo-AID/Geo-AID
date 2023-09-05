@@ -2,7 +2,7 @@ use std::mem;
 
 use crate::script::unroll::{
     CompileContext, Function, UnrolledExpression,
-    Properties,
+    Properties, Library,
 };
 
 use super::macros::{overload, call, perpendicular_through};
@@ -17,8 +17,8 @@ pub fn line_point(args: &[UnrolledExpression], context: &mut CompileContext, dis
     expr
 }
 
-pub fn register(context: &mut CompileContext) {
-    context.functions.insert(
+pub fn register(library: &mut Library) {
+    library.functions.insert(
         String::from("perpendicular_through"),
         Function {
             name: String::from("perpendicular_through"),

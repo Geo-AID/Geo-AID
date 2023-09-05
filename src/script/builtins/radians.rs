@@ -1,13 +1,13 @@
 use crate::script::{
     unroll::{
-        CompileContext, Function
+        Library, Function
     },
 };
 
 use super::macros::{overload, set_unit};
 
-pub fn register(context: &mut CompileContext) {
-    context.functions.insert(
+pub fn register(library: &mut Library) {
+    library.functions.insert(
         String::from("radians"),
         Function {
             name: String::from("radians"),

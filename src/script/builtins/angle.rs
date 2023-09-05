@@ -1,7 +1,7 @@
 use std::mem;
 
 use crate::script::unroll::{
-    CompileContext, Function, UnrolledExpression, Properties,
+    CompileContext, Function, UnrolledExpression, Properties, Library,
 };
 
 use super::macros::{overload, call, index, angle_expr};
@@ -18,8 +18,8 @@ fn angle_function_line_line(args: &[UnrolledExpression], _context: &mut CompileC
     angle_expr!(args[0], args[1])
 }
 
-pub fn register(context: &mut CompileContext) {
-    context.functions.insert(
+pub fn register(library: &mut Library) {
+    library.functions.insert(
         String::from("angle"),
         Function {
             name: String::from("angle"),
