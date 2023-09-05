@@ -254,6 +254,14 @@ impl Adjustable {
             None
         }
     }
+
+    pub fn as_clip1d(&self) -> Option<&f64> {
+        if let Self::Clip1D(v) = self {
+            Some(v)
+        } else {
+            None
+        }
+    }
 }
 
 pub enum Message {
@@ -341,6 +349,7 @@ pub struct Generator {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AdjustableTemplate {
     Point,
+    PointOnCircle,
     Real,
 }
 
@@ -377,6 +386,9 @@ impl Generator {
                         match temp {
                             AdjustableTemplate::Point => {
                                 Adjustable::Point(Complex::new(rand::random(), rand::random()))
+                            }
+                            AdjustableTemplate::PointOnCircle => {
+                                Adjustable::Clip1D(rand::random())
                             }
                             AdjustableTemplate::Real => Adjustable::Real(rand::random()),
                         },

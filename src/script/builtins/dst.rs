@@ -1,5 +1,5 @@
 use crate::script::{
-    unroll::{CompileContext, Function},
+    unroll::{Library, Function},
 };
 
 use super::macros::{overload, set_unit, distance};

@@ -5,6 +5,10 @@ use std::{
     rc::Rc, write, cell::RefCell,
 };
 
+use crate::span;
+
+pub use context::{CompileContext, Definition, Entity, Scalar as EntScalar, Point as EntPoint, Line as EntLine, Circle as EntCircle};
+
 use super::{
     builtins::{self, macros::variable},
     parser::{
@@ -15,6 +19,8 @@ use super::{
     token::{self, Ident, NamedIdent, PointCollection, Span},
     ty, ComplexUnit, Error, SimpleUnit, unit, compile::PreFigure,
 };
+
+mod context;
 
 /// A definition for a user-defined rule operator.
 #[derive(Debug)]
@@ -464,83 +470,8 @@ pub struct CompileContext {
 impl CompileContext {
     pub fn new() ->  Self {
         Self {
-            rule_ops: HashMap::new(),
-            variables: HashMap::new(),
             functions: HashMap::new(),
-            flags: FlagSetConstructor::new()
-                .add_set(
-                    &"optimizations",
-                    FlagSetConstructor::new().add_bool_def(&"identical_expressions", true),
-                )
-                .add_ident_def(&"distance_literals", &"none")
-                .add_bool_def(&"point_bounds", false)
-                .finish(),
-            entities: vec![Entity {
-                kind: EntityKind::All,
-                parent: 0
-            }],
-            rules: Vec::new(),
-            figure: PreFigure::default()
-        }
-    }
-
-    pub fn add_scalar(&mut self) -> usize {
-        self.entities.push(Entity {
-            kind: EntityKind::Scalar,
-            parent: 0
-        });
-
-        self.entities.len() - 1
-    }
-
-    pub fn add_point(&mut self) -> usize {
-        self.entities.push(Entity {
-            kind: EntityKind::Point,
-            parent: 0
-        });
-
-        self.entities.len() - 1
-    }
-
-    pub fn point(&mut self, index: usize) -> PointHandle {
-        let entity = self.entities.get(index).unwrap();
-        if let EntityKind::Point = entity.kind {
-            return PointHandle {
-                index,
-                context: self
-            };
-        } else {
-            panic!("Requested entity is not a point.");
-        }
-    }
-
-    pub fn add_circle(&mut self) -> usize {
-        self.entities.push(Entity {
-            kind: EntityKind::Circle,
-            parent: 0
-        });
-
-        self.entities.len() - 1
-    }
-
-    pub fn circle(&mut self, index: usize) -> CircleHandle {
-        let entity = self.entities.get(index).unwrap();
-        if let EntityKind::Circle = entity.kind {
-            return CircleHandle {
-                index,
-                context: self
-            };
-        } else {
-            panic!("Requested entity is not a circle.");
-        }
-    }
-
-    pub fn entity_contains(&self, check: usize, entity: usize) -> bool {
-        match self.entities[self.entities[check].parent].kind {
-            EntityKind::Scalar | EntityKind::Line
-            | EntityKind::Point | EntityKind::Circle => self.entity_contains(self.entities[check].parent, entity),
-            EntityKind::Bind(expr) => expr.contains_entity(entity, self),
-            EntityKind::All => false,
+            rule_ops: HashMap::new()
         }
     }
 }

@@ -9,7 +9,7 @@ use serde::Serialize;
 use self::expr::{
     AngleBisector, AngleLine, AnglePoint, Average, CenterRadius, Difference, FreePoint,
     LineLineIntersection, LinePoint, Literal, Negation, ParallelThrough, PerpendicularThrough,
-    PointLineDistance, PointPointDistance, PointX, PointY, Product, Quotient, Real, SetUnit, Sum,
+    PointLineDistance, PointPointDistance, PointX, PointY, Product, Quotient, Real, SetUnit, Sum, PointOnCircle,
 };
 
 use super::{critic::EvaluationArgs, Complex, EvaluationError};
@@ -358,7 +358,7 @@ pub mod expr {
 
     use super::{
         Circle, Evaluate, Expression, Kind, Line, LineExpr, PointExpr, ScalarExpr, Value, Weights,
-        Zero,
+        Zero, CircleExpr,
     };
 
     #[derive(Debug, Clone, Serialize)]
@@ -490,6 +490,30 @@ pub mod expr {
 
         fn evaluate(&self, args: &EvaluationArgs) -> Result<Complex, EvaluationError> {
             Ok(args.adjustables[self.index].0.as_point().copied().unwrap())
+        }
+
+        fn evaluate_weights(&self) -> Weights {
+            Weights::one_at(self.index)
+        }
+    }
+
+    #[derive(Debug, Clone, Serialize)]
+    /// A point on a circle.
+    pub struct PointOnCircle {
+        pub circle: Arc<Expression<CircleExpr>>,
+        pub index: usize,
+    }
+
+    impl Evaluate for PointOnCircle {
+        type Output = Complex;
+
+        fn evaluate(&self, args: &EvaluationArgs) -> Result<Complex, EvaluationError> {
+            let circle = self.circle.evaluate(args)?;
+            let theta = args.adjustables[self.index].0.as_clip1d().copied().unwrap();
+
+            let point_rel = Complex::new(theta.cos(), theta.sin());
+
+            Ok(circle.center + point_rel * circle.radius)
         }
 
         fn evaluate_weights(&self) -> Weights {
@@ -869,6 +893,8 @@ pub mod expr {
 pub enum PointExpr {
     /// An adjustable indexed point in euclidean space
     Free(FreePoint),
+    /// A point on a circle.
+    OnCircle(PointOnCircle),
     /// Takes the average value (arithmetic mean)
     Average(Average<PointExpr>),
     /// The point where two lines cross.
@@ -919,6 +945,7 @@ impl Evaluate for PointExpr {
     fn evaluate(&self, args: &EvaluationArgs) -> Result<Complex, EvaluationError> {
         match self {
             Self::Free(v) => v.evaluate(args),
+            Self::OnCircle(v) => v.evaluate(args),
             Self::LineLineIntersection(v) => v.evaluate(args),
             Self::Average(v) => v.evaluate(args),
         }
@@ -927,6 +954,7 @@ impl Evaluate for PointExpr {
     fn evaluate_weights(&self) -> Weights {
         match self {
             Self::Free(v) => v.evaluate_weights(),
+            Self::OnCircle(v) => v.evaluate_weights(),
             Self::LineLineIntersection(v) => v.evaluate_weights(),
             Self::Average(v) => v.evaluate_weights(),
         }
@@ -946,6 +974,7 @@ impl Kind for PointExpr {
                 }
             }
             Self::Free(_) => (),
+            Self::OnCircle(v) => v.circle.collect(exprs)
         }
     }
 

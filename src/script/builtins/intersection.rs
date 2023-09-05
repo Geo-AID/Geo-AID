@@ -1,5 +1,7 @@
 use crate::script::{
-    unroll::{CompileContext, Function},
+    unroll::{
+        Function, Library
+    },
 };
 
 use super::macros::{overload, intersection};

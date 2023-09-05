@@ -1,5 +1,5 @@
 use crate::script::unroll::{
-    CompileContext, Function, UnrolledExpression, Properties
+    CompileContext, Function, UnrolledExpression, Properties, Library
 };
 
 use super::macros::{overload, average};
@@ -17,8 +17,8 @@ mid_function! {DISTANCE, mid_function_distance}
 mid_function! {ANGLE, mid_function_angle}
 mid_function! {SCALAR, mid_function_scalar}
 
-pub fn register(context: &mut CompileContext) {
-    context.functions.insert(
+pub fn register(library: &mut Library) {
+    library.functions.insert(
         String::from("mid"),
         Function {
             name: String::from("mid"),

@@ -1,7 +1,9 @@
 use std::f64::consts::PI;
 
 use crate::script::{
-    unroll::{CompileContext, Function},
+    unroll::{
+        Function, Library
+    },
 };
 
 use super::macros::{overload, set_unit, math, number};
