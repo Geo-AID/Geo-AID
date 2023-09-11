@@ -271,12 +271,42 @@ pub mod macros {
     }
 
     macro_rules! entity {
-        ($index:expr) => {
+        (POINT $index:expr) => {
             $crate::script::unroll::UnrolledExpression {
                 weight: 1.0,
                 ty: $crate::script::ty::POINT,
                 span: $crate::span!(0, 0, 0, 0),
                 data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::Entity($index))
+            }
+        };
+        (SCALAR $index:expr) => {
+            $crate::script::unroll::UnrolledExpression {
+                weight: 1.0,
+                ty: $crate::script::ty::SCALAR,
+                span: $crate::span!(0, 0, 0, 0),
+                data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::Entity($index))
+            }
+        };
+    }
+
+    macro_rules! circle_center {
+        ($circle:expr) => {
+            $crate::script::unroll::UnrolledExpression {
+                weight: 1.0,
+                ty: $crate::script::ty::POINT,
+                span: $crate::span!(0, 0, 0, 0),
+                data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::CircleCenter($circle.clone()))
+            }
+        };
+    }
+
+    macro_rules! circle_radius {
+        ($circle:expr) => {
+            $crate::script::unroll::UnrolledExpression {
+                weight: 1.0,
+                ty: $crate::script::ty::DISTANCE,
+                span: $crate::span!(0, 0, 0, 0),
+                data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::CircleRadius($circle.clone()))
             }
         };
     }
@@ -358,12 +388,20 @@ pub mod macros {
                 inverted: false
             })
         };
+        ($context:ident : = ($lhs:expr, $rhs:expr)) => {
+            $context.rules.push($crate::script::unroll::UnrolledRule {
+                kind: $crate::script::unroll::UnrolledRuleKind::Eq,
+                lhs: $lhs.clone(),
+                rhs: $rhs.clone(),
+                inverted: false
+            })
+        };
     }
 
     pub(crate) use {
         ty, overload, params, call, index, bisector, line2,
         group, average, angle_expr, circle_expr, set_unit, math, number,
         intersection, entity, parallel_through, perpendicular_through,
-        distance, variable, rule
+        distance, variable, rule, circle_center, circle_radius
     };
 }

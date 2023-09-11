@@ -139,54 +139,54 @@ impl CompiledEntity {
     }
 }
 
-pub struct Compiler<'r> {
-    pub variables: VariableRecord,
-    pub expressions: ExpressionRecord,
-    pub entities: Vec<CompiledEntity>,
-    pub dst_var: &'r Option<Rc<Variable>>,
-    pub context: &'r CompileContext
+struct Compiler {
+    variables: VariableRecord,
+    expressions: ExpressionRecord,
+    entities: Vec<CompiledEntity>,
+    dst_var: Rc<RefCell<Variable>>,
+    context: CompileContext,
+    template: Vec<AdjustableTemplate>
 }
 
-#[must_use]
-pub fn fix_distance(
-    expr: UnrolledExpression,
-    power: i8,
-    dst_var: &Rc<RefCell<Variable>>,
-) -> UnrolledExpression {
-    let sp = expr.span;
-    let t = expr.ty;
+impl Compiler {
+    #[must_use]
+    pub fn new(mut context: CompileContext) -> Self {
+        let dst_var = context.add_scalar();
 
-    match power.cmp(&0) {
-        std::cmp::Ordering::Less => UnrolledExpression {
-            weight: 1.0,
-            data: Rc::new(UnrolledExpressionData::Divide(
-                fix_distance(expr, power + 1, dst_var),
-                UnrolledExpression {
-                    weight: 1.0,
-                    ty: ty::SCALAR,
-                    span: sp,
-                    data: Rc::new(UnrolledExpressionData::VariableAccess(Rc::clone(dst_var))),
-                },
-            )),
-            ty: t,
-            span: sp,
-        },
-        std::cmp::Ordering::Equal => expr,
-        std::cmp::Ordering::Greater => UnrolledExpression {
-            weight: 1.0,
-            data: Rc::new(UnrolledExpressionData::Multiply(
-                fix_distance(expr, power - 1, dst_var),
-                UnrolledExpression {
-                    weight: 1.0,
-                    ty: ty::SCALAR,
-                    span: sp,
-                    data: Rc::new(UnrolledExpressionData::VariableAccess(Rc::clone(dst_var))),
-                },
-            )),
-            ty: t,
-            span: sp,
-        },
+        let dst_var = Rc::clone(
+        context
+            .variables
+            .entry(String::from("@distance"))
+            .or_insert_with(|| {
+                Rc::new(RefCell::new(Variable {
+                    name: String::from("@distance"),
+                    definition_span: span!(0, 0, 0, 0),
+                    definition: UnrolledExpression {
+                        weight: 0.1, // We reduce the weight of distance to reduce its changes.
+                        data: Rc::new(UnrolledExpressionData::Entity(dst_var)),
+                        ty: ty::SCALAR,
+                        span: span!(0, 0, 0, 0),
+                    }
+                }))
+            }),
+        );
+
+        let mut entities = Vec::new();
+        entities.resize(context.entities.len(), CompiledEntity::None);
+
+        Self {
+            variables: VariableRecord::default(),
+            expressions: ExpressionRecord::default(),
+            dst_var,
+            entities,
+            context,
+            template: Vec::new()
+        }
     }
+}
+
+trait Compile<T> {
+    fn compile(&mut self, expr: &UnrolledExpression) -> Arc<Expression<T>>;
 }
 
 impl<'r> Compile<PointExpr> for Compiler<'r> {
@@ -194,7 +194,7 @@ impl<'r> Compile<PointExpr> for Compiler<'r> {
         // First we have to check if this expression has been compiled already.
         let key = HashableRc::new(Rc::clone(&expr.data));
 
-        if let Some(v) = expressions.points.get(&key) {
+        if let Some(v) = self.expressions.points.get(&key) {
             // If so, we return it.
             return Arc::clone(v);
         }
@@ -202,26 +202,19 @@ impl<'r> Compile<PointExpr> for Compiler<'r> {
         // Otherwise we compile.
         let compiled = match expr.data.as_ref() {
             UnrolledExpressionData::VariableAccess(var) => {
-                compile_variable(var, variables, expressions, entities, dst_var, context)
+                self.compile_variable(var)
             }
             UnrolledExpressionData::Entity(i) => {
-                compile_entity(*i, variables, expressions, entities, dst_var, context).as_point().unwrap().clone()
+                self.compile_entity(*i).as_point().unwrap().clone()
             }
             UnrolledExpressionData::Boxed(expr) => {
-                Self::compile(expr, variables, expressions, entities, dst_var, context)
+                self.compile(expr)
             }
-            UnrolledExpressionData::IndexCollection(expr, index) => Self::compile(
-                &index_collection(expr, *index),
-                variables,
-                expressions,
-                entities,
-                dst_var,
-                context
-            ),
+            UnrolledExpressionData::IndexCollection(expr, index) => self.compile(&index_collection(expr, *index)),
             UnrolledExpressionData::LineLineIntersection(k, l) => Arc::new(Expression::new(
                 PointExpr::LineLineIntersection(LineLineIntersection {
-                    k: Expression::compile(k, variables, expressions, entities, dst_var, context),
-                    l: Expression::compile(l, variables, expressions, entities, dst_var, context),
+                    k: self.compile(k),
+                    l: self.compile(l),
                 }),
                 1.0,
             )),
@@ -229,7 +222,7 @@ impl<'r> Compile<PointExpr> for Compiler<'r> {
                 PointExpr::Average(Average {
                     items: exprs
                         .iter()
-                        .map(|expr| Self::compile(expr, variables, expressions, entities, dst_var, context))
+                        .map(|expr| self.compile(expr))
                         .collect(),
                 }),
                 1.0,
@@ -238,7 +231,7 @@ impl<'r> Compile<PointExpr> for Compiler<'r> {
         };
 
         // We insert for memory.
-        expressions.points.insert(key, Arc::clone(&compiled));
+        self.expressions.points.insert(key, Arc::clone(&compiled));
         compiled
     }
 }
@@ -248,7 +241,7 @@ impl<'r> Compile<LineExpr> for Compiler<'r> {
         // First we have to check if this expression has been compiled already.
         let key = HashableRc::new(Rc::clone(&expr.data));
 
-        if let Some(v) = expressions.lines.get(&key) {
+        if let Some(v) = self.expressions.lines.get(&key) {
             // If so, we return it.
             return Arc::clone(v);
         }
@@ -256,37 +249,37 @@ impl<'r> Compile<LineExpr> for Compiler<'r> {
         // Otherwise we compile.
         let compiled = match expr.data.as_ref() {
             UnrolledExpressionData::VariableAccess(var) => {
-                compile_variable(var, variables, expressions, entities, dst_var, context)
+                self.compile_variable(var)
             }
             UnrolledExpressionData::Boxed(expr) => {
-                Expression::compile(expr, variables, expressions, entities, dst_var, context)
+                self.compile(expr)
             }
             UnrolledExpressionData::LineFromPoints(p1, p2) => Arc::new(Expression::new(
                 LineExpr::Line(LinePoint {
-                    a: Expression::compile(p1, variables, expressions, entities, dst_var, context),
-                    b: Expression::compile(p2, variables, expressions, entities, dst_var, context),
+                    a: self.compile(p1),
+                    b: self.compile(p2),
                 }),
                 1.0,
             )),
             UnrolledExpressionData::ParallelThrough(line, point) => Arc::new(Expression::new(
                 LineExpr::ParallelThrough(ParallelThrough {
-                    line: Expression::compile(line, variables, expressions, entities, dst_var, context),
-                    point: Expression::compile(point, variables, expressions, entities, dst_var, context),
+                    line: self.compile(line),
+                    point: self.compile(point),
                 }),
                 1.0,
             )),
             UnrolledExpressionData::PerpendicularThrough(line, point) => Arc::new(Expression::new(
                 LineExpr::PerpendicularThrough(PerpendicularThrough {
-                    line: Expression::compile(line, variables, expressions, entities, dst_var, context),
-                    point: Expression::compile(point, variables, expressions, entities, dst_var, context),
+                    line: self.compile(line),
+                    point: self.compile(point),
                 }),
                 1.0,
             )),
             UnrolledExpressionData::AngleBisector(v1, v2, v3) => Arc::new(Expression::new(
                 LineExpr::AngleBisector(AngleBisector {
-                    arm1: Expression::compile(v1, variables, expressions, entities, dst_var, context),
-                    origin: Expression::compile(v2, variables, expressions, entities, dst_var, context),
-                    arm2: Expression::compile(v3, variables, expressions, entities, dst_var, context),
+                    arm1: self.compile(v1),
+                    origin: self.compile(v2),
+                    arm2: self.compile(v3),
                 }),
                 1.0,
             )),
@@ -294,7 +287,7 @@ impl<'r> Compile<LineExpr> for Compiler<'r> {
         };
 
         // We insert for memory.
-        expressions.lines.insert(key, Arc::clone(&compiled));
+        self.expressions.lines.insert(key, Arc::clone(&compiled));
         compiled
     }
 }
@@ -314,7 +307,7 @@ impl<'r> Compile<CircleExpr> for Compiler<'r> {
         // First we have to check if this expression has been compiled already.
         let key = HashableRc::new(Rc::clone(&expr.data));
 
-        if let Some(v) = expressions.circles.get(&key) {
+        if let Some(v) = self.expressions.circles.get(&key) {
             // If so, we return it.
             return Arc::clone(v);
         }
@@ -322,19 +315,19 @@ impl<'r> Compile<CircleExpr> for Compiler<'r> {
         let compiled = match expr.data.as_ref() {
             UnrolledExpressionData::Circle(center, radius) => Arc::new(Expression::new(
                 CircleExpr::CenterRadius(CenterRadius {
-                    center: Expression::compile(center, variables, expressions, entities, dst_var, context),
-                    radius: Expression::compile(radius, variables, expressions, entities, dst_var, context),
+                    center: self.compile(center),
+                    radius: self.compile(radius),
                 }),
                 1.0,
             )),
             UnrolledExpressionData::Boxed(expr) => {
-                Expression::compile(expr, variables, expressions, entities, dst_var, context)
+                self.compile(expr)
             }
             _ => unreachable!("A circle should never be compiled this way"),
         };
 
         // We insert for memory.
-        expressions.circles.insert(key, Arc::clone(&compiled));
+        self.expressions.circles.insert(key, Arc::clone(&compiled));
         compiled
     }
 }
@@ -564,180 +557,6 @@ impl Compile for Expression<ScalarExpr> {
         expressions.scalars.insert(key, Arc::clone(&compiled));
         compiled
     }
-}
-
-/// Attempts to compile the variable. If the variable is a `PointCollection`, leaves it unrolled. Otherwise everything is compiled properly.
-fn compile_variable<T>(
-    var: &Rc<RefCell<Variable>>,
-    variables: &mut VariableRecord,
-    expressions: &mut ExpressionRecord,
-    entities: &mut Vec<CompiledEntity>,
-    dst_var: &Option<Rc<Variable>>,
-    context: &CompileContext
-) -> Arc<Expression<T>>
-where
-    VariableRecord: Mapping<RefCell<Variable>, T>,
-    Expression<T>: Compile,
-{
-    // We first have to see if the variable already exists.
-    let key = HashableRc::new(Rc::clone(var));
-
-    if let Some(v) = variables.get(&key) {
-        // So we can return it here.
-        return Arc::clone(v);
-    }
-
-    // And otherwise compile it.
-    let compiled = Expression::compile(&var.borrow().definition, variables, expressions, entities, dst_var, context);
-
-    // We insert for memory
-    variables.insert(HashableRc::new(Rc::clone(var)), compiled.clone());
-    compiled
-}
-
-/// Compiles the entity by index.
-fn compile_entity(
-    entity: usize,
-    variables: &mut VariableRecord,
-    expressions: &mut ExpressionRecord,
-    entities: &mut Vec<CompiledEntity>,
-    template: &mut Vec<AdjustableTemplate>,
-    dst_var: &Option<Rc<RefCell<Variable>>>,
-    context: &CompileContext
-) -> CompiledEntity {
-    // If the expression is compiled, there's no problem
-    match entities[entity].clone() {
-        CompiledEntity::None => {
-            entities[entity] = match context.entities[entity] {
-                Entity::Scalar(v) => CompiledEntity::Scalar(match v {
-                    EntScalar::Free => {
-                        template.push(AdjustableTemplate::Real);
-                        Arc::new(Expression::new(
-                            ScalarExpr::Real(Real {
-                                index: template.len() - 1
-                            }),
-                            1.0
-                        ))
-                    }
-                    EntScalar::Bind(expr) => Expression::compile(&expr, variables, expressions, entities, dst_var, context),
-                }),
-                Entity::Point(v) => CompiledEntity::Point(match v {
-                    EntPoint::Free => {
-                        template.push(AdjustableTemplate::Point);
-                        Arc::new(Expression::new(
-                            PointExpr::Free(FreePoint {
-                                index: template.len() - 1
-                            }),
-                            1.0
-                        ))
-                    }
-                    EntPoint::OnCircle(circle) => {
-                        template.push(AdjustableTemplate::PointOnCircle);
-                        Arc::new(Expression::new(
-                            PointExpr::OnCircle(PointOnCircle {
-                                index: template.len() - 1,
-                                circle: Expression::compile(&circle, variables, expressions, entities, dst_var, context)
-                            }),
-                            1.0
-                        ))
-                    }
-                    EntPoint::Bind(expr) => Expression::compile(&expr, variables, expressions, entities, dst_var, context),
-                }),
-                Entity::Line(v) => match v {
-                    EntLine::Bind(_) => todo!(),
-                },
-                Entity::Circle(v) => match v {
-                    EntCircle::Bind(_) => todo!(),
-                    EntCircle::Temporary => unreachable!(),
-                },
-            };
-
-            entities[entity].clone()
-        },
-        v => v
-    }
-}
-
-fn compile_rules(
-    variables: &mut VariableRecord,
-    expressions: &mut ExpressionRecord,
-    entities: &Vec<CompiledEntity>,
-    dst_var: &Option<Rc<RefCell<Variable>>>,
-    context: &CompileContext
-) -> Vec<Criteria> {
-    context.rules
-        .iter()
-        .map(|rule| {
-            let crit = match rule.kind {
-                UnrolledRuleKind::Eq => {
-                    if rule.lhs.ty == ty::POINT {
-                        let lhs = Expression::compile(
-                            &rule.lhs,
-                            variables,
-                            expressions,
-                            entities,
-                            dst_var,
-                            context
-                        );
-                        let rhs = Expression::compile(
-                            &rule.rhs,
-                            variables,
-                            expressions,
-                            entities,
-                            dst_var,
-                            context
-                        );
-
-                        Weighed::one(CriteriaKind::EqualPoint(lhs, rhs))
-                    } else {
-                        let lhs = Expression::compile(
-                            &rule.lhs,
-                            variables,
-                            expressions,
-                            entities,
-                            dst_var,
-                            context
-                        );
-                        let rhs = Expression::compile(
-                            &rule.rhs,
-                            variables,
-                            expressions,
-                            entities,
-                            dst_var,
-                            context
-                        );
-
-                        Weighed::one(CriteriaKind::EqualScalar(lhs, rhs))
-                    }
-                }
-                UnrolledRuleKind::Gt => {
-                    let lhs =
-                        Expression::compile(&rule.lhs, variables, expressions, entities, dst_var, context);
-                    let rhs =
-                        Expression::compile(&rule.rhs, variables, expressions, entities, dst_var, context);
-
-                    Weighed::one(CriteriaKind::Greater(lhs, rhs))
-                }
-                UnrolledRuleKind::Lt => {
-                    let lhs =
-                        Expression::compile(&rule.lhs, variables, expressions, entities, dst_var, context);
-                    let rhs =
-                        Expression::compile(&rule.rhs, variables, expressions, entities, dst_var, context);
-
-                    Weighed::one(CriteriaKind::Less(lhs, rhs))
-                }
-            };
-
-            if rule.inverted {
-                Weighed {
-                    object: CriteriaKind::Inverse(Box::new(crit.object)),
-                    weight: crit.weight,
-                }
-            } else {
-                crit
-            }
-        })
-        .collect()
 }
 
 fn read_flags(flags: &HashMap<String, Flag>) -> Result<Flags, Error> {

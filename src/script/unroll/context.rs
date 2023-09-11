@@ -1,6 +1,6 @@
 use std::{collections::HashMap, rc::Rc, cell::RefCell, fmt::Debug};
 
-use crate::script::{compile::PreFigure, ty};
+use crate::script::{compile::{PreFigure, self}, ty, builtins::macros::{rule, distance, circle_radius, circle_center}};
 
 use super::{Variable, UnrolledExpression, FlagSet, UnrolledRule, FlagSetConstructor, UnrolledExpressionData};
 
@@ -15,7 +15,7 @@ pub trait Definition {
 }
 
 /// A scalar is either a bind or a free real value.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Scalar {
     /// A free, adjusted real.
     Free,
@@ -40,7 +40,7 @@ impl Definition for Scalar {
 }
 
 /// A point is either a bind or a free complex value.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Point {
     /// A free, adjusted complex.
     Free,
@@ -69,7 +69,7 @@ impl Definition for Point {
 }
 
 /// A line is always a bind.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Line {
     /// A bind
     Bind(UnrolledExpression)
@@ -90,7 +90,7 @@ impl Definition for Line {
 }
 
 /// A circle is always a bind.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Circle {
     /// A bind
     Bind(UnrolledExpression),
@@ -115,7 +115,7 @@ impl Definition for Circle {
 }
 
 /// An entity is a single primitive on the figure plane.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Entity {
     /// A scalar
     Scalar(Scalar),
@@ -135,6 +135,14 @@ impl Entity {
 
     pub fn free_circle() -> Self {
         Self::Circle(Circle::Temporary)
+    }
+
+    pub fn as_point(&self) -> Option<&Point> {
+        if let Self::Point(v) = self {
+            Some(v)
+        } else {
+            None
+        }
     }
 
     pub fn as_point_mut(&mut self) -> Option<&mut Point> {
@@ -216,7 +224,6 @@ impl CompileContext {
                     &"optimizations",
                     FlagSetConstructor::new().add_bool_def(&"identical_expressions", true),
                 )
-                .add_ident_def(&"distance_literals", &"none")
                 .add_bool_def(&"point_bounds", false)
                 .finish(),
             entities: vec![],
@@ -231,7 +238,7 @@ impl CompileContext {
     }
 
     /// Gets the entity of the given index.
-    pub fn get_entity_mut(&self, i: usize) -> &mut Entity {
+    pub fn get_entity_mut(&mut self, i: usize) -> &mut Entity {
         &mut self.entities[i]
     }
 
@@ -261,11 +268,16 @@ impl CompileContext {
             UnrolledExpressionData::VariableAccess(var) => self.get_point_by_expr(&var.borrow().definition),
             UnrolledExpressionData::Entity(index) => self.get_point_by_index(*index),
             UnrolledExpressionData::Boxed(expr) => self.get_point_by_expr(expr),
-            UnrolledExpressionData::IndexCollection(_, _)
-            | UnrolledExpressionData::Average(_)
+            UnrolledExpressionData::IndexCollection(col, i) => self.get_point_by_expr(&compile::index_collection(col, *i)),
+            UnrolledExpressionData::CircleCenter(circ) => match circ.data.as_ref() {
+                UnrolledExpressionData::Circle(center, _) => self.get_point_by_expr(center),
+                _ => unreachable!()
+            },
+            UnrolledExpressionData::Average(_)
             | UnrolledExpressionData::LineLineIntersection(_, _) => PointHandle(expr.clone()),
             UnrolledExpressionData::Circle(_, _)
             | UnrolledExpressionData::PerpendicularThrough(_, _)
+            | UnrolledExpressionData::CircleRadius(_)
             | UnrolledExpressionData::ParallelThrough(_, _)
             | UnrolledExpressionData::LineFromPoints(_, _)
             | UnrolledExpressionData::SetUnit(_, _)
@@ -292,12 +304,23 @@ impl CompileContext {
         }
     }
 
+    pub fn get_point_entity(&self, handle: &PointHandle) -> Option<&Point> {
+        match handle.0.data.as_ref() {
+            UnrolledExpressionData::Entity(i) => self.get_entity(*i).as_point(),
+            UnrolledExpressionData::IndexCollection(col, i) => self.get_point_entity(
+                &PointHandle(compile::index_collection(col, *i))
+            ),
+            UnrolledExpressionData::VariableAccess(var) => self.get_point_entity(&(PointHandle(var.borrow().definition.clone())))
+            _ => None
+        }
+    }
+
     pub fn add_circle(&mut self) -> usize {
         self.entities.push(Entity::free_circle());
 
         self.entities.len() - 1
     }
-
+ 
     pub fn get_circle_by_index(&mut self, index: usize) -> CircleHandle {
         let entity = self.entities.get(index).unwrap();
         if let Entity::Circle(_) = entity {
@@ -332,6 +355,8 @@ impl CompileContext {
             | UnrolledExpressionData::TwoLineAngle(_, _)
             | UnrolledExpressionData::AngleBisector(_, _, _)
             | UnrolledExpressionData::Number(_)
+            | UnrolledExpressionData::CircleCenter(_)
+            | UnrolledExpressionData::CircleRadius(_)
             | UnrolledExpressionData::PointCollection(_) => panic!("Requested entity is not a circle."),
         }
     }
@@ -340,8 +365,16 @@ impl CompileContext {
 /// Everything related to circles.
 impl CompileContext {
     pub fn point_on_circle(&mut self, lhs: PointHandle, rhs: CircleHandle) {
-        if let Some(point) = self.get_point_entity_mut(&lhs) {
-
+        if let Some(point) = self.get_point_entity(&lhs) {
+            if point.order(self) > 1 {
+                *self.get_point_entity_mut(&lhs).unwrap() = Point::OnCircle(rhs.0);
+                return;
+            }
         }
+
+        rule!(self:=(
+            distance!(PP: lhs.0, circle_center!(rhs.0)),
+            circle_radius!(rhs.0)
+        ));
     }
 }

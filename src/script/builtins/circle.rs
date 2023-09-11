@@ -26,7 +26,7 @@ pub fn register(library: &mut Library) {
                     |args, context, _| call!(context:circle_function(args[1], args[0]))
                 }),
                 overload!(() -> CIRCLE {
-                    |_, context, _| call!(context:circle_function(entity!(context.add_point()), entity!(context.add_scalar())))
+                    |_, context, _| call!(context:circle_function(entity!(POINT context.add_point()), entity!(SCALAR context.add_scalar())))
                 })
             ],
         },
