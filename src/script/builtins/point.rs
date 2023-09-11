@@ -14,7 +14,7 @@ pub fn register(library: &mut Library) {
             overloads: vec![
                 overload!(() -> POINT {
                     |_, context, _| {
-                        entity!(context.add_point())
+                        entity!(POINT context.add_point())
                     }
                 })
             ],

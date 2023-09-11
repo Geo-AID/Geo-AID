@@ -807,6 +807,8 @@ pub enum UnrolledExpressionData {
     ParallelThrough(UnrolledExpression, UnrolledExpression),      // Line, Point
     LineLineIntersection(UnrolledExpression, UnrolledExpression),
     Circle(UnrolledExpression, UnrolledExpression), // Center, radius
+    CircleRadius(UnrolledExpression),
+    CircleCenter(UnrolledExpression),
 }
 
 impl Definition for UnrolledExpressionData {
@@ -833,6 +835,8 @@ impl Definition for UnrolledExpressionData {
             UnrolledExpressionData::Number(_) => false,
             UnrolledExpressionData::Boxed(v)
             | UnrolledExpressionData::IndexCollection(v, _)
+            | UnrolledExpressionData::CircleCenter(v)
+            | UnrolledExpressionData::CircleRadius(v)
             | UnrolledExpressionData::Negate(v) => v.contains_entity(entity, context),
             UnrolledExpressionData::SetUnit(v, _) => {
                 v.contains_entity(entity, context)
@@ -920,6 +924,12 @@ impl Display for UnrolledExpressionData {
             UnrolledExpressionData::Circle(center, radius) => {
                 write!(f, "circle({center}, {radius})")
             }
+            UnrolledExpressionData::CircleRadius(circle) => {
+                write!(f, "{circle}.radius")
+            }
+            UnrolledExpressionData::CircleCenter(circle) => {
+                write!(f, "{circle}.center")
+            }
         }
     }
 }
@@ -970,68 +980,6 @@ impl UnrolledExpression {
         let mut cloned = self.clone();
         cloned.weight = weight;
         cloned
-    }
-
-    /// # Panics
-    /// Never.
-    #[must_use]
-    pub fn has_distance_literal(&self) -> Option<Span> {
-        match self.data.as_ref() {
-            UnrolledExpressionData::VariableAccess(_)
-            | UnrolledExpressionData::Entity(_) => None,
-            UnrolledExpressionData::PointCollection(v) | UnrolledExpressionData::Average(v) => {
-                for expr in v {
-                    if let Some(sp) = expr.has_distance_literal() {
-                        return Some(sp);
-                    }
-                }
-
-                None
-            }
-            UnrolledExpressionData::Number(_) => {
-                if let Some(unit) = self.ty.as_scalar().unwrap() {
-                    if unit.0[SimpleUnit::Distance as usize] != 0 {
-                        return Some(self.span);
-                    }
-                }
-
-                None
-            }
-            UnrolledExpressionData::Boxed(v)
-            | UnrolledExpressionData::IndexCollection(v, _)
-            | UnrolledExpressionData::Negate(v) => v.has_distance_literal(),
-            UnrolledExpressionData::SetUnit(v, u) => {
-                if let Some(sp) = v.has_distance_literal() {
-                    Some(sp)
-                } else if u.0[SimpleUnit::Distance as usize] != 0 {
-                    Some(self.span)
-                } else {
-                    None
-                }
-            }
-            UnrolledExpressionData::PointPointDistance(e1, e2)
-            | UnrolledExpressionData::PointLineDistance(e1, e2) => e1
-                .has_distance_literal()
-                .or_else(|| e2.has_distance_literal()),
-            UnrolledExpressionData::Add(v1, v2)
-            | UnrolledExpressionData::Circle(v1, v2)
-            | UnrolledExpressionData::LineFromPoints(v1, v2)
-            | UnrolledExpressionData::ParallelThrough(v1, v2)
-            | UnrolledExpressionData::PerpendicularThrough(v1, v2)
-            | UnrolledExpressionData::LineLineIntersection(v1, v2)
-            | UnrolledExpressionData::TwoLineAngle(v1, v2)
-            | UnrolledExpressionData::Subtract(v1, v2)
-            | UnrolledExpressionData::Multiply(v1, v2)
-            | UnrolledExpressionData::Divide(v1, v2) => v1
-                .has_distance_literal()
-                .or_else(|| v2.has_distance_literal()),
-            UnrolledExpressionData::ThreePointAngle(v1, v2, v3)
-            | UnrolledExpressionData::ThreePointAngleDir(v1, v2, v3)
-            | UnrolledExpressionData::AngleBisector(v1, v2, v3) => v1
-                .has_distance_literal()
-                .or_else(|| v2.has_distance_literal())
-                .or_else(|| v3.has_distance_literal()),
-        }
     }
 }
 
@@ -1288,6 +1236,8 @@ fn unroll_conversion_to_scalar(
         | UnrolledExpressionData::SetUnit(_, _)
         | UnrolledExpressionData::PointPointDistance(_, _)
         | UnrolledExpressionData::PointLineDistance(_, _)
+        | UnrolledExpressionData::CircleRadius(_)
+        | UnrolledExpressionData::CircleCenter(_)
         | UnrolledExpressionData::ThreePointAngle(_, _, _)
         | UnrolledExpressionData::ThreePointAngleDir(_, _, _)
         | UnrolledExpressionData::AngleBisector(_, _, _)

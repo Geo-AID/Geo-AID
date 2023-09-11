@@ -560,16 +560,8 @@ pub struct Optimizations {
 }
 
 #[derive(Debug)]
-pub enum DistanceLiterals {
-    Adjust,
-    Solve,
-    None,
-}
-
-#[derive(Debug)]
 pub struct Flags {
     pub optimizations: Optimizations,
-    pub distance_literals: DistanceLiterals,
     pub point_bounds: bool,
 }
 
@@ -579,7 +571,6 @@ impl Default for Flags {
             optimizations: Optimizations {
                 identical_expressions: true,
             },
-            distance_literals: DistanceLiterals::None,
             point_bounds: false,
         }
     }
