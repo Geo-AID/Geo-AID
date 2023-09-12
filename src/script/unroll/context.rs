@@ -307,10 +307,6 @@ impl CompileContext {
     pub fn get_point_entity(&self, handle: &PointHandle) -> Option<&Point> {
         match handle.0.data.as_ref() {
             UnrolledExpressionData::Entity(i) => self.get_entity(*i).as_point(),
-            UnrolledExpressionData::IndexCollection(col, i) => self.get_point_entity(
-                &PointHandle(compile::index_collection(col, *i))
-            ),
-            UnrolledExpressionData::VariableAccess(var) => self.get_point_entity(&(PointHandle(var.borrow().definition.clone())))
             _ => None
         }
     }
@@ -365,10 +361,15 @@ impl CompileContext {
 /// Everything related to circles.
 impl CompileContext {
     pub fn point_on_circle(&mut self, lhs: PointHandle, rhs: CircleHandle) {
-        if let Some(point) = self.get_point_entity(&lhs) {
-            if point.order(self) > 1 {
-                *self.get_point_entity_mut(&lhs).unwrap() = Point::OnCircle(rhs.0);
-                return;
+        if let Some(point) = self.get_point_entity_mut(&lhs) {
+            match point {
+                Point::Free => {
+                    println!("Works?");
+                    *point = Point::OnCircle(rhs.0);
+                    return;
+                }
+                Point::OnCircle(_)
+                | Point::Bind(_) => (),
             }
         }
 
