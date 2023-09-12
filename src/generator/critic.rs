@@ -170,7 +170,7 @@ fn evaluate_single(
                     // Note that the difference is not the same as with equality. This time we have to be prepared for negative diffs.
                     let (v1, v2) = (v1, v2);
                     let diff = 1.0 - v2 / v1;
-                    println!("Satisfied with {}", smooth_inf_inf(54.0 * f64::cbrt(diff - 0.001)));
+                    println!("{v1} > {v2} Satisfied with {}", smooth_inf_inf(54.0 * f64::cbrt(diff - 0.001)));
                     // Interestingly, it's easier to calculate the quality function for != and then invert it.
                     Quality::Some(smooth_inf_inf(54.0 * f64::cbrt(diff - 0.001)))
                 } else {

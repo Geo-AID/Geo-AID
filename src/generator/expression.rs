@@ -537,7 +537,6 @@ pub mod expr {
             let theta = args.adjustables[self.index].0.as_clip1d().copied().unwrap();
 
             let point_rel = Complex::new(theta.cos(), theta.sin());
-
             Ok(circle.center + point_rel * circle.radius)
         }
 

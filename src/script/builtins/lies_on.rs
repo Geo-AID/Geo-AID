@@ -34,7 +34,7 @@ fn col_lies_on_circle(lhs: &UnrolledExpression, rhs: &UnrolledExpression, contex
                     angle_expr!(dir index!(lhs, i), index!(lhs, i-1), index!(lhs, i+1)),
                     angle_expr!(dir index!(lhs, i+1), index!(lhs, i), index!(lhs, last))
                 ),
-                number!(ANGLE 0.0)
+                number!(ANGLE 0.01)
             ));
         }
     }
