@@ -11,6 +11,8 @@ pub mod parallel;
 pub mod perpendicular;
 pub mod point;
 pub mod radians;
+pub mod lies_on;
+pub mod segment;
 
 /// Returns what size of point collection can the given bundle type be cast onto.
 pub const fn get_bundle_pc(_name: &'static str) -> usize {

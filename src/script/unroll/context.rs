@@ -364,7 +364,6 @@ impl CompileContext {
         if let Some(point) = self.get_point_entity_mut(&lhs) {
             match point {
                 Point::Free => {
-                    println!("Works?");
                     *point = Point::OnCircle(rhs.0);
                     return;
                 }
