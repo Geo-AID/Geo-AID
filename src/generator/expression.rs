@@ -346,7 +346,7 @@ pub trait Evaluate {
 pub mod expr {
     use std::{
         ops::{AddAssign, Div},
-        sync::Arc,
+        sync::Arc, f64::consts::PI,
     };
 
     use serde::Serialize;
@@ -534,7 +534,7 @@ pub mod expr {
 
         fn evaluate(&self, args: &EvaluationArgs) -> Result<Complex, EvaluationError> {
             let circle = self.circle.evaluate(args)?;
-            let theta = args.adjustables[self.index].0.as_clip1d().copied().unwrap();
+            let theta = args.adjustables[self.index].0.as_clip1d().copied().unwrap() * PI;
 
             let point_rel = Complex::new(theta.cos(), theta.sin());
             Ok(circle.center + point_rel * circle.radius)
