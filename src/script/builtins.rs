@@ -27,10 +27,12 @@ pub fn register(context: &mut CompileContext) {
 }
 
 macro_rules! ty {
-    ($name:ident) => {$crate::script::ty::$name};
+    ($name:ident) => {
+        $crate::script::ty::$name
+    };
     ($count:literal-P) => {
         $crate::script::ty::collection($count)
-    }
+    };
 }
 
 macro_rules! params {
@@ -80,12 +82,14 @@ pub mod macros {
                 weight: 1.0,
                 ty: $crate::script::ty::POINT,
                 span: $crate::span!(0, 0, 0, 0),
-                data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::IndexCollection(
-                    $col.clone(),
-                    $at
-                ))
+                data: std::rc::Rc::new(
+                    $crate::script::unroll::UnrolledExpressionData::IndexCollection(
+                        $col.clone(),
+                        $at,
+                    ),
+                ),
             }
-        }
+        };
     }
 
     macro_rules! bisector {
@@ -94,11 +98,15 @@ pub mod macros {
                 weight: 1.0,
                 ty: $crate::script::ty::LINE,
                 span: $crate::span!(0, 0, 0, 0),
-                data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::AngleBisector(
-                    $a.clone(), $b.clone(), $c.clone()
-                ))
+                data: std::rc::Rc::new(
+                    $crate::script::unroll::UnrolledExpressionData::AngleBisector(
+                        $a.clone(),
+                        $b.clone(),
+                        $c.clone(),
+                    ),
+                ),
             }
-        }
+        };
     }
 
     macro_rules! line2 {
@@ -107,11 +115,14 @@ pub mod macros {
                 weight: 1.0,
                 ty: $crate::script::ty::LINE,
                 span: $crate::span!(0, 0, 0, 0),
-                data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::LineFromPoints(
-                    $a.clone(), $b.clone()
-                ))
+                data: std::rc::Rc::new(
+                    $crate::script::unroll::UnrolledExpressionData::LineFromPoints(
+                        $a.clone(),
+                        $b.clone(),
+                    ),
+                ),
             }
-        }
+        };
     }
 
     macro_rules! intersection {
@@ -120,11 +131,14 @@ pub mod macros {
                 weight: 1.0,
                 ty: $crate::script::ty::POINT,
                 span: $crate::span!(0, 0, 0, 0),
-                data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::LineLineIntersection(
-                    $a.clone(), $b.clone()
-                ))
+                data: std::rc::Rc::new(
+                    $crate::script::unroll::UnrolledExpressionData::LineLineIntersection(
+                        $a.clone(),
+                        $b.clone(),
+                    ),
+                ),
             }
-        }
+        };
     }
 
     macro_rules! average {
@@ -146,9 +160,13 @@ pub mod macros {
                 weight: 1.0,
                 ty: $crate::script::ty::ANGLE,
                 span: $crate::span!(0, 0, 0, 0),
-                data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::ThreePointAngle(
-                    $a.clone(), $b.clone(), $c.clone()
-                ))
+                data: std::rc::Rc::new(
+                    $crate::script::unroll::UnrolledExpressionData::ThreePointAngle(
+                        $a.clone(),
+                        $b.clone(),
+                        $c.clone(),
+                    ),
+                ),
             }
         };
         ($a:expr, $b:expr) => {
@@ -156,11 +174,14 @@ pub mod macros {
                 weight: 1.0,
                 ty: $crate::script::ty::ANGLE,
                 span: $crate::span!(0, 0, 0, 0),
-                data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::TwoLineAngle(
-                    $a.clone(), $b.clone()
-                ))
+                data: std::rc::Rc::new(
+                    $crate::script::unroll::UnrolledExpressionData::TwoLineAngle(
+                        $a.clone(),
+                        $b.clone(),
+                    ),
+                ),
             }
-        }
+        };
     }
 
     macro_rules! circle_expr {
@@ -170,10 +191,11 @@ pub mod macros {
                 ty: $crate::script::ty::CIRCLE,
                 span: $crate::span!(0, 0, 0, 0),
                 data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::Circle(
-                    $a.clone(), $b.clone()
-                ))
+                    $a.clone(),
+                    $b.clone(),
+                )),
             }
-        }
+        };
     }
 
     macro_rules! set_unit {
@@ -183,8 +205,9 @@ pub mod macros {
                 ty: $crate::script::ty::$unit,
                 span: $crate::span!(0, 0, 0, 0),
                 data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::SetUnit(
-                    $a.clone(), $crate::script::unit::$unit
-                ))
+                    $a.clone(),
+                    $crate::script::unit::$unit,
+                )),
             }
         };
         ($a:expr, $unit:expr) => {
@@ -193,22 +216,26 @@ pub mod macros {
                 ty: $crate::script::ty::$unit,
                 span: $crate::span!(0, 0, 0, 0),
                 data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::SetUnit(
-                    $a.clone(), $unit
-                ))
+                    $a.clone(),
+                    $unit,
+                )),
             }
-        }
+        };
     }
 
     macro_rules! math {
         (*, $a:expr, $b:expr) => {
             $crate::script::unroll::UnrolledExpression {
                 weight: 1.0,
-                ty: $crate::script::Type::Scalar(Some($a.ty.as_scalar().unwrap().unwrap() * &$b.ty.as_scalar().unwrap().unwrap())),
+                ty: $crate::script::Type::Scalar(Some(
+                    $a.ty.as_scalar().unwrap().unwrap() * &$b.ty.as_scalar().unwrap().unwrap(),
+                )),
                 span: $crate::span!(0, 0, 0, 0),
                 data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::Multiply(
-                    $a.clone(), $b.clone()
-                ))
-            } 
+                    $a.clone(),
+                    $b.clone(),
+                )),
+            }
         };
     }
 
@@ -218,10 +245,8 @@ pub mod macros {
                 weight: 1.0,
                 ty: $crate::script::ty::SCALAR,
                 span: $crate::span!(0, 0, 0, 0),
-                data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::Number(
-                    $v
-                ))
-            } 
+                data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::Number($v)),
+            }
         };
     }
 
@@ -231,7 +256,7 @@ pub mod macros {
                 weight: 1.0,
                 ty: $crate::script::ty::POINT,
                 span: $crate::span!(0, 0, 0, 0),
-                data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::FreePoint)
+                data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::FreePoint),
             }
         };
     }
@@ -242,11 +267,14 @@ pub mod macros {
                 weight: 1.0,
                 ty: $crate::script::ty::LINE,
                 span: $crate::span!(0, 0, 0, 0),
-                data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::ParallelThrough(
-                    $a.clone(), $b.clone()
-                ))
+                data: std::rc::Rc::new(
+                    $crate::script::unroll::UnrolledExpressionData::ParallelThrough(
+                        $a.clone(),
+                        $b.clone(),
+                    ),
+                ),
             }
-        }
+        };
     }
 
     macro_rules! perpendicular_through {
@@ -255,11 +283,14 @@ pub mod macros {
                 weight: 1.0,
                 ty: $crate::script::ty::LINE,
                 span: $crate::span!(0, 0, 0, 0),
-                data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::PerpendicularThrough(
-                    $a.clone(), $b.clone()
-                ))
+                data: std::rc::Rc::new(
+                    $crate::script::unroll::UnrolledExpressionData::PerpendicularThrough(
+                        $a.clone(),
+                        $b.clone(),
+                    ),
+                ),
             }
-        }
+        };
     }
 
     macro_rules! distance {
@@ -268,9 +299,12 @@ pub mod macros {
                 weight: 1.0,
                 ty: $crate::script::ty::DISTANCE,
                 span: $crate::span!(0, 0, 0, 0),
-                data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::PointPointDistance(
-                    $a.clone(), $b.clone()
-                ))
+                data: std::rc::Rc::new(
+                    $crate::script::unroll::UnrolledExpressionData::PointPointDistance(
+                        $a.clone(),
+                        $b.clone(),
+                    ),
+                ),
             }
         };
         (PL: $a:expr, $b:expr) => {
@@ -278,16 +312,18 @@ pub mod macros {
                 weight: 1.0,
                 ty: $crate::script::ty::DISTANCE,
                 span: $crate::span!(0, 0, 0, 0),
-                data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::PointLineDistance(
-                    $a.clone(), $b.clone()
-                ))
+                data: std::rc::Rc::new(
+                    $crate::script::unroll::UnrolledExpressionData::PointLineDistance(
+                        $a.clone(),
+                        $b.clone(),
+                    ),
+                ),
             }
         };
     }
     pub(crate) use {
-        ty, overload, params, call, index, bisector, line2,
-        group, average, angle_expr, circle_expr, set_unit, math, number,
-        intersection, free, parallel_through, perpendicular_through,
-        distance
+        angle_expr, average, bisector, call, circle_expr, distance, free, group, index,
+        intersection, line2, math, number, overload, parallel_through, params,
+        perpendicular_through, set_unit, ty,
     };
 }
