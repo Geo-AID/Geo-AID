@@ -1,11 +1,9 @@
 use crate::script::{
     token::{Position, Span},
-    unroll::{
-        CompileContext, Function
-    }
+    unroll::{CompileContext, Function},
 };
 
-use super::macros::{overload, set_unit, distance};
+use super::macros::{distance, overload, set_unit};
 
 pub fn register(context: &mut CompileContext) {
     context.functions.insert(

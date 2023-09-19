@@ -1,46 +1,52 @@
 use std::mem;
 
 use crate::script::{
-        token::{Position, Span},
-        unroll::{
-            CompileContext, Function, UnrolledExpression,
-            Properties,
-        }, compile::PreFigure
-    };
+    compile::PreFigure,
+    token::{Position, Span},
+    unroll::{CompileContext, Function, Properties, UnrolledExpression},
+};
 
-use super::macros::{overload, call, index, bisector, line2, intersection};
+use super::macros::{bisector, call, index, intersection, line2, overload};
 
 /// bisector(point, point, point) - angle bisector.
-pub fn point_point_point(args: &[UnrolledExpression], figure: &mut PreFigure, display: Option<Properties>) -> UnrolledExpression {
+pub fn point_point_point(
+    args: &[UnrolledExpression],
+    figure: &mut PreFigure,
+    display: Option<Properties>,
+) -> UnrolledExpression {
     mem::drop(display);
     let expr = bisector!(args[0], args[1], args[2]);
 
     // Render the bisector.
     figure.rays.push((
         args[1].clone(),
-        intersection!(expr, line2!(args[0], args[2]))
+        intersection!(expr, line2!(args[0], args[2])),
     ));
 
-    figure.segments.push((
-        args[0].clone(),
-        args[1].clone()
-    ));
+    figure.segments.push((args[0].clone(), args[1].clone()));
 
-    figure.segments.push((
-        args[2].clone(),
-        args[1].clone()
-    ));
+    figure.segments.push((args[2].clone(), args[1].clone()));
 
     expr
 }
 
 /// bisector(point, point) - bisector of a segment.
-pub fn point_point(args: &[UnrolledExpression], figure: &mut PreFigure, display: Option<Properties>) -> UnrolledExpression {
-    use super::perpendicular::line_point;
+pub fn point_point(
+    args: &[UnrolledExpression],
+    figure: &mut PreFigure,
+    display: Option<Properties>,
+) -> UnrolledExpression {
     use super::mid::mid_function_point;
+    use super::perpendicular::line_point;
     mem::drop(display);
 
-    let expr = call!(figure:line_point(line2!(args[0], args[1]), call!(figure:mid_function_point(args[0], args[1]))));
+    let expr = call!(
+            figure:
+                line_point(
+                    line2!(args[0], args[1]),
+                    call!(figure:mid_function_point(args[0], args[1]))
+                )
+    );
 
     figure.lines.push(expr.clone());
 
@@ -67,7 +73,7 @@ pub fn register(context: &mut CompileContext) {
                         index!(args[0], 1)
                     ))
                 }),
-                overload!((POINT, POINT) -> LINE : point_point)
+                overload!((POINT, POINT) -> LINE : point_point),
             ],
         },
     );

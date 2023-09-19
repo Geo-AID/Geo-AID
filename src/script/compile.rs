@@ -23,8 +23,8 @@ use super::{
     token::{Position, Span},
     ty,
     unroll::{
-        self, Flag, UnrolledExpression, UnrolledExpressionData, UnrolledRule,
-        UnrolledRuleKind, Variable, CompileContext, PointMeta,
+        self, CompileContext, Flag, PointMeta, UnrolledExpression, UnrolledExpressionData,
+        UnrolledRule, UnrolledRuleKind, Variable,
     },
     Criteria, CriteriaKind, Error, HashableRc, SimpleUnit, Weighed,
 };
@@ -149,7 +149,9 @@ pub fn fix_distance(
                     weight: 1.0,
                     ty: ty::SCALAR,
                     span: sp,
-                    data: Rc::new(UnrolledExpressionData::VariableAccess(Rc::clone(dst_var.as_ref().unwrap()))),
+                    data: Rc::new(UnrolledExpressionData::VariableAccess(Rc::clone(
+                        dst_var.as_ref().unwrap(),
+                    ))),
                 },
             )),
             ty: t,
@@ -164,7 +166,9 @@ pub fn fix_distance(
                     weight: 1.0,
                     ty: ty::SCALAR,
                     span: sp,
-                    data: Rc::new(UnrolledExpressionData::VariableAccess(Rc::clone(dst_var.as_ref().unwrap()))),
+                    data: Rc::new(UnrolledExpressionData::VariableAccess(Rc::clone(
+                        dst_var.as_ref().unwrap(),
+                    ))),
                 },
             )),
             ty: t,
@@ -361,11 +365,7 @@ fn compile_number(
                         span: expr.span,
                         data: expr.data.clone(),
                     },
-                    *expr.ty
-                        .as_scalar()
-                        .unwrap()
-                        .as_ref()
-                        .unwrap()
+                    *expr.ty.as_scalar().unwrap().as_ref().unwrap(),
                 )),
             },
             variables,
@@ -695,7 +695,7 @@ pub fn get_dst_variable(
                                     data: Rc::new(UnrolledExpressionData::FreeReal),
                                     ty: ty::SCALAR,
                                     span: span!(0, 0, 0, 0),
-                                }
+                                },
                             })
                         }),
                 ))
@@ -737,67 +737,61 @@ pub struct PreFigure {
     /// Rays in the figure
     pub rays: Vec<(UnrolledExpression, UnrolledExpression)>,
     /// Circles in the figure
-    pub circles: Vec<UnrolledExpression>
+    pub circles: Vec<UnrolledExpression>,
 }
 
 impl PreFigure {
     /// Builds an actual figure.
-    fn build(self, canvas_size: (usize, usize), variables: &mut VariableRecord, expressions: &mut ExpressionRecord, template: &mut Vec<AdjustableTemplate>, dst_var: &Option<Rc<Variable>>) -> Figure {
+    fn build(
+        self,
+        canvas_size: (usize, usize),
+        variables: &mut VariableRecord,
+        expressions: &mut ExpressionRecord,
+        template: &mut Vec<AdjustableTemplate>,
+        dst_var: &Option<Rc<Variable>>,
+    ) -> Figure {
         Figure {
             canvas_size,
-            points: self.points.into_iter().map(|(expr, meta)| (Expression::compile(
-                &expr,
-                variables,
-                expressions,
-                template,
-                dst_var
-            ), meta)).collect(),
-            lines: self.lines.into_iter().map(|expr| Expression::compile(
-                &expr,
-                variables,
-                expressions,
-                template,
-                dst_var
-            )).collect(),
-            segments: self.segments.into_iter().map(|(a, b)| (
-                Expression::compile(
-                    &a,
-                    variables,
-                    expressions,
-                    template,
-                    dst_var
-                ),
-                Expression::compile(
-                    &b,
-                    variables,
-                    expressions,
-                    template,
-                    dst_var
-                )
-            )).collect(),
-            rays: self.rays.into_iter().map(|(a, b)| (
-                Expression::compile(
-                    &a,
-                    variables,
-                    expressions,
-                    template,
-                    dst_var
-                ),
-                Expression::compile(
-                    &b,
-                    variables,
-                    expressions,
-                    template,
-                    dst_var
-                )
-            )).collect(),
-            circles: self.circles.into_iter().map(|expr| Expression::compile(
-                &expr,
-                variables,
-                expressions,
-                template,
-                dst_var
-            )).collect(),
+            points: self
+                .points
+                .into_iter()
+                .map(|(expr, meta)| {
+                    (
+                        Expression::compile(&expr, variables, expressions, template, dst_var),
+                        meta,
+                    )
+                })
+                .collect(),
+            lines: self
+                .lines
+                .into_iter()
+                .map(|expr| Expression::compile(&expr, variables, expressions, template, dst_var))
+                .collect(),
+            segments: self
+                .segments
+                .into_iter()
+                .map(|(a, b)| {
+                    (
+                        Expression::compile(&a, variables, expressions, template, dst_var),
+                        Expression::compile(&b, variables, expressions, template, dst_var),
+                    )
+                })
+                .collect(),
+            rays: self
+                .rays
+                .into_iter()
+                .map(|(a, b)| {
+                    (
+                        Expression::compile(&a, variables, expressions, template, dst_var),
+                        Expression::compile(&b, variables, expressions, template, dst_var),
+                    )
+                })
+                .collect(),
+            circles: self
+                .circles
+                .into_iter()
+                .map(|expr| Expression::compile(&expr, variables, expressions, template, dst_var))
+                .collect(),
             ..Default::default()
         }
     }
@@ -926,7 +920,18 @@ pub fn compile(
     //     println!("{rule:?}");
     // }
 
-    Ok((criteria, figure.build(canvas_size, &mut variables, &mut expressions, &mut template, &dst_var), template, flags))
+    Ok((
+        criteria,
+        figure.build(
+            canvas_size,
+            &mut variables,
+            &mut expressions,
+            &mut template,
+            &dst_var,
+        ),
+        template,
+        flags,
+    ))
 }
 
 /// Inequality principle and the point plane limit.
