@@ -21,18 +21,15 @@ fn col_lies_on_circle(lhs: &UnrolledExpression, rhs: &UnrolledExpression, contex
          * (A_1, A_2, A_3), (A_2, A_3, A_4), ... (A_n-1, A_n, A_1)
          */
 
-        for i in 1..(len-1) {
-            let last = if i + 2 == len {
-                0
-            } else {
-                i + 2
-            };
+        for i in 1..len {
+            let i_plus_1 = (i + 1) % len;
+            let i_plus_2 = (i + 2) % len;
 
             rule!(context:>(
                 math!(
                     *,
-                    angle_expr!(dir index!(lhs, i), index!(lhs, i-1), index!(lhs, i+1)),
-                    angle_expr!(dir index!(lhs, i+1), index!(lhs, i), index!(lhs, last))
+                    angle_expr!(dir index!(lhs, i), index!(lhs, i-1), index!(lhs, i_plus_1)),
+                    angle_expr!(dir index!(lhs, i_plus_1), index!(lhs, i), index!(lhs, i_plus_2))
                 ),
                 number!(ANGLE 0.01)
             ));
