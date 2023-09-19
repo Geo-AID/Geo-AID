@@ -502,6 +502,11 @@ pub mod ty {
     pub const fn collection(length: usize) -> Type {
         Type::PointCollection(length)
     }
+
+    #[must_use]
+    pub const fn bundle(t: &'static str) -> Type {
+        Type::Bundle(t)
+    }
 }
 
 impl ComplexUnit {

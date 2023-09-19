@@ -12,6 +12,7 @@ pub mod perpendicular;
 pub mod point;
 pub mod radians;
 pub mod lies_on;
+pub mod segment;
 
 /// Returns what size of point collection can the given bundle type be cast onto.
 pub const fn get_bundle_pc(_name: &'static str) -> usize {
@@ -36,10 +37,17 @@ pub fn register(library: &mut Library) {
 }
 
 macro_rules! ty {
-    ($name:ident) => {$crate::script::ty::$name};
+    (DISTANCE) => {$crate::script::ty::DISTANCE};
+    (ANGLE) => {$crate::script::ty::ANGLE};
+    (SCALAR) => {$crate::script::ty::SCALAR};
+    (SCALAR_UNKNOWN) => {$crate::script::ty::SCALAR_UNKNOWN};
+    (POINT) => {$crate::script::ty::POINT};
+    (LINE) => {$crate::script::ty::LINE};
+    (CIRCLE) => {$crate::script::ty::CIRCLE};
     ($count:literal-P) => {
         $crate::script::ty::collection($count)
-    }
+    };
+    ($t:ident) => {$crate::script::ty::bundle(stringify!($t))}
 }
 
 macro_rules! params {
@@ -340,6 +348,19 @@ pub mod macros {
 
     macro_rules! variable {
         ($v:expr) => {
+            $crate::script::unroll::UnrolledExpression {
+                weight: 1.0,
+                ty: $v.borrow().definition.ty,
+                span: $crate::span!(0, 0, 0, 0),
+                data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::VariableAccess(
+                    std::rc::Rc::clone(&$v.clone())
+                ))
+            }
+        };
+    }
+
+    macro_rules! construct_bundle {
+        ($t:ident { $($field : $value:expr),* $(,)? }) => {
             $crate::script::unroll::UnrolledExpression {
                 weight: 1.0,
                 ty: $v.borrow().definition.ty,
