@@ -105,7 +105,6 @@ pub fn draw(target: &Path, canvas_size: (usize, usize), output: &Output) {
             Rendered::Point(point) => {
                 points(point);
             }
-
             Rendered::Line(line) => {
                 lines(line);
             }
