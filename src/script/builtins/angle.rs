@@ -1,23 +1,29 @@
 use std::mem;
 
 use crate::script::{
-    token::{Position, Span},
-    unroll::{
-        CompileContext, Function, UnrolledExpression, Properties,
-    },
     compile::PreFigure,
+    token::{Position, Span},
+    unroll::{CompileContext, Function, Properties, UnrolledExpression},
 };
 
-use super::macros::{overload, call, index, angle_expr};
+use super::macros::{angle_expr, call, index, overload};
 
 /// angle(point, point, point) - angle depicted by 3 points.
-fn angle_function_point_point_point(args: &[UnrolledExpression], _figure: &mut PreFigure, display: Option<Properties>) -> UnrolledExpression {
+fn angle_function_point_point_point(
+    args: &[UnrolledExpression],
+    _figure: &mut PreFigure,
+    display: Option<Properties>,
+) -> UnrolledExpression {
     mem::drop(display);
     angle_expr!(args[0], args[1], args[2])
 }
 
 /// angle(line, line) - distance between a point and a line.
-fn angle_function_line_line(args: &[UnrolledExpression], _figure: &mut PreFigure, display: Option<Properties>) -> UnrolledExpression {
+fn angle_function_line_line(
+    args: &[UnrolledExpression],
+    _figure: &mut PreFigure,
+    display: Option<Properties>,
+) -> UnrolledExpression {
     mem::drop(display);
     angle_expr!(args[0], args[1])
 }

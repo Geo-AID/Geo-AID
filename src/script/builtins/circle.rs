@@ -1,16 +1,19 @@
 use std::mem;
 
 use crate::script::{
+    compile::PreFigure,
     token::{Position, Span},
-    unroll::{
-        CompileContext, Function, UnrolledExpression, Properties,
-    }, compile::PreFigure,
+    unroll::{CompileContext, Function, Properties, UnrolledExpression},
 };
 
-use super::macros::{overload, call, circle_expr};
+use super::macros::{call, circle_expr, overload};
 
 /// Circle constructor. Creates a circle based off of its center and radius.
-fn circle_function(args: &[UnrolledExpression],figure: &mut PreFigure, display: Option<Properties>) -> UnrolledExpression {
+fn circle_function(
+    args: &[UnrolledExpression],
+    figure: &mut PreFigure,
+    display: Option<Properties>,
+) -> UnrolledExpression {
     mem::drop(display);
     let expr = circle_expr!(args[0], args[1]);
 
