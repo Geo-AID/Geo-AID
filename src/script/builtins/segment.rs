@@ -1,4 +1,5 @@
 use std::mem;
+use crate::script::builtins::macros::construct_bundle;
 
 use crate::script::unroll::{UnrolledExpression, CompileContext, Properties, Library, Function};
 
@@ -17,9 +18,9 @@ fn segment_function_point_point(args: &[UnrolledExpression], _context: &mut Comp
 
 pub fn register(library: &mut Library) {
     library.functions.insert(
-        String::from("angle"),
+        String::from("Segment"),
         Function {
-            name: String::from("angle"),
+            name: String::from("Segment"),
             overloads: vec![
                 overload!((2-P) -> Segment {
                     |args, context, _| call!(context:segment_function_point_point(

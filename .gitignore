@@ -1,9 +1,10 @@
 /target
 .vscode
-test.svg
 test.geo
-debug-output
 playground
 Cargo.lock
 testoutputs/*
 reports
+test.svg
+debug-output
+.idea

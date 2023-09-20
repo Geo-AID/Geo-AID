@@ -37,10 +37,17 @@ pub fn register(library: &mut Library) {
 }
 
 macro_rules! ty {
-    ($name:ident) => {$crate::script::ty::$name};
+    (DISTANCE) => {$crate::script::ty::DISTANCE};
+    (ANGLE) => {$crate::script::ty::ANGLE};
+    (SCALAR) => {$crate::script::ty::SCALAR};
+    (SCALAR_UNKNOWN) => {$crate::script::ty::SCALAR_UNKNOWN};
+    (POINT) => {$crate::script::ty::POINT};
+    (LINE) => {$crate::script::ty::LINE};
+    (CIRCLE) => {$crate::script::ty::CIRCLE};
     ($count:literal-P) => {
         $crate::script::ty::collection($count)
-    }
+    };
+    ($t:ident) => {$crate::script::ty::bundle(stringify!($t))}
 }
 
 macro_rules! params {
@@ -350,6 +357,23 @@ pub mod macros {
                 ))
             }
         };
+    }
+
+    macro_rules! construct_bundle {
+        ($t:ident { $($field:ident : $value:expr),* $(,)? }) => {{
+            let mut fields = std::collections::HashMap::new();
+
+            $(fields.insert(stringify!($field).to_string(), $value.clone());)*
+
+            $crate::script::unroll::UnrolledExpression {
+                weight: 1.0,
+                ty: $crate::script::ty::bundle(stringify!($t)),
+                span: $crate::span!(0, 0, 0, 0),
+                data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::ConstructBundle(
+                    fields
+                ))
+            }
+        }};
     }
 
     macro_rules! distance {

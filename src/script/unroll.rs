@@ -807,6 +807,10 @@ pub enum UnrolledExpressionData {
     ParallelThrough(UnrolledExpression, UnrolledExpression),      // Line, Point
     LineLineIntersection(UnrolledExpression, UnrolledExpression),
     Circle(UnrolledExpression, UnrolledExpression), // Center, radius
+    CircleRadius(UnrolledExpression),
+    CircleCenter(UnrolledExpression),
+    ConstructBundle(HashMap<String, UnrolledExpression>),
+    IndexBundle(UnrolledExpression, String),
 }
 
 impl Definition for UnrolledExpressionData {
@@ -921,6 +925,23 @@ impl Display for UnrolledExpressionData {
             }
             UnrolledExpressionData::Circle(center, radius) => {
                 write!(f, "circle({center}, {radius})")
+            }
+            UnrolledExpressionData::CircleRadius(circle) => {
+                write!(f, "{circle}.radius")
+            }
+            UnrolledExpressionData::CircleCenter(circle) => {
+                write!(f, "{circle}.center")
+            }
+            UnrolledExpressionData::ConstructBundle(fields) => {
+                write!(
+                    f,
+                    "{{ {} }}",
+                    fields
+                        .iter()
+                        .map(|(field, value)| format!("{field}:{value}"))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
             }
         }
     }
@@ -1228,6 +1249,8 @@ fn unroll_conversion_to_scalar(
         | UnrolledExpressionData::SetUnit(_, _)
         | UnrolledExpressionData::PointPointDistance(_, _)
         | UnrolledExpressionData::PointLineDistance(_, _)
+        | UnrolledExpressionData::CircleRadius(_)
+        | UnrolledExpressionData::CircleCenter(_)
         | UnrolledExpressionData::ThreePointAngle(_, _, _)
         | UnrolledExpressionData::ThreePointAngleDir(_, _, _)
         | UnrolledExpressionData::AngleBisector(_, _, _)
