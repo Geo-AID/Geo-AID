@@ -16,6 +16,8 @@ use crate::{
     },
     span,
 };
+use crate::generator::expression::expr::PointOnLine;
+use crate::script::unit;
 
 use super::{
     figure::Figure,
@@ -244,6 +246,7 @@ impl Compile<PointExpr> for Compiler {
                 }),
                 1.0
             )),
+            UnrolledExpressionData::IndexBundle(bundle, field) => self.compile(&index_bundle(bundle, field)),
             _ => unreachable!("A point should never be compiled this way"),
         };
 
@@ -300,6 +303,7 @@ impl Compile<LineExpr> for Compiler {
                 }),
                 1.0,
             )),
+            UnrolledExpressionData::IndexBundle(bundle, field) => self.compile(&index_bundle(bundle, field)),
             _ => unreachable!("A line should never be compiled this way"),
         };
 
@@ -316,6 +320,16 @@ pub fn index_collection(expr: &UnrolledExpression, index: usize) -> UnrolledExpr
         UnrolledExpressionData::PointCollection(col) => col.get(index).unwrap().clone(),
         UnrolledExpressionData::Boxed(expr) => index_collection(expr, index),
         _ => unreachable!("PointCollection should never be achievable by this expression."),
+    }
+}
+
+/// Takes the unrolled expression of a bundle type and takes out the given field.
+pub fn index_bundle(bundle: &UnrolledExpression, field: &str) -> UnrolledExpression {
+    match bundle.data.as_ref() {
+        UnrolledExpressionData::VariableAccess(var) => index_bundle(&var.borrow().definition, field),
+        UnrolledExpressionData::ConstructBundle(map) => map.get(field).unwrap().clone(),
+        UnrolledExpressionData::Boxed(bundle) => index_bundle(bundle, field),
+        _ => unreachable!("A bundle type should never be achievable by this expression.")
     }
 }
 
@@ -340,6 +354,7 @@ impl Compile<CircleExpr> for Compiler {
             UnrolledExpressionData::Boxed(expr) => {
                 self.compile(expr)
             }
+            UnrolledExpressionData::IndexBundle(bundle, field) => self.compile(&index_bundle(bundle, field)),
             _ => unreachable!("A circle should never be compiled this way"),
         };
 
@@ -491,7 +506,17 @@ impl Compiler {
                             Arc::new(Expression::new(
                                 PointExpr::OnCircle(PointOnCircle {
                                     index: self.template.len() - 1,
-                                    circle: self.compile(&circle)
+                                    circle: self.compile(circle)
+                                }),
+                                1.0
+                            ))
+                        }
+                        EntPoint::OnLine(line) => {
+                            self.template.push(AdjustableTemplate::PointOnLine);
+                            Arc::new(Expression::new(
+                                PointExpr::OnLine(PointOnLine {
+                                    index: self.template.len() - 1,
+                                    line: self.compile(line)
                                 }),
                                 1.0
                             ))
@@ -632,6 +657,15 @@ impl Compile<ScalarExpr> for Compiler {
             UnrolledExpressionData::Number(v) => {
                 self.compile_number(expr, *v)
             }
+            UnrolledExpressionData::DstLiteral(v) => Arc::new(Expression::new(
+                ScalarExpr::SetUnit(SetUnit {
+                    unit: unit::DISTANCE,
+                    value: Arc::new(Expression::new(ScalarExpr::Literal(Literal {
+                        value: *v
+                    }), 1.0))
+                }),
+                1.0
+            )),
             UnrolledExpressionData::Entity(i) => self.compile_entity(*i).as_scalar().unwrap().clone(),
             UnrolledExpressionData::Boxed(expr) => {
                 self.compile(expr)
@@ -738,7 +772,8 @@ impl Compile<ScalarExpr> for Compiler {
                 }),
                 1.0
             )),
-            x => unreachable!("A scalar should never be compiled this way {x}"),
+            UnrolledExpressionData::IndexBundle(bundle, field) => self.compile(&index_bundle(bundle, field)),
+            _ => unreachable!("A scalar should never be compiled this way"),
         };
 
         // We insert for memory.

@@ -350,6 +350,7 @@ pub struct Generator {
 pub enum AdjustableTemplate {
     Point,
     PointOnCircle,
+    PointOnLine,
     Real,
 }
 
@@ -388,6 +389,9 @@ impl Generator {
                                 Adjustable::Point(Complex::new(rand::random(), rand::random()))
                             }
                             AdjustableTemplate::PointOnCircle => {
+                                Adjustable::Clip1D(rand::random())
+                            }
+                            AdjustableTemplate::PointOnLine => {
                                 Adjustable::Clip1D(rand::random())
                             }
                             AdjustableTemplate::Real => Adjustable::Real(rand::random()),

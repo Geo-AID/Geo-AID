@@ -32,6 +32,7 @@ pub fn register(library: &mut Library) {
     intersection::register(library); // intersection()
     bisector::register(library); // bisector()
     circle::register(library); // Circle()
+    segment::register(library); // Segment()
 
     lies_on::register(library); // lies_on
 }
@@ -107,6 +108,20 @@ pub mod macros {
                 data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::IndexCollection(
                     $col.clone(),
                     $at
+                ))
+            }
+        }
+    }
+
+    macro_rules! field {
+        ($bundle:expr, $at:ident) => {
+            $crate::script::unroll::UnrolledExpression {
+                weight: 1.0,
+                ty: $crate::script::ty::POINT,
+                span: $crate::span!(0, 0, 0, 0),
+                data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::IndexBundle(
+                    $bundle.clone(),
+                    stringify!($at).to_string()
                 ))
             }
         }
@@ -267,6 +282,16 @@ pub mod macros {
                 ))
             } 
         };
+        (=$v:expr) => {
+            $crate::script::unroll::UnrolledExpression {
+                weight: 1.0,
+                ty: $crate::script::builtins::macros::ty!(DISTANCE),
+                span: $crate::span!(0, 0, 0, 0),
+                data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::DstLiteral(
+                    $v
+                ))
+            }
+        };
         ($t:ident $v:expr) => {
             $crate::script::unroll::UnrolledExpression {
                 weight: 1.0,
@@ -275,7 +300,7 @@ pub mod macros {
                 data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::Number(
                     $v
                 ))
-            } 
+            }
         };
     }
 
@@ -360,16 +385,20 @@ pub mod macros {
     }
 
     macro_rules! construct_bundle {
-        ($t:ident { $($field : $value:expr),* $(,)? }) => {
+        ($t:ident { $($field:ident : $value:expr),* $(,)? }) => {{
+            let mut fields = std::collections::HashMap::new();
+
+            $(fields.insert(stringify!($field).to_string(), $value.clone());)*
+
             $crate::script::unroll::UnrolledExpression {
                 weight: 1.0,
-                ty: $v.borrow().definition.ty,
+                ty: $crate::script::ty::bundle(stringify!($t)),
                 span: $crate::span!(0, 0, 0, 0),
-                data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::VariableAccess(
-                    std::rc::Rc::clone(&$v.clone())
+                data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::ConstructBundle(
+                    fields
                 ))
             }
-        };
+        }};
     }
 
     macro_rules! distance {
@@ -424,6 +453,7 @@ pub mod macros {
         ty, overload, params, call, index, bisector, line2,
         group, average, angle_expr, circle_expr, set_unit, math, number,
         intersection, entity, parallel_through, perpendicular_through,
-        distance, variable, rule, circle_center, circle_radius
+        distance, variable, rule, circle_center, circle_radius,
+        construct_bundle, field
     };
 }

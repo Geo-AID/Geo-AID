@@ -5,6 +5,7 @@ use std::{
 };
 
 use serde::Serialize;
+use crate::generator::expression::expr::PointOnLine;
 
 use self::expr::{
     AngleBisector, AngleLine, AnglePoint, Average, CenterRadius, Difference, FreePoint,
@@ -546,6 +547,28 @@ pub mod expr {
     }
 
     #[derive(Debug, Clone, Serialize)]
+    /// A point on a aine.
+    pub struct PointOnLine {
+        pub line: Arc<Expression<LineExpr>>,
+        pub index: usize,
+    }
+
+    impl Evaluate for PointOnLine {
+        type Output = Complex;
+
+        fn evaluate(&self, args: &EvaluationArgs) -> Result<Complex, EvaluationError> {
+            let line = self.line.evaluate(args)?;
+            let mag = args.adjustables[self.index].0.as_clip1d().copied().unwrap();
+
+            Ok(line.origin + line.direction * mag)
+        }
+
+        fn evaluate_weights(&self) -> Weights {
+            Weights::one_at(self.index)
+        }
+    }
+
+    #[derive(Debug, Clone, Serialize)]
     /// A line defined with two points.
     pub struct LinePoint {
         pub a: Arc<Expression<PointExpr>>,
@@ -955,6 +978,8 @@ pub enum PointExpr {
     Free(FreePoint),
     /// A point on a circle.
     OnCircle(PointOnCircle),
+    /// A point on a line.
+    OnLine(PointOnLine),
     /// Takes the average value (arithmetic mean)
     Average(Average<PointExpr>),
     /// The point where two lines cross.
@@ -1008,6 +1033,7 @@ impl Evaluate for PointExpr {
         match self {
             Self::Free(v) => v.evaluate(args),
             Self::OnCircle(v) => v.evaluate(args),
+            Self::OnLine(v) => v.evaluate(args),
             Self::LineLineIntersection(v) => v.evaluate(args),
             Self::Average(v) => v.evaluate(args),
             Self::CircleCenter(v) => v.evaluate(args)
@@ -1018,6 +1044,7 @@ impl Evaluate for PointExpr {
         match self {
             Self::Free(v) => v.evaluate_weights(),
             Self::OnCircle(v) => v.evaluate_weights(),
+            Self::OnLine(v) => v.evaluate_weights(),
             Self::LineLineIntersection(v) => v.evaluate_weights(),
             Self::Average(v) => v.evaluate_weights(),
             Self::CircleCenter(v) => v.evaluate_weights()
@@ -1039,6 +1066,7 @@ impl Kind for PointExpr {
             }
             Self::Free(_) => (),
             Self::OnCircle(v) => v.circle.collect(exprs),
+            Self::OnLine(v) => v.line.collect(exprs),
             Self::CircleCenter(v) => v.circle.collect(exprs)
         }
     }

@@ -8,6 +8,7 @@ use std::{
 use crate::span;
 
 pub use context::{CompileContext, Definition, Entity, Scalar as EntScalar, Point as EntPoint, Line as EntLine, Circle as EntCircle};
+use crate::script::compile;
 
 use super::{
     builtins::{self, macros::variable},
@@ -786,6 +787,7 @@ pub enum UnrolledExpressionData {
     VariableAccess(Rc<RefCell<Variable>>),
     PointCollection(Vec<UnrolledExpression>),
     Number(f64),
+    DstLiteral(f64),
     Entity(usize),
     Boxed(UnrolledExpression),
     IndexCollection(UnrolledExpression, usize),
@@ -809,6 +811,8 @@ pub enum UnrolledExpressionData {
     Circle(UnrolledExpression, UnrolledExpression), // Center, radius
     CircleRadius(UnrolledExpression),
     CircleCenter(UnrolledExpression),
+    ConstructBundle(HashMap<String, UnrolledExpression>),
+    IndexBundle(UnrolledExpression, String),
 }
 
 impl Definition for UnrolledExpressionData {
@@ -832,9 +836,11 @@ impl Definition for UnrolledExpressionData {
             UnrolledExpressionData::PointCollection(v) | UnrolledExpressionData::Average(v) => {
                 v.iter().any(|x| x.contains_entity(entity, context))
             }
-            UnrolledExpressionData::Number(_) => false,
+            UnrolledExpressionData::DstLiteral(_)
+            | UnrolledExpressionData::Number(_) => false,
             UnrolledExpressionData::Boxed(v)
             | UnrolledExpressionData::IndexCollection(v, _)
+            | UnrolledExpressionData::IndexBundle(v, _)
             | UnrolledExpressionData::CircleCenter(v)
             | UnrolledExpressionData::CircleRadius(v)
             | UnrolledExpressionData::Negate(v) => v.contains_entity(entity, context),
@@ -862,7 +868,10 @@ impl Definition for UnrolledExpressionData {
             | UnrolledExpressionData::AngleBisector(v1, v2, v3) => v1
                 .contains_entity(entity, context)
                 || v2.contains_entity(entity, context)
-                || v3.contains_entity(entity, context)
+                || v3.contains_entity(entity, context),
+            UnrolledExpressionData::ConstructBundle(v) => {
+                v.values().any(|x| x.contains_entity(entity, context))
+            }
         }
     }
 }
@@ -889,10 +898,12 @@ impl Display for UnrolledExpressionData {
                     .join(", ")
             ),
             UnrolledExpressionData::Number(num) => write!(f, "{num}"),
+            UnrolledExpressionData::DstLiteral(num) => write!(f, "lit {num}"),
             UnrolledExpressionData::Entity(i) => write!(f, "Entity {i}"),
             UnrolledExpressionData::Boxed(expr) | UnrolledExpressionData::SetUnit(expr, _) => {
                 write!(f, "{expr}")
             }
+            UnrolledExpressionData::IndexBundle(expr, field) => write!(f, "{expr}.{field}"),
             UnrolledExpressionData::IndexCollection(expr, index) => write!(f, "{expr}[{index}]"),
             UnrolledExpressionData::LineFromPoints(e1, e2) => write!(f, "line({e1}, {e2})"),
             UnrolledExpressionData::PointPointDistance(e1, e2)
@@ -930,6 +941,17 @@ impl Display for UnrolledExpressionData {
             UnrolledExpressionData::CircleCenter(circle) => {
                 write!(f, "{circle}.center")
             }
+            UnrolledExpressionData::ConstructBundle(fields) => {
+                write!(
+                    f,
+                    "{{ {} }}",
+                    fields
+                        .iter()
+                        .map(|(field, value)| format!("{field}:{value}"))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            }
         }
     }
 }
@@ -961,6 +983,9 @@ impl Definition for UnrolledExpression {
 
 impl Display for UnrolledExpression {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Type::Bundle(name) = self.ty {
+            write!(f, "{name} ")?;
+        }
         write!(f, "{}", self.data)
     }
 }
@@ -1157,7 +1182,13 @@ fn unroll_conversion_to_scalar(
                 context
             )?)),
         }),
-        UnrolledExpressionData::Number(_) => Ok(UnrolledExpression {
+        UnrolledExpressionData::IndexBundle(bundle, field) => unroll_implicit_conversion(
+            compile::index_bundle(bundle, field).clone(),
+            to,
+            context
+        ),
+        UnrolledExpressionData::DstLiteral(_)
+        | UnrolledExpressionData::Number(_) => Ok(UnrolledExpression {
             ty: *to,
             span: expr.span,
             weight: expr.weight,
@@ -1230,6 +1261,7 @@ fn unroll_conversion_to_scalar(
         }),
         UnrolledExpressionData::VariableAccess(_)
         | UnrolledExpressionData::PointCollection(_)
+        | UnrolledExpressionData::ConstructBundle(_)
         | UnrolledExpressionData::Entity(_)
         | UnrolledExpressionData::IndexCollection(_, _)
         | UnrolledExpressionData::LineFromPoints(_, _)
@@ -1556,7 +1588,7 @@ fn unroll_binop(
             let rhs = unroll_muldiv(rhs, &lhs, context)?;
 
             Ok(UnrolledExpression {
-                weight: 1.0, // Technically, the only way to assign weight to an arithmetic op is to parenthise it.
+                weight: 1.0, // Technically, the only way to assign weight to an arithmetic op is to put it in parentheses.
                 ty: match &lhs.ty {
                     Type::Scalar(None) => lhs.ty,
                     Type::Scalar(Some(left_unit)) => {

@@ -1,6 +1,7 @@
 use std::rc::Rc;
 
 use crate::script::{unroll::{CompileContext, Rule, UnrolledExpression, Properties, Library}, builtins::macros::{rule, index, math, angle_expr, number}, parser::Type};
+use crate::script::builtins::macros::{line2, field, distance};
 
 use super::macros::overload;
 
@@ -37,6 +38,21 @@ fn col_lies_on_circle(lhs: &UnrolledExpression, rhs: &UnrolledExpression, contex
     }
 }
 
+fn pt_lies_on_segment(lhs: &UnrolledExpression, rhs: &UnrolledExpression, context: &mut CompileContext, properties: Option<Properties>) {
+    drop(properties);
+
+    let point = context.get_point_by_expr(lhs);
+    let line = context.get_line_by_expr(&line2!(
+        field!(rhs, A), field!(rhs, B)
+    ));
+    context.point_on_line(point, line);
+
+    rule!(context:=(
+        distance!(PP: field!(rhs, A), lhs),
+        distance!(PP: field!(rhs, B), lhs)
+    ));
+}
+
 pub fn register(library: &mut Library) {
     library.rule_ops.insert(
         String::from("lies_on"),
@@ -44,7 +60,8 @@ pub fn register(library: &mut Library) {
             name: String::from("lies_on"),
             overloads: vec![
                 overload!(POINT lies_on CIRCLE : pt_lies_on_circle),
-                overload!(0-P lies_on CIRCLE : col_lies_on_circle)
+                overload!(0-P lies_on CIRCLE : col_lies_on_circle),
+                overload!(POINT lies_on Segment : pt_lies_on_segment)
             ]
         })
     );
