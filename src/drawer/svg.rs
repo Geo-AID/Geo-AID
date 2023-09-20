@@ -2,24 +2,26 @@ use std::{fs::File, io::Write, path::Path, rc::Rc};
 
 use crate::{
     generator::{geometry, Complex},
-    projector::{Output, Rendered, RenderedPoint, RenderedLine, RenderedAngle, RenderedSegment, RenderedRay, RenderedCircle},
+    projector::{
+        Output, Rendered, RenderedAngle, RenderedCircle, RenderedLine, RenderedPoint, RenderedRay,
+        RenderedSegment,
+    },
 };
-
 
 fn points(point: &Rc<RenderedPoint>) -> String {
     // This of course requires a change. Labels will soon get an overhaul.
     let p = Complex::new(point.position.real, point.position.imaginary);
-        let real = if p.real - 20.0 < 0.0 {
-            p.real + 20.0
-        } else {
-            p.real - 20.0
-        };
+    let real = if p.real - 20.0 < 0.0 {
+        p.real + 20.0
+    } else {
+        p.real - 20.0
+    };
 
-        let imaginary = if p.imaginary - 20.0 < 0.0 {
-            p.imaginary + 20.0
-        } else {
-            p.imaginary - 20.0
-        };
+    let imaginary = if p.imaginary - 20.0 < 0.0 {
+        p.imaginary + 20.0
+    } else {
+        p.imaginary - 20.0
+    };
     format!(
         r#"
             <circle cx="{}" cy="{}" fill="black" r="2"/>
@@ -75,10 +77,7 @@ fn rays(ray: &RenderedRay) -> String {
         r#"
             <line stroke="black" x1="{}" x2="{}" y1="{}" y2="{}"/>
         "#,
-        ray.points.0.real,
-        ray.points.1.real,
-        ray.points.0.imaginary,
-        ray.points.1.imaginary
+        ray.points.0.real, ray.points.1.real, ray.points.0.imaginary, ray.points.1.imaginary
     )
 }
 
@@ -106,7 +105,6 @@ pub fn draw(target: &Path, canvas_size: (usize, usize), output: &Output) {
             Rendered::Point(point) => {
                 points(point);
             }
-
             Rendered::Line(line) => {
                 lines(line);
             }
