@@ -4,13 +4,14 @@ use std::{
     sync::Arc,
 };
 
-use serde::Serialize;
 use crate::generator::expression::expr::PointOnLine;
+use serde::Serialize;
 
 use self::expr::{
-    AngleBisector, AngleLine, AnglePoint, Average, CenterRadius, Difference, FreePoint,
-    LineLineIntersection, LinePoint, Literal, Negation, ParallelThrough, PerpendicularThrough,
-    PointLineDistance, PointPointDistance, PointX, PointY, Product, Quotient, Real, SetUnit, Sum, PointOnCircle, CircleCenter, CircleRadius, AnglePointDir,
+    AngleBisector, AngleLine, AnglePoint, AnglePointDir, Average, CenterRadius, CircleCenter,
+    CircleRadius, Difference, FreePoint, LineLineIntersection, LinePoint, Literal, Negation,
+    ParallelThrough, PerpendicularThrough, PointLineDistance, PointOnCircle, PointPointDistance,
+    PointX, PointY, Product, Quotient, Real, SetUnit, Sum,
 };
 
 use super::{critic::EvaluationArgs, Complex, EvaluationError};
@@ -217,6 +218,7 @@ pub enum Value {
 }
 
 impl Value {
+    //noinspection DuplicatedCode
     #[must_use]
     pub fn as_point(&self) -> Option<&Complex> {
         if let Self::Point(v) = self {
@@ -346,8 +348,9 @@ pub trait Evaluate {
 /// All possible expressions.
 pub mod expr {
     use std::{
+        f64::consts::PI,
         ops::{AddAssign, Div},
-        sync::Arc, f64::consts::PI,
+        sync::Arc,
     };
 
     use serde::Serialize;
@@ -358,8 +361,8 @@ pub mod expr {
     };
 
     use super::{
-        Circle, Evaluate, Expression, Kind, Line, LineExpr, PointExpr, ScalarExpr, Value, Weights,
-        Zero, CircleExpr,
+        Circle, CircleExpr, Evaluate, Expression, Kind, Line, LineExpr, PointExpr, ScalarExpr,
+        Value, Weights, Zero,
     };
 
     #[derive(Debug, Clone, Serialize)]
@@ -617,7 +620,7 @@ pub mod expr {
     #[derive(Debug, Clone, Serialize)]
     /// Line-line intersection.
     pub struct CircleCenter {
-        pub circle: Arc<Expression<CircleExpr>>
+        pub circle: Arc<Expression<CircleExpr>>,
     }
 
     impl Evaluate for CircleCenter {
@@ -635,7 +638,7 @@ pub mod expr {
     #[derive(Debug, Clone, Serialize)]
     /// Line-line intersection.
     pub struct CircleRadius {
-        pub circle: Arc<Expression<CircleExpr>>
+        pub circle: Arc<Expression<CircleExpr>>,
     }
 
     impl Evaluate for CircleRadius {
@@ -985,7 +988,7 @@ pub enum PointExpr {
     /// The point where two lines cross.
     LineLineIntersection(LineLineIntersection),
     /// The centre of a circle.
-    CircleCenter(CircleCenter)
+    CircleCenter(CircleCenter),
 }
 
 /// Defines a circle expression.
@@ -1012,10 +1015,6 @@ impl Evaluate for CircleExpr {
 }
 
 impl Kind for CircleExpr {
-    fn is_trivial(&self) -> bool {
-        false
-    }
-
     fn collect(&self, exprs: &mut Vec<usize>) {
         match self {
             Self::CenterRadius(CenterRadius { center, radius }) => {
@@ -1023,6 +1022,10 @@ impl Kind for CircleExpr {
                 radius.collect(exprs);
             }
         }
+    }
+
+    fn is_trivial(&self) -> bool {
+        false
     }
 }
 
@@ -1036,7 +1039,7 @@ impl Evaluate for PointExpr {
             Self::OnLine(v) => v.evaluate(args),
             Self::LineLineIntersection(v) => v.evaluate(args),
             Self::Average(v) => v.evaluate(args),
-            Self::CircleCenter(v) => v.evaluate(args)
+            Self::CircleCenter(v) => v.evaluate(args),
         }
     }
 
@@ -1047,7 +1050,7 @@ impl Evaluate for PointExpr {
             Self::OnLine(v) => v.evaluate_weights(),
             Self::LineLineIntersection(v) => v.evaluate_weights(),
             Self::Average(v) => v.evaluate_weights(),
-            Self::CircleCenter(v) => v.evaluate_weights()
+            Self::CircleCenter(v) => v.evaluate_weights(),
         }
     }
 }
@@ -1067,7 +1070,7 @@ impl Kind for PointExpr {
             Self::Free(_) => (),
             Self::OnCircle(v) => v.circle.collect(exprs),
             Self::OnLine(v) => v.line.collect(exprs),
-            Self::CircleCenter(v) => v.circle.collect(exprs)
+            Self::CircleCenter(v) => v.circle.collect(exprs),
         }
     }
 
@@ -1172,7 +1175,7 @@ pub enum ScalarExpr {
     /// Average
     Average(Average<Self>),
     /// Radius of a circle
-    CircleRadius(CircleRadius)
+    CircleRadius(CircleRadius),
 }
 
 impl Kind for ScalarExpr {
@@ -1216,7 +1219,7 @@ impl Kind for ScalarExpr {
             }
             Self::Real(_) | Self::Literal(_) => (),
             Self::CircleRadius(CircleRadius { circle }) => {
-                circle.collect(exprs)
+                circle.collect(exprs);
             }
         }
     }
@@ -1265,7 +1268,7 @@ impl Evaluate for ScalarExpr {
             Self::PointX(v) => v.evaluate(args),
             Self::PointY(v) => v.evaluate(args),
             Self::Average(v) => v.evaluate(args),
-            Self::CircleRadius(v) => v.evaluate(args)
+            Self::CircleRadius(v) => v.evaluate(args),
         }
     }
 
@@ -1287,7 +1290,7 @@ impl Evaluate for ScalarExpr {
             Self::PointX(v) => v.evaluate_weights(),
             Self::PointY(v) => v.evaluate_weights(),
             Self::Average(v) => v.evaluate_weights(),
-            Self::CircleRadius(v) => v.evaluate_weights()
+            Self::CircleRadius(v) => v.evaluate_weights(),
         }
     }
 }

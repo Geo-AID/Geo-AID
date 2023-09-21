@@ -4,7 +4,7 @@
 - Basic generation
 
 ## Version 0.2.0
-- Refactorized svg.rs to optimize the rendering
+- Refactored svg.rs to optimize the rendering
 - Created the latex drawer
 - Completed the documentation as of now.
 - Added a Command Line Interface
@@ -40,3 +40,7 @@
 - Added circle primitive and function.
 - Added circle support and improved latex drawer.
 - Heavily changed the display system.
+- Added the circle clip and the line clip
+- Added basic bundle type support
+- Added the `Segment` function
+- Added the `lies_on` operator for points on circles, lines and segments. 

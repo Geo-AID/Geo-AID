@@ -1,10 +1,6 @@
-use crate::script::{
-    unroll::{
-        Library, Function
-    }
-};
+use crate::script::unroll::{Function, Library};
 
-use super::macros::{overload, set_unit, distance};
+use super::macros::{distance, overload, set_unit};
 
 pub fn register(library: &mut Library) {
     library.functions.insert(

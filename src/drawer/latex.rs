@@ -140,14 +140,14 @@ pub fn draw(target: &Path, canvas_size: (usize, usize), output: &Output) {
     #[allow(clippy::cast_precision_loss)]
     let scale = f64::min(20.0 / canvas_size.0 as f64, 20.0 / canvas_size.1 as f64);
     let mut content = String::from(
-        r#"
+        r"
     \documentclass{article}
     \usepackage{tikz}
     \usepackage{tkz-euclide}
     \usetikzlibrary {angles,calc,quotes}
     \begin{document}
     \begin{tikzpicture}
-    "#,
+    ",
     );
     for item in &output.vec_rendered {
         match item {

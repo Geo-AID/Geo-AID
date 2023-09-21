@@ -233,10 +233,11 @@ pub type Logger = Vec<String>;
 pub enum Adjustable {
     Point(Complex),
     Real(f64),
-    Clip1D(f64)
+    Clip1D(f64),
 }
 
 impl Adjustable {
+    //noinspection DuplicatedCode
     #[must_use]
     pub fn as_point(&self) -> Option<&Complex> {
         if let Self::Point(v) = self {
@@ -255,6 +256,7 @@ impl Adjustable {
         }
     }
 
+    #[must_use]
     pub fn as_clip1d(&self) -> Option<&f64> {
         if let Self::Clip1D(v) = self {
             Some(v)
@@ -388,10 +390,7 @@ impl Generator {
                             AdjustableTemplate::Point => {
                                 Adjustable::Point(Complex::new(rand::random(), rand::random()))
                             }
-                            AdjustableTemplate::PointOnCircle => {
-                                Adjustable::Clip1D(rand::random())
-                            }
-                            AdjustableTemplate::PointOnLine => {
+                            AdjustableTemplate::PointOnCircle | AdjustableTemplate::PointOnLine => {
                                 Adjustable::Clip1D(rand::random())
                             }
                             AdjustableTemplate::Real => Adjustable::Real(rand::random()),

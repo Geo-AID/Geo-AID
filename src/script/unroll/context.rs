@@ -1,9 +1,15 @@
-use std::{collections::HashMap, rc::Rc, cell::RefCell, fmt::Debug};
+use std::{cell::RefCell, collections::HashMap, fmt::Debug, rc::Rc};
 
-use crate::script::{compile::{PreFigure, self}, ty, builtins::macros::{rule, distance, circle_radius, circle_center}};
 use crate::script::builtins::macros::number;
+use crate::script::{
+    builtins::macros::{circle_center, circle_radius, distance, rule},
+    compile::{self, PreFigure},
+    ty,
+};
 
-use super::{Variable, UnrolledExpression, FlagSet, UnrolledRule, FlagSetConstructor, UnrolledExpressionData};
+use super::{
+    FlagSet, FlagSetConstructor, UnrolledExpression, UnrolledExpressionData, UnrolledRule, Variable,
+};
 
 /// A definition has an order - a non-negative integer - depicting how 'modifiable' it is.
 /// It can also use other definitions/entities.
@@ -21,7 +27,7 @@ pub enum Scalar {
     /// A free, adjusted real.
     Free,
     /// A bind
-    Bind(UnrolledExpression)
+    Bind(UnrolledExpression),
 }
 
 impl Definition for Scalar {
@@ -50,15 +56,14 @@ pub enum Point {
     /// A single-value clip.
     OnLine(UnrolledExpression),
     /// A bind
-    Bind(UnrolledExpression)
+    Bind(UnrolledExpression),
 }
 
 impl Definition for Point {
     fn order(&self, context: &CompileContext) -> usize {
         match self {
             Self::Free => 2,
-            Self::OnCircle(_) => 1,
-            Self::OnLine(_) => 1,
+            Self::OnCircle(_) | Self::OnLine(_) => 1,
             Self::Bind(expr) => expr.order(context),
         }
     }
@@ -66,9 +71,9 @@ impl Definition for Point {
     fn contains_entity(&self, entity: usize, context: &CompileContext) -> bool {
         match self {
             Self::Free => false,
-            Self::OnLine(expr)
-            | Self::OnCircle(expr) => expr.contains_entity(entity, context),
-            Self::Bind(expr) => expr.contains_entity(entity, context),
+            Self::OnLine(expr) | Self::OnCircle(expr) | Self::Bind(expr) => {
+                expr.contains_entity(entity, context)
+            }
         }
     }
 }
@@ -77,7 +82,7 @@ impl Definition for Point {
 #[derive(Debug, Clone)]
 pub enum Line {
     /// A bind
-    Bind(UnrolledExpression)
+    Bind(UnrolledExpression),
 }
 
 impl Definition for Line {
@@ -100,7 +105,7 @@ pub enum Circle {
     /// A bind
     Bind(UnrolledExpression),
     /// A never compiled temporary value
-    Temporary
+    Temporary,
 }
 
 impl Definition for Circle {
@@ -126,22 +131,26 @@ pub enum Entity {
     Scalar(Scalar),
     Point(Point),
     Line(Line),
-    Circle(Circle)
+    Circle(Circle),
 }
 
 impl Entity {
+    #[must_use]
     pub fn free_point() -> Self {
         Self::Point(Point::Free)
     }
 
+    #[must_use]
     pub fn free_scalar() -> Self {
         Self::Scalar(Scalar::Free)
     }
 
+    #[must_use]
     pub fn free_circle() -> Self {
         Self::Circle(Circle::Temporary)
     }
 
+    #[must_use]
     pub fn as_point(&self) -> Option<&Point> {
         if let Self::Point(v) = self {
             Some(v)
@@ -150,6 +159,7 @@ impl Entity {
         }
     }
 
+    #[must_use]
     pub fn as_point_mut(&mut self) -> Option<&mut Point> {
         if let Self::Point(v) = self {
             Some(v)
@@ -219,6 +229,7 @@ impl Definition for LineHandle {
 }
 
 /// The context of compilation process.
+#[allow(clippy::module_name_repetitions)]
 #[derive(Debug)]
 pub struct CompileContext {
     /// Variables
@@ -230,11 +241,18 @@ pub struct CompileContext {
     /// Unrolled rules
     pub rules: Vec<UnrolledRule>,
     /// Pre-compiled figure
-    pub figure: PreFigure
+    pub figure: PreFigure,
+}
+
+impl Default for CompileContext {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl CompileContext {
-    pub fn new() ->  Self {
+    #[must_use]
+    pub fn new() -> Self {
         Self {
             variables: HashMap::new(),
             flags: FlagSetConstructor::new()
@@ -246,11 +264,12 @@ impl CompileContext {
                 .finish(),
             entities: vec![],
             rules: Vec::new(),
-            figure: PreFigure::default()
+            figure: PreFigure::default(),
         }
     }
 
     /// Gets the entity of the given index.
+    #[must_use]
     pub fn get_entity(&self, i: usize) -> &Entity {
         &self.entities[i]
     }
@@ -272,24 +291,35 @@ impl CompileContext {
         self.entities.len() - 1
     }
 
+    /// # Panics
+    /// Panics if given an invalid entity.
     pub fn get_point_by_index(&mut self, index: usize) -> PointHandle {
         let entity = self.entities.get(index).unwrap();
         if let Entity::Point(_) = entity {
-            return PointHandle(UnrolledExpression::new_spanless(UnrolledExpressionData::Entity(index), ty::POINT));
+            return PointHandle(UnrolledExpression::new_spanless(
+                UnrolledExpressionData::Entity(index),
+                ty::POINT,
+            ));
         }
 
         panic!("Requested entity is not a point.");
     }
 
+    /// # Panics
+    /// Panics if given an invalid expression.
     pub fn get_point_by_expr(&mut self, expr: &UnrolledExpression) -> PointHandle {
         match expr.data.as_ref() {
-            UnrolledExpressionData::VariableAccess(var) => self.get_point_by_expr(&var.borrow().definition),
+            UnrolledExpressionData::VariableAccess(var) => {
+                self.get_point_by_expr(&var.borrow().definition)
+            }
             UnrolledExpressionData::Entity(index) => self.get_point_by_index(*index),
             UnrolledExpressionData::Boxed(expr) => self.get_point_by_expr(expr),
-            UnrolledExpressionData::IndexCollection(col, i) => self.get_point_by_expr(&compile::index_collection(col, *i)),
+            UnrolledExpressionData::IndexCollection(col, i) => {
+                self.get_point_by_expr(&compile::index_collection(col, *i))
+            }
             UnrolledExpressionData::CircleCenter(circ) => match circ.data.as_ref() {
                 UnrolledExpressionData::Circle(center, _) => self.get_point_by_expr(center),
-                _ => unreachable!()
+                _ => unreachable!(),
             },
             UnrolledExpressionData::IndexBundle(bundle, field) => {
                 let value = compile::index_bundle(bundle, field);
@@ -321,21 +351,24 @@ impl CompileContext {
             | UnrolledExpressionData::Number(_)
             | UnrolledExpressionData::DstLiteral(_)
             | UnrolledExpressionData::ConstructBundle(_)
-            | UnrolledExpressionData::PointCollection(_) => panic!("Requested entity is not a point."),
+            | UnrolledExpressionData::PointCollection(_) => {
+                panic!("Requested entity is not a point.")
+            }
         }
     }
 
     pub fn get_point_entity_mut(&mut self, handle: &PointHandle) -> Option<&mut Point> {
         match handle.0.data.as_ref() {
             UnrolledExpressionData::Entity(i) => self.get_entity_mut(*i).as_point_mut(),
-            _ => None
+            _ => None,
         }
     }
 
+    #[must_use]
     pub fn get_point_entity(&self, handle: &PointHandle) -> Option<&Point> {
         match handle.0.data.as_ref() {
             UnrolledExpressionData::Entity(i) => self.get_entity(*i).as_point(),
-            _ => None
+            _ => None,
         }
     }
 
@@ -344,21 +377,28 @@ impl CompileContext {
 
         self.entities.len() - 1
     }
- 
+
+    /// # Panics
+    /// Panics if given an invalid expression.
     pub fn get_circle_by_index(&mut self, index: usize) -> CircleHandle {
         let entity = self.entities.get(index).unwrap();
         if let Entity::Circle(_) = entity {
-            return CircleHandle(UnrolledExpression::new_spanless(UnrolledExpressionData::Entity(index), ty::CIRCLE));
+            return CircleHandle(UnrolledExpression::new_spanless(
+                UnrolledExpressionData::Entity(index),
+                ty::CIRCLE,
+            ));
         }
 
-        panic!("Requested entity is not a point.");
+        panic!("Requested entity is not a circle.");
     }
 
     /// # Panics
     /// Panics if the expression is not a circle.
     pub fn get_circle_by_expr(&mut self, expr: &UnrolledExpression) -> CircleHandle {
         match expr.data.as_ref() {
-            UnrolledExpressionData::VariableAccess(var) => self.get_circle_by_expr(&var.borrow().definition),
+            UnrolledExpressionData::VariableAccess(var) => {
+                self.get_circle_by_expr(&var.borrow().definition)
+            }
             UnrolledExpressionData::Entity(index) => self.get_circle_by_index(*index),
             UnrolledExpressionData::Boxed(expr) => self.get_circle_by_expr(expr),
             UnrolledExpressionData::Circle(_, _) => CircleHandle(expr.clone()),
@@ -393,15 +433,33 @@ impl CompileContext {
             | UnrolledExpressionData::CircleCenter(_)
             | UnrolledExpressionData::CircleRadius(_)
             | UnrolledExpressionData::ConstructBundle(_)
-            | UnrolledExpressionData::PointCollection(_) => panic!("Requested entity is not a circle."),
+            | UnrolledExpressionData::PointCollection(_) => {
+                panic!("Requested entity is not a circle.")
+            }
         }
+    }
+
+    /// # Panics
+    /// Panics if given an invalid expression.
+    pub fn get_line_by_index(&mut self, index: usize) -> LineHandle {
+        let entity = self.entities.get(index).unwrap();
+        if let Entity::Line(_) = entity {
+            return LineHandle(UnrolledExpression::new_spanless(
+                UnrolledExpressionData::Entity(index),
+                ty::LINE,
+            ));
+        }
+
+        panic!("Requested entity is not a line.");
     }
 
     /// # Panics
     /// Panics if the expression is not a line.
     pub fn get_line_by_expr(&mut self, expr: &UnrolledExpression) -> LineHandle {
         match expr.data.as_ref() {
-            UnrolledExpressionData::VariableAccess(var) => self.get_line_by_expr(&var.borrow().definition),
+            UnrolledExpressionData::VariableAccess(var) => {
+                self.get_line_by_expr(&var.borrow().definition)
+            }
             UnrolledExpressionData::Boxed(expr) => self.get_line_by_expr(expr),
             UnrolledExpressionData::IndexBundle(bundle, field) => {
                 let value = compile::index_bundle(bundle, field);
@@ -411,8 +469,9 @@ impl CompileContext {
                     unreachable!()
                 }
             }
+            UnrolledExpressionData::Entity(index) => self.get_line_by_index(*index),
             UnrolledExpressionData::AngleBisector(_, _, _)
-             | UnrolledExpressionData::LineFromPoints(_, _) => LineHandle(expr.clone()),
+            | UnrolledExpressionData::LineFromPoints(_, _) => LineHandle(expr.clone()),
             UnrolledExpressionData::IndexCollection(_, _)
             | UnrolledExpressionData::Average(_)
             | UnrolledExpressionData::LineLineIntersection(_, _)
@@ -433,26 +492,25 @@ impl CompileContext {
             | UnrolledExpressionData::DstLiteral(_)
             | UnrolledExpressionData::CircleCenter(_)
             | UnrolledExpressionData::CircleRadius(_)
-            | UnrolledExpressionData::Entity(_)
             | UnrolledExpressionData::Circle(_, _)
             | UnrolledExpressionData::ConstructBundle(_)
-            | UnrolledExpressionData::PointCollection(_) => panic!("Requested entity is not a circle.")
+            | UnrolledExpressionData::PointCollection(_) => {
+                panic!("Requested entity is not a circle.")
+            }
         }
     }
 }
 
 /// Everything related to circles.
 impl CompileContext {
-    pub fn point_on_circle(&mut self, lhs: PointHandle, rhs: CircleHandle) {
-        if let Some(point) = self.get_point_entity_mut(&lhs) {
+    pub fn point_on_circle(&mut self, lhs: &PointHandle, rhs: CircleHandle) {
+        if let Some(point) = self.get_point_entity_mut(lhs) {
             match point {
                 Point::Free => {
                     *point = Point::OnCircle(rhs.0);
                     return;
                 }
-                Point::OnCircle(_)
-                | Point::OnLine(_)
-                | Point::Bind(_) => (),
+                Point::OnCircle(_) | Point::OnLine(_) | Point::Bind(_) => (),
             }
         }
 
@@ -461,16 +519,14 @@ impl CompileContext {
             circle_radius!(rhs.0)
         ));
     }
-    pub fn point_on_line(&mut self, lhs: PointHandle, rhs: LineHandle) {
-        if let Some(point) = self.get_point_entity_mut(&lhs) {
+    pub fn point_on_line(&mut self, lhs: &PointHandle, rhs: LineHandle) {
+        if let Some(point) = self.get_point_entity_mut(lhs) {
             match point {
                 Point::Free => {
                     *point = Point::OnLine(rhs.0);
                     return;
                 }
-                Point::OnCircle(_)
-                | Point::OnLine(_)
-                | Point::Bind(_) => (),
+                Point::OnCircle(_) | Point::OnLine(_) | Point::Bind(_) => (),
             }
         }
 
