@@ -1,11 +1,9 @@
-use crate::script::{
-    unroll::{Library, Function},
-};
+use crate::script::unroll::{Function, Library};
 
 use super::macros::{overload, set_unit, distance};
 
-pub fn register(context: &mut CompileContext) {
-    context.functions.insert(
+pub fn register(library: &mut Library) {
+    library.functions.insert(
         String::from("dst"),
         Function {
             name: String::from("dst"),

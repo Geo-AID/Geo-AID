@@ -11,8 +11,7 @@ use super::{
         LBrace, LParen, LSquare, Let, Lt, Lteq, Minus, NamedIdent, Number, Plus, RBrace,
         RParen, RSquare, Semi, Slash, Span, Token, Vertical,
     },
-    unit,
-    ComplexUnit, Error, builtins, SimpleUnit,
+    unit, ComplexUnit, Error,
 };
 
 macro_rules! impl_token_parse {
@@ -52,6 +51,7 @@ impl UnaryOperator {
                 | Type::Line
                 | Type::Circle
                 | Type::Undefined
+                | Type::Bundle(_)
                 | Type::PointCollection(_) => Type::Undefined,
                 t @ Type::Scalar(_) => *t,
             },
@@ -1328,10 +1328,14 @@ impl Type {
                 _ => false,
             },
             Type::Circle => matches!(into, Type::Circle),
-            Type::Bundle(name) => if into == self {
-                true
-            } else if let Type::PointCollection(count) = into {
-                // Stuff
+            Type::Bundle(name) => {
+                if into == self {
+                    true
+                } else if let Type::PointCollection(count) = into {
+                    builtins::get_bundle_pc(name) == *count
+                } else {
+                    false
+                }
             }
             Type::Undefined => false,
         }

@@ -16,6 +16,8 @@ use crate::{
     },
     span,
 };
+use crate::generator::expression::expr::PointOnLine;
+use crate::script::unit;
 
 use super::{
     figure::Figure,
@@ -301,6 +303,9 @@ impl Compile<LineExpr> for Compiler {
                 }),
                 1.0,
             )),
+            UnrolledExpressionData::IndexBundle(bundle, field) => {
+                self.compile(&index_bundle(bundle, field))
+            }
             _ => unreachable!("A line should never be compiled this way"),
         };
 
@@ -351,6 +356,7 @@ impl Compile<CircleExpr> for Compiler {
             UnrolledExpressionData::Boxed(expr) => {
                 self.compile(expr)
             }
+            UnrolledExpressionData::IndexBundle(bundle, field) => self.compile(&index_bundle(bundle, field)),
             _ => unreachable!("A circle should never be compiled this way"),
         };
 

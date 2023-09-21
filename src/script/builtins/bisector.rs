@@ -1,11 +1,6 @@
 use std::mem;
 
-use crate::script::{
-        unroll::{
-            CompileContext, Function, UnrolledExpression,
-            Properties, Library,
-        }, compile::PreFigure
-    };
+use crate::script::unroll::{CompileContext, Function, Library, Properties, UnrolledExpression};
 
 use super::macros::{overload, call, index, bisector, line2, intersection};
 
@@ -46,8 +41,8 @@ pub fn point_point(args: &[UnrolledExpression], context: &mut CompileContext, di
     expr
 }
 
-pub fn register(context: &mut CompileContext) {
-    context.functions.insert(
+pub fn register(library: &mut Library) {
+    library.functions.insert(
         String::from("bisector"),
         Function {
             name: String::from("bisector"),

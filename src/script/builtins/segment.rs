@@ -1,19 +1,21 @@
-use std::mem;
 use crate::script::builtins::macros::construct_bundle;
+use std::mem;
 
-use crate::script::unroll::{UnrolledExpression, CompileContext, Properties, Library, Function};
+use crate::script::unroll::{CompileContext, Function, Library, Properties, UnrolledExpression};
 
-use super::macros::{overload, call, index};
+use super::macros::{call, index, overload};
 
-fn segment_function_point_point(args: &[UnrolledExpression], _context: &mut CompileContext, display: Option<Properties>) -> UnrolledExpression {
+fn segment_function_point_point(
+    args: &[UnrolledExpression],
+    _context: &mut CompileContext,
+    display: Option<Properties>,
+) -> UnrolledExpression {
     mem::drop(display);
 
-    construct_bundle!(
-        Segment {
-            A: args[0],
-            B: args[1]
-        }
-    )
+    construct_bundle!(Segment {
+        A: args[0],
+        B: args[1]
+    })
 }
 
 pub fn register(library: &mut Library) {
@@ -28,7 +30,7 @@ pub fn register(library: &mut Library) {
                         index!(args[0], 1)
                     ))
                 }),
-                overload!((POINT, POINT) -> Segment : segment_function_point_point)
+                overload!((POINT, POINT) -> Segment : segment_function_point_point),
             ],
         },
     );

@@ -201,7 +201,7 @@ pub fn evaluate(
     cache: Option<&RefCell<Cache>>,
     point_evaluation: &mut [Vec<(Quality, f64)>],
 ) -> AdjustableVec {
-    for pt in point_evaluation.iter_mut() {
+    for pt in &mut *point_evaluation {
         pt.clear();
     }
 

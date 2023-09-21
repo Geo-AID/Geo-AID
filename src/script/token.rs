@@ -5,9 +5,7 @@ use super::{parser::Parse, Error};
 #[cfg(test)]
 mod tests {
     use crate::{
-        script::token::{
-            Dot, Eq, Ident, Let, NamedIdent, Number, PointCollection, Semi,
-        },
+        script::token::{Dot, Eq, Ident, Let, NamedIdent, Number, PointCollection, Semi},
         span,
     };
 

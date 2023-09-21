@@ -1,8 +1,6 @@
-use crate::script::unroll::{
-    CompileContext, Function, UnrolledExpression, Properties, Library
-};
+use crate::script::unroll::{CompileContext, Function, Library, Properties, UnrolledExpression};
 
-use super::macros::{overload, average};
+use super::macros::{average, overload};
 
 macro_rules! mid_function {
     ($t:ident, $name:ident) => {

@@ -32,6 +32,7 @@ pub fn register(library: &mut Library) {
     intersection::register(library); // intersection()
     bisector::register(library); // bisector()
     circle::register(library); // Circle()
+    segment::register(library); // Segment()
 
     lies_on::register(library); // lies_on
 }
@@ -110,6 +111,22 @@ pub mod macros {
                 ))
             }
         }
+    }
+
+    macro_rules! field {
+        ($bundle:expr, $at:ident) => {
+            $crate::script::unroll::UnrolledExpression {
+                weight: 1.0,
+                ty: $crate::script::ty::POINT,
+                span: $crate::span!(0, 0, 0, 0),
+                data: std::rc::Rc::new(
+                    $crate::script::unroll::UnrolledExpressionData::IndexBundle(
+                        $bundle.clone(),
+                        stringify!($at).to_string(),
+                    ),
+                ),
+            }
+        };
     }
 
     macro_rules! bisector {
@@ -267,15 +284,23 @@ pub mod macros {
                 ))
             } 
         };
+        (=$v:expr) => {
+            $crate::script::unroll::UnrolledExpression {
+                weight: 1.0,
+                ty: $crate::script::builtins::macros::ty!(DISTANCE),
+                span: $crate::span!(0, 0, 0, 0),
+                data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::DstLiteral(
+                    $v,
+                )),
+            }
+        };
         ($t:ident $v:expr) => {
             $crate::script::unroll::UnrolledExpression {
                 weight: 1.0,
                 ty: $crate::script::builtins::macros::ty!($t),
                 span: $crate::span!(0, 0, 0, 0),
-                data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::Number(
-                    $v
-                ))
-            } 
+                data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::Number($v)),
+            }
         };
     }
 
@@ -425,9 +450,8 @@ pub mod macros {
     }
 
     pub(crate) use {
-        ty, overload, params, call, index, bisector, line2,
-        group, average, angle_expr, circle_expr, set_unit, math, number,
-        intersection, entity, parallel_through, perpendicular_through,
-        distance, variable, rule, circle_center, circle_radius
+        angle_expr, average, bisector, call, circle_center, circle_expr, circle_radius,
+        construct_bundle, distance, entity, field, group, index, intersection, line2, math, number,
+        overload, parallel_through, params, perpendicular_through, rule, set_unit, ty, variable,
     };
 }
