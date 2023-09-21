@@ -259,6 +259,24 @@ fn get_angle_points(
 
 /// Function getting the intersection points of the line with the picture's frame.
 fn get_line_ends(figure: &Figure, ln_c: Line) -> (Complex, Complex) {
+    fn choose_intersection(
+        i: usize,
+        j: usize,
+    ) -> impl Fn(f64, &[Result<Complex, EvaluationError>]) -> &Complex {
+        move |width, intersections| {
+            intersections[i].as_ref().map_or_else(
+                |_| intersections[j].as_ref().unwrap(),
+                |x| {
+                    if (x.real > 0f64 && x.real < width) || intersections[j].is_err() {
+                        x
+                    } else {
+                        intersections[j].as_ref().unwrap()
+                    }
+                },
+            )
+        }
+    }
+
     // +--0--+
     // |     |
     // 1     2
@@ -295,52 +313,16 @@ fn get_line_ends(figure: &Figure, ln_c: Line) -> (Complex, Complex) {
     #[allow(clippy::cast_precision_loss)]
     if a < 0f64 {
         // There must be one intersection with lines 0/1 and 2/3
-        let i1 = intersections[0].as_ref().map_or_else(
-            |_| intersections[1].as_ref().unwrap(),
-            |x| {
-                if (x.real > 0f64 && x.real < width) || intersections[1].is_err() {
-                    x
-                } else {
-                    intersections[1].as_ref().unwrap()
-                }
-            },
-        );
+        let i1 = choose_intersection(0, 1)(width, &intersections);
 
-        let i2 = intersections[3].as_ref().map_or_else(
-            |_| intersections[2].as_ref().unwrap(),
-            |x| {
-                if (x.real > 0f64 && x.real < width) || intersections[2].is_err() {
-                    x
-                } else {
-                    intersections[2].as_ref().unwrap()
-                }
-            },
-        );
+        let i2 = choose_intersection(3, 2)(width, &intersections);
 
         (*i1, *i2)
     } else {
         // There must be one intersection with lines 1/3 and 0/2
-        let i1 = intersections[3].as_ref().map_or_else(
-            |_| intersections[1].as_ref().unwrap(),
-            |x| {
-                if (x.real > 0f64 && x.real < width) || intersections[1].is_err() {
-                    x
-                } else {
-                    intersections[1].as_ref().unwrap()
-                }
-            },
-        );
+        let i1 = choose_intersection(3, 1)(width, &intersections);
 
-        let i2 = intersections[0].as_ref().map_or_else(
-            |_| intersections[2].as_ref().unwrap(),
-            |x| {
-                if (x.real > 0f64 && x.real < width) || intersections[2].is_err() {
-                    x
-                } else {
-                    intersections[2].as_ref().unwrap()
-                }
-            },
-        );
+        let i2 = choose_intersection(0, 2)(width, &intersections);
 
         (*i1, *i2)
     }
@@ -498,6 +480,7 @@ fn circles(
 
     blueprint_circles
 }
+
 /// Takes the figure and rendered points and attempts to design a figure that can then be rendered in chosen format.
 ///
 /// # Panics
@@ -530,9 +513,10 @@ pub fn project(
     let size09 = size1 * 0.9;
     let size005 = size1 * 0.05;
 
-    // Frame topleft point.
+    // Frame top left point.
     let mut offset = points.get(0).copied().unwrap_or_default();
 
+    //noinspection DuplicatedCode
     for x in &points {
         if x.real < offset.real {
             offset.real = x.real;
@@ -543,14 +527,15 @@ pub fn project(
         }
     }
 
-    // println!("Points preoffset: {:?}", points);
+    // println!("Points pre-offset: {:?}", points);
     // println!("Offset: {offset}");
     let points: Vec<Complex> = points.into_iter().map(|x| x - offset).collect();
-    // println!("Points postoffset: {:?}", points);
+    // println!("Points post-offset: {:?}", points);
 
-    // Frame bottomright point.
+    // Frame bottom right point.
     let mut furthest = points.get(0).copied().unwrap_or_default();
 
+    //noinspection DuplicatedCode
     for x in &points {
         if x.real > furthest.real {
             furthest.real = x.real;

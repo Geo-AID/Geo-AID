@@ -15,7 +15,7 @@ use crate::{
 };
 
 use self::parser::Type;
-use self::token::{NamedIdent, Position, Span, Token};
+use self::token::{NamedIdent, Span, Token};
 
 mod builtins;
 pub mod compile;
@@ -307,7 +307,7 @@ impl Error {
                 error_span,
                 feature_name,
             } => {
-                DiagnosticData::new(&format!("feature `{feature_name}` of undefined type"))
+                DiagnosticData::new(&format!("feature `{feature_name}` not supported"))
                     .add_span(error_span)
             }
             Self::InvalidArgumentCount {
@@ -501,6 +501,11 @@ pub mod ty {
     #[must_use]
     pub const fn collection(length: usize) -> Type {
         Type::PointCollection(length)
+    }
+
+    #[must_use]
+    pub const fn bundle(t: &'static str) -> Type {
+        Type::Bundle(t)
     }
 }
 

@@ -101,26 +101,26 @@ pub fn draw(target: &Path, canvas_size: (usize, usize), output: &Output) {
     );
 
     for elem in &output.vec_rendered {
-        match elem {
+        content += &match elem {
             Rendered::Point(point) => {
-                points(point);
+                points(point)
             }
             Rendered::Line(line) => {
-                lines(line);
+                lines(line)
             }
             Rendered::Angle(angle) => {
-                angles(angle);
+                angles(angle)
             }
             Rendered::Segment(segment) => {
-                segments(segment);
+                segments(segment)
             }
             Rendered::Ray(ray) => {
-                rays(ray);
+                rays(ray)
             }
             Rendered::Circle(circle) => {
-                circles(circle);
+                circles(circle)
             }
-        }
+        };
     }
     content += "</svg>";
 

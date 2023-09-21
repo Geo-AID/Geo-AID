@@ -1,12 +1,9 @@
-use crate::script::{
-    token::{Position, Span},
-    unroll::{CompileContext, Function},
-};
+use crate::script::unroll::{Function, Library};
 
 use super::macros::{intersection, overload};
 
-pub fn register(context: &mut CompileContext) {
-    context.functions.insert(
+pub fn register(library: &mut Library) {
+    library.functions.insert(
         String::from("intersection"),
         Function {
             name: String::from("intersection"),

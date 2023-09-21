@@ -39,6 +39,21 @@ pub fn adjust(
                         quality,
                     )
                 }
+                Adjustable::Clip1D(val) => {
+                    let direction = if rand::random::<u8>() & 1 == 0 {
+                        1.0
+                    } else {
+                        -1.0
+                    };
+
+                    (
+                        // Adjust by a relative value based on quality and randomly chosen direction (+/-)
+                        Adjustable::Clip1D(
+                            val + direction * adjustment_magnitude * (1.0 - quality),
+                        ),
+                        quality,
+                    )
+                }
             }
         })
         .collect()

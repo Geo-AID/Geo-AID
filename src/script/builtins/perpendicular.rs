@@ -1,29 +1,25 @@
 use std::mem;
 
-use crate::script::{
-    compile::PreFigure,
-    token::{Position, Span},
-    unroll::{CompileContext, Function, Properties, UnrolledExpression},
-};
+use crate::script::unroll::{CompileContext, Function, Library, Properties, UnrolledExpression};
 
 use super::macros::{call, overload, perpendicular_through};
 
 /// `perpendicular_through(line, point)` - returns a line perpendicular to the 1st argument going through point at 2nd argument.
 pub fn line_point(
     args: &[UnrolledExpression],
-    figure: &mut PreFigure,
+    context: &mut CompileContext,
     display: Option<Properties>,
 ) -> UnrolledExpression {
     mem::drop(display);
     let expr = perpendicular_through!(args[0], args[1]);
 
-    figure.lines.push(expr.clone());
+    context.figure.lines.push(expr.clone());
 
     expr
 }
 
-pub fn register(context: &mut CompileContext) {
-    context.functions.insert(
+pub fn register(library: &mut Library) {
+    library.functions.insert(
         String::from("perpendicular_through"),
         Function {
             name: String::from("perpendicular_through"),

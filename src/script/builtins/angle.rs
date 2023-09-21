@@ -1,17 +1,13 @@
 use std::mem;
 
-use crate::script::{
-    compile::PreFigure,
-    token::{Position, Span},
-    unroll::{CompileContext, Function, Properties, UnrolledExpression},
-};
+use crate::script::unroll::{CompileContext, Function, Library, Properties, UnrolledExpression};
 
 use super::macros::{angle_expr, call, index, overload};
 
 /// angle(point, point, point) - angle depicted by 3 points.
 fn angle_function_point_point_point(
     args: &[UnrolledExpression],
-    _figure: &mut PreFigure,
+    _context: &mut CompileContext,
     display: Option<Properties>,
 ) -> UnrolledExpression {
     mem::drop(display);
@@ -21,21 +17,21 @@ fn angle_function_point_point_point(
 /// angle(line, line) - distance between a point and a line.
 fn angle_function_line_line(
     args: &[UnrolledExpression],
-    _figure: &mut PreFigure,
+    _context: &mut CompileContext,
     display: Option<Properties>,
 ) -> UnrolledExpression {
     mem::drop(display);
     angle_expr!(args[0], args[1])
 }
 
-pub fn register(context: &mut CompileContext) {
-    context.functions.insert(
+pub fn register(library: &mut Library) {
+    library.functions.insert(
         String::from("angle"),
         Function {
             name: String::from("angle"),
             overloads: vec![
                 overload!((3-P) -> ANGLE {
-                    |args, figure, _| call!(figure:angle_function_point_point_point(
+                    |args, context, _| call!(context:angle_function_point_point_point(
                         index!(args[0], 0),
                         index!(args[0], 1),
                         index!(args[0], 2)

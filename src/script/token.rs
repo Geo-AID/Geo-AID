@@ -5,9 +5,7 @@ use super::{parser::Parse, Error};
 #[cfg(test)]
 mod tests {
     use crate::{
-        script::token::{
-            Dot, Eq, Ident, Let, NamedIdent, Number, PointCollection, Position, Semi, Span,
-        },
+        script::token::{Dot, Eq, Ident, Let, NamedIdent, Number, PointCollection, Semi},
         span,
     };
 
@@ -168,12 +166,12 @@ impl Ord for Span {
 #[macro_export]
 macro_rules! span {
     ($start_ln:expr, $start_col:expr, $end_ln:expr, $end_col:expr) => {
-        Span {
-            start: Position {
+        $crate::script::token::Span {
+            start: $crate::script::token::Position {
                 line: $start_ln,
                 column: $start_col,
             },
-            end: Position {
+            end: $crate::script::token::Position {
                 line: $end_ln,
                 column: $end_col,
             },

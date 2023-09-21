@@ -147,7 +147,7 @@ fn evaluate_single(
                 if let (Ok(v1), Ok(v2)) = (v1, v2) {
                     // Note that the difference is not the same as with equality. This time we have to be prepared for negative diffs.
                     let (v1, v2) = (v1, v2);
-                    let diff = 1.0 - v2 / v1;
+                    let diff = (v1 - v2) / v1.abs();
                     // logger.push(format!("Distance is {}", v1.0.real));
                     // logger.push(format!("Diff's {diff}"));
                     // Interestingly, it's easier to calculate the quality function for != and then invert it.
@@ -169,7 +169,8 @@ fn evaluate_single(
                 if let (Ok(v1), Ok(v2)) = (v1, v2) {
                     // Note that the difference is not the same as with equality. This time we have to be prepared for negative diffs.
                     let (v1, v2) = (v1, v2);
-                    let diff = 1.0 - v2 / v1;
+                    let diff = (v1 - v2) / v1.abs();
+                    // println!("{v1} > {v2} Satisfied with {}", smooth_inf_inf(54.0 * f64::cbrt(diff - 0.001)));
                     // Interestingly, it's easier to calculate the quality function for != and then invert it.
                     Quality::Some(smooth_inf_inf(54.0 * f64::cbrt(diff - 0.001)))
                 } else {
@@ -200,7 +201,7 @@ pub fn evaluate(
     cache: Option<&RefCell<Cache>>,
     point_evaluation: &mut [Vec<(Quality, f64)>],
 ) -> AdjustableVec {
-    for pt in point_evaluation.iter_mut() {
+    for pt in &mut *point_evaluation {
         pt.clear();
     }
 
