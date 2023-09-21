@@ -2,6 +2,7 @@ use std::{
     fmt::{Debug, Display},
     iter::Peekable
 };
+use crate::script::builtins;
 
 use crate::span;
 
@@ -1451,18 +1452,18 @@ pub struct DisplayProperties {
 }
 
 impl Parse for DisplayProperties {
-    fn get_span(&self) -> Span {
-        self.lsquare.span.join(self.rsquare.span)
-    }
-
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
         it: &mut Peekable<I>,
-        
+
     ) -> Result<Self, Error> {
         Ok(Self {
             lsquare: LSquare::parse(it)?,
             properties: Punctuated::parse(it)?,
             rsquare: RSquare::parse(it)?,
         })
+    }
+
+    fn get_span(&self) -> Span {
+        self.lsquare.span.join(self.rsquare.span)
     }
 }

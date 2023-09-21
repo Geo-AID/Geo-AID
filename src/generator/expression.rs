@@ -538,7 +538,7 @@ pub mod expr {
 
         fn evaluate(&self, args: &EvaluationArgs) -> Result<Complex, EvaluationError> {
             let circle = self.circle.evaluate(args)?;
-            let theta = args.adjustables[self.index].0.as_clip1d().copied().unwrap() * PI;
+            let theta = args.adjustables[self.index].0.as_clip1d().copied().unwrap() * 2.0 * PI;
 
             let point_rel = Complex::new(theta.cos(), theta.sin());
             Ok(circle.center + point_rel * circle.radius)

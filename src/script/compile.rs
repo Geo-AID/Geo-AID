@@ -784,8 +784,8 @@ impl Compile<ScalarExpr> for Compiler {
     }
 }
 
-fn read_flags(flags: &HashMap<String, Flag>) -> Result<Flags, Error> {
-    Ok(Flags {
+fn read_flags(flags: &HashMap<String, Flag>) -> Flags {
+    Flags {
         optimizations: Optimizations {
             identical_expressions: flags["optimizations"].as_set().unwrap()
                 ["identical_expressions"]
@@ -793,7 +793,7 @@ fn read_flags(flags: &HashMap<String, Flag>) -> Result<Flags, Error> {
                 .unwrap(),
         },
         point_bounds: flags["point_bounds"].as_bool().unwrap(),
-    })
+    }
 }
 
 /// A figure before expression compilation.
@@ -833,7 +833,7 @@ pub fn compile(
     // First, we have to unroll the script.
     let context = unroll::unroll(input)?;
 
-    let flags = read_flags(&context.flags)?;
+    let flags = read_flags(&context.flags);
 
     // Print variables (debugging)
     // for var in context.variables.values() {

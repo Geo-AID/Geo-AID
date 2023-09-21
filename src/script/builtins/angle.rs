@@ -24,8 +24,8 @@ fn angle_function_line_line(
     angle_expr!(args[0], args[1])
 }
 
-pub fn register(context: &mut CompileContext) {
-    context.functions.insert(
+pub fn register(library: &mut Library) {
+    library.functions.insert(
         String::from("angle"),
         Function {
             name: String::from("angle"),

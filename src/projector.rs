@@ -315,14 +315,14 @@ fn get_line_ends(figure: &Figure, ln_c: Line) -> (Complex, Complex) {
         // There must be one intersection with lines 0/1 and 2/3
         let i1 = choose_intersection(0, 1)(width, &intersections);
 
-        let i2 = choose_intersection(0, 1)(width, &intersections);
+        let i2 = choose_intersection(3, 2)(width, &intersections);
 
         (*i1, *i2)
     } else {
         // There must be one intersection with lines 1/3 and 0/2
         let i1 = choose_intersection(3, 1)(width, &intersections);
 
-        let i2 = choose_intersection(0, 1)(width, &intersections);
+        let i2 = choose_intersection(0, 2)(width, &intersections);
 
         (*i1, *i2)
     }
