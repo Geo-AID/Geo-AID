@@ -40,6 +40,8 @@
 - Added circle primitive and function.
 - Added circle support and improved latex drawer.
 - Heavily changed the display system.
+
+## Version 0.2.4
 - Added the circle clip and the line clip
 - Added basic bundle type support
 - Added the `Segment` function
