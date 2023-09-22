@@ -1,7 +1,7 @@
 [package]
 name = "geo-aid"
 description = "A tool designed to generate geometrical figures based on given rules."
-version = "0.2.3"
+version = "0.2.5"
 edition = "2021"
 license = "MIT"
 repository = "https://www.github.com/DragonGamesStudios/Geo-AID"
