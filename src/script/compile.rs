@@ -1,3 +1,23 @@
+/*
+ Copyright (c) 2023 Michał Wilczek, Michał Margos
+
+ Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
+ associated documentation files (the “Software”), to deal in the Software without restriction,
+ including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
+ and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do
+ so, subject to the following conditions:
+
+ The above copyright notice and this permission notice shall be included in all copies or substantial
+ portions of the Software.
+
+ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+ FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS
+ OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+ WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ */
+
 use std::{collections::HashMap, rc::Rc, sync::Arc, unreachable, cell::RefCell, mem};
 
 use crate::{
@@ -17,6 +37,7 @@ use crate::{
     span,
 };
 use crate::generator::expression::expr::PointOnLine;
+use crate::generator::fast_float::FastFloat;
 use crate::script::unit;
 
 use super::{
@@ -175,7 +196,7 @@ impl Compiler {
                     name: String::from("@distance"),
                     definition_span: span!(0, 0, 0, 0),
                     definition: UnrolledExpression {
-                        weight: 0.1, // We reduce the weight of distance to reduce its changes.
+                        weight: FastFloat::Other(0.1), // We reduce the weight of distance to reduce its changes.
                         data: Rc::new(UnrolledExpressionData::Entity(dst_var)),
                         ty: ty::SCALAR,
                         span: span!(0, 0, 0, 0),
@@ -229,7 +250,7 @@ impl Compile<PointExpr> for Compiler {
                     k: self.compile(k),
                     l: self.compile(l),
                 }),
-                1.0,
+                FastFloat::One,
             )),
             UnrolledExpressionData::Average(exprs) => Arc::new(Expression::new(
                 PointExpr::Average(Average {
@@ -238,13 +259,13 @@ impl Compile<PointExpr> for Compiler {
                         .map(|expr| self.compile(expr))
                         .collect(),
                 }),
-                1.0,
+                FastFloat::One,
             )),
             UnrolledExpressionData::CircleCenter(circle) => Arc::new(Expression::new(
                 PointExpr::CircleCenter(CircleCenter {
                     circle: self.compile(circle)
                 }),
-                1.0
+                FastFloat::One
             )),
             UnrolledExpressionData::IndexBundle(bundle, field) => self.compile(&index_bundle(bundle, field)),
             _ => unreachable!("A point should never be compiled this way"),
@@ -279,21 +300,21 @@ impl Compile<LineExpr> for Compiler {
                     a: self.compile(p1),
                     b: self.compile(p2),
                 }),
-                1.0,
+                FastFloat::One,
             )),
             UnrolledExpressionData::ParallelThrough(line, point) => Arc::new(Expression::new(
                 LineExpr::ParallelThrough(ParallelThrough {
                     line: self.compile(line),
                     point: self.compile(point),
                 }),
-                1.0,
+                FastFloat::One,
             )),
             UnrolledExpressionData::PerpendicularThrough(line, point) => Arc::new(Expression::new(
                 LineExpr::PerpendicularThrough(PerpendicularThrough {
                     line: self.compile(line),
                     point: self.compile(point),
                 }),
-                1.0,
+                FastFloat::One,
             )),
             UnrolledExpressionData::AngleBisector(v1, v2, v3) => Arc::new(Expression::new(
                 LineExpr::AngleBisector(AngleBisector {
@@ -301,7 +322,7 @@ impl Compile<LineExpr> for Compiler {
                     origin: self.compile(v2),
                     arm2: self.compile(v3),
                 }),
-                1.0,
+                FastFloat::One,
             )),
             UnrolledExpressionData::IndexBundle(bundle, field) => {
                 self.compile(&index_bundle(bundle, field))
@@ -351,7 +372,7 @@ impl Compile<CircleExpr> for Compiler {
                     center: self.compile(center),
                     radius: self.compile(radius),
                 }),
-                1.0,
+                FastFloat::One,
             )),
             UnrolledExpressionData::Boxed(expr) => {
                 self.compile(expr)
@@ -378,11 +399,11 @@ impl Compiler {
 
         match power.cmp(&0) {
             std::cmp::Ordering::Less => UnrolledExpression {
-                weight: 1.0,
+                weight: FastFloat::One,
                 data: Rc::new(UnrolledExpressionData::Divide(
                     self.fix_distance(expr, power + 1),
                     UnrolledExpression {
-                        weight: 1.0,
+                        weight: FastFloat::One,
                         ty: ty::SCALAR,
                         span: sp,
                         data: Rc::new(UnrolledExpressionData::VariableAccess(Rc::clone(&self.dst_var))),
@@ -393,11 +414,11 @@ impl Compiler {
             },
             std::cmp::Ordering::Equal => expr,
             std::cmp::Ordering::Greater => UnrolledExpression {
-                weight: 1.0,
+                weight: FastFloat::One,
                 data: Rc::new(UnrolledExpressionData::Multiply(
                     self.fix_distance(expr, power - 1),
                     UnrolledExpression {
-                        weight: 1.0,
+                        weight: FastFloat::One,
                         ty: ty::SCALAR,
                         span: sp,
                         data: Rc::new(UnrolledExpressionData::VariableAccess(Rc::clone(&self.dst_var))),
@@ -418,18 +439,18 @@ impl Compiler {
             // If a scalar, we treat it as a standard literal.
             Arc::new(Expression::new(
                 ScalarExpr::Literal(Literal { value: v }),
-                1.0,
+                FastFloat::One,
             ))
         } else {
             // Otherwise we pretend it's a scalar literal inside a SetUnit.
             self.compile(
                 &UnrolledExpression {
-                    weight: 1.0,
+                    weight: FastFloat::One,
                     ty: expr.ty,
                     span: expr.span,
                     data: Rc::new(UnrolledExpressionData::SetUnit(
                         UnrolledExpression {
-                            weight: 1.0,
+                            weight: FastFloat::One,
                             ty: ty::SCALAR,
                             span: expr.span,
                             data: expr.data.clone(),
@@ -488,7 +509,7 @@ impl Compiler {
                                 ScalarExpr::Real(Real {
                                     index: self.template.len() - 1
                                 }),
-                                1.0
+                                FastFloat::One
                             ))
                         }
                         EntScalar::Bind(expr) => self.compile(expr),
@@ -500,7 +521,7 @@ impl Compiler {
                                 PointExpr::Free(FreePoint {
                                     index: self.template.len() - 1
                                 }),
-                                1.0
+                                FastFloat::One
                             ))
                         }
                         EntPoint::OnCircle(circle) => {
@@ -510,7 +531,7 @@ impl Compiler {
                                     index: self.template.len() - 1,
                                     circle: self.compile(circle)
                                 }),
-                                1.0
+                                FastFloat::One
                             ))
                         }
                         EntPoint::OnLine(line) => {
@@ -520,7 +541,7 @@ impl Compiler {
                                     index: self.template.len() - 1,
                                     line: self.compile(line)
                                 }),
-                                1.0
+                                FastFloat::One
                             ))
                         }
                         EntPoint::Bind(expr) => self.compile(&expr),
@@ -664,9 +685,9 @@ impl Compile<ScalarExpr> for Compiler {
                     unit: unit::DISTANCE,
                     value: Arc::new(Expression::new(ScalarExpr::Literal(Literal {
                         value: *v
-                    }), 1.0))
+                    }), FastFloat::One))
                 }),
-                1.0
+                FastFloat::One
             )),
             UnrolledExpressionData::Entity(i) => self.compile_entity(*i).as_scalar().unwrap().clone(),
             UnrolledExpressionData::Boxed(expr) => {
@@ -686,55 +707,55 @@ impl Compile<ScalarExpr> for Compiler {
                     ),
                     unit: *unit,
                 }),
-                1.0,
+                FastFloat::One,
             )),
             UnrolledExpressionData::PointPointDistance(p1, p2) => Arc::new(Expression::new(
                 ScalarExpr::PointPointDistance(PointPointDistance {
                     a: self.compile(p1),
                     b: self.compile(p2),
                 }),
-                1.0,
+                FastFloat::One,
             )),
             UnrolledExpressionData::PointLineDistance(p, l) => Arc::new(Expression::new(
                 ScalarExpr::PointLineDistance(PointLineDistance {
                     point: self.compile(p),
                     line: self.compile(l),
                 }),
-                1.0,
+                FastFloat::One,
             )),
             UnrolledExpressionData::Negate(expr) => Arc::new(Expression::new(
                 ScalarExpr::Negation(Negation {
                     value: self.compile(expr),
                 }),
-                1.0,
+                FastFloat::One,
             )),
             UnrolledExpressionData::Add(v1, v2) => Arc::new(Expression::new(
                 ScalarExpr::Sum(Sum {
                     a: self.compile(v1),
                     b: self.compile(v2),
                 }),
-                1.0,
+                FastFloat::One,
             )),
             UnrolledExpressionData::Subtract(v1, v2) => Arc::new(Expression::new(
                 ScalarExpr::Difference(Difference {
                     a: self.compile(v1),
                     b: self.compile(v2),
                 }),
-                1.0,
+                FastFloat::One,
             )),
             UnrolledExpressionData::Multiply(v1, v2) => Arc::new(Expression::new(
                 ScalarExpr::Product(Product {
                     a: self.compile(v1),
                     b: self.compile(v2),
                 }),
-                1.0,
+                FastFloat::One,
             )),
             UnrolledExpressionData::Divide(v1, v2) => Arc::new(Expression::new(
                 ScalarExpr::Quotient(Quotient {
                     a: self.compile(v1),
                     b: self.compile(v2),
                 }),
-                1.0,
+                FastFloat::One,
             )),
             UnrolledExpressionData::ThreePointAngle(v1, v2, v3) => Arc::new(Expression::new(
                 ScalarExpr::AnglePoint(AnglePoint {
@@ -742,7 +763,7 @@ impl Compile<ScalarExpr> for Compiler {
                     origin: self.compile(v2),
                     arm2: self.compile(v3),
                 }),
-                1.0,
+                FastFloat::One,
             )),
             UnrolledExpressionData::ThreePointAngleDir(v1, v2, v3) => Arc::new(Expression::new(
                 ScalarExpr::AnglePointDir(AnglePointDir {
@@ -750,14 +771,14 @@ impl Compile<ScalarExpr> for Compiler {
                     origin: self.compile(v2),
                     arm2: self.compile(v3),
                 }),
-                1.0
+                FastFloat::One
             )),
             UnrolledExpressionData::TwoLineAngle(v1, v2) => Arc::new(Expression::new(
                 ScalarExpr::AngleLine(AngleLine {
                     k: self.compile(v1),
                     l: self.compile(v2),
                 }),
-                1.0,
+                FastFloat::One,
             )),
             UnrolledExpressionData::Average(exprs) => Arc::new(Expression::new(
                 ScalarExpr::Average(Average {
@@ -766,13 +787,13 @@ impl Compile<ScalarExpr> for Compiler {
                         .map(|expr| self.compile(expr))
                         .collect(),
                 }),
-                1.0,
+                FastFloat::One,
             )),
             UnrolledExpressionData::CircleRadius(circle) => Arc::new(Expression::new(
                 ScalarExpr::CircleRadius(CircleRadius {
                     circle: self.compile(circle)
                 }),
-                1.0
+                FastFloat::One
             )),
             UnrolledExpressionData::IndexBundle(bundle, field) => self.compile(&index_bundle(bundle, field)),
             _ => unreachable!("A scalar should never be compiled this way"),
@@ -860,7 +881,7 @@ pub fn compile(
 
         criteria.push(Weighed {
             object: CriteriaKind::Bias(dst_any),
-            weight: 10.0, // The bias.
+            weight: FastFloat::Other(10.0), // The bias.
         });
     }
 
@@ -903,7 +924,7 @@ fn add_bounds(
                         kind: PointExpr::Free(FreePoint { index: j }),
                     }),
                 ))),
-                weight: 1.0,
+                weight: FastFloat::One,
             });
         }
 
@@ -925,7 +946,7 @@ fn add_bounds(
                         kind: ScalarExpr::Literal(Literal { value: 0.0 }),
                     }),
                 ),
-                weight: 1.0,
+                weight: FastFloat::One,
             }); // x > 0
 
             criteria.push(Weighed {
@@ -944,7 +965,7 @@ fn add_bounds(
                         kind: ScalarExpr::Literal(Literal { value: 1.0 }),
                     }),
                 ),
-                weight: 1.0,
+                weight: FastFloat::One,
             }); // y > 0
 
             criteria.push(Weighed {
@@ -963,7 +984,7 @@ fn add_bounds(
                         kind: ScalarExpr::Literal(Literal { value: 1.0 }),
                     }),
                 ),
-                weight: 1.0,
+                weight: FastFloat::One,
             }); // x < 1
 
             criteria.push(Weighed {
@@ -982,7 +1003,7 @@ fn add_bounds(
                         kind: ScalarExpr::Literal(Literal { value: 1.0 }),
                     }),
                 ),
-                weight: 1.0,
+                weight: FastFloat::One,
             }); // y < 1
         }
     }

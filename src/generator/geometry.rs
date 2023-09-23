@@ -1,6 +1,26 @@
+/*
+ Copyright (c) 2023 Michał Wilczek, Michał Margos
+
+ Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
+ associated documentation files (the “Software”), to deal in the Software without restriction,
+ including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
+ and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do
+ so, subject to the following conditions:
+
+ The above copyright notice and this permission notice shall be included in all copies or substantial
+ portions of the Software.
+
+ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+ FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS
+ OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+ WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ */
+
 use crate::generator::Complex;
 
-use super::{expression::Line, EvaluationError};
+use super::expression::Line;
 
 #[must_use]
 pub fn get_line(p1: Complex, p2: Complex) -> Line {
@@ -14,33 +34,7 @@ pub fn get_line(p1: Complex, p2: Complex) -> Line {
 ///
 /// # Errors
 /// If the two lines are parallel, return an evaluation error. (Currently ignored)
-pub fn get_intersection(l_ln: Line, k_ln: Line) -> Result<Complex, EvaluationError> {
-    // For now: ignore parallelity.
-
-    /* OLD, INVALID VERSION
-    // First, make l's origin relative to k's origin.
-    let l_origin = l.origin - k.origin;
-
-    // Next, rotate the system so that k becomes the x-axis. k's origin is (0, 0) is our system, we don't have to rotate it.
-    // The exact rotation can be performed by dividing by the line's direction vector. We have to divide both l's origin
-    // and l's direction vector.
-    let l_origin = l_origin / k.direction;
-    let l_dir = l.direction / k.direction;
-
-    // Now, we simply get the intersection of rotated l with rotated k (the x-axis).
-    // Let L be the origin of l, P the intersection point and L' a point on x-axis so that LL'P is right.
-    // Let v be the direction vector of l, m the magnitude of that vector and d the (directed) distance LP.
-    // Let h also be the directed distance LL'.
-    // Then we have: P = L + v * d / m. And based on similarity d / m = h / y.
-    // Thus P = L + v * h / y.
-    let intersection = l_origin + l_dir * l_origin.imaginary / l_dir.imaginary;
-
-    // Now we have to rotate the intersection back and offset it by k.origin.
-    println!("{intersection}, {}", k.direction);
-    let intersection = intersection * k.direction + k.origin;
-    println!("{intersection}");
-    */
-
+pub fn get_intersection(l_ln: Line, k_ln: Line) -> Complex {
     let Line {
         origin: a,
         direction: b,
@@ -50,9 +44,7 @@ pub fn get_intersection(l_ln: Line, k_ln: Line) -> Result<Complex, EvaluationErr
         direction: d,
     } = k_ln;
 
-    let intersection = a - b * ((a - c) / d).imaginary / (b / d).imaginary;
-
-    Ok(intersection)
+    a - b * ((a - c) / d).imaginary / (b / d).imaginary
 }
 
 /// Gets the angle between two arms and the origin

@@ -1,3 +1,23 @@
+/*
+ Copyright (c) 2023 Michał Wilczek, Michał Margos
+
+ Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
+ associated documentation files (the “Software”), to deal in the Software without restriction,
+ including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
+ and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do
+ so, subject to the following conditions:
+
+ The above copyright notice and this permission notice shall be included in all copies or substantial
+ portions of the Software.
+
+ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+ FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS
+ OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+ WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ */
+
 use std::{
     collections::{hash_map::Entry, HashMap},
     fmt::{Display, Debug},
@@ -12,6 +32,7 @@ pub use context::{
     Circle as EntCircle, CompileContext, Definition, Entity, Line as EntLine, Point as EntPoint,
     Scalar as EntScalar,
 };
+use crate::generator::fast_float::FastFloat;
 
 use super::{
     builtins::{self, macros::variable},
@@ -972,7 +993,7 @@ pub struct UnrolledExpression {
     pub data: Rc<UnrolledExpressionData>,
     pub ty: Type,
     pub span: Span,
-    pub weight: f64, // Assigned weight.
+    pub weight: FastFloat, // Assigned weight.
 }
 
 impl Definition for UnrolledExpression {
@@ -1000,12 +1021,12 @@ impl UnrolledExpression {
             span: span!(0,0,0,0),
             ty,
             data: Rc::new(data),
-            weight: 1.0
+            weight: FastFloat::One
         }
     }
 
     #[must_use]
-    pub fn clone_with_weight(&self, weight: f64) -> Self {
+    pub fn clone_with_weight(&self, weight: FastFloat) -> Self {
         let mut cloned = self.clone();
         cloned.weight = weight;
         cloned
@@ -1075,7 +1096,7 @@ fn unroll_pc_conversion(
         1 => {
             if to == &ty::POINT {
                 Ok(UnrolledExpression {
-                    weight: 1.0, // Weight is propagated through `IndexCollection`.
+                    weight: FastFloat::One, // Weight is propagated through `IndexCollection`.
                     data: Rc::new(UnrolledExpressionData::IndexCollection(expr.clone(), 0)),
                     ty: ty::POINT,
                     span: expr.span,
@@ -1091,16 +1112,16 @@ fn unroll_pc_conversion(
         2 => match to {
             Type::Line => {
                 let expr = UnrolledExpression {
-                    weight: 1.0, // Weight is propagated through `IndexCollection`.
+                    weight: FastFloat::One, // Weight is propagated through `IndexCollection`.
                     data: Rc::new(UnrolledExpressionData::LineFromPoints(
                         UnrolledExpression {
-                            weight: 1.0, // Weight is propagated through `IndexCollection`.
+                            weight: FastFloat::One, // Weight is propagated through `IndexCollection`.
                             data: Rc::new(UnrolledExpressionData::IndexCollection(expr.clone(), 0)),
                             ty: ty::POINT,
                             span: expr.span,
                         },
                         UnrolledExpression {
-                            weight: 1.0, // Weight is propagated through `IndexCollection`.
+                            weight: FastFloat::One, // Weight is propagated through `IndexCollection`.
                             data: Rc::new(UnrolledExpressionData::IndexCollection(expr.clone(), 1)),
                             ty: ty::POINT,
                             span: expr.span,
@@ -1118,7 +1139,7 @@ fn unroll_pc_conversion(
             Type::Scalar(unit) => {
                 if unit == &Some(ComplexUnit::new(SimpleUnit::Distance)) {
                     let a = UnrolledExpression {
-                        weight: 1.0, // Weight is propagated through `IndexCollection`.
+                        weight: FastFloat::One, // Weight is propagated through `IndexCollection`.
                         data: Rc::new(UnrolledExpressionData::IndexCollection(
                             expr.clone(),
                             0,
@@ -1128,7 +1149,7 @@ fn unroll_pc_conversion(
                     };
 
                     let b = UnrolledExpression {
-                        weight: 1.0, // Weight is propagated through `IndexCollection`.
+                        weight: FastFloat::One, // Weight is propagated through `IndexCollection`.
                         data: Rc::new(UnrolledExpressionData::IndexCollection(
                             expr.clone(),
                             1,
@@ -1141,7 +1162,7 @@ fn unroll_pc_conversion(
                     context.figure.segments.push((a.clone(), b.clone()));
 
                     Ok(UnrolledExpression {
-                        weight: 1.0, // Weight is propagated through `IndexCollection`.
+                        weight: FastFloat::One, // Weight is propagated through `IndexCollection`.
                         data: Rc::new(UnrolledExpressionData::PointPointDistance(a, b)),
                         ty: ty::DISTANCE,
                         span: expr.span,
@@ -1361,14 +1382,14 @@ fn unroll_simple(
                 })?;
 
                 UnrolledExpression {
-                    weight: 1.0, // TODO: UPDATE FOR WEIGHING SUPPORT IN GEOSCRIPT
+                    weight: FastFloat::One, // TODO: UPDATE FOR WEIGHING SUPPORT IN GEOSCRIPT
                     ty: var.borrow().definition.ty,
                     data: Rc::new(UnrolledExpressionData::VariableAccess(Rc::clone(var))),
                     span: named.span,
                 }
             }
             Ident::Collection(col) => UnrolledExpression {
-                weight: 1.0, // TODO: UPDATE FOR WEIGHING SUPPORT IN GEOSCRIPT
+                weight: FastFloat::One, // TODO: UPDATE FOR WEIGHING SUPPORT IN GEOSCRIPT
                 ty: ty::collection(col.collection.len()),
                 data: Rc::new(UnrolledExpressionData::PointCollection(
                     col.collection
@@ -1376,7 +1397,7 @@ fn unroll_simple(
                         .map(|(letter, primes)| {
                             match context.variables.get(&construct_point_name(*letter, *primes)) {
                                 Some(var) => Ok(UnrolledExpression {
-                                    weight: 1.0, // Always one.
+                                    weight: FastFloat::One, // Always one.
                                     data: Rc::new(UnrolledExpressionData::VariableAccess(
                                         Rc::clone(var),
                                     )),
@@ -1396,7 +1417,7 @@ fn unroll_simple(
             },
         },
         SimpleExpressionKind::Number(num) => UnrolledExpression {
-            weight: 0.0, // Always zero.
+            weight: FastFloat::Zero, // Always zero.
             ty: ty::SCALAR_UNKNOWN,
             data: Rc::new(UnrolledExpressionData::Number(num.value.to_float())),
             span: num.get_span(),
@@ -1431,7 +1452,7 @@ fn unroll_simple(
                         .collect::<Result<Vec<UnrolledExpression>, Error>>()?;
 
                     UnrolledExpression {
-                        weight: 1.0, // TODO: UPDATE FOR WEIGHING SUPPORT IN GEOSCRIPT
+                        weight: FastFloat::One, // TODO: UPDATE FOR WEIGHING SUPPORT IN GEOSCRIPT
                         ty: overload.returned_type,
                         data: Rc::new(UnrolledExpressionData::Boxed(unroll_parameters(
                             &overload.definition,
@@ -1453,7 +1474,9 @@ fn unroll_simple(
                 let suggested = library
                     .functions
                     .iter()
-                    .max_by_key(|v| (strsim::jaro(v.0, &e.name.ident) * 1000.0).floor() as i64)
+                    .map(|v| (v.0, v.1, (strsim::jaro(v.0, &e.name.ident) * 1000.0).floor() as i64))
+                    .filter(|v| v.2 > 600)
+                    .max_by_key(|v| v.2)
                     .map(|x| x.0)
                     .cloned();
 
@@ -1468,7 +1491,7 @@ fn unroll_simple(
             let unrolled = unroll_simple(&op.rhs, context, library, it_index)?;
             match &unrolled.ty {
                 Type::Scalar(_) => UnrolledExpression {
-                    weight: 1.0, // TODO: UPDATE FOR WEIGHING SUPPORT IN GEOSCRIPT
+                    weight: FastFloat::One, // TODO: UPDATE FOR WEIGHING SUPPORT IN GEOSCRIPT
                     ty: unrolled.ty,
                     span: expr.get_span(),
                     data: Rc::new(UnrolledExpressionData::Negate(unrolled)),
@@ -1487,7 +1510,7 @@ fn unroll_simple(
             unroll_expression(it.get(it_index[&it.id]).unwrap(), context, library, it_index)?
         }
         SimpleExpressionKind::PointCollection(col) => UnrolledExpression {
-            weight: 1.0, // TODO: UPDATE FOR WEIGHING SUPPORT IN GEOSCRIPT
+            weight: FastFloat::One, // TODO: UPDATE FOR WEIGHING SUPPORT IN GEOSCRIPT
             ty: ty::collection(col.points.len()),
             span: col.get_span(),
             data: Rc::new(UnrolledExpressionData::PointCollection(
@@ -1575,7 +1598,7 @@ fn unroll_binop(
             let rhs = unroll_implicit_conversion(rhs, &lhs.ty, context)?;
 
             Ok(UnrolledExpression {
-                weight: 1.0, // Technically, the only way to assign weight to an arithmetic op is to parenthise it.
+                weight: FastFloat::One, // Technically, the only way to assign weight to an arithmetic op is to parenthise it.
                 ty: lhs.ty,
                 span: lhs.span.join(rhs.span),
                 data: Rc::new(match op {
@@ -1591,7 +1614,7 @@ fn unroll_binop(
             let rhs = unroll_muldiv(rhs, &lhs, context)?;
 
             Ok(UnrolledExpression {
-                weight: 1.0, // Technically, the only way to assign weight to an arithmetic op is to put it in parentheses.
+                weight: FastFloat::One, // Technically, the only way to assign weight to an arithmetic op is to put it in parentheses.
                 ty: match &lhs.ty {
                     Type::Scalar(None) => lhs.ty,
                     Type::Scalar(Some(left_unit)) => {
@@ -1650,7 +1673,7 @@ fn unpack_expression(
         Type::Point => Ok(vec![expr.clone()]),
         Type::PointCollection(l) => Ok((0..*l)
             .map(|i| UnrolledExpression {
-                weight: 1.0, // Weight propagated through `IndexCollecttion`
+                weight: FastFloat::One, // Weight propagated through `IndexCollecttion`
                 data: Rc::new(UnrolledExpressionData::IndexCollection(expr.clone(), i)),
                 ty: ty::POINT,
                 span: expr.span,
@@ -2281,7 +2304,9 @@ fn unroll_rule(
                 let suggested = library
                     .rule_ops
                     .iter()
-                    .max_by_key(|v| (strsim::jaro(v.0, &op.ident.ident) * 1000.0).floor() as i64)
+                    .map(|v| (v.0, v.1, (strsim::jaro(v.0, &op.ident.ident) * 1000.0).floor() as i64))
+                    .filter(|v| v.2 > 600)
+                    .max_by_key(|v| v.2)
                     .map(|x| x.0)
                     .cloned();
 
