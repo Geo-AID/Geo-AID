@@ -1,3 +1,23 @@
+/*
+ Copyright (c) 2023 Michał Wilczek, Michał Margos
+
+ Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
+ associated documentation files (the “Software”), to deal in the Software without restriction,
+ including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
+ and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do
+ so, subject to the following conditions:
+
+ The above copyright notice and this permission notice shall be included in all copies or substantial
+ portions of the Software.
+
+ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+ FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS
+ OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+ WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ */
+
 use std::sync::Arc;
 use std::{collections::HashMap, rc::Rc};
 
@@ -11,7 +31,7 @@ use crate::generator::geometry::get_line;
 use crate::{
     generator::{
         critic::EvaluationArgs, expression::Expression, expression::Line, geometry, Adjustable,
-        Complex, EvaluationError, Flags,
+        Complex, Flags,
     },
     script::{figure::Figure, unroll, HashableArc},
 };
@@ -31,12 +51,13 @@ mod tests {
         },
         script::{figure::Figure, unroll::PointMeta},
     };
+    use crate::generator::fast_float::FastFloat;
 
     use super::project;
 
     /// Utility function used in fn `test_project`(), it makes the code below less messy and more readable.
     fn create_point_expr(index: usize) -> Arc<Expression<PointExpr>> {
-        Arc::new(Expression::new(PointExpr::Free(FreePoint { index }), 1.0))
+        Arc::new(Expression::new(PointExpr::Free(FreePoint { index }), FastFloat::One))
     }
 
     fn create_point_meta(character: char, primes: u8, index: Option<u16>) -> PointMeta {
@@ -86,14 +107,14 @@ mod tests {
                         a: create_point_expr(0),
                         b: create_point_expr(1),
                     }),
-                    1.0,
+                    FastFloat::One,
                 )),
                 Arc::new(Expression::new(
                     LineExpr::Line(LinePoint {
                         a: create_point_expr(1),
                         b: create_point_expr(2),
                     }),
-                    1.0,
+                    FastFloat::One,
                 )),
             ],
             angles: vec![(
@@ -103,7 +124,7 @@ mod tests {
                         origin: create_point_expr(1),
                         arm2: create_point_expr(2),
                     }),
-                    1.0,
+                    FastFloat::One,
                 )),
                 x,
             )],
@@ -119,10 +140,10 @@ mod tests {
                     center: create_point_expr(0),
                     radius: Arc::new(Expression::new(
                         ScalarExpr::Literal(Literal { value: 0.124 }),
-                        1.0,
+                        FastFloat::One,
                     )),
                 }),
-                1.0,
+                FastFloat::One,
             ))],
 
             canvas_size: (200, 200),
@@ -133,7 +154,7 @@ mod tests {
         let path_json = PathBuf::from("testoutputs//test.json");
         let path_raw = PathBuf::from("testoutputs//test.raw");
 
-        let pr = &project(&fig, &gen_points, &Arc::default()).unwrap();
+        let pr = &project(&fig, &gen_points, &Arc::default());
         drawer::latex::draw(&path_latex, (fig.canvas_size.0, fig.canvas_size.1), pr);
         drawer::svg::draw(&path_svg, (fig.canvas_size.0, fig.canvas_size.1), pr);
         drawer::json::draw(&path_json, (fig.canvas_size.0, fig.canvas_size.1), pr);
@@ -235,17 +256,17 @@ fn get_angle_points(
 ) -> (Complex, Complex, Complex) {
     match &angle.kind {
         ScalarExpr::AnglePoint(AnglePoint { arm1, origin, arm2 }) => {
-            let arm1 = arm1.evaluate(args).unwrap();
-            let origin = origin.evaluate(args).unwrap();
-            let arm2 = arm2.evaluate(args).unwrap();
+            let arm1 = arm1.evaluate(args);
+            let origin = origin.evaluate(args);
+            let arm2 = arm2.evaluate(args);
 
             (arm1, origin, arm2)
         }
         ScalarExpr::AngleLine(AngleLine { k, l }) => {
-            let ev_ln1 = k.evaluate(args).unwrap();
-            let ev_ln2 = l.evaluate(args).unwrap();
+            let ev_ln1 = k.evaluate(args);
+            let ev_ln2 = l.evaluate(args);
 
-            let origin = geometry::get_intersection(ev_ln1, ev_ln2).unwrap();
+            let origin = geometry::get_intersection(ev_ln1, ev_ln2);
 
             (
                 ev_ln1.origin + ev_ln1.direction,
@@ -262,18 +283,15 @@ fn get_line_ends(figure: &Figure, ln_c: Line) -> (Complex, Complex) {
     fn choose_intersection(
         i: usize,
         j: usize,
-    ) -> impl Fn(f64, &[Result<Complex, EvaluationError>]) -> &Complex {
+    ) -> impl Fn(f64, &[Complex]) -> Complex {
         move |width, intersections| {
-            intersections[i].as_ref().map_or_else(
-                |_| intersections[j].as_ref().unwrap(),
-                |x| {
-                    if (x.real > 0f64 && x.real < width) || intersections[j].is_err() {
-                        x
-                    } else {
-                        intersections[j].as_ref().unwrap()
-                    }
-                },
-            )
+            let x = intersections[i];
+
+            if x.real > 0f64 && x.real < width {
+                x
+            } else {
+                intersections[j]
+            }
         }
     }
 
@@ -317,14 +335,14 @@ fn get_line_ends(figure: &Figure, ln_c: Line) -> (Complex, Complex) {
 
         let i2 = choose_intersection(3, 2)(width, &intersections);
 
-        (*i1, *i2)
+        (i1, i2)
     } else {
         // There must be one intersection with lines 1/3 and 0/2
         let i1 = choose_intersection(3, 1)(width, &intersections);
 
         let i2 = choose_intersection(0, 2)(width, &intersections);
 
-        (*i1, *i2)
+        (i1, i2)
     }
 }
 
@@ -346,7 +364,7 @@ fn lines(
 ) -> Vec<RenderedLine> {
     let mut blueprint_lines = Vec::new();
     for ln in &figure.lines {
-        let mut ln_c = ln.evaluate(args).unwrap();
+        let mut ln_c = ln.evaluate(args);
         ln_c.origin = transform(offset, scale, size, ln_c.origin);
         let line_ends = get_line_ends(figure, ln_c);
         blueprint_lines.push(RenderedLine {
@@ -381,7 +399,7 @@ fn angles(
             ),
             no_arcs: ang.1,
             expr: Arc::clone(&ang.0),
-            angle_value: ang.0.evaluate(args).unwrap(),
+            angle_value: ang.0.evaluate(args),
         });
     }
     blueprint_angles
@@ -400,8 +418,8 @@ fn segments(
 ) -> Vec<RenderedSegment> {
     let mut blueprint_segments = Vec::new();
     for segment in &figure.segments {
-        let seg1 = segment.0.evaluate(args).unwrap();
-        let seg2 = segment.1.evaluate(args).unwrap();
+        let seg1 = segment.0.evaluate(args);
+        let seg2 = segment.1.evaluate(args);
         blueprint_segments.push(RenderedSegment {
             label: String::new(),
             points: (
@@ -422,8 +440,8 @@ fn rays(
 ) -> Vec<RenderedRay> {
     let mut blueprint_rays = Vec::new();
     for ray in &figure.rays {
-        let ray_a = ray.0.evaluate(args).unwrap();
-        let ray_b = ray.1.evaluate(args).unwrap();
+        let ray_a = ray.0.evaluate(args);
+        let ray_b = ray.1.evaluate(args);
 
         let ray_a = transform(offset, scale, size, ray_a);
         let ray_b = transform(offset, scale, size, ray_b);
@@ -466,7 +484,7 @@ fn circles(
 ) -> Vec<RenderedCircle> {
     let mut blueprint_circles = Vec::new();
     for circle in &figure.circles {
-        let circle = circle.evaluate(args).unwrap();
+        let circle = circle.evaluate(args);
         let center = transform(offset, scale, size, circle.center);
         let draw_point = Complex::new(circle.center.real + circle.radius, circle.center.imaginary);
         let sc_rad = circle.radius * scale;
@@ -492,7 +510,7 @@ pub fn project(
     figure: &Figure,
     generated_points: &[(Adjustable, f64)],
     flags: &Arc<Flags>,
-) -> Result<Output, EvaluationError> {
+) -> Output {
     let mut logger = Vec::new();
     let args = EvaluationArgs {
         logger: &mut logger,
@@ -506,7 +524,7 @@ pub fn project(
         .points
         .iter()
         .map(|pt| pt.0.evaluate(&args))
-        .collect::<Result<Vec<Complex>, EvaluationError>>()?;
+        .collect::<Vec<Complex>>();
 
     #[allow(clippy::cast_precision_loss)]
     let size1 = Complex::new(figure.canvas_size.0 as f64, figure.canvas_size.1 as f64);
@@ -585,7 +603,7 @@ pub fn project(
 
     let blueprint_circles = circles(figure, offset, scale, size005, &args);
 
-    Ok(Output {
+    Output {
         map: iden,
         vec_rendered: blueprint_points
             .into_iter()
@@ -596,5 +614,5 @@ pub fn project(
             .chain(blueprint_rays.into_iter().map(Rendered::Ray))
             .chain(blueprint_circles.into_iter().map(Rendered::Circle))
             .collect(),
-    })
+    }
 }

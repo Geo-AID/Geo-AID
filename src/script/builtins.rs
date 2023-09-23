@@ -1,3 +1,23 @@
+/*
+ Copyright (c) 2023 Michał Wilczek, Michał Margos
+
+ Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
+ associated documentation files (the “Software”), to deal in the Software without restriction,
+ including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
+ and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do
+ so, subject to the following conditions:
+
+ The above copyright notice and this permission notice shall be included in all copies or substantial
+ portions of the Software.
+
+ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+ FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS
+ OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+ WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ */
+
 use super::unroll::Library;
 
 pub mod angle;
@@ -102,7 +122,7 @@ pub mod macros {
     macro_rules! index {
         ($col:expr, $at:expr) => {
             $crate::script::unroll::UnrolledExpression {
-                weight: 1.0,
+                weight: $crate::generator::fast_float::FastFloat::One,
                 ty: $crate::script::ty::POINT,
                 span: $crate::span!(0, 0, 0, 0),
                 data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::IndexCollection(
@@ -116,7 +136,7 @@ pub mod macros {
     macro_rules! field {
         ($bundle:expr, $at:ident) => {
             $crate::script::unroll::UnrolledExpression {
-                weight: 1.0,
+                weight: $crate::generator::fast_float::FastFloat::One,
                 ty: $crate::script::ty::POINT,
                 span: $crate::span!(0, 0, 0, 0),
                 data: std::rc::Rc::new(
@@ -132,7 +152,7 @@ pub mod macros {
     macro_rules! bisector {
         ($a:expr, $b:expr, $c:expr) => {
             $crate::script::unroll::UnrolledExpression {
-                weight: 1.0,
+                weight: $crate::generator::fast_float::FastFloat::One,
                 ty: $crate::script::ty::LINE,
                 span: $crate::span!(0, 0, 0, 0),
                 data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::AngleBisector(
@@ -145,7 +165,7 @@ pub mod macros {
     macro_rules! line2 {
         ($a:expr, $b:expr) => {
             $crate::script::unroll::UnrolledExpression {
-                weight: 1.0,
+                weight: $crate::generator::fast_float::FastFloat::One,
                 ty: $crate::script::ty::LINE,
                 span: $crate::span!(0, 0, 0, 0),
                 data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::LineFromPoints(
@@ -158,7 +178,7 @@ pub mod macros {
     macro_rules! intersection {
         ($a:expr, $b:expr) => {
             $crate::script::unroll::UnrolledExpression {
-                weight: 1.0,
+                weight: $crate::generator::fast_float::FastFloat::One,
                 ty: $crate::script::ty::POINT,
                 span: $crate::span!(0, 0, 0, 0),
                 data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::LineLineIntersection(
@@ -171,7 +191,7 @@ pub mod macros {
     macro_rules! average {
         ($($count:literal-)? $t:ident : $x:expr) => {
             $crate::script::unroll::UnrolledExpression {
-                weight: 1.0,
+                weight: $crate::generator::fast_float::FastFloat::One,
                 ty: $crate::script::builtins::macros::ty!($($count-)? $t),
                 span: $crate::span!(0, 0, 0, 0),
                 data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::Average(
@@ -184,7 +204,7 @@ pub mod macros {
     macro_rules! angle_expr {
         ($a:expr, $b:expr, $c:expr) => {
             $crate::script::unroll::UnrolledExpression {
-                weight: 1.0,
+                weight: $crate::generator::fast_float::FastFloat::One,
                 ty: $crate::script::ty::ANGLE,
                 span: $crate::span!(0, 0, 0, 0),
                 data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::ThreePointAngle(
@@ -194,7 +214,7 @@ pub mod macros {
         };
         (dir $a:expr, $b:expr, $c:expr) => {
             $crate::script::unroll::UnrolledExpression {
-                weight: 1.0,
+                weight: $crate::generator::fast_float::FastFloat::One,
                 ty: $crate::script::ty::ANGLE,
                 span: $crate::span!(0, 0, 0, 0),
                 data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::ThreePointAngleDir(
@@ -204,7 +224,7 @@ pub mod macros {
         };
         ($a:expr, $b:expr) => {
             $crate::script::unroll::UnrolledExpression {
-                weight: 1.0,
+                weight: $crate::generator::fast_float::FastFloat::One,
                 ty: $crate::script::ty::ANGLE,
                 span: $crate::span!(0, 0, 0, 0),
                 data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::TwoLineAngle(
@@ -217,7 +237,7 @@ pub mod macros {
     macro_rules! circle_expr {
         ($a:expr, $b:expr) => {
             $crate::script::unroll::UnrolledExpression {
-                weight: 1.0,
+                weight: $crate::generator::fast_float::FastFloat::One,
                 ty: $crate::script::ty::CIRCLE,
                 span: $crate::span!(0, 0, 0, 0),
                 data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::Circle(
@@ -230,7 +250,7 @@ pub mod macros {
     macro_rules! set_unit {
         ($a:expr, %$unit:ident) => {
             $crate::script::unroll::UnrolledExpression {
-                weight: 1.0,
+                weight: $crate::generator::fast_float::FastFloat::One,
                 ty: $crate::script::ty::$unit,
                 span: $crate::span!(0, 0, 0, 0),
                 data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::SetUnit(
@@ -240,7 +260,7 @@ pub mod macros {
         };
         ($a:expr, $unit:expr) => {
             $crate::script::unroll::UnrolledExpression {
-                weight: 1.0,
+                weight: $crate::generator::fast_float::FastFloat::One,
                 ty: $crate::script::ty::$unit,
                 span: $crate::span!(0, 0, 0, 0),
                 data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::SetUnit(
@@ -253,7 +273,7 @@ pub mod macros {
     macro_rules! math {
         (*, $a:expr, $b:expr) => {
             $crate::script::unroll::UnrolledExpression {
-                weight: 1.0,
+                weight: $crate::generator::fast_float::FastFloat::One,
                 ty: $crate::script::Type::Scalar(Some($a.ty.as_scalar().unwrap().unwrap() * &$b.ty.as_scalar().unwrap().unwrap())),
                 span: $crate::span!(0, 0, 0, 0),
                 data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::Multiply(
@@ -263,7 +283,7 @@ pub mod macros {
         };
         (/, $a:expr, $b:expr) => {
             $crate::script::unroll::UnrolledExpression {
-                weight: 1.0,
+                weight: $crate::generator::fast_float::FastFloat::One,
                 ty: $crate::script::Type::Scalar(Some($a.ty.as_scalar().unwrap().unwrap() * &$b.ty.as_scalar().unwrap().unwrap())),
                 span: $crate::span!(0, 0, 0, 0),
                 data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::Divide(
@@ -276,7 +296,7 @@ pub mod macros {
     macro_rules! number {
         ($v:expr) => {
             $crate::script::unroll::UnrolledExpression {
-                weight: 1.0,
+                weight: $crate::generator::fast_float::FastFloat::One,
                 ty: $crate::script::ty::SCALAR,
                 span: $crate::span!(0, 0, 0, 0),
                 data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::Number(
@@ -286,7 +306,7 @@ pub mod macros {
         };
         (=$v:expr) => {
             $crate::script::unroll::UnrolledExpression {
-                weight: 1.0,
+                weight: $crate::generator::fast_float::FastFloat::One,
                 ty: $crate::script::builtins::macros::ty!(DISTANCE),
                 span: $crate::span!(0, 0, 0, 0),
                 data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::DstLiteral(
@@ -296,7 +316,7 @@ pub mod macros {
         };
         ($t:ident $v:expr) => {
             $crate::script::unroll::UnrolledExpression {
-                weight: 1.0,
+                weight: $crate::generator::fast_float::FastFloat::One,
                 ty: $crate::script::builtins::macros::ty!($t),
                 span: $crate::span!(0, 0, 0, 0),
                 data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::Number($v)),
@@ -307,7 +327,7 @@ pub mod macros {
     macro_rules! entity {
         (POINT $index:expr) => {
             $crate::script::unroll::UnrolledExpression {
-                weight: 1.0,
+                weight: $crate::generator::fast_float::FastFloat::One,
                 ty: $crate::script::ty::POINT,
                 span: $crate::span!(0, 0, 0, 0),
                 data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::Entity($index))
@@ -315,7 +335,7 @@ pub mod macros {
         };
         (SCALAR $index:expr) => {
             $crate::script::unroll::UnrolledExpression {
-                weight: 1.0,
+                weight: $crate::generator::fast_float::FastFloat::One,
                 ty: $crate::script::ty::SCALAR,
                 span: $crate::span!(0, 0, 0, 0),
                 data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::Entity($index))
@@ -326,7 +346,7 @@ pub mod macros {
     macro_rules! circle_center {
         ($circle:expr) => {
             $crate::script::unroll::UnrolledExpression {
-                weight: 1.0,
+                weight: $crate::generator::fast_float::FastFloat::One,
                 ty: $crate::script::ty::POINT,
                 span: $crate::span!(0, 0, 0, 0),
                 data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::CircleCenter($circle.clone()))
@@ -337,7 +357,7 @@ pub mod macros {
     macro_rules! circle_radius {
         ($circle:expr) => {
             $crate::script::unroll::UnrolledExpression {
-                weight: 1.0,
+                weight: $crate::generator::fast_float::FastFloat::One,
                 ty: $crate::script::ty::DISTANCE,
                 span: $crate::span!(0, 0, 0, 0),
                 data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::CircleRadius($circle.clone()))
@@ -348,7 +368,7 @@ pub mod macros {
     macro_rules! parallel_through {
         ($a:expr, $b:expr) => {
             $crate::script::unroll::UnrolledExpression {
-                weight: 1.0,
+                weight: $crate::generator::fast_float::FastFloat::One,
                 ty: $crate::script::ty::LINE,
                 span: $crate::span!(0, 0, 0, 0),
                 data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::ParallelThrough(
@@ -361,7 +381,7 @@ pub mod macros {
     macro_rules! perpendicular_through {
         ($a:expr, $b:expr) => {
             $crate::script::unroll::UnrolledExpression {
-                weight: 1.0,
+                weight: $crate::generator::fast_float::FastFloat::One,
                 ty: $crate::script::ty::LINE,
                 span: $crate::span!(0, 0, 0, 0),
                 data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::PerpendicularThrough(
@@ -374,7 +394,7 @@ pub mod macros {
     macro_rules! variable {
         ($v:expr) => {
             $crate::script::unroll::UnrolledExpression {
-                weight: 1.0,
+                weight: $crate::generator::fast_float::FastFloat::One,
                 ty: $v.borrow().definition.ty,
                 span: $crate::span!(0, 0, 0, 0),
                 data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::VariableAccess(
@@ -391,7 +411,7 @@ pub mod macros {
             $(fields.insert(stringify!($field).to_string(), $value.clone());)*
 
             $crate::script::unroll::UnrolledExpression {
-                weight: 1.0,
+                weight: $crate::generator::fast_float::FastFloat::One,
                 ty: $crate::script::ty::bundle(stringify!($t)),
                 span: $crate::span!(0, 0, 0, 0),
                 data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::ConstructBundle(
@@ -404,7 +424,7 @@ pub mod macros {
     macro_rules! distance {
         (PP: $a:expr, $b:expr) => {
             $crate::script::unroll::UnrolledExpression {
-                weight: 1.0,
+                weight: $crate::generator::fast_float::FastFloat::One,
                 ty: $crate::script::ty::DISTANCE,
                 span: $crate::span!(0, 0, 0, 0),
                 data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::PointPointDistance(
@@ -414,7 +434,7 @@ pub mod macros {
         };
         (PL: $a:expr, $b:expr) => {
             $crate::script::unroll::UnrolledExpression {
-                weight: 1.0,
+                weight: $crate::generator::fast_float::FastFloat::One,
                 ty: $crate::script::ty::DISTANCE,
                 span: $crate::span!(0, 0, 0, 0),
                 data: std::rc::Rc::new($crate::script::unroll::UnrolledExpressionData::PointLineDistance(

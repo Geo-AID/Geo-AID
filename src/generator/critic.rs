@@ -1,4 +1,25 @@
+/*
+ Copyright (c) 2023 Michał Wilczek, Michał Margos
+
+ Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
+ associated documentation files (the “Software”), to deal in the Software without restriction,
+ including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
+ and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do
+ so, subject to the following conditions:
+
+ The above copyright notice and this permission notice shall be included in all copies or substantial
+ portions of the Software.
+
+ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+ FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS
+ OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+ WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ */
+
 use std::{cell::RefCell, collections::HashMap, sync::Arc};
+use crate::generator::fast_float::FastFloat;
 
 use crate::script::{Criteria, CriteriaKind};
 
@@ -32,45 +53,10 @@ fn weighed_mean<I: Iterator<Item = (f64, f64)>>(it: I) -> f64 {
     sum / weight_sum
 }
 
-#[derive(Debug, Clone, Copy)]
-pub enum Quality {
-    /// Absolute zero, cannot be inverted. Used with evaluation errors.
-    Zero,
-    /// An actual value that can be manipulated.
-    Some(f64),
-}
-
-impl PartialEq for Quality {
-    fn eq(&self, other: &Self) -> bool {
-        self.as_f64().eq(&other.as_f64())
-    }
-}
-
-impl Eq for Quality {}
-
-impl PartialOrd for Quality {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        self.as_f64().partial_cmp(&other.as_f64())
-    }
-}
-
-impl Quality {
-    #[must_use]
-    pub fn as_f64(&self) -> f64 {
-        match self {
-            Self::Zero => 0.0,
-            Self::Some(v) => *v,
-        }
-    }
-}
-
 /// Inverts the quality. As simple as 1 - q
 #[inline]
-fn invert(q: Quality) -> Quality {
-    match q {
-        Quality::Zero => Quality::Zero,
-        Quality::Some(v) => Quality::Some(1.0 - v),
-    }
+fn invert(q: f64) -> f64 {
+    1.0 - q
 }
 
 pub type Cache = HashMap<usize, ExprCache>;
@@ -91,7 +77,7 @@ fn evaluate_single(
     generation: u64,
     flags: &Arc<Flags>,
     cache: Option<&RefCell<Cache>>,
-) -> (Quality, Vec<f64>) {
+) -> (f64, Vec<FastFloat>) {
     let args = EvaluationArgs {
         logger,
         adjustables,
@@ -105,88 +91,76 @@ fn evaluate_single(
             let v1 = e1.evaluate(&args);
             let v2 = e2.evaluate(&args);
 
-            let weigths = e1.weights.clone() + &e2.weights;
+            let weights = e1.weights.clone() + &e2.weights;
 
             (
-                if let (Ok(v1), Ok(v2)) = (v1, v2) {
+                {
                     let diff = v1 - v2;
                     // Interestingly, it's easier to calculate the quality function for != and then invert it.
-                    invert(Quality::Some(smooth_0_inf(1130.0 * diff.powi(2))))
-                } else {
-                    // An evaluation error means the criteria is surely not met
-                    Quality::Zero
+                    invert(smooth_0_inf(1130.0 * diff.powi(2)))
                 },
-                weigths.0,
+                weights.0,
             )
         }
         CriteriaKind::EqualPoint(e1, e2) => {
             let v1 = e1.evaluate(&args);
             let v2 = e2.evaluate(&args);
 
-            let weigths = e1.weights.clone() + &e2.weights;
+            let weights = e1.weights.clone() + &e2.weights;
 
             (
-                if let (Ok(v1), Ok(v2)) = (v1, v2) {
+                {
                     let diff = (v1 - v2).mangitude();
                     // Interestingly, it's easier to calculate the quality function for != and then invert it.
-                    invert(Quality::Some(smooth_0_inf(1130.0 * diff.powi(2))))
-                } else {
-                    // An evaluation error means the criteria is surely not met
-                    Quality::Zero
+                    invert(smooth_0_inf(1130.0 * diff.powi(2)))
                 },
-                weigths.0,
+                weights.0,
             )
         }
         CriteriaKind::Less(e1, e2) => {
             let v1 = e1.evaluate(&args);
             let v2 = e2.evaluate(&args);
 
-            let weigths = e1.weights.clone() + &e2.weights;
+            let weights = e1.weights.clone() + &e2.weights;
 
             (
-                if let (Ok(v1), Ok(v2)) = (v1, v2) {
+                {
                     // Note that the difference is not the same as with equality. This time we have to be prepared for negative diffs.
                     let (v1, v2) = (v1, v2);
                     let diff = (v1 - v2) / v1.abs();
                     // logger.push(format!("Distance is {}", v1.0.real));
                     // logger.push(format!("Diff's {diff}"));
                     // Interestingly, it's easier to calculate the quality function for != and then invert it.
-                    Quality::Some(smooth_inf_inf(-54.0 * f64::cbrt(diff + 0.001)))
-                } else {
-                    // An evaluation error means the criteria is surely not met
-                    Quality::Zero
+                    smooth_inf_inf(-54.0 * f64::cbrt(diff + 0.001))
                 },
-                weigths.0,
+                weights.0,
             )
         }
         CriteriaKind::Greater(e1, e2) => {
             let v1 = e1.evaluate(&args);
             let v2 = e2.evaluate(&args);
 
-            let weigths = e1.weights.clone() + &e2.weights;
+            let weights = e1.weights.clone() + &e2.weights;
 
             (
-                if let (Ok(v1), Ok(v2)) = (v1, v2) {
+                {
                     // Note that the difference is not the same as with equality. This time we have to be prepared for negative diffs.
                     let (v1, v2) = (v1, v2);
                     let diff = (v1 - v2) / v1.abs();
                     // println!("{v1} > {v2} Satisfied with {}", smooth_inf_inf(54.0 * f64::cbrt(diff - 0.001)));
                     // Interestingly, it's easier to calculate the quality function for != and then invert it.
-                    Quality::Some(smooth_inf_inf(54.0 * f64::cbrt(diff - 0.001)))
-                } else {
-                    // An evaluation error means the criteria is surely not met
-                    Quality::Zero
+                    smooth_inf_inf(54.0 * f64::cbrt(diff - 0.001))
                 },
-                weigths.0,
+                weights.0,
             )
         }
-        // Note: Inversed zero quality is still zero.
+        // Note: Inverted zero quality is still zero.
         CriteriaKind::Inverse(kind) => {
             let (quality, ws) =
                 evaluate_single(kind, adjustables, args.logger, generation, flags, cache);
             (invert(quality), ws)
         }
-        CriteriaKind::Bias(expr) => (Quality::Some(1.0), expr.weights.clone().0),
+        CriteriaKind::Bias(expr) => (1.0, expr.weights.clone().0),
     }
 }
 
@@ -199,7 +173,7 @@ pub fn evaluate(
     generation: u64,
     flags: &Arc<Flags>,
     cache: Option<&RefCell<Cache>>,
-    point_evaluation: &mut [Vec<(Quality, f64)>],
+    point_evaluation: &mut [Vec<(f64, FastFloat)>],
 ) -> AdjustableVec {
     for pt in &mut *point_evaluation {
         pt.clear();
@@ -213,9 +187,9 @@ pub fn evaluate(
         // println!("Evaluation result: {quality}, {:?}", weights);
 
         // Normalize weights (squeeze to [0, 1]) and add (quality, weight) pairs to the points
-        let weight_sum = weights.iter().sum::<f64>();
+        let weight_sum = weights.iter().copied().sum::<FastFloat>();
         for (i, weight) in weights.into_iter().enumerate() {
-            if weight != 0.0 {
+            if !weight.is_zero() {
                 point_evaluation[i].push((quality, crit.weight * weight / weight_sum));
             }
         }
@@ -231,7 +205,7 @@ pub fn evaluate(
                 if eval.is_empty() {
                     1.0
                 } else {
-                    weighed_mean(eval.iter().map(|v| (v.0.as_f64(), v.1)))
+                    weighed_mean(eval.iter().map(|v| (v.0, v.1.to_f64())))
                 },
             )
         })
