@@ -1,22 +1,22 @@
 /*
- Copyright (c) 2023 Michał Wilczek, Michał Margos
+Copyright (c) 2023 Michał Wilczek, Michał Margos
 
- Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
- associated documentation files (the “Software”), to deal in the Software without restriction,
- including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
- and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do
- so, subject to the following conditions:
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
+associated documentation files (the “Software”), to deal in the Software without restriction,
+including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
+and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do
+so, subject to the following conditions:
 
- The above copyright notice and this permission notice shall be included in all copies or substantial
- portions of the Software.
+The above copyright notice and this permission notice shall be included in all copies or substantial
+portions of the Software.
 
- THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
- FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS
- OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
- WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
- CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- */
+THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS
+OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*/
 
 use std::{
     fmt::Display,
@@ -28,12 +28,12 @@ use std::{
 
 use serde::Serialize;
 
+use crate::generator::fast_float::FastFloat;
 use crate::{
     cli::{AnnotationKind, Change, DiagnosticData, Fix},
     generator::expression::{AnyExpr, Expression, PointExpr, ScalarExpr},
     span,
 };
-use crate::generator::fast_float::FastFloat;
 
 use self::parser::Type;
 use self::token::{NamedIdent, Span, Token};
@@ -70,8 +70,8 @@ pub enum Error {
     InconsistentIterators {
         first_span: Span,
         first_length: usize,
-        occured_span: Span,
-        occured_length: usize,
+        occurred_span: Span,
+        occurred_length: usize,
         error_span: Span,
     },
     IteratorWithSameIdIterator {
@@ -103,7 +103,7 @@ pub enum Error {
         function_name: String,
         suggested: Option<String>,
     },
-    FetureNotSupported {
+    FeatureNotSupported {
         error_span: Span,
         feature_name: &'static str,
     },
@@ -175,69 +175,22 @@ pub enum Error {
         flagdef_span: Option<Span>,
         available_values: &'static [&'static str],
     },
+    ComparisonDoesNotExist {
+        error_span: Span,
+        ty: Type,
+    },
 }
 
 impl Error {
     #[must_use]
-    pub fn invalid_token(token: Token) -> Self {
-        Self::InvalidToken { token }
-    }
-
-    #[must_use]
-    pub fn invalid_character(character: char, error_span: Span) -> Self {
-        Self::InvalidCharacter {
-            character,
-            error_span,
-        }
-    }
-
-    #[must_use]
-    pub fn undefined_rule_operator(name: NamedIdent) -> Self {
-        Self::UndefinedRuleOperator { operator: name }
-    }
-
-    #[must_use]
-    pub fn redefined_variable(defined_at: Span, error_span: Span, variable_name: String) -> Self {
-        Self::RedefinedVariable {
-            defined_at,
-            error_span,
-            variable_name,
-        }
-    }
-
-    #[must_use]
-    pub fn undefined_type_variable(definition: Span) -> Self {
-        Self::UndefinedTypeVariable { definition }
-    }
-
-    #[must_use]
-    pub fn feature_not_supported(error_span: Span, feature_name: &'static str) -> Self {
-        Self::FetureNotSupported {
-            error_span,
-            feature_name,
-        }
-    }
-
-    #[must_use]
-    pub fn overload_not_found(error_span: Span, function_name: String, params: Vec<Type>) -> Self {
-        Self::OverloadNotFound {
-            error_span,
-            params,
-            function_name,
-        }
-    }
-
-    #[must_use]
-    pub fn cannot_unpack(error_span: Span, ty: Type) -> Self {
-        Self::CannotUnpack { error_span, ty }
-    }
-
-    #[must_use]
-    pub fn implicit_conversion_does_not_exist(error_span: Span, from: Type, to: Type) -> Self {
-        Self::ImplicitConversionDoesNotExist {
-            error_span,
-            from,
-            to,
+    pub fn as_implicit_does_not_exist(&self) -> Option<(&Span, &Type, &Type)> {
+        match self {
+            Self::ImplicitConversionDoesNotExist {
+                error_span,
+                from,
+                to,
+            } => Some((error_span, from, to)),
+            _ => None,
         }
     }
 
@@ -261,8 +214,8 @@ impl Error {
             Self::InconsistentIterators {
                 first_span,
                 first_length,
-                occured_span,
-                occured_length,
+                occurred_span: occured_span,
+                occurred_length: occured_length,
                 error_span,
             } => DiagnosticData::new(&"inconsitent iterator lengths")
                 .add_span(error_span)
@@ -324,7 +277,7 @@ impl Error {
                     .add_span(error_span)
                     .add_annotation_opt_msg(error_span, AnnotationKind::Help, message.as_ref())
             }
-            Self::FetureNotSupported {
+            Self::FeatureNotSupported {
                 error_span,
                 feature_name,
             } => {
@@ -457,6 +410,10 @@ impl Error {
                             }
                         ]
                     })
+            }
+            Self::ComparisonDoesNotExist { error_span, ty } => {
+                DiagnosticData::new(&format!("Comparison between values of type {ty} does not exist."))
+                    .add_span(error_span)
             }
         }
     }
