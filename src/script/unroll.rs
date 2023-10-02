@@ -1,48 +1,53 @@
 /*
- Copyright (c) 2023 Michał Wilczek, Michał Margos
+Copyright (c) 2023 Michał Wilczek, Michał Margos
 
- Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
- associated documentation files (the “Software”), to deal in the Software without restriction,
- including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
- and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do
- so, subject to the following conditions:
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
+associated documentation files (the “Software”), to deal in the Software without restriction,
+including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
+and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do
+so, subject to the following conditions:
 
- The above copyright notice and this permission notice shall be included in all copies or substantial
- portions of the Software.
+The above copyright notice and this permission notice shall be included in all copies or substantial
+portions of the Software.
 
- THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
- FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS
- OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
- WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
- CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- */
+THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS
+OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*/
 
+use geo_aid_derive::Definition;
+use std::fmt::Formatter;
 use std::{
+    cell::RefCell,
     collections::{hash_map::Entry, HashMap},
-    fmt::{Display, Debug},
+    fmt::{Debug, Display},
     ops::{Deref, DerefMut},
-    rc::Rc, write, cell::RefCell,
+    rc::Rc,
+    write,
 };
 
 use crate::span;
 
-use crate::script::compile;
+use crate::generator::fast_float::FastFloat;
+use crate::script::builtins::macros::{distance, index, line2};
+use crate::script::ty;
 pub use context::{
     Circle as EntCircle, CompileContext, Definition, Entity, Line as EntLine, Point as EntPoint,
     Scalar as EntScalar,
 };
-use crate::generator::fast_float::FastFloat;
 
 use super::{
-    builtins::{self, macros::variable},
+    builtins,
     parser::{
         BinaryOperator, DisplayProperties, ExplicitIterator, Expression, FlagStatement,
-        ImplicitIterator, LetStatement, Parse, PredefinedRuleOperator, Type,
-        PropertyValue, Punctuated, RuleOperator, RuleStatement, SimpleExpression, Statement, SimpleExpressionKind
+        ImplicitIterator, LetStatement, Parse, PredefinedRuleOperator, PropertyValue, Punctuated,
+        RuleOperator, RuleStatement, SimpleExpression, SimpleExpressionKind, Statement, Type,
     },
-    token::{self, Ident, NamedIdent, PointCollection, Span},
-    ty, ComplexUnit, Error, SimpleUnit, unit
+    token::{self, Ident, NamedIdent, PointCollection as PCToken, Span},
+    unit, ComplexUnit, Error,
 };
 
 mod context;
@@ -56,7 +61,7 @@ pub struct RuleOperatorDefinition {
 
 /// Meta info about a point.
 #[derive(Debug, Clone)]
-pub struct PointMeta {
+pub struct LabelMeta {
     /// The letter of a point.
     pub letter: char,
     /// The count of `'` in the point's name.
@@ -67,9 +72,9 @@ pub struct PointMeta {
 
 /// A point in variable meta.
 #[derive(Debug, Clone)]
-pub struct Point {
+pub struct PointMeta {
     /// A point meta is optional, since not every point has a letter.
-    pub meta: Option<PointMeta>,
+    pub meta: Option<LabelMeta>,
     /// Whether or not to display the point.
     pub display: bool,
 }
@@ -78,7 +83,7 @@ pub struct Point {
 #[derive(Debug)]
 pub enum VariableMeta {
     /// Point variable
-    Point(Point),
+    Point(PointMeta),
     Scalar,
     Line,
     PointCollection,
@@ -87,7 +92,7 @@ pub enum VariableMeta {
 
 impl VariableMeta {
     #[must_use]
-    pub fn as_point(&self) -> Option<&Point> {
+    pub fn as_point(&self) -> Option<&PointMeta> {
         if let Self::Point(v) = self {
             Some(v)
         } else {
@@ -98,13 +103,13 @@ impl VariableMeta {
 
 /// A variable created with a let statement.
 #[derive(Debug)]
-pub struct Variable {
+pub struct Variable<T> {
     /// Variable's name
     pub name: String,
     /// Variable's definition span.
     pub definition_span: Span,
     /// Variable's definition.
-    pub definition: UnrolledExpression
+    pub definition: Expr<T>,
 }
 
 pub type FlagSet = HashMap<String, Flag>;
@@ -318,17 +323,17 @@ pub struct RuleOverload {
     /// The parameter types.
     pub params: (Type, Type),
     /// The definition.
-    pub definition: RuleDefinition
+    pub definition: RuleDefinition,
 }
 
 /// geoscript rule declaration
-type GeoRule = dyn Fn(&UnrolledExpression, &UnrolledExpression, &mut CompileContext, Option<Properties>);
+type GeoRule = dyn Fn(&AnyExpr, &AnyExpr, &mut CompileContext, Option<Properties>);
 
 /// A function definition.
 pub struct RuleDefinition(pub Box<GeoRule>);
 
 impl Debug for RuleDefinition {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "function definition")
     }
 }
@@ -356,10 +361,7 @@ impl Rule {
     /// # Panics
     /// Never. Shut up, clippy.
     #[must_use]
-    pub fn match_params(
-        expected: (&Type, &Type),
-        received: (&Type, &Type)
-    ) -> bool {
+    pub fn match_params(expected: (&Type, &Type), received: (&Type, &Type)) -> bool {
         received.0.can_cast(expected.0) && received.1.can_cast(expected.1)
     }
 
@@ -386,7 +388,7 @@ pub struct FunctionOverload {
 }
 
 /// geoscript function declaration
-type GeoFunc = dyn Fn(&[UnrolledExpression], &mut CompileContext, Option<Properties>) -> UnrolledExpression;
+type GeoFunc = dyn Fn(&[AnyExpr], &mut CompileContext, Option<Properties>) -> AnyExpr;
 
 /// A function definition.
 pub struct FunctionDefinition(pub Box<GeoFunc>);
@@ -473,20 +475,21 @@ impl Function {
     }
 }
 
-/// The library of all rules and functions available in GeoScript.
-#[derive(Debug)]
+/// The library of all rules and functions available in geoscript.
+#[derive(Debug, Default)]
 pub struct Library {
     /// Functions
     pub functions: HashMap<String, Function>,
     /// The rule operators.
-    pub rule_ops: HashMap<String, Rc<Rule>>
+    pub rule_ops: HashMap<String, Rc<Rule>>,
 }
 
 impl Library {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             functions: HashMap::new(),
-            rule_ops: HashMap::new()
+            rule_ops: HashMap::new(),
         }
     }
 }
@@ -530,7 +533,9 @@ impl<const ITER: bool> From<&Expression<ITER>> for IterNode {
 impl From<&SimpleExpression> for IterNode {
     fn from(value: &SimpleExpression) -> Self {
         match &value.kind {
-            SimpleExpressionKind::Ident(_) | SimpleExpressionKind::Number(_) => IterNode::new(Vec::new()),
+            SimpleExpressionKind::Ident(_) | SimpleExpressionKind::Number(_) => {
+                IterNode::new(Vec::new())
+            }
             SimpleExpressionKind::Call(expr) => match &expr.params {
                 Some(params) => IterNode::new(
                     params
@@ -602,7 +607,7 @@ impl IterNode {
         e2: &Expression<ITER2>,
     ) -> Self {
         let mut node = Self::from(e1);
-        node.extend(Self::from(e2).0.into_iter());
+        node.extend(Self::from(e2).0);
         node
     }
 
@@ -627,8 +632,8 @@ impl IterNode {
                         return Err(Error::InconsistentIterators {
                             first_span: entry.get().1,
                             first_length: entry.get().0,
-                            occured_span: iter.span,
-                            occured_length: iter.variants.len(),
+                            occurred_span: iter.span,
+                            occurred_length: iter.variants.len(),
                             error_span: full_span,
                         });
                     } else if let Some(parent) = entry.get().2 {
@@ -665,7 +670,7 @@ impl MultiRangeIterator {
 
         Self {
             maxes,
-            currents: vec![0].repeat(l),
+            currents: [0].repeat(l),
         }
     }
 
@@ -801,119 +806,216 @@ impl<'r> IterTreeIterator<'r> {
 /// The kind on the unrolled rule.
 #[derive(Debug)]
 pub enum UnrolledRuleKind {
-    Eq,
-    Gt,
-    Lt,
+    PointEq(Expr<Point>, Expr<Point>),
+    ScalarEq(Expr<Scalar>, Expr<Scalar>),
+    Gt(Expr<Scalar>, Expr<Scalar>),
+    Lt(Expr<Scalar>, Expr<Scalar>),
 }
 
-#[derive(Debug, Clone)]
-pub enum UnrolledExpressionData {
-    VariableAccess(Rc<RefCell<Variable>>),
-    PointCollection(Vec<UnrolledExpression>),
-    Number(f64),
-    DstLiteral(f64),
-    Entity(usize),
-    Boxed(UnrolledExpression),
-    IndexCollection(UnrolledExpression, usize),
-    LineFromPoints(UnrolledExpression, UnrolledExpression),
-    SetUnit(UnrolledExpression, ComplexUnit),
-    PointPointDistance(UnrolledExpression, UnrolledExpression),
-    PointLineDistance(UnrolledExpression, UnrolledExpression),
-    Negate(UnrolledExpression),
-    Add(UnrolledExpression, UnrolledExpression),
-    Subtract(UnrolledExpression, UnrolledExpression),
-    Multiply(UnrolledExpression, UnrolledExpression),
-    Divide(UnrolledExpression, UnrolledExpression),
-    ThreePointAngle(UnrolledExpression, UnrolledExpression, UnrolledExpression),
-    ThreePointAngleDir(UnrolledExpression, UnrolledExpression, UnrolledExpression), // Directed angle
-    TwoLineAngle(UnrolledExpression, UnrolledExpression),
-    AngleBisector(UnrolledExpression, UnrolledExpression, UnrolledExpression),
-    Average(Vec<UnrolledExpression>),
-    PerpendicularThrough(UnrolledExpression, UnrolledExpression), // Line, Point
-    ParallelThrough(UnrolledExpression, UnrolledExpression),      // Line, Point
-    LineLineIntersection(UnrolledExpression, UnrolledExpression),
-    Circle(UnrolledExpression, UnrolledExpression), // Center, radius
-    CircleRadius(UnrolledExpression),
-    CircleCenter(UnrolledExpression),
-    ConstructBundle(HashMap<String, UnrolledExpression>),
-    IndexBundle(UnrolledExpression, String),
+pub trait ConvertFrom<T> {
+    /// # Errors
+    /// Returns an error if the conversion is invalid.
+    fn convert_from(value: T) -> Result<Expr<Self>, Error>;
 }
 
-impl Definition for UnrolledExpressionData {
-    fn order(&self, context: &CompileContext) -> usize {
-        match self {
-            Self::Entity(i) => context.get_entity(*i).order(context),
-            _ => 0 // Everything else is considered a bind.
-        }
+impl<T> ConvertFrom<Expr<T>> for T {
+    fn convert_from(value: Expr<T>) -> Result<Expr<Self>, Error> {
+        Ok(value)
     }
+}
 
-    fn contains_entity(&self, entity: usize, context: &CompileContext) -> bool {
-        match self {
-            UnrolledExpressionData::VariableAccess(var) => var.borrow().definition.contains_entity(entity, context),
-            UnrolledExpressionData::Entity(id) => {
-                if *id == entity {
-                    true
-                } else {
-                    context.get_entity(*id).contains_entity(entity, context)
+pub trait Convert
+where
+    Self: Sized,
+{
+    /// # Errors
+    /// Returns an error if the conversion is invalid.
+    fn convert<T: ConvertFrom<Self>>(self) -> Result<Expr<T>, Error>;
+}
+
+impl<T> Convert for T {
+    fn convert<U: ConvertFrom<Self>>(self) -> Result<Expr<U>, Error> {
+        U::convert_from(self)
+    }
+}
+
+pub trait GetValueType {
+    fn get_value_type(&self) -> Type;
+}
+
+pub trait Simplify {
+    #[must_use]
+    fn simplify(&self, context: &CompileContext) -> Self;
+}
+
+macro_rules! impl_from_any {
+    ($what:ident) => {
+        impl ConvertFrom<AnyExpr> for $what {
+            fn convert_from(value: AnyExpr) -> Result<Expr<Self>, Error> {
+                match value {
+                    AnyExpr::Point(v) => v.convert(),
+                    AnyExpr::Line(v) => v.convert(),
+                    AnyExpr::Scalar(v) => v.convert(),
+                    AnyExpr::Circle(v) => v.convert(),
+                    AnyExpr::PointCollection(v) => v.convert(),
+                    AnyExpr::Bundle(v) => v.convert(),
                 }
             }
-            UnrolledExpressionData::PointCollection(v) | UnrolledExpressionData::Average(v) => {
-                v.iter().any(|x| x.contains_entity(entity, context))
-            }
-            UnrolledExpressionData::DstLiteral(_)
-            | UnrolledExpressionData::Number(_) => false,
-            UnrolledExpressionData::Boxed(v)
-            | UnrolledExpressionData::IndexCollection(v, _)
-            | UnrolledExpressionData::IndexBundle(v, _)
-            | UnrolledExpressionData::CircleCenter(v)
-            | UnrolledExpressionData::CircleRadius(v)
-            | UnrolledExpressionData::Negate(v) => v.contains_entity(entity, context),
-            UnrolledExpressionData::SetUnit(v, _) => {
-                v.contains_entity(entity, context)
-            }
-            UnrolledExpressionData::PointPointDistance(e1, e2)
-            | UnrolledExpressionData::PointLineDistance(e1, e2) => e1
-                .contains_entity(entity, context)
-                || e2.contains_entity(entity, context),
-            UnrolledExpressionData::Add(v1, v2)
-            | UnrolledExpressionData::Circle(v1, v2)
-            | UnrolledExpressionData::LineFromPoints(v1, v2)
-            | UnrolledExpressionData::ParallelThrough(v1, v2)
-            | UnrolledExpressionData::PerpendicularThrough(v1, v2)
-            | UnrolledExpressionData::LineLineIntersection(v1, v2)
-            | UnrolledExpressionData::TwoLineAngle(v1, v2)
-            | UnrolledExpressionData::Subtract(v1, v2)
-            | UnrolledExpressionData::Multiply(v1, v2)
-            | UnrolledExpressionData::Divide(v1, v2) => v1
-                .contains_entity(entity, context)
-                || v2.contains_entity(entity, context),
-            UnrolledExpressionData::ThreePointAngle(v1, v2, v3)
-            | UnrolledExpressionData::ThreePointAngleDir(v1, v2, v3)
-            | UnrolledExpressionData::AngleBisector(v1, v2, v3) => {
-                v1.contains_entity(entity, context)
-                    || v2.contains_entity(entity, context)
-                    || v3.contains_entity(entity, context)
-            }
-            UnrolledExpressionData::ConstructBundle(v) => {
-                v.values().any(|x| x.contains_entity(entity, context))
+        }
+    };
+}
+
+macro_rules! convert_err {
+    ($from:ident($v:expr) -> $to:ident) => {
+        Err(Error::ImplicitConversionDoesNotExist {
+            error_span: ($v).span,
+            from: ($v).data.get_value_type(),
+            to: Self::get_type(),
+        })
+    };
+}
+
+macro_rules! impl_convert_err {
+    ($from:ident -> $to:ident) => {
+        impl ConvertFrom<Expr<$from>> for $to {
+            fn convert_from(value: Expr<$from>) -> Result<Expr<Self>, Error> {
+                convert_err!($from(value) -> $to)
             }
         }
     }
 }
 
-impl Display for UnrolledExpressionData {
+macro_rules! impl_make_variable {
+    ($what:ident) => {
+        impl Expr<$what> {
+            #[must_use]
+            pub fn make_variable(self, name: String) -> Self {
+                let sp = self.span;
+
+                Expr {
+                    span: sp,
+                    weight: FastFloat::One,
+                    data: Rc::new($what::Generic(Generic::VariableAccess(Rc::new(
+                        RefCell::new(Variable {
+                            name,
+                            definition: self,
+                            definition_span: sp,
+                        }),
+                    )))),
+                }
+            }
+        }
+    };
+    ($what:ident { other: $other:ident, data: $data:ident }) => {
+        impl Expr<$what> {
+            #[must_use]
+            pub fn make_variable(self, name: String) -> Self {
+                let sp = self.span;
+
+                Expr {
+                    span: sp,
+                    weight: FastFloat::One,
+                    data: Rc::new($what {
+                        $other: self.data.$other,
+                        data: $data::Generic(Generic::VariableAccess(Rc::new(RefCell::new(
+                            Variable {
+                                name,
+                                definition: self,
+                                definition_span: sp,
+                            },
+                        )))),
+                    }),
+                }
+            }
+        }
+    };
+}
+
+macro_rules! impl_any_from_x {
+    ($what:ident) => {
+        impl From<Expr<$what>> for AnyExpr {
+            fn from(value: Expr<$what>) -> Self {
+                AnyExpr::$what(value)
+            }
+        }
+    };
+}
+
+#[derive(Debug, Clone, Definition)]
+pub enum Generic<T>
+where
+    T: Definition,
+{
+    VariableAccess(#[def(variable)] Rc<RefCell<Variable<T>>>),
+    Boxed(Expr<T>),
+}
+
+impl<T: Display + Definition> Display for Generic<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            UnrolledExpressionData::VariableAccess(name) => write!(f, "{}", name.borrow().name),
-            UnrolledExpressionData::PointCollection(col) => write!(
-                f,
-                "col({})",
-                col.iter()
-                    .map(|v| format!("{v}"))
-                    .collect::<Vec<String>>()
-                    .join(", ")
-            ),
-            UnrolledExpressionData::Average(exprs) => write!(
+            Self::VariableAccess(name) => write!(f, "{}", name.borrow().name),
+            Self::Boxed(expr) => {
+                write!(f, "{expr}")
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, Definition)]
+pub enum Point {
+    Generic(Generic<Self>),
+    Entity(#[def(entity)] usize),
+    Average(#[def(sequence)] Vec<Expr<Point>>),
+    LineLineIntersection(Expr<Line>, Expr<Line>),
+    CircleCenter(Expr<Circle>),
+}
+
+impl Point {
+    #[must_use]
+    pub fn get_type() -> Type {
+        Type::Point
+    }
+}
+
+impl Simplify for Expr<Point> {
+    fn simplify(&self, context: &CompileContext) -> Expr<Point> {
+        match self.data.as_ref() {
+            Point::Generic(generic) => match generic {
+                Generic::VariableAccess(var) => var.borrow().definition.simplify(context),
+                Generic::Boxed(expr) => expr.simplify(context),
+            },
+            Point::Entity(index) => context.get_point_by_index(*index),
+            Point::CircleCenter(circ) => match circ.simplify(context).data.as_ref() {
+                Circle::Circle(center, _) => center.simplify(context),
+                _ => unreachable!(),
+            },
+            Point::Average(_) | Point::LineLineIntersection(_, _) => self.clone(),
+        }
+    }
+}
+
+impl Expr<Point> {
+    #[must_use]
+    pub fn boxed(self, weight: FastFloat, span: Span) -> Self {
+        Self {
+            weight,
+            span,
+            data: Rc::new(Point::Generic(Generic::Boxed(self))),
+        }
+    }
+}
+
+impl GetValueType for Point {
+    fn get_value_type(&self) -> Type {
+        ty::POINT
+    }
+}
+
+impl Display for Point {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Generic(v) => write!(f, "{v}"),
+            Self::Average(exprs) => write!(
                 f,
                 "average({})",
                 exprs
@@ -922,61 +1024,780 @@ impl Display for UnrolledExpressionData {
                     .collect::<Vec<String>>()
                     .join(", ")
             ),
-            UnrolledExpressionData::Number(num) => write!(f, "{num}"),
-            UnrolledExpressionData::DstLiteral(num) => write!(f, "lit {num}"),
-            UnrolledExpressionData::Entity(i) => write!(f, "Entity {i}"),
-            UnrolledExpressionData::Boxed(expr) | UnrolledExpressionData::SetUnit(expr, _) => {
-                write!(f, "{expr}")
-            }
-            UnrolledExpressionData::IndexBundle(expr, field) => write!(f, "{expr}.{field}"),
-            UnrolledExpressionData::IndexCollection(expr, index) => write!(f, "{expr}[{index}]"),
-            UnrolledExpressionData::LineFromPoints(e1, e2) => write!(f, "line({e1}, {e2})"),
-            UnrolledExpressionData::PointPointDistance(e1, e2)
-            | UnrolledExpressionData::PointLineDistance(e1, e2) => write!(f, "dst({e1}, {e2})"),
-            UnrolledExpressionData::Negate(e) => write!(f, "-{e}"),
-            UnrolledExpressionData::Add(e1, e2) => write!(f, "{e1} + {e2}"),
-            UnrolledExpressionData::Multiply(e1, e2) => write!(f, "{e1} * {e2}"),
-            UnrolledExpressionData::Divide(e1, e2) => write!(f, "{e1} / {e2}"),
-            UnrolledExpressionData::Subtract(e1, e2) => write!(f, "{e1} - {e2}"),
-            UnrolledExpressionData::ThreePointAngle(e1, e2, e3) => {
-                write!(f, "angle({e1}, {e2}, {e3})")
-            }
-            UnrolledExpressionData::ThreePointAngleDir(e1, e2, e3) => {
-                write!(f, "dir_angle({e1}, {e2}, {e3})")
-            }
-            UnrolledExpressionData::TwoLineAngle(e1, e2) => write!(f, "angle({e1}, {e2})"),
-            UnrolledExpressionData::AngleBisector(e1, e2, e3) => {
-                write!(f, "angle-bisector({e1}, {e2}, {e3})")
-            }
-            UnrolledExpressionData::PerpendicularThrough(l, p) => {
-                write!(f, "perpendicular-through({l}, {p})")
-            }
-            UnrolledExpressionData::ParallelThrough(l, p) => {
-                write!(f, "parallel-through({l}, {p})")
-            }
-            UnrolledExpressionData::LineLineIntersection(l1, l2) => {
+            Self::Entity(i) => write!(f, "Point {i}"),
+            Self::LineLineIntersection(l1, l2) => {
                 write!(f, "intersection({l1}, {l2})")
             }
-            UnrolledExpressionData::Circle(center, radius) => {
-                write!(f, "circle({center}, {radius})")
-            }
-            UnrolledExpressionData::CircleRadius(circle) => {
-                write!(f, "{circle}.radius")
-            }
-            UnrolledExpressionData::CircleCenter(circle) => {
+            Self::CircleCenter(circle) => {
                 write!(f, "{circle}.center")
             }
-            UnrolledExpressionData::ConstructBundle(fields) => {
+        }
+    }
+}
+
+impl_from_any! {Point}
+impl_convert_err! {Circle -> Point}
+impl_convert_err! {Line -> Point}
+impl_convert_err! {Bundle -> Point}
+impl_convert_err! {Scalar -> Point}
+
+impl_make_variable! {Point}
+
+impl ConvertFrom<Expr<PointCollection>> for Point {
+    fn convert_from(value: Expr<PointCollection>) -> Result<Expr<Self>, Error> {
+        if value.data.length == 1 {
+            Ok(index!(value, 0))
+        } else {
+            convert_err!(PointCollection(value) -> Point)
+        }
+    }
+}
+
+#[derive(Debug, Clone, Definition)]
+pub enum Circle {
+    Generic(Generic<Self>),
+    Entity(#[def(entity)] usize),
+    Circle(Expr<Point>, Expr<Scalar>), // Center, radius
+}
+
+impl_from_any! {Circle}
+
+impl_convert_err! {Point -> Circle}
+impl_convert_err! {Line -> Circle}
+impl_convert_err! {Bundle -> Circle}
+impl_convert_err! {Scalar -> Circle}
+impl_convert_err! {PointCollection -> Circle}
+
+impl_make_variable! {Circle}
+
+impl Circle {
+    #[must_use]
+    pub fn get_type() -> Type {
+        ty::CIRCLE
+    }
+}
+
+impl Simplify for Expr<Circle> {
+    fn simplify(&self, context: &CompileContext) -> Self {
+        match self.data.as_ref() {
+            Circle::Generic(generic) => match generic {
+                Generic::VariableAccess(var) => var.borrow().definition.simplify(context),
+                Generic::Boxed(expr) => expr.simplify(context),
+            },
+            Circle::Entity(index) => context.get_circle_by_index(*index),
+            Circle::Circle(_, _) => self.clone(),
+        }
+    }
+}
+
+impl Expr<Circle> {
+    #[must_use]
+    pub fn boxed(self, weight: FastFloat, span: Span) -> Self {
+        Self {
+            weight,
+            span,
+            data: Rc::new(Circle::Generic(Generic::Boxed(self))),
+        }
+    }
+}
+
+impl GetValueType for Circle {
+    fn get_value_type(&self) -> Type {
+        ty::CIRCLE
+    }
+}
+
+impl Display for Circle {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Generic(v) => write!(f, "{v}"),
+            Self::Entity(i) => write!(f, "Entity {i}"),
+            Self::Circle(center, radius) => {
+                write!(f, "circle({center}, {radius})")
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, Definition)]
+pub enum Line {
+    Generic(Generic<Self>),
+    Entity(#[def(entity)] usize),
+    LineFromPoints(Expr<Point>, Expr<Point>),
+    AngleBisector(Expr<Point>, Expr<Point>, Expr<Point>),
+    PerpendicularThrough(Expr<Line>, Expr<Point>), // Line, Point
+    ParallelThrough(Expr<Line>, Expr<Point>),      // Line, Point
+}
+
+impl Line {
+    #[must_use]
+    pub fn get_type() -> Type {
+        ty::LINE
+    }
+}
+
+impl Simplify for Expr<Line> {
+    fn simplify(&self, context: &CompileContext) -> Expr<Line> {
+        match self.data.as_ref() {
+            Line::Generic(generic) => match generic {
+                Generic::VariableAccess(var) => var.borrow().definition.simplify(context),
+                Generic::Boxed(expr) => expr.simplify(context),
+            },
+            Line::Entity(index) => context.get_line_by_index(*index),
+            Line::LineFromPoints(_, _)
+            | Line::AngleBisector(_, _, _)
+            | Line::PerpendicularThrough(_, _)
+            | Line::ParallelThrough(_, _) => self.clone(),
+        }
+    }
+}
+
+impl Expr<Line> {
+    #[must_use]
+    pub fn boxed(self, weight: FastFloat, span: Span) -> Self {
+        Self {
+            weight,
+            span,
+            data: Rc::new(Line::Generic(Generic::Boxed(self))),
+        }
+    }
+}
+
+impl_from_any! {Line}
+impl_convert_err! {Bundle -> Line}
+impl_convert_err! {Circle -> Line}
+impl_convert_err! {Point -> Line}
+impl_convert_err! {Scalar -> Line}
+
+impl_make_variable! {Line}
+
+impl ConvertFrom<Expr<PointCollection>> for Line {
+    fn convert_from(value: Expr<PointCollection>) -> Result<Expr<Self>, Error> {
+        if value.data.length == 2 {
+            Ok(line2!(index!(value, 0), index!(value, 1)))
+        } else {
+            convert_err!(PointCollection(value) -> Line)
+        }
+    }
+}
+
+impl GetValueType for Line {
+    fn get_value_type(&self) -> Type {
+        ty::LINE
+    }
+}
+
+impl Display for Line {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Generic(v) => write!(f, "{v}"),
+            Self::Entity(i) => write!(f, "Entity {i}"),
+            Self::LineFromPoints(e1, e2) => write!(f, "line({e1}, {e2})"),
+            Self::AngleBisector(e1, e2, e3) => {
+                write!(f, "angle-bisector({e1}, {e2}, {e3})")
+            }
+            Self::PerpendicularThrough(l, p) => {
+                write!(f, "perpendicular-through({l}, {p})")
+            }
+            Self::ParallelThrough(l, p) => {
+                write!(f, "parallel-through({l}, {p})")
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, Definition)]
+pub enum ScalarData {
+    Generic(Generic<Scalar>),
+    Entity(#[def(entity)] usize),
+    Number(#[def(no_entity)] f64),
+    DstLiteral(#[def(no_entity)] f64),
+    SetUnit(Expr<Scalar>, #[def(no_entity)] ComplexUnit),
+    PointPointDistance(Expr<Point>, Expr<Point>),
+    PointLineDistance(Expr<Point>, Expr<Line>),
+    Negate(Expr<Scalar>),
+    Add(Expr<Scalar>, Expr<Scalar>),
+    Subtract(Expr<Scalar>, Expr<Scalar>),
+    Multiply(Expr<Scalar>, Expr<Scalar>),
+    Divide(Expr<Scalar>, Expr<Scalar>),
+    ThreePointAngle(Expr<Point>, Expr<Point>, Expr<Point>),
+    ThreePointAngleDir(Expr<Point>, Expr<Point>, Expr<Point>), // Directed angle
+    TwoLineAngle(Expr<Line>, Expr<Line>),
+    Average(#[def(sequence)] Vec<Expr<Scalar>>),
+    CircleRadius(Expr<Circle>),
+}
+
+impl Display for ScalarData {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Generic(v) => write!(f, "{v}"),
+            Self::Average(exprs) => write!(
+                f,
+                "average({})",
+                exprs
+                    .iter()
+                    .map(|v| format!("{v}"))
+                    .collect::<Vec<String>>()
+                    .join(", ")
+            ),
+            Self::Number(num) => write!(f, "{num}"),
+            Self::DstLiteral(num) => write!(f, "lit {num}"),
+            Self::Entity(i) => write!(f, "Entity {i}"),
+            Self::SetUnit(expr, _) => {
+                write!(f, "{expr}")
+            }
+            Self::PointPointDistance(e1, e2) => write!(f, "dst({e1}, {e2})"),
+            Self::PointLineDistance(e1, e2) => write!(f, "dst({e1}, {e2})"),
+            Self::Negate(e) => write!(f, "-{e}"),
+            Self::Add(e1, e2) => write!(f, "{e1} + {e2}"),
+            Self::Multiply(e1, e2) => write!(f, "{e1} * {e2}"),
+            Self::Divide(e1, e2) => write!(f, "{e1} / {e2}"),
+            Self::Subtract(e1, e2) => write!(f, "{e1} - {e2}"),
+            Self::ThreePointAngle(e1, e2, e3) => {
+                write!(f, "angle({e1}, {e2}, {e3})")
+            }
+            Self::ThreePointAngleDir(e1, e2, e3) => {
+                write!(f, "dir_angle({e1}, {e2}, {e3})")
+            }
+            Self::TwoLineAngle(e1, e2) => write!(f, "angle({e1}, {e2})"),
+            Self::CircleRadius(circle) => {
+                write!(f, "{circle}.radius")
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, Definition)]
+pub struct Scalar {
+    pub unit: Option<ComplexUnit>,
+    #[def(entity)]
+    pub data: ScalarData,
+}
+
+impl_from_any! {Scalar}
+
+impl_convert_err! {Point -> Scalar}
+impl_convert_err! {Circle -> Scalar}
+impl_convert_err! {Line -> Scalar}
+impl_convert_err! {Bundle -> Scalar}
+
+impl_make_variable! {Scalar {other: unit, data: ScalarData}}
+
+impl ConvertFrom<Expr<PointCollection>> for Scalar {
+    fn convert_from(value: Expr<PointCollection>) -> Result<Expr<Self>, Error> {
+        if value.data.length == 2 {
+            Ok(distance!(PP: index!(value, 0), index!(value, 1)))
+        } else {
+            convert_err!(PointCollection(value) -> Scalar)
+        }
+    }
+}
+
+impl Scalar {
+    #[must_use]
+    pub fn get_type() -> Type {
+        ty::SCALAR
+    }
+}
+
+impl Expr<Scalar> {
+    #[must_use]
+    pub fn boxed(self, weight: FastFloat, span: Span) -> Self {
+        Self {
+            weight,
+            span,
+            data: Rc::new(Scalar {
+                unit: self.data.unit,
+                data: ScalarData::Generic(Generic::Boxed(self)),
+            }),
+        }
+    }
+
+    /// # Errors
+    /// Returns a conversion error if it is invalid.
+    ///
+    /// Only valid conversions are None to another unit or self to self
+    pub fn convert_unit(self, unit: Option<ComplexUnit>) -> Result<Self, Error> {
+        let err = Err(Error::ImplicitConversionDoesNotExist {
+            error_span: self.span,
+            from: self.get_value_type(),
+            to: Type::Scalar(unit),
+        });
+
+        if self.data.unit == unit {
+            Ok(self)
+        } else if unit.is_none() || self.data.unit.is_some() && self.data.unit != unit {
+            err
+        } else {
+            // `unit` is concrete and self.unit is not
+            Ok(Self {
+                weight: self.weight,
+                span: self.span,
+                data: Rc::new(Scalar {
+                    unit,
+                    data: match &self.data.data {
+                        ScalarData::Generic(generic) => match generic {
+                            Generic::VariableAccess(_) => unreachable!(), // Always concrete
+                            Generic::Boxed(v) => {
+                                ScalarData::Generic(Generic::Boxed(v.clone().convert_unit(unit)?))
+                            }
+                        },
+                        v @ (ScalarData::Entity(_) | ScalarData::Number(_)) => v.clone(),
+                        ScalarData::DstLiteral(_)
+                        | ScalarData::PointPointDistance(_, _)
+                        | ScalarData::PointLineDistance(_, _)
+                        | ScalarData::ThreePointAngle(_, _, _)
+                        | ScalarData::ThreePointAngleDir(_, _, _)
+                        | ScalarData::TwoLineAngle(_, _)
+                        | ScalarData::CircleRadius(_)
+                        | ScalarData::SetUnit(_, _) => unreachable!(), // Always concrete
+                        ScalarData::Negate(v) => ScalarData::Negate(v.clone().convert_unit(unit)?),
+                        ScalarData::Add(a, b) => {
+                            // Both operands are guaranteed to be unit-less here.
+                            ScalarData::Add(
+                                a.clone().convert_unit(unit)?,
+                                b.clone().convert_unit(unit)?,
+                            )
+                        }
+                        ScalarData::Subtract(a, b) => {
+                            // Both operands are guaranteed to be unit-less here.
+                            ScalarData::Subtract(
+                                a.clone().convert_unit(unit)?,
+                                b.clone().convert_unit(unit)?,
+                            )
+                        }
+                        ScalarData::Multiply(a, b) => {
+                            // Both operands are guaranteed to be unit-less here.
+                            ScalarData::Multiply(
+                                a.clone().convert_unit(unit)?,
+                                b.clone().convert_unit(Some(unit::SCALAR))?,
+                            )
+                        }
+                        ScalarData::Divide(a, b) => {
+                            // Both operands are guaranteed to be unit-less here.
+                            ScalarData::Divide(
+                                a.clone().convert_unit(unit)?,
+                                b.clone().convert_unit(Some(unit::SCALAR))?,
+                            )
+                        }
+                        ScalarData::Average(exprs) => {
+                            // All will be unit-less.
+                            ScalarData::Average(
+                                exprs
+                                    .iter()
+                                    .map(|v| v.clone().convert_unit(unit))
+                                    .collect::<Result<Vec<_>, Error>>()?,
+                            )
+                        }
+                    },
+                }),
+            })
+        }
+    }
+
+    /// # Panics
+    /// If bugged
+    #[must_use]
+    pub fn specify_unit(self) -> Self {
+        if self.data.unit.is_none() {
+            self.convert_unit(Some(unit::SCALAR)).unwrap()
+        } else {
+            self
+        }
+    }
+}
+
+impl GetValueType for Scalar {
+    fn get_value_type(&self) -> Type {
+        Type::Scalar(self.unit)
+    }
+}
+
+impl Display for Scalar {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.data)
+    }
+}
+
+#[derive(Debug, Clone, Definition)]
+pub enum PointCollectionData {
+    Generic(Generic<PointCollection>),
+    PointCollection(#[def(sequence)] Vec<Expr<Point>>),
+}
+
+impl PointCollectionData {
+    #[must_use]
+    pub fn as_collection(&self) -> Option<&Vec<Expr<Point>>> {
+        match self {
+            PointCollectionData::PointCollection(v) => Some(v),
+            PointCollectionData::Generic(_) => None,
+        }
+    }
+
+    /// # Panics
+    /// Panics if the collection isn't long enough
+    #[must_use]
+    pub fn index(&self, index: usize) -> Expr<Point> {
+        match self {
+            PointCollectionData::Generic(generic) => match &generic {
+                Generic::VariableAccess(var) => var.borrow().definition.index(index),
+                Generic::Boxed(expr) => expr.index(index),
+            },
+            PointCollectionData::PointCollection(col) => col.get(index).unwrap().clone(),
+        }
+    }
+}
+
+impl Display for PointCollectionData {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Generic(v) => write!(f, "{v}"),
+            Self::PointCollection(col) => write!(
+                f,
+                "col({})",
+                col.iter()
+                    .map(|v| format!("{v}"))
+                    .collect::<Vec<String>>()
+                    .join(", ")
+            ),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Definition)]
+pub struct PointCollection {
+    pub length: usize,
+    #[def(entity)]
+    pub data: PointCollectionData,
+}
+
+impl_from_any! {PointCollection}
+
+impl_convert_err! {Circle -> PointCollection}
+impl_convert_err! {Line -> PointCollection}
+impl_convert_err! {Scalar -> PointCollection}
+impl_convert_err! {Bundle -> PointCollection}
+
+impl_make_variable! {PointCollection {other: length, data: PointCollectionData}}
+
+impl ConvertFrom<Expr<Point>> for PointCollection {
+    fn convert_from(value: Expr<Point>) -> Result<Expr<Self>, Error> {
+        Ok(Expr {
+            weight: FastFloat::One,
+            span: value.span,
+            data: Rc::new(PointCollection {
+                length: 1,
+                data: PointCollectionData::PointCollection(vec![value]),
+            }),
+        })
+    }
+}
+
+impl PointCollection {
+    #[must_use]
+    pub fn get_type() -> Type {
+        ty::collection(0)
+    }
+}
+
+impl Expr<PointCollection> {
+    #[must_use]
+    pub fn boxed(self, weight: FastFloat, span: Span) -> Self {
+        Self {
+            weight,
+            span,
+            data: Rc::new(PointCollection {
+                length: self.data.length,
+                data: PointCollectionData::Generic(Generic::Boxed(self)),
+            }),
+        }
+    }
+
+    /// # Errors
+    /// Returns an error if lengths don't match up.
+    pub fn check_len(self, length: usize) -> Result<Self, Error> {
+        if self.data.length == length || length == 0 {
+            Ok(self)
+        } else {
+            Err(Error::ImplicitConversionDoesNotExist {
+                error_span: self.span,
+                from: self.get_value_type(),
+                to: ty::collection(length),
+            })
+        }
+    }
+
+    #[must_use]
+    pub fn index(&self, index: usize) -> Expr<Point> {
+        self.data.data.index(index)
+    }
+}
+
+impl GetValueType for PointCollection {
+    fn get_value_type(&self) -> Type {
+        ty::collection(self.length)
+    }
+}
+
+impl Display for PointCollection {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.data)
+    }
+}
+
+#[derive(Debug, Clone, Definition)]
+pub enum BundleData {
+    Generic(Generic<Bundle>),
+    ConstructBundle(#[def(map)] HashMap<String, AnyExpr>),
+}
+
+impl Display for BundleData {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Generic(v) => write!(f, "{v}"),
+            Self::ConstructBundle(fields) => {
                 write!(
                     f,
                     "{{ {} }}",
                     fields
                         .iter()
-                        .map(|(field, value)| format!("{field}:{value}"))
+                        .map(|(field, value)| format!("{field}: {value}"))
                         .collect::<Vec<_>>()
                         .join(", ")
                 )
             }
+        }
+    }
+}
+
+#[derive(Debug, Clone, Definition)]
+pub struct Bundle {
+    pub name: &'static str,
+    #[def(entity)]
+    pub data: BundleData,
+}
+
+impl_from_any! {Bundle}
+
+impl_convert_err! {Point -> Bundle}
+impl_convert_err! {Line -> Bundle}
+impl_convert_err! {Circle -> Bundle}
+impl_convert_err! {Scalar -> Bundle}
+impl_convert_err! {PointCollection -> Bundle}
+
+impl_make_variable! {Bundle {other: name, data: BundleData}}
+
+impl Bundle {
+    #[must_use]
+    pub fn get_type() -> Type {
+        ty::bundle("{}")
+    }
+
+    /// # Panics
+    /// Panics if the field doesn't exists
+    #[must_use]
+    pub fn index(&self, field: &str) -> AnyExpr {
+        match &self.data {
+            BundleData::Generic(generic) => match &generic {
+                Generic::VariableAccess(var) => var.borrow().definition.index(field),
+                Generic::Boxed(expr) => expr.index(field),
+            },
+            BundleData::ConstructBundle(map) => map.get(field).unwrap().clone(),
+        }
+    }
+}
+
+impl Expr<Bundle> {
+    #[must_use]
+    pub fn boxed(self, weight: FastFloat, span: Span) -> Self {
+        Self {
+            weight,
+            span,
+            data: Rc::new(Bundle {
+                name: self.data.name,
+                data: BundleData::Generic(Generic::Boxed(self)),
+            }),
+        }
+    }
+
+    #[must_use]
+    pub fn index(&self, field: &str) -> AnyExpr {
+        self.data.index(field)
+    }
+
+    /// # Errors
+    /// Returns an error if the bundle names don't match
+    pub fn check_name(self, name: &'static str) -> Result<Self, Error> {
+        if self.data.name == name {
+            Ok(self)
+        } else {
+            Err(Error::ImplicitConversionDoesNotExist {
+                error_span: self.span,
+                from: self.get_value_type(),
+                to: ty::bundle(name),
+            })
+        }
+    }
+}
+
+impl GetValueType for Bundle {
+    fn get_value_type(&self) -> Type {
+        ty::bundle(self.name)
+    }
+}
+
+impl Display for Bundle {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} {}", self.name, self.data)
+    }
+}
+
+#[derive(Debug, Clone, Definition)]
+pub enum AnyExpr {
+    Point(Expr<Point>),
+    Line(Expr<Line>),
+    Scalar(Expr<Scalar>),
+    Circle(Expr<Circle>),
+    PointCollection(Expr<PointCollection>),
+    Bundle(Expr<Bundle>),
+}
+
+impl_any_from_x! {Point}
+impl_any_from_x! {Line}
+impl_any_from_x! {Scalar}
+impl_any_from_x! {Circle}
+impl_any_from_x! {PointCollection}
+impl_any_from_x! {Bundle}
+
+impl AnyExpr {
+    /// Clones the expression and sets its own span. This will be treated as a separate expression now.
+    #[must_use]
+    pub fn get_span_mut(&mut self) -> &mut Span {
+        match self {
+            Self::Point(v) => &mut v.span,
+            Self::Line(v) => &mut v.span,
+            Self::Scalar(v) => &mut v.span,
+            Self::Circle(v) => &mut v.span,
+            Self::PointCollection(v) => &mut v.span,
+            Self::Bundle(v) => &mut v.span,
+        }
+    }
+
+    /// Clones the expression and sets its own span. This will be treated as a separate expression now.
+    #[must_use]
+    pub fn get_span(&self) -> Span {
+        match self {
+            Self::Point(v) => v.span,
+            Self::Line(v) => v.span,
+            Self::Scalar(v) => v.span,
+            Self::Circle(v) => v.span,
+            Self::PointCollection(v) => v.span,
+            Self::Bundle(v) => v.span,
+        }
+    }
+
+    #[must_use]
+    pub fn as_point(&self) -> Option<&Expr<Point>> {
+        match self {
+            Self::Point(v) => Some(v),
+            _ => None,
+        }
+    }
+
+    #[must_use]
+    pub fn get_type(&self) -> Type {
+        match self {
+            AnyExpr::Point(v) => v.get_value_type(),
+            AnyExpr::Line(v) => v.get_value_type(),
+            AnyExpr::Scalar(v) => v.get_value_type(),
+            AnyExpr::Circle(v) => v.get_value_type(),
+            AnyExpr::PointCollection(v) => v.get_value_type(),
+            AnyExpr::Bundle(v) => v.get_value_type(),
+        }
+    }
+
+    /// # Errors
+    /// Returns an error if the conversion is invalid.
+    pub fn convert_to(self, to: Type) -> Result<Self, Error> {
+        Ok(match to {
+            Type::Point => Self::Point(self.convert()?),
+            Type::Line => Self::Line(self.convert()?),
+            Type::Scalar(unit) => Self::Scalar(self.convert()?.convert_unit(unit)?),
+            Type::PointCollection(len) => Self::PointCollection(self.convert()?.check_len(len)?),
+            Type::Circle => Self::Circle(self.convert()?),
+            Type::Bundle(name) => Self::Bundle(self.convert()?.check_name(name)?),
+            Type::Undefined => unreachable!(),
+        })
+    }
+
+    #[must_use]
+    pub fn boxed(self, weight: FastFloat, span: Span) -> Self {
+        match self {
+            Self::Point(v) => Self::Point(v.boxed(weight, span)),
+            Self::Line(v) => Self::Line(v.boxed(weight, span)),
+            Self::Scalar(v) => Self::Scalar(v.boxed(weight, span)),
+            Self::Circle(v) => Self::Circle(v.boxed(weight, span)),
+            Self::PointCollection(v) => Self::PointCollection(v.boxed(weight, span)),
+            Self::Bundle(v) => Self::Bundle(v.boxed(weight, span)),
+        }
+    }
+
+    /// # Panics
+    /// Panics if not a variable.
+    #[must_use]
+    pub fn get_variable_span(&self) -> Span {
+        match self {
+            Self::Point(v) => match v.data.as_ref() {
+                Point::Generic(Generic::VariableAccess(var)) => var.borrow().definition_span,
+                _ => panic!("not a variable"),
+            },
+            Self::Line(v) => match v.data.as_ref() {
+                Line::Generic(Generic::VariableAccess(var)) => var.borrow().definition_span,
+                _ => panic!("not a variable"),
+            },
+            Self::Scalar(v) => match &v.data.data {
+                ScalarData::Generic(Generic::VariableAccess(var)) => var.borrow().definition_span,
+                _ => panic!("not a variable"),
+            },
+            Self::Circle(v) => match v.data.as_ref() {
+                Circle::Generic(Generic::VariableAccess(var)) => var.borrow().definition_span,
+                _ => panic!("not a variable"),
+            },
+            Self::PointCollection(v) => match &v.data.data {
+                PointCollectionData::Generic(Generic::VariableAccess(var)) => {
+                    var.borrow().definition_span
+                }
+                _ => panic!("not a variable"),
+            },
+            Self::Bundle(v) => match &v.data.data {
+                BundleData::Generic(Generic::VariableAccess(var)) => var.borrow().definition_span,
+                _ => panic!("not a variable"),
+            },
+        }
+    }
+
+    #[must_use]
+    pub fn make_variable(self, name: String) -> Self {
+        match self {
+            AnyExpr::Point(v) => AnyExpr::Point(v.make_variable(name)),
+            AnyExpr::Line(v) => AnyExpr::Line(v.make_variable(name)),
+            AnyExpr::Scalar(v) => AnyExpr::Scalar(v.make_variable(name)),
+            AnyExpr::Circle(v) => AnyExpr::Circle(v.make_variable(name)),
+            AnyExpr::PointCollection(v) => AnyExpr::PointCollection(v.make_variable(name)),
+            AnyExpr::Bundle(v) => AnyExpr::Bundle(v.make_variable(name)),
+        }
+    }
+}
+
+impl Display for AnyExpr {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            AnyExpr::Point(v) => write!(f, "{v}"),
+            AnyExpr::Line(v) => write!(f, "{v}"),
+            AnyExpr::Scalar(v) => write!(f, "{v}"),
+            AnyExpr::Circle(v) => write!(f, "{v}"),
+            AnyExpr::PointCollection(v) => write!(f, "{v}"),
+            AnyExpr::Bundle(v) => write!(f, "{v}"),
         }
     }
 }
@@ -989,14 +1810,19 @@ pub fn display_vec<T: Display>(v: &[T]) -> String {
 }
 
 #[derive(Debug, Clone)]
-pub struct UnrolledExpression {
-    pub data: Rc<UnrolledExpressionData>,
-    pub ty: Type,
+pub struct Expr<T: ?Sized> {
+    pub data: Rc<T>,
     pub span: Span,
     pub weight: FastFloat, // Assigned weight.
 }
 
-impl Definition for UnrolledExpression {
+impl<T: GetValueType> GetValueType for Expr<T> {
+    fn get_value_type(&self) -> Type {
+        self.data.get_value_type()
+    }
+}
+
+impl<T: Definition> Definition for Expr<T> {
     fn order(&self, context: &CompileContext) -> usize {
         self.data.order(context)
     }
@@ -1006,22 +1832,18 @@ impl Definition for UnrolledExpression {
     }
 }
 
-impl Display for UnrolledExpression {
+impl<T: Display> Display for Expr<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if let Type::Bundle(name) = self.ty {
-            write!(f, "{name} ")?;
-        }
         write!(f, "{}", self.data)
     }
 }
 
-impl UnrolledExpression {
-    pub fn new_spanless(data: UnrolledExpressionData, ty: Type) -> Self {
+impl<T: Clone> Expr<T> {
+    pub fn new_spanless(data: T) -> Self {
         Self {
-            span: span!(0,0,0,0),
-            ty,
+            span: span!(0, 0, 0, 0),
             data: Rc::new(data),
-            weight: FastFloat::One
+            weight: FastFloat::One,
         }
     }
 
@@ -1036,25 +1858,23 @@ impl UnrolledExpression {
 #[derive(Debug)]
 pub struct UnrolledRule {
     pub kind: UnrolledRuleKind,
-    pub lhs: UnrolledExpression,
-    pub rhs: UnrolledExpression,
     pub inverted: bool,
 }
 
 impl Display for UnrolledRule {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{} {}{} {}",
-            self.lhs,
-            if self.inverted { "!" } else { "" },
-            match self.kind {
-                UnrolledRuleKind::Eq => "=",
-                UnrolledRuleKind::Gt => ">",
-                UnrolledRuleKind::Lt => "<",
-            },
-            self.rhs
-        )
+        let inv = if self.inverted { "!" } else { "" };
+
+        match &self.kind {
+            UnrolledRuleKind::PointEq(a, b) => write!(f, "{a} {inv}= {b}"),
+            UnrolledRuleKind::ScalarEq(a, b) => write!(f, "{a} {inv}= {b}"),
+            UnrolledRuleKind::Gt(a, b) => {
+                write!(f, "{a} {} {b}", if self.inverted { "<=" } else { ">" })
+            }
+            UnrolledRuleKind::Lt(a, b) => {
+                write!(f, "{a} {} {b}", if self.inverted { ">=" } else { "<" })
+            }
+        }
     }
 }
 
@@ -1074,275 +1894,50 @@ pub fn construct_point_name(letter: char, primes: u8) -> String {
 #[must_use]
 pub fn unroll_parameters(
     definition: &FunctionDefinition,
-    params: &[UnrolledExpression],
+    params: &[AnyExpr],
     display: Option<Properties>,
-    context: &mut CompileContext
-) -> UnrolledExpression {
+    context: &mut CompileContext,
+) -> AnyExpr {
     definition(params, context, display)
 }
 
-/// Unrolls the conversion of a point collection into the given type.
-fn unroll_pc_conversion(
-    expr: &UnrolledExpression,
-    to: &Type,
-    collection_length: usize,
-    context: &mut CompileContext
-) -> Result<UnrolledExpression, Error> {
-    if to == &ty::collection(0) {
-        return Ok(expr.clone());
-    }
-
-    match collection_length {
-        1 => {
-            if to == &ty::POINT {
-                Ok(UnrolledExpression {
-                    weight: FastFloat::One, // Weight is propagated through `IndexCollection`.
-                    data: Rc::new(UnrolledExpressionData::IndexCollection(expr.clone(), 0)),
-                    ty: ty::POINT,
-                    span: expr.span,
-                })
-            } else {
-                Err(Error::implicit_conversion_does_not_exist(
-                    expr.span,
-                    expr.ty,
-                    *to,
-                ))
-            }
-        }
-        2 => match to {
-            Type::Line => {
-                let expr = UnrolledExpression {
-                    weight: FastFloat::One, // Weight is propagated through `IndexCollection`.
-                    data: Rc::new(UnrolledExpressionData::LineFromPoints(
-                        UnrolledExpression {
-                            weight: FastFloat::One, // Weight is propagated through `IndexCollection`.
-                            data: Rc::new(UnrolledExpressionData::IndexCollection(expr.clone(), 0)),
-                            ty: ty::POINT,
-                            span: expr.span,
-                        },
-                        UnrolledExpression {
-                            weight: FastFloat::One, // Weight is propagated through `IndexCollection`.
-                            data: Rc::new(UnrolledExpressionData::IndexCollection(expr.clone(), 1)),
-                            ty: ty::POINT,
-                            span: expr.span,
-                        },
-                    )),
-                    ty: ty::LINE,
-                    span: expr.span,
-                };
-
-                // Any line constructed from a point collection should be displayed.
-                context.figure.lines.push(expr.clone());
-
-                Ok(expr)
-            }
-            Type::Scalar(unit) => {
-                if unit == &Some(ComplexUnit::new(SimpleUnit::Distance)) {
-                    let a = UnrolledExpression {
-                        weight: FastFloat::One, // Weight is propagated through `IndexCollection`.
-                        data: Rc::new(UnrolledExpressionData::IndexCollection(
-                            expr.clone(),
-                            0,
-                        )),
-                        ty: ty::POINT,
-                        span: expr.span,
-                    };
-
-                    let b = UnrolledExpression {
-                        weight: FastFloat::One, // Weight is propagated through `IndexCollection`.
-                        data: Rc::new(UnrolledExpressionData::IndexCollection(
-                            expr.clone(),
-                            1,
-                        )),
-                        ty: ty::POINT,
-                        span: expr.span,
-                    };
-
-                    // Anything constructed like that is treated like a segment.
-                    context.figure.segments.push((a.clone(), b.clone()));
-
-                    Ok(UnrolledExpression {
-                        weight: FastFloat::One, // Weight is propagated through `IndexCollection`.
-                        data: Rc::new(UnrolledExpressionData::PointPointDistance(a, b)),
-                        ty: ty::DISTANCE,
-                        span: expr.span,
-                    })
-                } else {
-                    Err(Error::implicit_conversion_does_not_exist(
-                        expr.span,
-                        expr.ty,
-                        *to,
-                    ))
-                }
-            }
-            _ => Err(Error::implicit_conversion_does_not_exist(
-                expr.span,
-                expr.ty,
-                *to,
-            )),
-        },
-        _ => Err(Error::implicit_conversion_does_not_exist(
-            expr.span,
-            expr.ty,
-            *to,
-        )),
-    }
+fn unroll_properties(props: &DisplayProperties) -> Properties {
+    Properties(
+        props
+            .properties
+            .iter()
+            .map(|v| (v.name.ident.clone(), v.value.clone()))
+            .collect(),
+    )
 }
 
-/// Unrolls the conversion of the given expression of type scalar(none) to a scalar type.
-#[allow(clippy::too_many_lines)]
-fn unroll_conversion_to_scalar(
-    expr: &UnrolledExpression,
-    to: &Type,
-    context: &mut CompileContext
-) -> Result<UnrolledExpression, Error> {
-    match expr.data.as_ref() {
-        UnrolledExpressionData::Boxed(x) => Ok(UnrolledExpression {
-            ty: *to,
-            span: expr.span,
-            weight: expr.weight,
-            data: Rc::new(UnrolledExpressionData::Boxed(unroll_implicit_conversion(
-                x.clone(),
-                to,
-                context
-            )?)),
-        }),
-        UnrolledExpressionData::IndexBundle(bundle, field) => {
-            unroll_implicit_conversion(compile::index_bundle(bundle, field).clone(), to, context)
-        }
-        UnrolledExpressionData::DstLiteral(_) | UnrolledExpressionData::Number(_) => {
-            Ok(UnrolledExpression {
-                ty: *to,
-                span: expr.span,
-                weight: expr.weight,
-                data: Rc::clone(&expr.data),
-            })
-        }
-        UnrolledExpressionData::Negate(x) => Ok(UnrolledExpression {
-            ty: *to,
-            span: expr.span,
-            weight: expr.weight,
-            data: Rc::new(UnrolledExpressionData::Negate(unroll_implicit_conversion(
-                x.clone(),
-                to,
-                context
-            )?)),
-        }),
-        UnrolledExpressionData::Add(e1, e2) => Ok(UnrolledExpression {
-            ty: *to,
-            span: expr.span,
-            weight: expr.weight,
-            data: Rc::new(UnrolledExpressionData::Add(
-                unroll_implicit_conversion(e1.clone(), to, context)?,
-                unroll_implicit_conversion(e2.clone(), to, context)?,
-            )),
-        }),
-        UnrolledExpressionData::Subtract(e1, e2) => Ok(UnrolledExpression {
-            ty: *to,
-            span: expr.span,
-            weight: expr.weight,
-            data: Rc::new(UnrolledExpressionData::Subtract(
-                unroll_implicit_conversion(e1.clone(), to, context)?,
-                unroll_implicit_conversion(e2.clone(), to, context)?,
-            )),
-        }),
-        UnrolledExpressionData::Multiply(e1, e2) => Ok(UnrolledExpression {
-            ty: *to,
-            span: expr.span,
-            weight: expr.weight,
-            data: Rc::new(UnrolledExpressionData::Multiply(
-                unroll_implicit_conversion(e1.clone(), to, context)?,
-                unroll_implicit_conversion(
-                    e2.clone(),
-                    &ty::SCALAR,
-                    context
-                )?,
-            )),
-        }),
-        UnrolledExpressionData::Divide(e1, e2) => Ok(UnrolledExpression {
-            ty: *to,
-            span: expr.span,
-            weight: expr.weight,
-            data: Rc::new(UnrolledExpressionData::Divide(
-                unroll_implicit_conversion(e1.clone(), to, context)?,
-                unroll_implicit_conversion(
-                    e2.clone(),
-                    &ty::SCALAR,
-                    context
-                )?,
-            )),
-        }),
-        UnrolledExpressionData::Average(exprs) => Ok(UnrolledExpression {
-            ty: *to,
-            span: expr.span,
-            weight: expr.weight,
-            data: Rc::new(UnrolledExpressionData::Average(
-                exprs
-                    .iter()
-                    .map(|v| unroll_conversion_to_scalar(v, to, context))
-                    .collect::<Result<Vec<UnrolledExpression>, Error>>()?,
-            )),
-        }),
-        UnrolledExpressionData::VariableAccess(_)
-        | UnrolledExpressionData::PointCollection(_)
-        | UnrolledExpressionData::ConstructBundle(_)
-        | UnrolledExpressionData::Entity(_)
-        | UnrolledExpressionData::IndexCollection(_, _)
-        | UnrolledExpressionData::LineFromPoints(_, _)
-        | UnrolledExpressionData::SetUnit(_, _)
-        | UnrolledExpressionData::PointPointDistance(_, _)
-        | UnrolledExpressionData::PointLineDistance(_, _)
-        | UnrolledExpressionData::CircleRadius(_)
-        | UnrolledExpressionData::CircleCenter(_)
-        | UnrolledExpressionData::ThreePointAngle(_, _, _)
-        | UnrolledExpressionData::ThreePointAngleDir(_, _, _)
-        | UnrolledExpressionData::AngleBisector(_, _, _)
-        | UnrolledExpressionData::PerpendicularThrough(_, _)
-        | UnrolledExpressionData::ParallelThrough(_, _)
-        | UnrolledExpressionData::LineLineIntersection(_, _)
-        | UnrolledExpressionData::Circle(_, _)
-        | UnrolledExpressionData::TwoLineAngle(_, _) => unreachable!(
-            "This data should not be of type scalar(none) and yet is: {:#?}",
-            expr.data
-        ),
-    }
-}
+fn fetch_variable(
+    context: &CompileContext,
+    name: &str,
+    variable_span: Span,
+) -> Result<AnyExpr, Error> {
+    let mut var = context
+        .variables
+        .get(name)
+        .ok_or_else(|| {
+            #[allow(clippy::cast_possible_truncation)]
+            let suggested = context
+                .variables
+                .iter()
+                .max_by_key(|v| (strsim::jaro(v.0, name) * 1000.0).floor() as i64)
+                .map(|x| x.0)
+                .cloned();
 
-/// Unrolls implicit conversions between types.
-fn unroll_implicit_conversion(
-    expr: UnrolledExpression,
-    to: &Type,
-    context: &mut CompileContext
-) -> Result<UnrolledExpression, Error> {
-    if to == &expr.ty {
-        Ok(expr)
-    } else {
-        match &expr.ty {
-            Type::PointCollection(l) => unroll_pc_conversion(&expr, to, *l, context),
-            Type::Scalar(unit) => {
-                match unit {
-                    Some(unit) => {
-                        if unit.0[SimpleUnit::Angle as usize] == 0 {
-                            // no angle
-                            unroll_conversion_to_scalar(&expr, to, context)
-                        } else {
-                            Err(Error::implicit_conversion_does_not_exist(
-                                expr.span,
-                                expr.ty,
-                                *to,
-                            ))
-                        }
-                    }
-                    None => unroll_conversion_to_scalar(&expr, to, context),
-                }
+            Error::UndefinedVariable {
+                error_span: variable_span,
+                variable_name: name.to_string(),
+                suggested,
             }
-            _ => Err(Error::implicit_conversion_does_not_exist(
-                expr.span,
-                expr.ty,
-                *to,
-            )),
-        }
-    }
+        })?
+        .clone();
+
+    *var.get_span_mut() = variable_span;
+    Ok(var)
 }
 
 /// Unrolls the given expression based on the given iterator index. The index is assumed valid and an out-of-bounds access leads to a panic!().
@@ -1351,88 +1946,53 @@ fn unroll_simple(
     expr: &SimpleExpression,
     context: &mut CompileContext,
     library: &Library,
-    it_index: &HashMap<u8, usize>
-) -> Result<UnrolledExpression, Error> {
-    let display: Option<Properties> = expr.display.as_ref().map(|v| {
-        Properties(
-            v.properties
-                .iter()
-                .map(|v| (v.name.ident.clone(), v.value.clone()))
-                .collect(),
-        )
-    });
+    it_index: &HashMap<u8, usize>,
+) -> Result<AnyExpr, Error> {
+    let display: Option<Properties> = expr.display.as_ref().map(unroll_properties);
 
     Ok(match &expr.kind {
         SimpleExpressionKind::Ident(i) => match i {
-            Ident::Named(named) => {
-                let var = context.variables.get(&named.ident).ok_or_else(|| {
-                    #[allow(clippy::cast_possible_truncation)]
-                    let suggested = context
-                        .variables
-                        .iter()
-                        .max_by_key(|v| (strsim::jaro(v.0, &named.ident) * 1000.0).floor() as i64)
-                        .map(|x| x.0)
-                        .cloned();
-
-                    Error::UndefinedVariable {
-                        error_span: expr.get_span(),
-                        variable_name: named.ident.clone(),
-                        suggested,
-                    }
-                })?;
-
-                UnrolledExpression {
-                    weight: FastFloat::One, // TODO: UPDATE FOR WEIGHING SUPPORT IN GEOSCRIPT
-                    ty: var.borrow().definition.ty,
-                    data: Rc::new(UnrolledExpressionData::VariableAccess(Rc::clone(var))),
-                    span: named.span,
-                }
-            }
-            Ident::Collection(col) => UnrolledExpression {
+            Ident::Named(named) => fetch_variable(context, &named.ident, named.span)?,
+            Ident::Collection(col) => AnyExpr::PointCollection(Expr {
                 weight: FastFloat::One, // TODO: UPDATE FOR WEIGHING SUPPORT IN GEOSCRIPT
-                ty: ty::collection(col.collection.len()),
-                data: Rc::new(UnrolledExpressionData::PointCollection(
-                    col.collection
-                        .iter()
-                        .map(|(letter, primes)| {
-                            match context.variables.get(&construct_point_name(*letter, *primes)) {
-                                Some(var) => Ok(UnrolledExpression {
-                                    weight: FastFloat::One, // Always one.
-                                    data: Rc::new(UnrolledExpressionData::VariableAccess(
-                                        Rc::clone(var),
-                                    )),
-                                    ty: ty::POINT,
-                                    span: col.span,
-                                }),
-                                None => Err(Error::UndefinedVariable {
-                                    error_span: col.span,
-                                    variable_name: construct_point_name(*letter, *primes),
-                                    suggested: None, // Pretty much every single-letter point could be considered similar, so no suggestions.
-                                }),
-                            }
-                        })
-                        .collect::<Result<Vec<UnrolledExpression>, Error>>()?,
-                )),
+                data: Rc::new(PointCollection {
+                    length: col.collection.len(),
+                    data: PointCollectionData::PointCollection(
+                        col.collection
+                            .iter()
+                            .map(|(letter, primes)| {
+                                fetch_variable(
+                                    context,
+                                    &construct_point_name(*letter, *primes),
+                                    col.span,
+                                )
+                                .and_then(|var| var.convert::<Point>())
+                            })
+                            .collect::<Result<Vec<Expr<Point>>, Error>>()?,
+                    ),
+                }),
                 span: col.span,
-            },
+            }),
         },
-        SimpleExpressionKind::Number(num) => UnrolledExpression {
+        SimpleExpressionKind::Number(num) => AnyExpr::Scalar(Expr {
             weight: FastFloat::Zero, // Always zero.
-            ty: ty::SCALAR_UNKNOWN,
-            data: Rc::new(UnrolledExpressionData::Number(num.value.to_float())),
+            data: Rc::new(Scalar {
+                unit: None,
+                data: ScalarData::Number(num.value.to_float()),
+            }),
             span: num.get_span(),
-        },
+        }),
         SimpleExpressionKind::Call(e) => {
             let params = match &e.params {
                 Some(params) => params
                     .iter()
                     .map(|p| unroll_expression(p, context, library, it_index))
-                    .collect::<Result<Vec<UnrolledExpression>, Error>>()?,
+                    .collect::<Result<Vec<AnyExpr>, Error>>()?,
                 None => Vec::new(),
             };
 
             if let Some(func) = library.functions.get(&e.name.ident) {
-                let param_types = params.iter().map(|ex| ex.ty).collect();
+                let param_types = params.iter().map(AnyExpr::get_type).collect();
 
                 if let Some(overload) = func.get_overload(&param_types) {
                     let params = params
@@ -1440,41 +2000,36 @@ fn unroll_simple(
                         .enumerate()
                         .map(|(i, param)| {
                             if i < overload.params.len() {
-                                unroll_implicit_conversion(param, &overload.params[i], context)
+                                param.convert_to(overload.params[i])
                             } else {
-                                unroll_implicit_conversion(
-                                    param,
-                                    overload.param_group.as_ref().unwrap(),
-                                    context
-                                )
+                                param.convert_to(overload.param_group.unwrap())
                             }
                         })
-                        .collect::<Result<Vec<UnrolledExpression>, Error>>()?;
+                        .collect::<Result<Vec<AnyExpr>, Error>>()?;
 
-                    UnrolledExpression {
-                        weight: FastFloat::One, // TODO: UPDATE FOR WEIGHING SUPPORT IN GEOSCRIPT
-                        ty: overload.returned_type,
-                        data: Rc::new(UnrolledExpressionData::Boxed(unroll_parameters(
-                            &overload.definition,
-                            &params,
-                            display,
-                            context
-                        ))),
-                        span: e.get_span(),
-                    }
+                    let ret = unroll_parameters(&overload.definition, &params, display, context);
+
+                    // TODO: UPDATE FOR WEIGHING SUPPORT
+                    ret.boxed(FastFloat::One, e.get_span())
                 } else {
-                    return Err(Error::overload_not_found(
-                        e.get_span(),
-                        e.name.ident.clone(),
-                        param_types,
-                    ));
+                    return Err(Error::OverloadNotFound {
+                        error_span: e.get_span(),
+                        function_name: e.name.ident.clone(),
+                        params: param_types,
+                    });
                 }
             } else {
                 #[allow(clippy::cast_possible_truncation)]
                 let suggested = library
                     .functions
                     .iter()
-                    .map(|v| (v.0, v.1, (strsim::jaro(v.0, &e.name.ident) * 1000.0).floor() as i64))
+                    .map(|v| {
+                        (
+                            v.0,
+                            v.1,
+                            (strsim::jaro(v.0, &e.name.ident) * 1000.0).floor() as i64,
+                        )
+                    })
                     .filter(|v| v.2 > 600)
                     .max_by_key(|v| v.2)
                     .map(|x| x.0)
@@ -1488,154 +2043,114 @@ fn unroll_simple(
             }
         }
         SimpleExpressionKind::Unop(op) => {
-            let unrolled = unroll_simple(&op.rhs, context, library, it_index)?;
-            match &unrolled.ty {
-                Type::Scalar(_) => UnrolledExpression {
-                    weight: FastFloat::One, // TODO: UPDATE FOR WEIGHING SUPPORT IN GEOSCRIPT
-                    ty: unrolled.ty,
-                    span: expr.get_span(),
-                    data: Rc::new(UnrolledExpressionData::Negate(unrolled)),
-                },
-                t => {
-                    return Err(Error::InvalidOperandType {
-                        error_span: expr.get_span(),
-                        got: (*t, op.rhs.get_span()),
-                        op: String::from("-"),
-                    })
-                }
-            }
-        }
-        SimpleExpressionKind::Parenthised(expr) => unroll_expression(&expr.content, context, library, it_index)?,
-        SimpleExpressionKind::ExplicitIterator(it) => {
-            unroll_expression(it.get(it_index[&it.id]).unwrap(), context, library, it_index)?
-        }
-        SimpleExpressionKind::PointCollection(col) => UnrolledExpression {
-            weight: FastFloat::One, // TODO: UPDATE FOR WEIGHING SUPPORT IN GEOSCRIPT
-            ty: ty::collection(col.points.len()),
-            span: col.get_span(),
-            data: Rc::new(UnrolledExpressionData::PointCollection(
-                col.points
-                    .iter()
-                    .map(|expr| {
-                        let unrolled = unroll_expression(expr, context, library, it_index)?;
+            let unrolled: Expr<Scalar> =
+                unroll_simple(&op.rhs, context, library, it_index)?.convert()?;
 
-                        if unrolled.ty.can_cast(&ty::POINT) {
-                            Ok(unroll_implicit_conversion(unrolled, &ty::POINT, context)?)
-                        } else {
-                            Err(Error::NonPointInPointCollection {
-                                error_span: col.get_span(),
-                                received: (unrolled.span, unrolled.ty),
-                            })
-                        }
-                    })
-                    .collect::<Result<Vec<UnrolledExpression>, Error>>()?,
-            )),
-        },
+            AnyExpr::Scalar(Expr {
+                weight: FastFloat::One,
+                span: expr.get_span(),
+                data: Rc::new(Scalar {
+                    unit: unrolled.data.unit,
+                    data: ScalarData::Negate(unrolled),
+                }),
+            })
+        }
+        SimpleExpressionKind::Parenthised(expr) => {
+            unroll_expression(&expr.content, context, library, it_index)?
+        }
+        SimpleExpressionKind::ExplicitIterator(it) => unroll_expression(
+            it.get(it_index[&it.id]).unwrap(),
+            context,
+            library,
+            it_index,
+        )?,
+        SimpleExpressionKind::PointCollection(col) => AnyExpr::PointCollection(Expr {
+            weight: FastFloat::One, // TODO: UPDATE FOR WEIGHING SUPPORT IN GEOSCRIPT
+            span: col.get_span(),
+            data: Rc::new(PointCollection {
+                length: col.points.len(),
+                data: PointCollectionData::PointCollection(
+                    col.points
+                        .iter()
+                        .map(|expr| {
+                            unroll_expression(expr, context, library, it_index)?
+                                .convert()
+                                .map_err(|v| {
+                                    let err = v.as_implicit_does_not_exist().unwrap();
+                                    Error::NonPointInPointCollection {
+                                        error_span: col.get_span(),
+                                        received: (*err.0, *err.1), // (span, from)
+                                    }
+                                })
+                        })
+                        .collect::<Result<Vec<Expr<Point>>, Error>>()?,
+                ),
+            }),
+        }),
     })
 }
 
-fn unroll_muldiv(
-    this: UnrolledExpression,
-    other: &UnrolledExpression,
-    context: &mut CompileContext
-) -> Result<UnrolledExpression, Error> {
-    match this.ty {
-        Type::Scalar(None) => match &other.ty {
-            Type::Scalar(None) => Ok(this),
-            _ => unroll_implicit_conversion(
-                this,
-                &ty::SCALAR,
-                context
-            ),
-        },
-        _ => Ok(this),
-    }
-}
+fn unroll_binop(lhs: &AnyExpr, op: &BinaryOperator, rhs: &AnyExpr) -> Result<AnyExpr, Error> {
+    let full_span = lhs.get_span().join(rhs.get_span());
 
-fn unroll_binop(
-    lhs: UnrolledExpression,
-    op: &BinaryOperator,
-    rhs: UnrolledExpression,
-    context: &mut CompileContext
-) -> Result<UnrolledExpression, Error> {
-    let lhs = match &lhs.ty {
-        Type::Scalar(_) => lhs,
-        Type::PointCollection(2) => unroll_implicit_conversion(lhs, &ty::DISTANCE, context)?,
-        _ => {
-            return Err(Error::InvalidOperandType {
-                error_span: lhs.span.join(rhs.span),
-                got: (lhs.ty, lhs.span),
-                op: op.to_string(),
-            })
-        }
-    };
+    let lhs = lhs
+        .clone()
+        .convert::<Scalar>()
+        .map_err(|_| Error::InvalidOperandType {
+            error_span: full_span,
+            got: (lhs.get_type(), lhs.get_span()),
+            op: op.to_string(),
+        })?;
 
-    let rhs = match &rhs.ty {
-        Type::Scalar(_) => rhs,
-        Type::PointCollection(2) => unroll_implicit_conversion(
-            rhs,
-            &ty::DISTANCE,
-            context
-        )?,
-        _ => {
-            return Err(Error::InvalidOperandType {
-                error_span: rhs.span.join(rhs.span),
-                got: (rhs.ty, rhs.span),
-                op: op.to_string(),
-            })
-        }
-    };
+    let rhs = rhs
+        .clone()
+        .convert::<Scalar>()
+        .map_err(|_| Error::InvalidOperandType {
+            error_span: full_span,
+            got: (rhs.get_type(), rhs.get_span()),
+            op: op.to_string(),
+        })?;
 
     match op {
         BinaryOperator::Add(_) | BinaryOperator::Sub(_) => {
-            let lhs = match lhs.ty {
-                Type::Scalar(None) => {
-                    unroll_implicit_conversion(lhs, &rhs.ty, context)?
-                }
-                _ => lhs,
+            let lhs = if lhs.data.unit.is_none() {
+                lhs.convert_unit(rhs.data.unit)?
+            } else {
+                lhs
             };
 
-            let rhs = unroll_implicit_conversion(rhs, &lhs.ty, context)?;
+            let rhs = rhs.convert_unit(lhs.data.unit)?;
 
-            Ok(UnrolledExpression {
-                weight: FastFloat::One, // Technically, the only way to assign weight to an arithmetic op is to parenthise it.
-                ty: lhs.ty,
-                span: lhs.span.join(rhs.span),
-                data: Rc::new(match op {
-                    BinaryOperator::Add(_) => UnrolledExpressionData::Add(lhs, rhs),
-                    BinaryOperator::Sub(_) => UnrolledExpressionData::Subtract(lhs, rhs),
-                    _ => unreachable!(),
+            Ok(AnyExpr::Scalar(Expr {
+                weight: FastFloat::One, // Technically, the only way to assign weight to an arithmetic op is to put it in parentheses it.
+                span: full_span,
+                data: Rc::new(Scalar {
+                    unit: rhs.data.unit,
+                    data: match op {
+                        BinaryOperator::Add(_) => ScalarData::Add(lhs, rhs),
+                        BinaryOperator::Sub(_) => ScalarData::Subtract(lhs, rhs),
+                        _ => unreachable!(),
+                    },
                 }),
-            })
+            }))
         }
         BinaryOperator::Mul(_) | BinaryOperator::Div(_) => {
-            let lhs = unroll_muldiv(lhs, &rhs, context)?;
+            let lhs = lhs.specify_unit();
 
-            let rhs = unroll_muldiv(rhs, &lhs, context)?;
+            let rhs = rhs.specify_unit();
 
-            Ok(UnrolledExpression {
+            Ok(AnyExpr::Scalar(Expr {
                 weight: FastFloat::One, // Technically, the only way to assign weight to an arithmetic op is to put it in parentheses.
-                ty: match &lhs.ty {
-                    Type::Scalar(None) => lhs.ty,
-                    Type::Scalar(Some(left_unit)) => {
-                        if let Type::Scalar(Some(right_unit)) = &rhs.ty
-                        {
-                            Type::Scalar(Some(
-                                *left_unit * right_unit,
-                            ))
-                        } else {
-                            unreachable!()
-                        }
-                    }
-                    _ => unreachable!(),
-                },
-                span: lhs.span.join(rhs.span),
-                data: Rc::new(match op {
-                    BinaryOperator::Mul(_) => UnrolledExpressionData::Multiply(lhs, rhs),
-                    BinaryOperator::Div(_) => UnrolledExpressionData::Divide(lhs, rhs),
-                    _ => unreachable!(),
+                span: full_span,
+                data: Rc::new(Scalar {
+                    unit: Some(lhs.data.unit.unwrap() * rhs.data.unit.as_ref().unwrap()),
+                    data: match op {
+                        BinaryOperator::Mul(_) => ScalarData::Multiply(lhs, rhs),
+                        BinaryOperator::Div(_) => ScalarData::Divide(lhs, rhs),
+                        _ => unreachable!(),
+                    },
                 }),
-            })
+            }))
         }
     }
 }
@@ -1645,46 +2160,47 @@ fn unroll_expression<const ITER: bool>(
     expr: &Expression<ITER>,
     context: &mut CompileContext,
     library: &Library,
-    it_index: &HashMap<u8, usize>
-) -> Result<UnrolledExpression, Error> {
+    it_index: &HashMap<u8, usize>,
+) -> Result<AnyExpr, Error> {
     match expr {
         Expression::Single(simple) => unroll_simple(simple.as_ref(), context, library, it_index),
         Expression::ImplicitIterator(it) => unroll_simple(
             it.get(it_index[&0]).unwrap(), // Implicit iterators always have an id of 0.
             context,
             library,
-            it_index
+            it_index,
         ),
         Expression::Binop(op) => {
             let lhs = unroll_expression(&op.lhs, context, library, it_index)?;
             let rhs = unroll_expression(&op.rhs, context, library, it_index)?;
 
-            unroll_binop(lhs, &op.operator, rhs, context)
+            unroll_binop(&lhs, &op.operator, &rhs)
         }
     }
 }
 
-/// Unpacks the expressed type as a point collection.
-fn unpack_expression(
-    expr: &UnrolledExpression,
-    _context: &CompileContext,
-) -> Result<Vec<UnrolledExpression>, Error> {
-    match &expr.ty {
-        Type::Point => Ok(vec![expr.clone()]),
-        Type::PointCollection(l) => Ok((0..*l)
-            .map(|i| UnrolledExpression {
-                weight: FastFloat::One, // Weight propagated through `IndexCollecttion`
-                data: Rc::new(UnrolledExpressionData::IndexCollection(expr.clone(), i)),
-                ty: ty::POINT,
-                span: expr.span,
-            })
-            .collect()),
-        ty => Err(Error::cannot_unpack(
-            expr.span,
-            *ty,
-        )),
-    }
-}
+// /// Unpacks the expressed type as a point collection.
+// fn unpack_expression(
+//     expr: &AnyExpr,
+//     _context: &CompileContext,
+// ) -> Result<Vec<Expr<Point>>, Error> {
+//     match expr {
+//
+//         Type::Point => Ok(vec![expr.clone()]),
+//         Type::PointCollection(l) => Ok((0..*l)
+//             .map(|i| Expr {
+//                 weight: FastFloat::One, // Weight propagated through `IndexCollecttion`
+//                 data: Rc::new(UnrolledExpressionData::IndexCollection(expr.clone(), i)),
+//                 ty: ty::POINT,
+//                 span: expr.span,
+//             })
+//             .collect()),
+//         ty => Err(Error::cannot_unpack(
+//             expr.span,
+//             *ty,
+//         )),
+//     }
+// }
 
 #[derive(Debug, Clone)]
 struct PointProperties {
@@ -1733,54 +2249,39 @@ fn create_variable_named(
     context: &mut CompileContext,
     named: &NamedIdent,
     display: Option<&DisplayProperties>,
-    rhs_unrolled: UnrolledExpression,
-    variables: &mut Vec<Rc<RefCell<Variable>>>
+    rhs_unrolled: AnyExpr,
+    variables: &mut Vec<AnyExpr>,
 ) -> Result<(), Error> {
-    let display: Option<Properties> = display.map(|v| {
-        Properties(
-            v.properties
-                .iter()
-                .map(|v| (v.name.ident.clone(), v.value.clone()))
-                .collect(),
-        )
-    });
+    let display: Option<Properties> = display.map(unroll_properties);
 
     match context.variables.entry(named.ident.clone()) {
         // If the variable already exists, it's a redefinition error.
-        Entry::Occupied(entry) => Err(Error::redefined_variable(
-            entry.get().borrow().definition_span,
-            stat.get_span(),
-            entry.key().clone(),
-        )),
+        Entry::Occupied(entry) => Err(Error::RedefinedVariable {
+            defined_at: entry.get().get_variable_span(),
+            error_span: stat.get_span(),
+            variable_name: entry.key().clone(),
+        }),
         // Otherwise, create a new variable
         Entry::Vacant(entry) => {
-            let rhs_ty = rhs_unrolled.ty;
+            let var = rhs_unrolled.make_variable(entry.key().clone());
+            variables.push(var.clone());
 
-            let var = Variable {
-                name: entry.key().clone(),
-                definition_span: stat.get_span(),
-                definition: rhs_unrolled,
-            };
-
-            let v = Rc::new(RefCell::new(var));
-            variables.push(Rc::clone(&v));
-
-            if rhs_ty == Type::Point {
+            if let AnyExpr::Point(var_pt) = &var {
                 let props = PointProperties::parse(display, named.ident.clone())?;
 
                 if props.display {
                     context.figure.points.push((
-                        variable!(v),
-                        PointMeta {
+                        var_pt.clone(),
+                        LabelMeta {
                             letter: props.label.chars().next().unwrap(),
                             primes: 0,
-                            index: None
-                        }
+                            index: None,
+                        },
                     ));
                 }
             }
 
-            entry.insert(v);
+            entry.insert(var);
 
             Ok(())
         }
@@ -1791,26 +2292,19 @@ fn create_variable_named(
 fn create_variable_collection(
     stat: &LetStatement,
     context: &mut CompileContext,
-    col: &PointCollection,
-    rhs_unrolled: &UnrolledExpression,
+    col: &PCToken,
+    rhs_unrolled: &AnyExpr,
     display: Option<&DisplayProperties>,
-    variables: &mut Vec<Rc<RefCell<Variable>>>
+    variables: &mut Vec<AnyExpr>,
 ) -> Result<(), Error> {
-    let display: Option<Properties> = display.map(|v| {
-        Properties(
-            v.properties
-                .iter()
-                .map(|v| (v.name.ident.clone(), v.value.clone()))
-                .collect(),
-        )
-    });
+    let display: Option<Properties> = display.map(unroll_properties);
 
-    let rhs_unpacked = unpack_expression(rhs_unrolled, context)?;
+    let rhs_unpacked = rhs_unrolled.clone().convert::<PointCollection>()?.data;
 
-    if rhs_unpacked.len() != col.len() {
+    if rhs_unpacked.length != col.len() {
         return Err(Error::CannotUnpack {
-            error_span: rhs_unrolled.span,
-            ty: rhs_unrolled.ty,
+            error_span: rhs_unrolled.get_span(),
+            ty: rhs_unrolled.get_type(),
         });
     }
 
@@ -1825,41 +2319,39 @@ fn create_variable_collection(
         None
     };
 
-    let mut rhs_unpacked = rhs_unpacked.into_iter();
+    let mut rhs_unpacked = rhs_unpacked.data.as_collection().unwrap().iter().cloned();
     for pt in &col.collection {
         let id = construct_point_name(pt.0, pt.1);
 
         match context.variables.entry(id) {
             // If the variable already exists, it's a redefinition error.
             Entry::Occupied(entry) => {
-                return Err(Error::redefined_variable(
-                    entry.get().borrow().definition_span,
-                    stat.get_span(),
-                    construct_point_name(pt.0, pt.1),
-                ))
+                return Err(Error::RedefinedVariable {
+                    defined_at: entry.get().get_variable_span(),
+                    error_span: stat.get_span(),
+                    variable_name: construct_point_name(pt.0, pt.1),
+                })
             }
             // Otherwise, create a new variable
             Entry::Vacant(entry) => {
-                let var = Variable {
-                    name: construct_point_name(pt.0, pt.1),
-                    definition_span: stat.get_span(),
-                    definition: rhs_unpacked.next().unwrap(),
-                };
-
-                let var = Rc::new(RefCell::new(var));
+                let var = rhs_unpacked
+                    .next()
+                    .unwrap()
+                    .make_variable(entry.key().clone());
 
                 if let Some((letter, true)) = pt_letter {
                     context.figure.points.push((
-                        variable!(var),
-                        PointMeta {
+                        var.clone(),
+                        LabelMeta {
                             letter,
                             primes: 0,
-                            index: None
-                        }
+                            index: None,
+                        },
                     ));
                 }
 
-                variables.push(Rc::clone(&var));
+                let var = AnyExpr::Point(var);
+                variables.push(var.clone());
                 entry.insert(var);
             }
         }
@@ -1871,8 +2363,8 @@ fn create_variable_collection(
 fn create_variables(
     stat: &LetStatement,
     context: &mut CompileContext,
-    library: &Library
-) -> Result<Vec<Rc<RefCell<Variable>>>, Error> {
+    library: &Library,
+) -> Result<Vec<AnyExpr>, Error> {
     let mut variables = Vec::new();
 
     let tree = IterNode::from(&stat.expr);
@@ -1913,8 +2405,8 @@ fn create_variables(
             return Err(Error::InconsistentIterators {
                 first_span: stat.ident.get_span(),
                 first_length: stat.ident.len(),
-                occured_span: entry.1,
-                occured_length: entry.0,
+                occurred_span: entry.1,
+                occurred_length: entry.0,
                 error_span: stat.get_span(),
             });
         }
@@ -1933,7 +2425,7 @@ fn create_variables(
             context,
             library,
             ind.as_ref()
-                .unwrap_or_else(|| it_index.get_currents().unwrap())
+                .unwrap_or_else(|| it_index.get_currents().unwrap()),
         )?;
         it_index.next();
 
@@ -1945,7 +2437,7 @@ fn create_variables(
                     named,
                     def.display_properties.as_ref(),
                     rhs_unrolled,
-                    &mut variables
+                    &mut variables,
                 )?;
             }
             Ident::Collection(col) => {
@@ -1955,7 +2447,7 @@ fn create_variables(
                     col,
                     &rhs_unrolled,
                     def.display_properties.as_ref(),
-                    &mut variables
+                    &mut variables,
                 )?;
             }
         }
@@ -1967,7 +2459,7 @@ fn create_variables(
 fn unroll_let(
     stat: &LetStatement,
     context: &mut CompileContext,
-    library: &Library
+    library: &Library,
 ) -> Result<(), Error> {
     create_variables(stat, context, library)?;
 
@@ -1976,16 +2468,21 @@ fn unroll_let(
         exprs: Punctuated {
             first: Box::new(SimpleExpression {
                 kind: SimpleExpressionKind::Ident(stat.ident.first.name.clone()),
-                display: None
+                display: None,
             }),
             collection: stat
                 .ident
                 .collection
                 .iter()
-                .map(|(p, i)| (*p, SimpleExpression {
-                    kind: SimpleExpressionKind::Ident(i.name.clone()),
-                    display: None
-                }))
+                .map(|(p, i)| {
+                    (
+                        *p,
+                        SimpleExpression {
+                            kind: SimpleExpressionKind::Ident(i.name.clone()),
+                            display: None,
+                        },
+                    )
+                })
                 .collect(),
         },
     });
@@ -2008,7 +2505,7 @@ fn unroll_let(
                 context,
                 library,
                 stat.get_span(),
-                false
+                false,
             )?;
 
             index.next();
@@ -2019,292 +2516,198 @@ fn unroll_let(
 }
 
 fn unroll_eq(
-    lhs: UnrolledExpression,
-    rhs: UnrolledExpression,
+    lhs: AnyExpr,
+    rhs: AnyExpr,
     context: &mut CompileContext,
     full_span: Span,
-    inverted: bool
+    inverted: bool,
 ) -> Result<(), Error> {
-    if (lhs.ty == ty::collection(2) && rhs.ty == ty::collection(2))
-        || (lhs.ty == ty::collection(2) && rhs.ty == ty::SCALAR_UNKNOWN)
-        || (lhs.ty == ty::SCALAR_UNKNOWN && rhs.ty == ty::collection(2))
+    let lhs_type = lhs.get_type();
+    let rhs_type = rhs.get_type();
+
+    if (lhs_type == ty::collection(2) && rhs_type == ty::collection(2))
+        || (lhs_type == ty::collection(2) && rhs_type == ty::SCALAR_UNKNOWN)
+        || (lhs_type == ty::SCALAR_UNKNOWN && rhs_type == ty::collection(2))
     {
         // AB = CD must have different logic as it's implied that this means "equality of distances".
         let rule = UnrolledRule {
-            kind: UnrolledRuleKind::Eq,
-            lhs: unroll_implicit_conversion(
-                lhs,
-                &ty::DISTANCE,
-                context
-            )?,
-            rhs: unroll_implicit_conversion(
-                rhs,
-                &ty::DISTANCE,
-                context
-            )?,
-            inverted
+            kind: UnrolledRuleKind::ScalarEq(
+                lhs.convert()?.convert_unit(Some(unit::DISTANCE))?,
+                rhs.convert()?.convert_unit(Some(unit::DISTANCE))?,
+            ),
+            inverted,
         };
 
         context.rules.push(rule);
 
         Ok(())
     } else {
-        let (mut lhs, mut rhs) = (lhs, rhs);
         // If any of the two types can be cast onto the other, cast and compare.
-        if rhs.ty.can_cast(&lhs.ty) {
-            rhs = unroll_implicit_conversion(rhs, &lhs.ty, context)?;
-        } else if lhs.ty.can_cast(&rhs.ty) {
-            lhs = unroll_implicit_conversion(lhs, &rhs.ty, context)?;
+        let (lhs, rhs) = if let Ok(rhs) = rhs.clone().convert_to(lhs.get_type()) {
+            (lhs, rhs)
+        } else if let Ok(lhs) = lhs.clone().convert_to(rhs.get_type()) {
+            (lhs, rhs)
         } else {
             return Err(Error::InconsistentTypes {
-                expected: (lhs.ty, Box::new(lhs.span)),
-                got: (rhs.ty, Box::new(rhs.span)),
+                expected: (lhs.get_type(), Box::new(lhs.get_span())),
+                got: (rhs.get_type(), Box::new(rhs.get_span())),
                 error_span: Box::new(full_span),
             });
-        }
+        };
 
-        context.rules.push(UnrolledRule {
-            kind: UnrolledRuleKind::Eq,
-            lhs,
-            rhs,
-            inverted: false,
-        });
+        match rhs.get_type() {
+            Type::Point => context.rules.push(UnrolledRule {
+                kind: UnrolledRuleKind::PointEq(lhs.convert()?, rhs.convert()?),
+                inverted: false,
+            }),
+            Type::Scalar(_) => context.rules.push(UnrolledRule {
+                kind: UnrolledRuleKind::ScalarEq(
+                    lhs.convert()?.specify_unit(),
+                    rhs.convert()?.specify_unit(),
+                ),
+                inverted: false,
+            }),
+            ty => {
+                return Err(Error::ComparisonDoesNotExist {
+                    error_span: full_span,
+                    ty,
+                })
+            }
+        }
 
         Ok(())
     }
 }
 
 fn unroll_gt(
-    lhs: UnrolledExpression,
-    rhs: UnrolledExpression,
+    lhs: Expr<Scalar>,
+    rhs: Expr<Scalar>,
     context: &mut CompileContext,
     full_span: Span,
-    inverted: bool
+    inverted: bool,
 ) -> Result<(), Error> {
-    let left_unit = match &lhs.ty {
-        Type::Scalar(Some(unit)) => Some(*unit),
-        Type::Scalar(None) => None,
-        Type::PointCollection(2) => Some(unit::DISTANCE),
-        _ => {
-            return Err(Error::InvalidOperandType {
-                error_span: full_span,
-                got: (lhs.ty, lhs.span),
-                op: String::from(">"),
-            })
-        }
-    };
+    if lhs.data.unit.is_some() {
+        let rhs =
+            rhs.clone()
+                .convert_unit(lhs.data.unit)
+                .map_err(|_| Error::InconsistentTypes {
+                    expected: (lhs.get_value_type(), Box::new(lhs.span)),
+                    got: (rhs.get_value_type(), Box::new(rhs.span)),
+                    error_span: Box::new(full_span),
+                })?;
 
-    if let Some(ltype) = left_unit {
-        if rhs
-            .ty
-            .can_cast(&Type::Scalar(Some(
-                ltype,
-            )))
-        {
-            let rule = UnrolledRule {
-                kind: UnrolledRuleKind::Gt,
-                lhs: unroll_implicit_conversion(
-                    lhs,
-                    &Type::Scalar(Some(ltype)),
-                    context
-                )?,
-                rhs: unroll_implicit_conversion(
-                    rhs,
-                    &Type::Scalar(Some(ltype)),
-                    context
-                )?,
-                inverted,
-            };
-
-            context.rules.push(rule);
-        } else {
-            return Err(Error::InconsistentTypes {
-                expected: (lhs.ty, Box::new(lhs.span)),
-                got: (rhs.ty, Box::new(rhs.span)),
-                error_span: Box::new(full_span),
-            });
-        }
+        context.rules.push(UnrolledRule {
+            kind: UnrolledRuleKind::Gt(lhs, rhs),
+            inverted: false,
+        });
+    } else if rhs.data.unit.is_some() {
+        context.rules.push(UnrolledRule {
+            kind: UnrolledRuleKind::Gt(lhs.convert_unit(rhs.data.unit)?, rhs),
+            inverted,
+        });
     } else {
-        let right_unit = match &rhs.ty {
-            Type::Scalar(Some(unit)) => Some(*unit),
-            Type::Scalar(None) => None,
-            Type::PointCollection(2) => Some(ComplexUnit::new(SimpleUnit::Distance)),
-            _ => {
-                return Err(Error::InvalidOperandType {
-                    error_span: lhs.span.join(rhs.span),
-                    got: (rhs.ty, rhs.span),
-                    op: String::from(">"),
-                })
-            }
-        };
-
-        if let Some(rtype) = right_unit {
-            let rule = UnrolledRule {
-                kind: UnrolledRuleKind::Gt,
-                lhs: unroll_implicit_conversion(
-                    lhs,
-                    &Type::Scalar(Some(rtype)),
-                    context
-                )?,
-                rhs: unroll_implicit_conversion(
-                    rhs,
-                    &Type::Scalar(Some(rtype)),
-                    context
-                )?,
-                inverted,
-            };
-
-            context.rules.push(rule);
-        } else {
-            let common = Type::Scalar(Some(ComplexUnit::new(SimpleUnit::Scalar)));
-            let rule = UnrolledRule {
-                kind: UnrolledRuleKind::Gt,
-                lhs: unroll_implicit_conversion(lhs, &common, context)?,
-                rhs: unroll_implicit_conversion(rhs, &common, context)?,
-                inverted,
-            };
-
-            context.rules.push(rule);
-        }
+        context.rules.push(UnrolledRule {
+            kind: UnrolledRuleKind::Gt(
+                lhs.convert_unit(Some(unit::SCALAR))?,
+                rhs.convert_unit(Some(unit::SCALAR))?,
+            ),
+            inverted,
+        });
     }
 
     Ok(())
 }
 
 fn unroll_lt(
-    lhs: UnrolledExpression,
-    rhs: UnrolledExpression,
+    lhs: Expr<Scalar>,
+    rhs: Expr<Scalar>,
     context: &mut CompileContext,
     full_span: Span,
-    inverted: bool
+    inverted: bool,
 ) -> Result<(), Error> {
-    let left_unit = match &lhs.ty {
-        Type::Scalar(Some(unit)) => Some(*unit),
-        Type::Scalar(None) => None,
-        Type::PointCollection(2) => Some(ComplexUnit::new(SimpleUnit::Distance)),
-        _ => {
-            return Err(Error::InvalidOperandType {
-                error_span: lhs.span.join(rhs.span),
-                got: (lhs.ty, lhs.span),
-                op: String::from("<"),
-            })
-        }
-    };
+    if lhs.data.unit.is_some() {
+        let rhs =
+            rhs.clone()
+                .convert_unit(lhs.data.unit)
+                .map_err(|_| Error::InconsistentTypes {
+                    expected: (lhs.get_value_type(), Box::new(lhs.span)),
+                    got: (rhs.get_value_type(), Box::new(rhs.span)),
+                    error_span: Box::new(full_span),
+                })?;
 
-    if let Some(ltype) = left_unit {
-        if rhs
-            .ty
-            .can_cast(&Type::Scalar(Some(
-                ltype,
-            )))
-        {
-            let rule = UnrolledRule {
-                kind: UnrolledRuleKind::Lt,
-                lhs: unroll_implicit_conversion(
-                    lhs,
-                    &Type::Scalar(Some(ltype)),
-                    context
-                )?,
-                rhs: unroll_implicit_conversion(
-                    rhs,
-                    &Type::Scalar(Some(ltype)),
-                    context
-                )?,
-                inverted,
-            };
-
-            context.rules.push(rule);
-        } else {
-            return Err(Error::InconsistentTypes {
-                expected: (lhs.ty, Box::new(lhs.span)),
-                got: (rhs.ty, Box::new(rhs.span)),
-                error_span: Box::new(full_span),
-            });
-        }
+        context.rules.push(UnrolledRule {
+            kind: UnrolledRuleKind::Lt(lhs, rhs),
+            inverted: false,
+        });
+    } else if rhs.data.unit.is_some() {
+        context.rules.push(UnrolledRule {
+            kind: UnrolledRuleKind::Lt(lhs.convert_unit(rhs.data.unit)?, rhs),
+            inverted,
+        });
     } else {
-        let right_unit = match &rhs.ty {
-            Type::Scalar(Some(unit)) => Some(*unit),
-            Type::Scalar(None) => None,
-            Type::PointCollection(2) => Some(ComplexUnit::new(SimpleUnit::Distance)),
-            _ => {
-                return Err(Error::InvalidOperandType {
-                    error_span: full_span,
-                    got: (rhs.ty, rhs.span),
-                    op: String::from("<"),
-                })
-            }
-        };
-
-        if let Some(rtype) = right_unit {
-            let rule = UnrolledRule {
-                kind: UnrolledRuleKind::Lt,
-                lhs: unroll_implicit_conversion(
-                    lhs,
-                    &Type::Scalar(Some(rtype)),
-                    context
-                )?,
-                rhs: unroll_implicit_conversion(
-                    rhs,
-                    &Type::Scalar(Some(rtype)),
-                    context
-                )?,
-                inverted,
-            };
-
-            context.rules.push(rule);
-        } else {
-            let common = ty::SCALAR;
-            let rule = UnrolledRule {
-                kind: UnrolledRuleKind::Lt,
-                lhs: unroll_implicit_conversion(lhs, &common, context)?,
-                rhs: unroll_implicit_conversion(rhs, &common, context)?,
-                inverted,
-            };
-
-            context.rules.push(rule);
-        }
+        context.rules.push(UnrolledRule {
+            kind: UnrolledRuleKind::Lt(
+                lhs.convert_unit(Some(unit::SCALAR))?,
+                rhs.convert_unit(Some(unit::SCALAR))?,
+            ),
+            inverted,
+        });
     }
 
     Ok(())
 }
 
 fn unroll_rule(
-    lhs: UnrolledExpression,
+    lhs: AnyExpr,
     op: &RuleOperator,
-    rhs: UnrolledExpression,
+    rhs: AnyExpr,
     context: &mut CompileContext,
     library: &Library,
     full_span: Span,
-    invert: bool
+    invert: bool,
 ) -> Result<(), Error> {
     match op {
         RuleOperator::Predefined(pre) => match pre {
             PredefinedRuleOperator::Eq(_) => unroll_eq(lhs, rhs, context, full_span, invert),
-            PredefinedRuleOperator::Lt(_) => unroll_lt(lhs, rhs, context, full_span, invert),
-            PredefinedRuleOperator::Gt(_) => unroll_gt(lhs, rhs, context, full_span, invert),
-            PredefinedRuleOperator::Lteq(_) => unroll_gt(lhs, rhs, context, full_span, !invert),
-            PredefinedRuleOperator::Gteq(_) => unroll_lt(lhs, rhs, context, full_span, !invert),
+            PredefinedRuleOperator::Lt(_) => {
+                unroll_lt(lhs.convert()?, rhs.convert()?, context, full_span, invert)
+            }
+            PredefinedRuleOperator::Gt(_) => {
+                unroll_gt(lhs.convert()?, rhs.convert()?, context, full_span, invert)
+            }
+            PredefinedRuleOperator::Lteq(_) => {
+                unroll_gt(lhs.convert()?, rhs.convert()?, context, full_span, !invert)
+            }
+            PredefinedRuleOperator::Gteq(_) => {
+                unroll_lt(lhs.convert()?, rhs.convert()?, context, full_span, !invert)
+            }
         },
         RuleOperator::Defined(op) => {
             let (def, lhs, rhs) = if let Some(func) = library.rule_ops.get(&op.ident.ident) {
-                if let Some(overload) = func.get_overload((&lhs.ty, &rhs.ty)) {
-                    let lhs = unroll_implicit_conversion(lhs, &overload.params.0, context)?;
-                    let rhs = unroll_implicit_conversion(rhs, &overload.params.1, context)?;
+                if let Some(overload) = func.get_overload((&lhs.get_type(), &rhs.get_type())) {
+                    let lhs = lhs.convert_to(overload.params.0)?;
+                    let rhs = rhs.convert_to(overload.params.1)?;
 
                     (&overload.definition, lhs, rhs)
                 } else {
-                    return Err(Error::overload_not_found(
-                        op.ident.span,
-                        op.ident.ident.clone(),
-                        vec![lhs.ty, rhs.ty],
-                    ));
+                    return Err(Error::OverloadNotFound {
+                        error_span: op.ident.span,
+                        function_name: op.ident.ident.clone(),
+                        params: vec![lhs.get_type(), rhs.get_type()],
+                    });
                 }
             } else {
                 #[allow(clippy::cast_possible_truncation)]
                 let suggested = library
                     .rule_ops
                     .iter()
-                    .map(|v| (v.0, v.1, (strsim::jaro(v.0, &op.ident.ident) * 1000.0).floor() as i64))
+                    .map(|v| {
+                        (
+                            v.0,
+                            v.1,
+                            (strsim::jaro(v.0, &op.ident.ident) * 1000.0).floor() as i64,
+                        )
+                    })
                     .filter(|v| v.2 > 600)
                     .max_by_key(|v| v.2)
                     .map(|x| x.0)
@@ -2329,7 +2732,7 @@ fn unroll_rule(
 fn unroll_rulestat(
     rule: &RuleStatement,
     context: &mut CompileContext,
-    library: &Library
+    library: &Library,
 ) -> Result<(), Error> {
     let tree = IterNode::from2(&rule.lhs, &rule.rhs);
     tree.get_iter_lengths(&mut HashMap::new(), rule.get_span())?;
@@ -2344,7 +2747,7 @@ fn unroll_rulestat(
             context,
             library,
             rule.get_span(),
-            false
+            false,
         )?;
 
         it_index.next();

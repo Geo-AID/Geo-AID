@@ -1,47 +1,53 @@
 /*
- Copyright (c) 2023 Michał Wilczek, Michał Margos
+Copyright (c) 2023 Michał Wilczek, Michał Margos
 
- Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
- associated documentation files (the “Software”), to deal in the Software without restriction,
- including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
- and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do
- so, subject to the following conditions:
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
+associated documentation files (the “Software”), to deal in the Software without restriction,
+including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
+and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do
+so, subject to the following conditions:
 
- The above copyright notice and this permission notice shall be included in all copies or substantial
- portions of the Software.
+The above copyright notice and this permission notice shall be included in all copies or substantial
+portions of the Software.
 
- THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
- FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS
- OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
- WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
- CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- */
+THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS
+OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*/
 
-use std::mem;
+#[allow(unused_imports)]
+use crate::script::unroll::{
+    CompileContext, Expr, Function, Library, Line, Point, PointCollection, Properties, Scalar,
+};
+use geo_aid_derive::overload;
 
-use crate::script::unroll::{CompileContext, Function, Library, Properties, UnrolledExpression};
-
-use super::macros::{angle_expr, call, index, overload};
+#[allow(unused_imports)]
+use super::macros::{angle_expr, call, index};
 
 /// angle(point, point, point) - angle depicted by 3 points.
 fn angle_function_point_point_point(
-    args: &[UnrolledExpression],
+    a: &Expr<Point>,
+    b: &Expr<Point>,
+    c: &Expr<Point>,
     _context: &mut CompileContext,
     display: Option<Properties>,
-) -> UnrolledExpression {
-    mem::drop(display);
-    angle_expr!(args[0], args[1], args[2])
+) -> Expr<Scalar> {
+    drop(display);
+    angle_expr!(a, b, c)
 }
 
 /// angle(line, line) - distance between a point and a line.
 fn angle_function_line_line(
-    args: &[UnrolledExpression],
+    k: &Expr<Line>,
+    l: &Expr<Line>,
     _context: &mut CompileContext,
     display: Option<Properties>,
-) -> UnrolledExpression {
-    mem::drop(display);
-    angle_expr!(args[0], args[1])
+) -> Expr<Scalar> {
+    drop(display);
+    angle_expr!(k, l)
 }
 
 pub fn register(library: &mut Library) {
@@ -51,10 +57,10 @@ pub fn register(library: &mut Library) {
             name: String::from("angle"),
             overloads: vec![
                 overload!((3-P) -> ANGLE {
-                    |args, context, _| call!(context:angle_function_point_point_point(
-                        index!(args[0], 0),
-                        index!(args[0], 1),
-                        index!(args[0], 2)
+                    |col: &Expr<PointCollection>, context, _| call!(context:angle_function_point_point_point(
+                        index!(col, 0),
+                        index!(col, 1),
+                        index!(col, 2)
                     ))
                 }),
                 overload!((POINT, POINT, POINT) -> ANGLE : angle_function_point_point_point),

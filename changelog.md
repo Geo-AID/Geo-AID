@@ -48,3 +48,5 @@
 - Added the `lies_on` operator for points on circles, lines and segments.
 
 ## Version 0.2.5
+- Huge compiler & generator refactor
+- A point laying on two lines is now defined as an intersection of them.

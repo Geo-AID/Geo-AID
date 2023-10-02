@@ -1,60 +1,68 @@
 /*
- Copyright (c) 2023 Michał Wilczek, Michał Margos
+Copyright (c) 2023 Michał Wilczek, Michał Margos
 
- Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
- associated documentation files (the “Software”), to deal in the Software without restriction,
- including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
- and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do
- so, subject to the following conditions:
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
+associated documentation files (the “Software”), to deal in the Software without restriction,
+including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
+and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do
+so, subject to the following conditions:
 
- The above copyright notice and this permission notice shall be included in all copies or substantial
- portions of the Software.
+The above copyright notice and this permission notice shall be included in all copies or substantial
+portions of the Software.
 
- THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
- FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS
- OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
- WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
- CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- */
+THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS
+OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*/
 
-use std::mem;
+#[allow(unused_imports)]
+use crate::script::unroll::{
+    CompileContext, Expr, Function, Library, Line, Point, PointCollection, Properties,
+};
+use geo_aid_derive::overload;
 
-use crate::script::unroll::{CompileContext, Function, Library, Properties, UnrolledExpression};
-
-use super::macros::{overload, call, index, bisector, line2, intersection};
+#[allow(unused_imports)]
+use super::macros::{bisector, call, index, intersection, line2};
 
 /// bisector(point, point, point) - angle bisector.
-pub fn point_point_point(args: &[UnrolledExpression], context: &mut CompileContext, display: Option<Properties>) -> UnrolledExpression {
-    mem::drop(display);
-    let expr = bisector!(args[0], args[1], args[2]);
+pub fn point_point_point(
+    a: &Expr<Point>,
+    b: &Expr<Point>,
+    c: &Expr<Point>,
+    context: &mut CompileContext,
+    display: Option<Properties>,
+) -> Expr<Line> {
+    drop(display);
+    let expr = bisector!(a, b, c);
 
     // Render the bisector.
-    context.figure.rays.push((
-        args[1].clone(),
-        intersection!(expr, line2!(args[0], args[2]))
-    ));
+    context
+        .figure
+        .rays
+        .push((b.clone(), intersection!(expr, line2!(a, c))));
 
-    context.figure.segments.push((
-        args[0].clone(),
-        args[1].clone()
-    ));
+    context.figure.segments.push((a.clone(), b.clone()));
 
-    context.figure.segments.push((
-        args[2].clone(),
-        args[1].clone()
-    ));
+    context.figure.segments.push((c.clone(), b.clone()));
 
     expr
 }
 
 /// bisector(point, point) - bisector of a segment.
-pub fn point_point(args: &[UnrolledExpression], context: &mut CompileContext, display: Option<Properties>) -> UnrolledExpression {
+pub fn point_point(
+    a: &Expr<Point>,
+    b: &Expr<Point>,
+    context: &mut CompileContext,
+    display: Option<Properties>,
+) -> Expr<Line> {
+    use super::mid::function_point;
     use super::perpendicular::line_point;
-    use super::mid::mid_function_point;
-    mem::drop(display);
+    drop(display);
 
-    let expr = call!(context:line_point(line2!(args[0], args[1]), call!(context:mid_function_point(args[0], args[1]))));
+    let expr = call!(context:line_point(line2!(a, b), call!(context:function_point(&[a.clone(), b.clone()]))));
 
     context.figure.lines.push(expr.clone());
 
@@ -68,20 +76,20 @@ pub fn register(library: &mut Library) {
             name: String::from("bisector"),
             overloads: vec![
                 overload!((3-P) -> LINE {
-                    |args, context, _| call!(context:point_point_point(
-                        index!(args[0], 0),
-                        index!(args[0], 1),
-                        index!(args[0], 2)
+                    |col: &Expr<PointCollection>, context, _| call!(context:point_point_point(
+                        index!(col, 0),
+                        index!(col, 1),
+                        index!(col, 2)
                     ))
                 }),
                 overload!((POINT, POINT, POINT) -> LINE : point_point_point),
                 overload!((2-P) -> LINE {
-                    |args, context, _| call!(context:point_point(
-                        index!(args[0], 0),
-                        index!(args[0], 1)
+                    |col: &Expr<PointCollection>, context, _| call!(context:point_point(
+                        index!(col, 0),
+                        index!(col, 1)
                     ))
                 }),
-                overload!((POINT, POINT) -> LINE : point_point)
+                overload!((POINT, POINT) -> LINE : point_point),
             ],
         },
     );

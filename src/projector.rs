@@ -1,22 +1,22 @@
 /*
- Copyright (c) 2023 Michał Wilczek, Michał Margos
+Copyright (c) 2023 Michał Wilczek, Michał Margos
 
- Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
- associated documentation files (the “Software”), to deal in the Software without restriction,
- including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
- and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do
- so, subject to the following conditions:
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
+associated documentation files (the “Software”), to deal in the Software without restriction,
+including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
+and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do
+so, subject to the following conditions:
 
- The above copyright notice and this permission notice shall be included in all copies or substantial
- portions of the Software.
+The above copyright notice and this permission notice shall be included in all copies or substantial
+portions of the Software.
 
- THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
- FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS
- OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
- WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
- CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- */
+THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS
+OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*/
 
 use std::sync::Arc;
 use std::{collections::HashMap, rc::Rc};
@@ -40,6 +40,7 @@ use crate::{
 mod tests {
     use std::{path::PathBuf, sync::Arc};
 
+    use crate::generator::fast_float::FastFloat;
     use crate::{
         drawer,
         generator::{
@@ -49,19 +50,21 @@ mod tests {
             },
             Adjustable, Complex,
         },
-        script::{figure::Figure, unroll::PointMeta},
+        script::{figure::Figure, unroll::LabelMeta},
     };
-    use crate::generator::fast_float::FastFloat;
 
     use super::project;
 
     /// Utility function used in fn `test_project`(), it makes the code below less messy and more readable.
     fn create_point_expr(index: usize) -> Arc<Expression<PointExpr>> {
-        Arc::new(Expression::new(PointExpr::Free(FreePoint { index }), FastFloat::One))
+        Arc::new(Expression::new(
+            PointExpr::Free(FreePoint { index }),
+            FastFloat::One,
+        ))
     }
 
-    fn create_point_meta(character: char, primes: u8, index: Option<u16>) -> PointMeta {
-        PointMeta {
+    fn create_point_meta(character: char, primes: u8, index: Option<u16>) -> LabelMeta {
+        LabelMeta {
             letter: character,
             primes,
             index,
@@ -280,10 +283,7 @@ fn get_angle_points(
 
 /// Function getting the intersection points of the line with the picture's frame.
 fn get_line_ends(figure: &Figure, ln_c: Line) -> (Complex, Complex) {
-    fn choose_intersection(
-        i: usize,
-        j: usize,
-    ) -> impl Fn(f64, &[Complex]) -> Complex {
+    fn choose_intersection(i: usize, j: usize) -> impl Fn(f64, &[Complex]) -> Complex {
         move |width, intersections| {
             let x = intersections[i];
 

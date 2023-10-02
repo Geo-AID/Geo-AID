@@ -1,23 +1,24 @@
 /*
- Copyright (c) 2023 Michał Wilczek, Michał Margos
+Copyright (c) 2023 Michał Wilczek, Michał Margos
 
- Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
- associated documentation files (the “Software”), to deal in the Software without restriction,
- including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
- and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do
- so, subject to the following conditions:
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
+associated documentation files (the “Software”), to deal in the Software without restriction,
+including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
+and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do
+so, subject to the following conditions:
 
- The above copyright notice and this permission notice shall be included in all copies or substantial
- portions of the Software.
+The above copyright notice and this permission notice shall be included in all copies or substantial
+portions of the Software.
 
- THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
- FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS
- OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
- WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
- CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- */
+THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS
+OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*/
 
+use geo_aid_derive::{Evaluate, Kind};
 use std::{
     cell::RefCell,
     ops::{Add, AddAssign, Mul},
@@ -25,8 +26,8 @@ use std::{
 };
 
 use crate::generator::expression::expr::PointOnLine;
-use serde::Serialize;
 use crate::generator::fast_float::FastFloat;
+use serde::Serialize;
 
 use self::expr::{
     AngleBisector, AngleLine, AnglePoint, AnglePointDir, Average, CenterRadius, CircleCenter,
@@ -106,6 +107,10 @@ pub trait Kind {
     /// than to get their caches.
     #[must_use]
     fn is_trivial(&self) -> bool;
+
+    /// Evaluates weights.
+    #[must_use]
+    fn evaluate_weights(&self) -> Weights;
 }
 
 /// An expression is a base construct of Geo-AID. Contains a cache, saved weights and the expression kind itself.
@@ -361,9 +366,6 @@ pub trait Evaluate {
     /// # Errors
     /// Any errors related to evaluation.
     fn evaluate(&self, args: &EvaluationArgs) -> Self::Output;
-
-    /// Evaluates weights.
-    fn evaluate_weights(&self) -> Weights;
 }
 
 /// All possible expressions.
@@ -386,7 +388,7 @@ pub mod expr {
         Value, Weights, Zero,
     };
 
-    #[derive(Debug, Clone, Serialize)]
+    #[derive(Debug, Clone, Serialize, Kind)]
     pub struct PointPointDistance {
         pub a: Arc<Expression<PointExpr>>,
         pub b: Arc<Expression<PointExpr>>,
@@ -403,13 +405,9 @@ pub mod expr {
             // Pythagorean theorem
             (p1 - p2).mangitude()
         }
-
-        fn evaluate_weights(&self) -> Weights {
-            self.a.weights.clone() + &self.b.weights
-        }
     }
 
-    #[derive(Debug, Clone, Serialize)]
+    #[derive(Debug, Clone, Serialize, Kind)]
     pub struct PointLineDistance {
         pub point: Arc<Expression<PointExpr>>,
         pub line: Arc<Expression<LineExpr>>,
@@ -429,13 +427,9 @@ pub mod expr {
             // Now we can just get the imaginary part. We have to take the absolute value here.
             point_rot.imaginary.abs()
         }
-
-        fn evaluate_weights(&self) -> Weights {
-            self.point.weights.clone() + &self.line.weights
-        }
     }
 
-    #[derive(Debug, Clone, Serialize)]
+    #[derive(Debug, Clone, Serialize, Kind)]
     /// An angle defined with 3 points.
     pub struct AnglePoint {
         pub arm1: Arc<Expression<PointExpr>>,
@@ -454,13 +448,9 @@ pub mod expr {
 
             geometry::get_angle(arm1, origin, arm2)
         }
-
-        fn evaluate_weights(&self) -> Weights {
-            self.arm1.weights.clone() + &self.origin.weights + &self.arm2.weights
-        }
     }
 
-    #[derive(Debug, Clone, Serialize)]
+    #[derive(Debug, Clone, Serialize, Kind)]
     /// An angle defined with 3 points.
     pub struct AnglePointDir {
         pub arm1: Arc<Expression<PointExpr>>,
@@ -479,13 +469,9 @@ pub mod expr {
 
             geometry::get_angle_directed(arm1, origin, arm2)
         }
-
-        fn evaluate_weights(&self) -> Weights {
-            self.arm1.weights.clone() + &self.origin.weights + &self.arm2.weights
-        }
     }
 
-    #[derive(Debug, Clone, Serialize)]
+    #[derive(Debug, Clone, Serialize, Kind)]
     /// An angle defined with 2 lines.
     pub struct AngleLine {
         pub k: Arc<Expression<LineExpr>>,
@@ -505,15 +491,14 @@ pub mod expr {
 
             div.arg()
         }
-
-        fn evaluate_weights(&self) -> Weights {
-            self.k.weights.clone() + &self.l.weights
-        }
     }
 
-    #[derive(Debug, Clone, Serialize)]
+    #[derive(Debug, Clone, Serialize, Kind)]
+    #[trivial]
     /// An angle defined with 2 lines.
     pub struct Literal {
+        #[weigh_with(|_| Weights::empty())]
+        #[skip_collecting]
         pub value: f64,
     }
 
@@ -523,15 +508,14 @@ pub mod expr {
         fn evaluate(&self, _args: &EvaluationArgs) -> f64 {
             self.value
         }
-
-        fn evaluate_weights(&self) -> Weights {
-            Weights::empty()
-        }
     }
 
-    #[derive(Debug, Clone, Serialize)]
+    #[derive(Debug, Clone, Serialize, Kind)]
+    #[trivial]
     /// A free adjustable point.
     pub struct FreePoint {
+        #[weigh_with(|x: &usize| Weights::one_at(*x))]
+        #[skip_collecting]
         pub index: usize,
     }
 
@@ -541,16 +525,14 @@ pub mod expr {
         fn evaluate(&self, args: &EvaluationArgs) -> Complex {
             args.adjustables[self.index].0.as_point().copied().unwrap()
         }
-
-        fn evaluate_weights(&self) -> Weights {
-            Weights::one_at(self.index)
-        }
     }
 
-    #[derive(Debug, Clone, Serialize)]
+    #[derive(Debug, Clone, Serialize, Kind)]
     /// A point on a circle.
     pub struct PointOnCircle {
         pub circle: Arc<Expression<CircleExpr>>,
+        #[weigh_with(|x: &usize| Weights::one_at(*x))]
+        #[skip_collecting]
         pub index: usize,
     }
 
@@ -564,16 +546,14 @@ pub mod expr {
             let point_rel = Complex::new(theta.cos(), theta.sin());
             circle.center + point_rel * circle.radius
         }
-
-        fn evaluate_weights(&self) -> Weights {
-            Weights::one_at(self.index)
-        }
     }
 
-    #[derive(Debug, Clone, Serialize)]
+    #[derive(Debug, Clone, Serialize, Kind)]
     /// A point on a aine.
     pub struct PointOnLine {
         pub line: Arc<Expression<LineExpr>>,
+        #[weigh_with(|x: &usize| Weights::one_at(*x))]
+        #[skip_collecting]
         pub index: usize,
     }
 
@@ -586,13 +566,9 @@ pub mod expr {
 
             line.origin + line.direction * mag
         }
-
-        fn evaluate_weights(&self) -> Weights {
-            Weights::one_at(self.index)
-        }
     }
 
-    #[derive(Debug, Clone, Serialize)]
+    #[derive(Debug, Clone, Serialize, Kind)]
     /// A line defined with two points.
     pub struct LinePoint {
         pub a: Arc<Expression<PointExpr>>,
@@ -605,18 +581,11 @@ pub mod expr {
         fn evaluate(&self, args: &EvaluationArgs) -> Line {
             let origin = self.a.evaluate(args);
 
-            Line::new(
-                origin,
-                (self.b.evaluate(args) - origin).normalize(),
-            )
-        }
-
-        fn evaluate_weights(&self) -> Weights {
-            self.a.weights.clone() + &self.b.weights
+            Line::new(origin, (self.b.evaluate(args) - origin).normalize())
         }
     }
 
-    #[derive(Debug, Clone, Serialize)]
+    #[derive(Debug, Clone, Serialize, Kind)]
     /// Line-line intersection.
     pub struct LineLineIntersection {
         pub k: Arc<Expression<LineExpr>>,
@@ -632,13 +601,10 @@ pub mod expr {
 
             geometry::get_intersection(k, l)
         }
-
-        fn evaluate_weights(&self) -> Weights {
-            self.l.weights.clone() + &self.k.weights
-        }
     }
 
-    #[derive(Debug, Clone, Serialize)]
+    #[derive(Debug, Clone, Serialize, Kind)]
+    #[trivial]
     /// Line-line intersection.
     pub struct CircleCenter {
         pub circle: Arc<Expression<CircleExpr>>,
@@ -650,13 +616,10 @@ pub mod expr {
         fn evaluate(&self, args: &EvaluationArgs) -> Complex {
             self.circle.evaluate(args).center
         }
-
-        fn evaluate_weights(&self) -> Weights {
-            self.circle.weights.clone()
-        }
     }
 
-    #[derive(Debug, Clone, Serialize)]
+    #[derive(Debug, Clone, Serialize, Kind)]
+    #[trivial]
     /// Line-line intersection.
     pub struct CircleRadius {
         pub circle: Arc<Expression<CircleExpr>>,
@@ -668,16 +631,15 @@ pub mod expr {
         fn evaluate(&self, args: &EvaluationArgs) -> f64 {
             self.circle.evaluate(args).radius
         }
-
-        fn evaluate_weights(&self) -> Weights {
-            self.circle.weights.clone()
-        }
     }
 
-    #[derive(Debug, Clone, Serialize)]
+    #[derive(Debug, Clone, Serialize, Kind)]
+    #[trivial]
     /// Changes the scalar's unit.
     pub struct SetUnit {
         pub value: Arc<Expression<ScalarExpr>>,
+        #[skip_collecting]
+        #[weigh_with(|_| Weights::empty())]
         pub unit: ComplexUnit,
     }
 
@@ -687,13 +649,9 @@ pub mod expr {
         fn evaluate(&self, args: &EvaluationArgs) -> f64 {
             self.value.evaluate(args)
         }
-
-        fn evaluate_weights(&self) -> Weights {
-            self.value.weights.clone()
-        }
     }
 
-    #[derive(Debug, Clone, Serialize)]
+    #[derive(Debug, Clone, Serialize, Kind)]
     /// a + b.
     pub struct Sum {
         pub a: Arc<Expression<ScalarExpr>>,
@@ -709,13 +667,9 @@ pub mod expr {
 
             a + b
         }
-
-        fn evaluate_weights(&self) -> Weights {
-            self.a.weights.clone() + &self.b.weights
-        }
     }
 
-    #[derive(Debug, Clone, Serialize)]
+    #[derive(Debug, Clone, Serialize, Kind)]
     /// a - b.
     pub struct Difference {
         pub a: Arc<Expression<ScalarExpr>>,
@@ -731,13 +685,9 @@ pub mod expr {
 
             a - b
         }
-
-        fn evaluate_weights(&self) -> Weights {
-            self.a.weights.clone() + &self.b.weights
-        }
     }
 
-    #[derive(Debug, Clone, Serialize)]
+    #[derive(Debug, Clone, Serialize, Kind)]
     /// a * b.
     pub struct Product {
         pub a: Arc<Expression<ScalarExpr>>,
@@ -753,13 +703,9 @@ pub mod expr {
 
             a * b
         }
-
-        fn evaluate_weights(&self) -> Weights {
-            self.a.weights.clone() + &self.b.weights
-        }
     }
 
-    #[derive(Debug, Clone, Serialize)]
+    #[derive(Debug, Clone, Serialize, Kind)]
     /// a / b.
     pub struct Quotient {
         pub a: Arc<Expression<ScalarExpr>>,
@@ -775,13 +721,10 @@ pub mod expr {
 
             a / b
         }
-
-        fn evaluate_weights(&self) -> Weights {
-            self.a.weights.clone() + &self.b.weights
-        }
     }
 
-    #[derive(Debug, Clone, Serialize)]
+    #[derive(Debug, Clone, Serialize, Kind)]
+    #[trivial]
     /// -v.
     pub struct Negation {
         pub value: Arc<Expression<ScalarExpr>>,
@@ -795,13 +738,9 @@ pub mod expr {
 
             -v
         }
-
-        fn evaluate_weights(&self) -> Weights {
-            self.value.weights.clone()
-        }
     }
 
-    #[derive(Debug, Clone, Serialize)]
+    #[derive(Debug, Clone, Serialize, Kind)]
     /// An angle defined with 3 points.
     pub struct AngleBisector {
         pub arm1: Arc<Expression<PointExpr>>,
@@ -827,15 +766,15 @@ pub mod expr {
 
             Line::new(origin, bi_dir)
         }
-
-        fn evaluate_weights(&self) -> Weights {
-            self.arm1.weights.clone() + &self.origin.weights + &self.arm2.weights
-        }
     }
 
     #[derive(Debug, Clone, Serialize)]
     /// Gets the average value.
-    pub struct Average<T> {
+    pub struct Average<T>
+    where
+        T: Evaluate + Kind,
+        T::Output: From<Value> + Into<Value> + Clone,
+    {
         pub items: Vec<Arc<Expression<T>>>,
     }
 
@@ -862,19 +801,35 @@ pub mod expr {
 
             x
         }
+    }
+
+    impl<T> Kind for Average<T>
+    where
+        T: Evaluate + Kind,
+        T::Output: From<Value> + Into<Value> + Clone,
+    {
+        fn collect(&self, exprs: &mut Vec<usize>) {
+            for expr in &self.items {
+                expr.collect(exprs);
+            }
+        }
+
+        fn is_trivial(&self) -> bool {
+            false
+        }
 
         fn evaluate_weights(&self) -> Weights {
-            let mut ws = Weights::empty();
+            let mut whs = Weights::empty();
 
-            for w in &self.items {
-                ws += &w.weights;
+            for expr in &self.items {
+                whs += &expr.weights;
             }
 
-            ws
+            whs
         }
     }
 
-    #[derive(Debug, Clone, Serialize)]
+    #[derive(Debug, Clone, Serialize, Kind)]
     pub struct PerpendicularThrough {
         pub point: Arc<Expression<PointExpr>>,
         pub line: Arc<Expression<LineExpr>>,
@@ -887,18 +842,11 @@ pub mod expr {
             // Evaluate the two points
             let point = self.point.evaluate(args);
 
-            Line::new(
-                point,
-                self.line.evaluate(args).direction.mul_i(),
-            )
-        }
-
-        fn evaluate_weights(&self) -> Weights {
-            self.point.weights.clone() + &self.line.weights
+            Line::new(point, self.line.evaluate(args).direction.mul_i())
         }
     }
 
-    #[derive(Debug, Clone, Serialize)]
+    #[derive(Debug, Clone, Serialize, Kind)]
     pub struct ParallelThrough {
         pub point: Arc<Expression<PointExpr>>,
         pub line: Arc<Expression<LineExpr>>,
@@ -914,15 +862,14 @@ pub mod expr {
 
             Line::new(point, line.direction)
         }
-
-        fn evaluate_weights(&self) -> Weights {
-            self.point.weights.clone() + &self.line.weights
-        }
     }
 
-    #[derive(Debug, Clone, Serialize)]
+    #[derive(Debug, Clone, Serialize, Kind)]
+    #[trivial]
     /// A free adjustable real.
     pub struct Real {
+        #[skip_collecting]
+        #[weigh_with(|x: &usize| Weights::one_at(*x))]
         pub index: usize,
     }
 
@@ -932,13 +879,10 @@ pub mod expr {
         fn evaluate(&self, args: &EvaluationArgs) -> f64 {
             args.adjustables[self.index].0.as_real().copied().unwrap()
         }
-
-        fn evaluate_weights(&self) -> Weights {
-            Weights::one_at(self.index)
-        }
     }
 
-    #[derive(Debug, Clone, Serialize)]
+    #[derive(Debug, Clone, Serialize, Kind)]
+    #[trivial]
     /// X coordinate of a point.
     pub struct PointX {
         pub point: Arc<Expression<PointExpr>>,
@@ -950,13 +894,10 @@ pub mod expr {
         fn evaluate(&self, args: &EvaluationArgs) -> f64 {
             self.point.evaluate(args).real
         }
-
-        fn evaluate_weights(&self) -> Weights {
-            self.point.weights.clone()
-        }
     }
 
-    #[derive(Debug, Clone, Serialize)]
+    #[derive(Debug, Clone, Serialize, Kind)]
+    #[trivial]
     /// Y coordinate of a point.
     pub struct PointY {
         pub point: Arc<Expression<PointExpr>>,
@@ -968,14 +909,11 @@ pub mod expr {
         fn evaluate(&self, args: &EvaluationArgs) -> f64 {
             self.point.evaluate(args).imaginary
         }
-
-        fn evaluate_weights(&self) -> Weights {
-            self.point.weights.clone()
-        }
     }
 
     /// The center and the radius of the circle.
-    #[derive(Debug, Clone, Serialize)]
+    #[derive(Debug, Clone, Serialize, Kind)]
+    #[trivial]
     pub struct CenterRadius {
         pub center: Arc<Expression<PointExpr>>,
         pub radius: Arc<Expression<ScalarExpr>>,
@@ -990,15 +928,12 @@ pub mod expr {
                 radius: self.radius.evaluate(args),
             }
         }
-
-        fn evaluate_weights(&self) -> Weights {
-            self.center.weights.clone() + &self.radius.weights
-        }
     }
 }
 
 /// Defines a point expression.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Evaluate, Kind)]
+#[evaluate(Complex)]
 pub enum PointExpr {
     /// An adjustable indexed point in euclidean space
     Free(FreePoint),
@@ -1015,95 +950,16 @@ pub enum PointExpr {
 }
 
 /// Defines a circle expression.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Evaluate, Kind)]
+#[evaluate(Circle)]
 pub enum CircleExpr {
     /// A circle given the center and the radius.
     CenterRadius(CenterRadius),
 }
 
-impl Evaluate for CircleExpr {
-    type Output = Circle;
-
-    fn evaluate(&self, args: &EvaluationArgs) -> Self::Output {
-        match self {
-            Self::CenterRadius(v) => v.evaluate(args),
-        }
-    }
-
-    fn evaluate_weights(&self) -> Weights {
-        match self {
-            Self::CenterRadius(v) => v.evaluate_weights(),
-        }
-    }
-}
-
-impl Kind for CircleExpr {
-    fn collect(&self, exprs: &mut Vec<usize>) {
-        match self {
-            Self::CenterRadius(CenterRadius { center, radius }) => {
-                center.collect(exprs);
-                radius.collect(exprs);
-            }
-        }
-    }
-
-    fn is_trivial(&self) -> bool {
-        false
-    }
-}
-
-impl Evaluate for PointExpr {
-    type Output = Complex;
-
-    fn evaluate(&self, args: &EvaluationArgs) -> Complex {
-        match self {
-            Self::Free(v) => v.evaluate(args),
-            Self::OnCircle(v) => v.evaluate(args),
-            Self::OnLine(v) => v.evaluate(args),
-            Self::LineLineIntersection(v) => v.evaluate(args),
-            Self::Average(v) => v.evaluate(args),
-            Self::CircleCenter(v) => v.evaluate(args),
-        }
-    }
-
-    fn evaluate_weights(&self) -> Weights {
-        match self {
-            Self::Free(v) => v.evaluate_weights(),
-            Self::OnCircle(v) => v.evaluate_weights(),
-            Self::OnLine(v) => v.evaluate_weights(),
-            Self::LineLineIntersection(v) => v.evaluate_weights(),
-            Self::Average(v) => v.evaluate_weights(),
-            Self::CircleCenter(v) => v.evaluate_weights(),
-        }
-    }
-}
-
-impl Kind for PointExpr {
-    fn collect(&self, exprs: &mut Vec<usize>) {
-        match self {
-            Self::LineLineIntersection(LineLineIntersection { k, l }) => {
-                k.collect(exprs);
-                l.collect(exprs);
-            }
-            Self::Average(v) => {
-                for x in &v.items {
-                    x.collect(exprs);
-                }
-            }
-            Self::Free(_) => (),
-            Self::OnCircle(v) => v.circle.collect(exprs),
-            Self::OnLine(v) => v.line.collect(exprs),
-            Self::CircleCenter(v) => v.circle.collect(exprs),
-        }
-    }
-
-    fn is_trivial(&self) -> bool {
-        matches!(self, Self::Free(_) | Self::CircleCenter(_))
-    }
-}
-
 /// Defines a line expression.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Evaluate, Kind)]
+#[evaluate(Line)]
 pub enum LineExpr {
     /// A line in euclidean space. defined by two points.
     Line(LinePoint),
@@ -1115,55 +971,9 @@ pub enum LineExpr {
     ParallelThrough(ParallelThrough),
 }
 
-impl Evaluate for LineExpr {
-    type Output = Line;
-
-    fn evaluate(&self, args: &EvaluationArgs) -> Line {
-        match self {
-            Self::Line(v) => v.evaluate(args),
-            Self::AngleBisector(v) => v.evaluate(args),
-            Self::PerpendicularThrough(v) => v.evaluate(args),
-            Self::ParallelThrough(v) => v.evaluate(args),
-        }
-    }
-
-    fn evaluate_weights(&self) -> Weights {
-        match self {
-            Self::Line(v) => v.evaluate_weights(),
-            Self::AngleBisector(v) => v.evaluate_weights(),
-            Self::PerpendicularThrough(v) => v.evaluate_weights(),
-            Self::ParallelThrough(v) => v.evaluate_weights(),
-        }
-    }
-}
-
-impl Kind for LineExpr {
-    fn collect(&self, exprs: &mut Vec<usize>) {
-        match self {
-            Self::Line(LinePoint { a, b }) => {
-                a.collect(exprs);
-                b.collect(exprs);
-            }
-            Self::AngleBisector(AngleBisector { arm1, origin, arm2 }) => {
-                arm1.collect(exprs);
-                origin.collect(exprs);
-                arm2.collect(exprs);
-            }
-            Self::PerpendicularThrough(PerpendicularThrough { point, line })
-            | Self::ParallelThrough(ParallelThrough { point, line }) => {
-                point.collect(exprs);
-                line.collect(exprs);
-            }
-        }
-    }
-
-    fn is_trivial(&self) -> bool {
-        false
-    }
-}
-
 /// Defines a scalar expression.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Evaluate, Kind)]
+#[evaluate(f64)]
 pub enum ScalarExpr {
     /// Euclidean distance between two points.
     PointPointDistance(PointPointDistance),
@@ -1201,125 +1011,8 @@ pub enum ScalarExpr {
     CircleRadius(CircleRadius),
 }
 
-impl Kind for ScalarExpr {
-    fn collect(&self, exprs: &mut Vec<usize>) {
-        match self {
-            Self::PointPointDistance(PointPointDistance { a, b }) => {
-                a.collect(exprs);
-                b.collect(exprs);
-            }
-            Self::Sum(Sum { a, b })
-            | Self::Difference(Difference { a, b })
-            | Self::Product(Product { a, b })
-            | Self::Quotient(Quotient { a, b }) => {
-                a.collect(exprs);
-                b.collect(exprs);
-            }
-            Self::AnglePoint(AnglePoint { arm1, origin, arm2 })
-            | Self::AnglePointDir(AnglePointDir { arm1, origin, arm2 }) => {
-                arm1.collect(exprs);
-                origin.collect(exprs);
-                arm2.collect(exprs);
-            }
-            Self::AngleLine(AngleLine { k, l }) => {
-                k.collect(exprs);
-                l.collect(exprs);
-            }
-            Self::Negation(Negation { value }) | Self::SetUnit(SetUnit { value, unit: _ }) => {
-                value.collect(exprs);
-            }
-            Self::PointY(PointY { point }) | Self::PointX(PointX { point }) => {
-                point.collect(exprs);
-            }
-            Self::Average(v) => {
-                for x in &v.items {
-                    x.collect(exprs);
-                }
-            }
-            Self::PointLineDistance(PointLineDistance { point, line }) => {
-                point.collect(exprs);
-                line.collect(exprs);
-            }
-            Self::Real(_) | Self::Literal(_) => (),
-            Self::CircleRadius(CircleRadius { circle }) => {
-                circle.collect(exprs);
-            }
-        }
-    }
-
-    fn is_trivial(&self) -> bool {
-        match self {
-            Self::PointPointDistance(_)
-            | Self::PointLineDistance(_)
-            | Self::AnglePoint(_)
-            | Self::AnglePointDir(_)
-            | Self::AngleLine(_)
-            | Self::Sum(_)
-            | Self::Difference(_)
-            | Self::Product(_)
-            | Self::Quotient(_)
-            | Self::Negation(_)
-            | Self::Average(_) => false,
-            Self::Literal(_)
-            | Self::SetUnit(_)
-            | Self::Real(_)
-            | Self::CircleRadius(_)
-            | Self::PointX(_)
-            | Self::PointY(_) => true,
-        }
-    }
-}
-
-impl Evaluate for ScalarExpr {
-    type Output = f64;
-
-    fn evaluate(&self, args: &EvaluationArgs) -> f64 {
-        match self {
-            Self::PointPointDistance(v) => v.evaluate(args),
-            Self::PointLineDistance(v) => v.evaluate(args),
-            Self::AnglePoint(v) => v.evaluate(args),
-            Self::AnglePointDir(v) => v.evaluate(args),
-            Self::AngleLine(v) => v.evaluate(args),
-            Self::Literal(v) => v.evaluate(args),
-            Self::SetUnit(v) => v.evaluate(args),
-            Self::Sum(v) => v.evaluate(args),
-            Self::Difference(v) => v.evaluate(args),
-            Self::Product(v) => v.evaluate(args),
-            Self::Quotient(v) => v.evaluate(args),
-            Self::Negation(v) => v.evaluate(args),
-            Self::Real(v) => v.evaluate(args),
-            Self::PointX(v) => v.evaluate(args),
-            Self::PointY(v) => v.evaluate(args),
-            Self::Average(v) => v.evaluate(args),
-            Self::CircleRadius(v) => v.evaluate(args),
-        }
-    }
-
-    fn evaluate_weights(&self) -> Weights {
-        match self {
-            Self::PointPointDistance(v) => v.evaluate_weights(),
-            Self::PointLineDistance(v) => v.evaluate_weights(),
-            Self::AnglePoint(v) => v.evaluate_weights(),
-            Self::AnglePointDir(v) => v.evaluate_weights(),
-            Self::AngleLine(v) => v.evaluate_weights(),
-            Self::Literal(v) => v.evaluate_weights(),
-            Self::SetUnit(v) => v.evaluate_weights(),
-            Self::Sum(v) => v.evaluate_weights(),
-            Self::Difference(v) => v.evaluate_weights(),
-            Self::Product(v) => v.evaluate_weights(),
-            Self::Quotient(v) => v.evaluate_weights(),
-            Self::Negation(v) => v.evaluate_weights(),
-            Self::Real(v) => v.evaluate_weights(),
-            Self::PointX(v) => v.evaluate_weights(),
-            Self::PointY(v) => v.evaluate_weights(),
-            Self::Average(v) => v.evaluate_weights(),
-            Self::CircleRadius(v) => v.evaluate_weights(),
-        }
-    }
-}
-
 /// Defines a point expression.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Kind)]
 pub enum AnyExpr {
     /// A scalar.
     Scalar(ScalarExpr),
@@ -1327,24 +1020,6 @@ pub enum AnyExpr {
     Point(PointExpr),
     /// A line
     Line(LineExpr),
-}
-
-impl Kind for AnyExpr {
-    fn collect(&self, exprs: &mut Vec<usize>) {
-        match self {
-            Self::Line(line) => line.collect(exprs),
-            Self::Point(point) => point.collect(exprs),
-            Self::Scalar(scalar) => scalar.collect(exprs),
-        }
-    }
-
-    fn is_trivial(&self) -> bool {
-        match self {
-            Self::Line(line) => line.is_trivial(),
-            Self::Point(point) => point.is_trivial(),
-            Self::Scalar(scalar) => scalar.is_trivial(),
-        }
-    }
 }
 
 impl Evaluate for AnyExpr {
@@ -1355,14 +1030,6 @@ impl Evaluate for AnyExpr {
             Self::Line(line) => line.evaluate(args).into(),
             Self::Point(point) => point.evaluate(args).into(),
             Self::Scalar(scalar) => scalar.evaluate(args).into(),
-        }
-    }
-
-    fn evaluate_weights(&self) -> Weights {
-        match self {
-            Self::Line(line) => line.evaluate_weights(),
-            Self::Point(point) => point.evaluate_weights(),
-            Self::Scalar(scalar) => scalar.evaluate_weights(),
         }
     }
 }
