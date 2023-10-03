@@ -378,7 +378,7 @@ impl AdjustableTemplate {
     /// [`Point`]: AdjustableTemplate::Point
     #[must_use]
     pub fn is_point(&self) -> bool {
-        matches!(self, Self::Point)
+        matches!(self, Self::Point | Self::PointOnLine | Self::PointOnCircle)
     }
 }
 

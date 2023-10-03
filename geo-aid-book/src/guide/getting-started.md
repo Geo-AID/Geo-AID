@@ -12,12 +12,23 @@ cargo install geo-aid
 
 This has the advantage of installing Geo-AID globally, so that you can run it from anywhere. It will take care of all dependencies for you. Building may take some time, but once it's done, it's done for good (unless you'll want to update it).
 
-The second way is to clone/download the [GitHub repository](https://github.com/DragonGamesStudios/Geo-AID/tree/v0.2) (remember to get the last vX.X version) and build Geo-AID yourself. To download the repo, you'll need to download the .zip file and unpack it somewhere. If you want to clone it (recommended), you'll need [git](https://git-scm.com/). The clone way is shown below
+The second way is to clone/download the [GitHub repository](https://github.com/DragonGamesStudios/Geo-AID/tree/v0.2) (remember to get the last vX.X version) and build Geo-AID yourself. In this, case, you will also need the [geo_aid_derive](https://github.com/DragonGamesStudios/geo_aid_derive) source. To download the repos, you'll need to download the .zip file and unpack it somewhere. If you want to clone it (recommended), you'll need [git](https://git-scm.com/). The clone way is shown below
 
 ```shell
+mkdir geo-aid
+cd geo-aid
 git clone https://github.com/DragonGamesStudios/Geo-AID.git
+git clone https://github.com/DragonGamesStudios/geo_aid_derive.git
 cd Geo-AID
 git checkout v0.2
+```
+
+It's important that if you compile from source, you should preserve this file structure:
+
+```
+| some_folder:
+    | geo-aid
+    | geo_aid_derive
 ```
 
 Then, either build it with `cargo build --release` and use the produced executable or run it with `cargo run --release -- <geo-aid arguments here>`.
@@ -107,11 +118,11 @@ Bundle types are essentially like structs in programming languages. They have th
 ### Implicit conversions
 
 Geo-AID is capable of performing some implicit conversions:
-* Unitless scalars (usually literals) can be converted into a scalar with any unit.
+* Unknown-unit scalars (usually literals) can be converted into a scalar with a distance unit.
 * A point collection consisting of two points can be converted into a line or the distance between the two points, depending on the context.
-* A point collections of length one is always automatically converted into a point.
-* When performing mutliplication/division over a scalar with a unit and a scalar with no unit, the latter is automatically converted into a `one` unit (standard scalar in mathematics).
-* Any variable defined with a unitless scalar is automatically given a `one` unit.
+* A point collection of length one is always automatically converted into a point.
+* When performing mutliplication/division over a scalar with a unit and a scalar with an unknwon unit, the latter is automatically converted into a unitless scalar (standard scalar in mathematics).
+* Any variable defined with an unknown-unit scalar is assumed to be unitless.
 
 ## Shortening the code with iterators
 
