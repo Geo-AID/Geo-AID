@@ -76,6 +76,8 @@ struct Args {
     /// Where to put the log output
     #[arg(long, short)]
     log: Option<PathBuf>,
+    #[arg(long, hide = true)]
+    markdown_help: Option<PathBuf>
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum, Debug)]
@@ -92,6 +94,11 @@ enum Renderer {
 
 fn main() {
     let args = Args::parse();
+
+    if let Some(path) = args.markdown_help {
+        fs::write(path, clap_markdown::help_markdown::<Args>()).unwrap();
+    }
+
     let script = fs::read_to_string(&args.input).expect("Failed to read file.");
     let canvas_size = (args.width, args.height);
 

@@ -1,17 +1,17 @@
 <!DOCTYPE HTML>
-<html lang="en" class="sidebar-visible no-js light">
+<html lang="en" class="light" dir="ltr">
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
         <title>The Geo-AID Book</title>
-        <meta name="robots" content="noindex" />
+        <meta name="robots" content="noindex">
 
 
         <!-- Custom HTML head -->
         
         <meta name="description" content="">
         <meta name="viewport" content="width=device-width, initial-scale=1">
-        <meta name="theme-color" content="#ffffff" />
+        <meta name="theme-color" content="#ffffff">
 
         <link rel="icon" href="favicon.svg">
         <link rel="shortcut icon" href="favicon.png">
@@ -32,7 +32,7 @@
         <!-- Custom theme stylesheets -->
 
     </head>
-    <body>
+    <body class="sidebar-visible no-js">
     <div id="body-container">
         <!-- Provide site root to javascript -->
         <script>
@@ -62,42 +62,69 @@
             try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
             if (theme === null || theme === undefined) { theme = default_theme; }
             var html = document.querySelector('html');
-            html.classList.remove('no-js')
             html.classList.remove('light')
             html.classList.add(theme);
-            html.classList.add('js');
+            var body = document.querySelector('body');
+            body.classList.remove('no-js')
+            body.classList.add('js');
         </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
 
         <!-- Hide / unhide sidebar before it is displayed -->
         <script>
-            var html = document.querySelector('html');
+            var body = document.querySelector('body');
             var sidebar = null;
+            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
             if (document.body.clientWidth >= 1080) {
                 try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
                 sidebar = sidebar || 'visible';
             } else {
                 sidebar = 'hidden';
             }
-            html.classList.remove('sidebar-visible');
-            html.classList.add("sidebar-" + sidebar);
+            sidebar_toggle.checked = sidebar === 'visible';
+            body.classList.remove('sidebar-visible');
+            body.classList.add("sidebar-" + sidebar);
         </script>
 
         <nav id="sidebar" class="sidebar" aria-label="Table of contents">
             <div class="sidebar-scrollbox">
-                <ol class="chapter"><li class="chapter-item expanded "><a href="introduction.html"><strong aria-hidden="true">1.</strong> Introduction</a></li><li class="chapter-item expanded "><a href="guide.html"><strong aria-hidden="true">2.</strong> Beginner guide</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="guide/getting-started.html"><strong aria-hidden="true">2.1.</strong> Getting started</a></li><li class="chapter-item expanded "><a href="guide/distances.html"><strong aria-hidden="true">2.2.</strong> Working with distances</a></li><li class="chapter-item expanded "><a href="guide/complicated-figures.html"><strong aria-hidden="true">2.3.</strong> Dealing with complicated figures</a></li></ol></li><li class="chapter-item expanded "><a href="cli.html"><strong aria-hidden="true">3.</strong> CLI Reference</a></li><li class="chapter-item expanded "><a href="renderers.html"><strong aria-hidden="true">4.</strong> Renderers</a></li><li class="chapter-item expanded "><a href="reference.html"><strong aria-hidden="true">5.</strong> GeoScript reference</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="reference/syntax.html"><strong aria-hidden="true">5.1.</strong> Syntax</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="reference/syntax/display-options.html"><strong aria-hidden="true">5.1.1.</strong> Display Options</a></li><li class="chapter-item expanded "><a href="reference/syntax/expressions.html"><strong aria-hidden="true">5.1.2.</strong> Expressions</a></li><li class="chapter-item expanded "><a href="reference/syntax/figure.html"><strong aria-hidden="true">5.1.3.</strong> Figure</a></li><li class="chapter-item expanded "><a href="reference/syntax/flags.html"><strong aria-hidden="true">5.1.4.</strong> Flags</a></li><li class="chapter-item expanded "><a href="reference/syntax/identifiers.html"><strong aria-hidden="true">5.1.5.</strong> Identifiers</a></li><li class="chapter-item expanded "><a href="reference/syntax/iterators.html"><strong aria-hidden="true">5.1.6.</strong> Iterators</a></li><li class="chapter-item expanded "><a href="reference/syntax/numbers.html"><strong aria-hidden="true">5.1.7.</strong> Numbers</a></li><li class="chapter-item expanded "><a href="reference/syntax/rules.html"><strong aria-hidden="true">5.1.8.</strong> Rules</a></li><li class="chapter-item expanded "><a href="reference/syntax/variables.html"><strong aria-hidden="true">5.1.9.</strong> Variables</a></li></ol></li><li class="chapter-item expanded "><a href="reference/types.html"><strong aria-hidden="true">5.2.</strong> Types</a></li><li class="chapter-item expanded "><a href="reference/function.html"><strong aria-hidden="true">5.3.</strong> Functions</a></li><li class="chapter-item expanded "><a href="reference/rule-operators.html"><strong aria-hidden="true">5.4.</strong> Rule operators</a></li></ol></li></ol>
+                <ol class="chapter"><li class="chapter-item expanded "><a href="introduction.html"><strong aria-hidden="true">1.</strong> Introduction</a></li><li class="chapter-item expanded "><a href="guide.html"><strong aria-hidden="true">2.</strong> Beginner guide</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="guide/getting-started.html"><strong aria-hidden="true">2.1.</strong> Getting started</a></li><li class="chapter-item expanded "><a href="guide/distances.html"><strong aria-hidden="true">2.2.</strong> Working with distances</a></li><li class="chapter-item expanded "><a href="guide/complicated-figures.html"><strong aria-hidden="true">2.3.</strong> Dealing with complicated figures</a></li></ol></li><li class="chapter-item expanded "><a href="cli.html"><strong aria-hidden="true">3.</strong> CLI Reference</a></li><li class="chapter-item expanded "><a href="renderers.html"><strong aria-hidden="true">4.</strong> Renderers</a></li><li class="chapter-item expanded "><a href="reference.html"><strong aria-hidden="true">5.</strong> GeoScript reference</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="reference/syntax.html"><strong aria-hidden="true">5.1.</strong> Syntax</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="reference/syntax/display-options.html"><strong aria-hidden="true">5.1.1.</strong> Display Options</a></li><li class="chapter-item expanded "><a href="reference/syntax/expressions.html"><strong aria-hidden="true">5.1.2.</strong> Expressions</a></li><li class="chapter-item expanded "><a href="reference/syntax/figure.html"><strong aria-hidden="true">5.1.3.</strong> Figure</a></li><li class="chapter-item expanded "><a href="reference/syntax/flags.html"><strong aria-hidden="true">5.1.4.</strong> Flags</a></li><li class="chapter-item expanded "><a href="reference/syntax/identifiers.html"><strong aria-hidden="true">5.1.5.</strong> Identifiers</a></li><li class="chapter-item expanded "><a href="reference/syntax/iterators.html"><strong aria-hidden="true">5.1.6.</strong> Iterators</a></li><li class="chapter-item expanded "><a href="reference/syntax/numbers.html"><strong aria-hidden="true">5.1.7.</strong> Numbers</a></li><li class="chapter-item expanded "><a href="reference/syntax/rules.html"><strong aria-hidden="true">5.1.8.</strong> Rules</a></li><li class="chapter-item expanded "><a href="reference/syntax/variables.html"><strong aria-hidden="true">5.1.9.</strong> Variables</a></li></ol></li><li class="chapter-item expanded "><a href="reference/types.html"><strong aria-hidden="true">5.2.</strong> Types</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="reference/types/primitives.html"><strong aria-hidden="true">5.2.1.</strong> Primitives</a></li><li class="chapter-item expanded "><a href="reference/types/bundle-types.html"><strong aria-hidden="true">5.2.2.</strong> Bundle types</a></li></ol></li><li class="chapter-item expanded "><a href="reference/operators.html"><strong aria-hidden="true">5.3.</strong> Operators</a></li><li class="chapter-item expanded "><a href="reference/functions.html"><strong aria-hidden="true">5.4.</strong> Functions</a></li><li class="chapter-item expanded "><a href="reference/rule-operators.html"><strong aria-hidden="true">5.5.</strong> Rule operators</a></li></ol></li></ol>
             </div>
             <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
         </nav>
+
+        <!-- Track and set sidebar scroll position -->
+        <script>
+            var sidebarScrollbox = document.querySelector('#sidebar .sidebar-scrollbox');
+            sidebarScrollbox.addEventListener('click', function(e) {
+                if (e.target.tagName === 'A') {
+                    sessionStorage.setItem('sidebar-scroll', sidebarScrollbox.scrollTop);
+                }
+            }, { passive: true });
+            var sidebarScrollTop = sessionStorage.getItem('sidebar-scroll');
+            sessionStorage.removeItem('sidebar-scroll');
+            if (sidebarScrollTop) {
+                // preserve sidebar scroll position when navigating via links within sidebar
+                sidebarScrollbox.scrollTop = sidebarScrollTop;
+            } else {
+                // scroll sidebar to current active section when navigating via "next/previous chapter" buttons
+                var activeSection = document.querySelector('#sidebar .active');
+                if (activeSection) {
+                    activeSection.scrollIntoView({ block: 'center' });
+                }
+            }
+        </script>
 
         <div id="page-wrapper" class="page-wrapper">
 
             <div class="page">
                                 <div id="menu-bar-hover-placeholder"></div>
-                <div id="menu-bar" class="menu-bar sticky bordered">
+                <div id="menu-bar" class="menu-bar sticky">
                     <div class="left-buttons">
-                        <button id="sidebar-toggle" class="icon-button" type="button" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
                             <i class="fa fa-bars"></i>
-                        </button>
+                        </label>
                         <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
                             <i class="fa fa-paint-brush"></i>
                         </button>
@@ -172,10 +199,18 @@
 <pre><code class="language-shell">cargo install geo-aid
 </code></pre>
 <p>This has the advantage of installing Geo-AID globally, so that you can run it from anywhere. It will take care of all dependencies for you. Building may take some time, but once it's done, it's done for good (unless you'll want to update it).</p>
-<p>The second way is to clone/download the <a href="https://github.com/DragonGamesStudios/Geo-AID/tree/v0.2">GitHub repository</a> (remember to get the last vX.X version) and build Geo-AID yourself. To download the repo, you'll need to download the .zip file and unpack it somewhere. If you want to clone it (recommended), you'll need <a href="https://git-scm.com/">git</a>. The clone way is shown below</p>
-<pre><code class="language-shell">git clone https://github.com/DragonGamesStudios/Geo-AID.git
+<p>The second way is to clone/download the <a href="https://github.com/DragonGamesStudios/Geo-AID/tree/v0.2">GitHub repository</a> (remember to get the last vX.X version) and build Geo-AID yourself. In this, case, you will also need the <a href="https://github.com/DragonGamesStudios/geo_aid_derive">geo_aid_derive</a> source. To download the repos, you'll need to download the .zip file and unpack it somewhere. If you want to clone it (recommended), you'll need <a href="https://git-scm.com/">git</a>. The clone way is shown below</p>
+<pre><code class="language-shell">mkdir geo-aid
+cd geo-aid
+git clone https://github.com/DragonGamesStudios/Geo-AID.git
+git clone https://github.com/DragonGamesStudios/geo_aid_derive.git
 cd Geo-AID
 git checkout v0.2
+</code></pre>
+<p>It's important that if you compile from source, you should preserve this file structure:</p>
+<pre><code>| some_folder:
+    | geo-aid
+    | geo_aid_derive
 </code></pre>
 <p>Then, either build it with <code>cargo build --release</code> and use the produced executable or run it with <code>cargo run --release -- &lt;geo-aid arguments here&gt;</code>.</p>
 <p>Run the program with the <code>--version</code> flag to check if it works properly. You can also run <code>geo-aid --help</code> (replace <code>geo-aid</code> with <code>cargo run --release --</code> if using the second way) if you want to see how to use the tool CLI (you can also check the <a href="guide/../cli.html">CLI reference</a>).</p>
@@ -231,11 +266,11 @@ let omega = Circle(A, r);
 <h3 id="implicit-conversions"><a class="header" href="#implicit-conversions">Implicit conversions</a></h3>
 <p>Geo-AID is capable of performing some implicit conversions:</p>
 <ul>
-<li>Unitless scalars (usually literals) can be converted into a scalar with any unit.</li>
+<li>Unknown-unit scalars (usually literals) can be converted into a scalar with a distance unit.</li>
 <li>A point collection consisting of two points can be converted into a line or the distance between the two points, depending on the context.</li>
-<li>A point collections of length one is always automatically converted into a point.</li>
-<li>When performing mutliplication/division over a scalar with a unit and a scalar with no unit, the latter is automatically converted into a <code>one</code> unit (standard scalar in mathematics).</li>
-<li>Any variable defined with a unitless scalar is automatically given a <code>one</code> unit.</li>
+<li>A point collection of length one is always automatically converted into a point.</li>
+<li>When performing mutliplication/division over a scalar with a unit and a scalar with an unknwon unit, the latter is automatically converted into a unitless scalar (standard scalar in mathematics).</li>
+<li>Any variable defined with an unknown-unit scalar is assumed to be unitless.</li>
 </ul>
 <h2 id="shortening-the-code-with-iterators"><a class="header" href="#shortening-the-code-with-iterators">Shortening the code with iterators</a></h2>
 <p>Many figures feature multiple points and defining each one with a separate <code>let</code> statement can feel very verbose. To help that, GeoScript has a powerful iterator system. Iterators can be used in <code>let</code> statements and rules on both sides. A sequence of expressions separated by a comma is called an <em>implicit iterator</em>. Using these, we can collapse multiple lines of a script into a single one. For example, our first figure script becomes the following:</p>
@@ -364,8 +399,80 @@ AB, BC, AC = 1, 2, 3;
 <hr />
 <p>Usually, the most visible effect comes from increasing the worker count. There is also a way to modify Geo-AID's behavior outside of its parameters. You can do so by modifying the <code>point_bounds</code> flag. Enabling them adds rules for points to be contained within (0,0) -&gt; (1,1) range. This will heavily afftect the generation process and severely increase the time it will tak to complete. The result might not be the desired one, so don't expect too much.</p>
 <p>Ultimately the best way of increasing odds for Geo-AID is to write the script as best as you can, relying strongly on defining points with expressions. The golden rule is: the less rules, the better.</p>
-<div style="break-before: page; page-break-before: always;"></div><h1 id="cli-reference"><a class="header" href="#cli-reference">CLI Reference</a></h1>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="command-line-interface-of-geo-aid"><a class="header" href="#command-line-interface-of-geo-aid">Command-Line Interface of Geo-AID</a></h1>
+<p><strong>Command Overview:</strong></p>
+<ul>
+<li><a href="cli.html#Geo-AID"><code>Geo-AID</code></a></li>
+</ul>
+<h2 id="geo-aid"><a class="header" href="#geo-aid"><code>Geo-AID</code></a></h2>
+<p><strong>Usage:</strong> <code>Geo-AID [OPTIONS] &lt;INPUT&gt; &lt;OUTPUT&gt;</code></p>
+<h6 id="arguments"><a class="header" href="#arguments"><strong>Arguments:</strong></a></h6>
+<ul>
+<li><code>&lt;INPUT&gt;</code> — The input script file</li>
+<li><code>&lt;OUTPUT&gt;</code> — The output target</li>
+</ul>
+<h6 id="options"><a class="header" href="#options"><strong>Options:</strong></a></h6>
+<ul>
+<li>
+<p><code>-d</code>, <code>--delta-max-mean &lt;DELTA_MAX_MEAN&gt;</code> — The maximum mean quality delta. Geo-AID will keep doing generation cycles until the average quality delta over the last <code>m</code> cycles gets below <code>d</code>.</p>
+<p>Default value: <code>0.0001</code></p>
+</li>
+<li>
+<p><code>-c</code>, <code>--count-of-workers &lt;COUNT_OF_WORKERS&gt;</code> — The count of threads to use for generation</p>
+<p>Default value: <code>512</code></p>
+</li>
+<li>
+<p><code>-m</code>, <code>--mean-count &lt;MEAN_COUNT&gt;</code> — The count of last deltas to include in mean calculation. Geo-AID will keep doing generation cycles until the average quality delta over the last <code>m</code> cycles gets below <code>d</code>.</p>
+<p>Default value: <code>128</code></p>
+</li>
+<li>
+<p><code>-a</code>, <code>--adjustment-max &lt;ADJUSTMENT_MAX&gt;</code> — Maximal adjustment of an adjustable during generation. Treated differently for different adjustables.</p>
+<p>Default value: <code>0.5</code></p>
+</li>
+<li>
+<p><code>-r</code>, <code>--renderer &lt;RENDERER&gt;</code> — What renderer to use.</p>
+<p>Default value: <code>latex</code></p>
+<p>Possible values:</p>
+<ul>
+<li><code>latex</code>:
+The LaTeX + tikz renderer</li>
+<li><code>svg</code>:
+The SVG format renderer</li>
+<li><code>json</code>:
+The JSON (machine-readable) format renderer</li>
+<li><code>raw</code>:
+The raw (human-readable) format renderer</li>
+</ul>
+</li>
+<li>
+<p><code>--width &lt;WIDTH&gt;</code> — Canvas width (treated very differently for LaTeX)</p>
+<p>Default value: <code>500</code></p>
+</li>
+<li>
+<p><code>--height &lt;HEIGHT&gt;</code> — Canvas height (treated very differently for LaTeX)</p>
+<p>Default value: <code>500</code></p>
+</li>
+<li>
+<p><code>-l</code>, <code>--log &lt;LOG&gt;</code> — Where to put the log output. Geo-AID has a logging feature for concise information about the rendering process (quality and time).</p>
+</li>
+</ul>
+<hr/>
+<p><small><i>
+This document was generated with the help of
+<a href="https://crates.io/crates/clap-markdown"><code>clap-markdown</code></a>.
+</i></small></p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="renderers"><a class="header" href="#renderers">Renderers</a></h1>
+<p>Geo-AID supports four different renderers, also called drawers. One more is planned.</p>
+<h2 id="json"><a class="header" href="#json">JSON</a></h2>
+<p>The popularized <a href="https://www.json.org/json-en.html">JSON</a> format. Currently very not standardized, mostly useless - enforcing a better standard is work in progress.</p>
+<h2 id="raw"><a class="header" href="#raw">Raw</a></h2>
+<p>A human-readable format, pure <a href="https://en.wikipedia.org/wiki/Plain_text">text</a>. Contains descriptions of the positions of each object in the figure.</p>
+<h2 id="latex"><a class="header" href="#latex">LaTeX</a></h2>
+<p>Using <a href="https://www.latex-project.org/"><code>LaTeX</code></a>, <a href="https://www.overleaf.com/learn/latex/TikZ_package"><code>tikz</code></a> and <a href="https://ctan.org/pkg/tkz-euclide"><code>tikz-euclide</code></a>, one of the two recommended ways of drawing the figure.</p>
+<h2 id="svg"><a class="header" href="#svg">SVG</a></h2>
+<p>Outputs the figure in the <a href="https://developer.mozilla.org/en-US/docs/Web/SVG"><code>svg</code></a> format. One of the two - and the most tested - way of drawing the figure.</p>
+<h2 id="geogebra"><a class="header" href="#geogebra">GeoGebra</a></h2>
+<p>Work in progress, Geo-AID will support outputting in the GeoGebra format importable in the very tool.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="geoscript-reference"><a class="header" href="#geoscript-reference">GeoScript reference</a></h1>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="syntax"><a class="header" href="#syntax">Syntax</a></h1>
 <p>This chapter describes the syntax of GeoScript. The notation used is the same as deifned in <a href="https://doc.rust-lang.org/reference/notation.html">The Rust Reference</a>. Geo-AID expects utf8 encoded files. All whitespaces are ignored beyond distinguishing separate tokens</p>
@@ -589,8 +696,172 @@ NUMBER :<br />
 <p>After each variable name there can be display options given, modifying how the construct is displayed.</p>
 <p>The let statement accepts rules after its right hand side. They behave as if the lhs was a sequence of variable accesses in a 0-id iterator.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="types"><a class="header" href="#types">Types</a></h1>
+<p>GeoScript has two kinds of types: primitives and bundles.</p>
+<p>Primitives - the points, lines, scalars and circles, are the building blocks of every value in GeoScript. Bundles, on the other hand, consist of multiple primitives.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="primitives"><a class="header" href="#primitives">Primitives</a></h1>
+<h2 id="scalar"><a class="header" href="#scalar">Scalar</a></h2>
+<p>A scalar is a simple real value with a unit - a unit is a product of integer powers of simple units. The simple units are:</p>
+<ul>
+<li>Distance</li>
+<li>Angle</li>
+</ul>
+<p>Any scalar, whose unit cannot be determined, is assumed to be unitless. Scalars in this reference are denoted as <code>Scalar(&lt;unit&gt;)</code>.</p>
+<p>Note: A literal will never be coerced to an angle, since that would introduce uncertainty whether it should be treated as given in radians or degrees. Instead, look for their respective functions.</p>
+<h2 id="point"><a class="header" href="#point">Point</a></h2>
+<p>A point is defined as a point on a euclidean plane. Denoted as <code>Point</code>.</p>
+<h2 id="circle"><a class="header" href="#circle">Circle</a></h2>
+<p>A circle is given a center and a radius. It is a set of points with the distance to its center equal to its radius. Denoted as <code>Circle</code>.</p>
+<h2 id="line"><a class="header" href="#line">Line</a></h2>
+<p>A line is a line in euclidean sense. Denoted as <code>Line</code>.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="bundle-types"><a class="header" href="#bundle-types">Bundle types</a></h1>
+<p>Bundle types are zero-cost abstractions over primitives. There are two types of bundles: point collections and named bundles.</p>
+<h2 id="point-collections-1"><a class="header" href="#point-collections-1">Point collections</a></h2>
+<p>Point collections are simply ordered collections of points. It is never a seperate entity, only an abstraction over a set of points. Denoted as <code>&lt;length&gt;-P</code>. If <code>&lt;length&gt;</code> is given as <code>0</code>, it means a collection of any length. Most functions that accept points as arguments, also accept point collections.</p>
+<h2 id="named-bundles"><a class="header" href="#named-bundles">Named Bundles</a></h2>
+<p>Named bundles are similar to structs in C. They have names and named fields of any type (not yet accessible). Denoted with their unique names different from the names of any other type.</p>
+<h3 id="segment"><a class="header" href="#segment">Segment</a></h3>
+<pre><code>Segment {
+    A: [Point](primitives.md#point),
+    B: [Point](primitives.md#point)
+}
+</code></pre>
+<p><code>Segment</code>s have two fields denoting their ends.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="operators-1"><a class="header" href="#operators-1">Operators</a></h1>
+<p>Standard arithmetic operations - addition (<code>+</code>), subtraction (<code>-</code>), multiplication (<code>*</code>) and division (<code>/</code>) are only allowed between scalars. Addition and subtraction must only be performed between scalars of the same unit, whereas multiplication and division can be done with any two scalars. The resulting unit will simply be a product of the operation. Beyond that, negation with the <code>-</code> operator can be performed on any scalar.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="functions-1"><a class="header" href="#functions-1">Functions</a></h1>
+<h2 id="angle"><a class="header" href="#angle"><code>angle</code></a></h2>
+<ul>
+<li><code>angle(ABC: [3-P](./types/bundle-types.md#point-collections))</code></li>
+<li><code>angle(A: [Point](./types/primitives.md#point), B: [Point](./types/primitives.md#point), C: [Point](./types/primitives.md#point))</code></li>
+</ul>
+<p><strong>Return type</strong>: <a href="reference/./types/primitives.html#scalar">Scalar (angle)</a></p>
+<p><strong>Returns</strong>: measurement of the angle <code>ABC</code></p>
+<ul>
+<li><code>angle(k: [Line](./types/primitives.md#point), l: [Line](./types/primitives.md#line))</code></li>
+</ul>
+<p><strong>Return type</strong>: <a href="reference/./types/primitives.html#scalar">Scalar (angle)</a></p>
+<p><strong>Returns</strong>: measurement of the angle between <code>k</code> and <code>l</code>. Which angle, depends on the order of the lines. For predictable outcome, the point versions are strongly recommended.</p>
+<h2 id="bisector"><a class="header" href="#bisector"><code>bisector</code></a></h2>
+<ul>
+<li><code>bisector(AB: [2-P](./types/bundle-types.md#point-collections))</code></li>
+<li><code>bisector(A: [Point](./types/primitives.md#point), B: [Point](./types/primitives.md#point))</code></li>
+</ul>
+<p><strong>Return type</strong>: <a href="reference/./types/primitives.html#Line">Line</a></p>
+<p><strong>Returns</strong>: a bisector of the segment <code>AB</code> - a perpendicular line passing through its center.</p>
+<ul>
+<li><code>bisector(ABC: [3-P](./types/bundle-types.md#point-collections))</code></li>
+<li><code>bisector(A: [Point](./types/primitives.md#point), B: [Point](./types/primitives.md#point), C: [Point](./types/primitives.md#point))</code></li>
+</ul>
+<p><strong>Return type</strong>: <a href="reference/./types/primitives.html#Line">Line</a></p>
+<p><strong>Returns</strong>: a bisector of the angle <code>ABC</code> - a line between lines <code>AB</code> and <code>BC</code>, where each point is in the same distance from both of these lines.</p>
+<h2 id="circle-1"><a class="header" href="#circle-1"><code>Circle</code></a></h2>
+<ul>
+<li><code>Circle(center: [Point](./types/primitives.md#point), radius: [Scalar (distance)](./types/primitives.md#point))</code></li>
+<li><code>circle(radius: [Scalar (distance)](./types/primitives.md#point), center: [Point](./types/primitives.md#point))</code></li>
+</ul>
+<p><strong>Return type</strong>: <a href="reference/./types/primitives.html#Circle">Circle</a></p>
+<p><strong>Returns</strong>: a circle with the given <code>center</code> and <code>radius</code>.</p>
+<ul>
+<li><code>Circle()</code></li>
+</ul>
+<p><strong>Return type</strong>: <a href="reference/./types/primitives.html#Circle">Circle</a></p>
+<p><strong>Returns</strong>: a circle with an adjusted (free point) <code>center</code> and an adjusted (free scalar) <code>radius</code>.</p>
+<h2 id="degrees"><a class="header" href="#degrees"><code>degrees</code></a></h2>
+<ul>
+<li><code>degrees(value: [Scalar (no unit)])</code></li>
+</ul>
+<p><strong>Return type</strong>: <a href="reference/./types/primitives.html#Scalar">Scalar (angle)</a></p>
+<p><strong>Returns</strong>: an angle with the given measurement in degreees. Related: <a href="reference/functions.html#radians">radians</a></p>
+<h2 id="dst"><a class="header" href="#dst"><code>dst</code></a></h2>
+<ul>
+<li><code>dst(AB: [2-P](./types/bundle-types.md#point-collections))</code></li>
+<li><code>dst(A: [Point](./types/primitives.md#point), B: [Point](./types/primitives.md#point))</code></li>
+</ul>
+<p><strong>Return type</strong>: <a href="reference/./types/primitives.html#Scalar">Scalar (distance)</a></p>
+<p><strong>Returns</strong>: the distance between points <code>A</code> and <code>B</code>.</p>
+<ul>
+<li><code>dst(P: [Point](./types/primitives.md#point), k: [Line](./types/primitives.md#line))</code></li>
+<li><code>dst(k: [Line](./types/primitives.md#line), P: [Point](./types/primitives.md#point))</code></li>
+</ul>
+<p><strong>Return type</strong>: <a href="reference/./types/primitives.html#Scalar">Scalar (distance)</a></p>
+<p><strong>Returns</strong>: the distance between point <code>P</code> and line <code>k</code>.</p>
+<ul>
+<li><code>dst(value: [Scalar (no unit / distance)])</code></li>
+</ul>
+<p><strong>Return type</strong>: <a href="reference/./types/primitives.html#Scalar">Scalar (angle)</a></p>
+<p><strong>Returns</strong>: the value with a distance unit.</p>
+<h2 id="intersection"><a class="header" href="#intersection"><code>intersection</code></a></h2>
+<ul>
+<li><code>intersection(k: [Line](./types/primitives.md#point), l: [Line](./types/primitives.md#line))</code></li>
+</ul>
+<p><strong>Return type</strong>: <a href="reference/./types/primitives.html#point">Point</a></p>
+<p><strong>Returns</strong>: intersection of lines <code>k</code> and <code>l</code>.</p>
+<h2 id="mid"><a class="header" href="#mid"><code>mid</code></a></h2>
+<p><strong>Note</strong>: The following functions allow any positive numbers of arguments.</p>
+<ul>
+<li><code>mid(v_1: [Scalar (any unit u)](./types/primitives.md#Scalar), v_2 [Scalar (the same unit u)](./types/primitives.md#Scalar), ..., v_n: [Scalar (the same unit u)](./types/primitives.md#Scalar))</code></li>
+</ul>
+<p><strong>Return type</strong>: <a href="reference/./types/primitives.html#Scalar">Scalar (the same unit u)</a></p>
+<p><strong>Returns</strong>: The average value of <code>v_1</code>, <code>v_2</code>, ... <code>v_n</code>.</p>
+<ul>
+<li><code>mid(P_1: [Point](./types/primitives.md#Point), P_2 [Point](./types/primitives.md#Point), ..., P_n: [Point](./types/primitives.md#Point))</code></li>
+</ul>
+<p><strong>Return type</strong>: <a href="reference/./types/primitives.html#Point">Point</a></p>
+<p><strong>Returns</strong>: The middle point of <code>P_1</code>, <code>P_2</code>, ... <code>P_n</code>. Special cases: when <code>n=2</code>, the middle of a segment; When <code>n=3</code>, the centroid of a triangle.</p>
+<h2 id="parallel_through"><a class="header" href="#parallel_through"><code>parallel_through</code></a></h2>
+<ul>
+<li><code>parallel_through(P: [Point](./types/primitives.md#point), k: [Line](./types/primitives.md#Line))</code></li>
+<li><code>parallel_through(k: [Line](./types/primitives.md#line), P: [Point](./types/primitives.md#Point))</code></li>
+</ul>
+<p><strong>Return type</strong>: <a href="reference/./types/primitives.html#Line">Line</a></p>
+<p><strong>Returns</strong>: a line parallel to <code>k</code>, passing through <code>P</code>.</p>
+<h2 id="perpendicular_through"><a class="header" href="#perpendicular_through"><code>perpendicular_through</code></a></h2>
+<ul>
+<li><code>perpendicular_through(P: [Point](./types/primitives.md#point), k: [Line](./types/primitives.md#Line))</code></li>
+<li><code>perpendicular_through(k: [Line](./types/primitives.md#line), P: [Point](./types/primitives.md#Point))</code></li>
+</ul>
+<p><strong>Return type</strong>: <a href="reference/./types/primitives.html#Line">Line</a></p>
+<p><strong>Returns</strong>: a line perpendicular to <code>k</code>, passing through <code>P</code>.</p>
+<h2 id="point-1"><a class="header" href="#point-1"><code>Point</code></a></h2>
+<ul>
+<li><code>Point()</code></li>
+</ul>
+<p><strong>Return type</strong>: <a href="reference/./types/primitives.html#Circle">Point</a></p>
+<p><strong>Returns</strong>: an adjusted (free) point.</p>
+<h2 id="radians"><a class="header" href="#radians"><code>radians</code></a></h2>
+<ul>
+<li><code>radians(value: [Scalar (no unit)])</code></li>
+</ul>
+<p><strong>Return type</strong>: <a href="reference/./types/primitives.html#Scalar">Scalar (angle)</a></p>
+<p><strong>Returns</strong>: an angle with the given measurement in radians. Related: <a href="reference/functions.html#degrees">degrees</a></p>
+<h2 id="segment-1"><a class="header" href="#segment-1"><code>Segment</code></a></h2>
+<ul>
+<li><code>Segment(AB: [2-P](./types/bundle-types.md#point-collections))</code></li>
+<li><code>Segment(A: [Point](./types/primitives.md#point), B: [Point](./types/primitives.md#point))</code></li>
+</ul>
+<p><strong>Return type</strong>: <a href="reference/./types/bundle-types.html#segment">Segment</a></p>
+<p><strong>Returns</strong>: the semgent <code>AB</code>.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="rule-operators"><a class="header" href="#rule-operators">Rule operators</a></h1>
+<h2 id="comparison"><a class="header" href="#comparison">Comparison</a></h2>
+<p>The operators <code>&lt;</code>, <code>&lt;=</code>, <code>&gt;</code>, <code>&gt;=</code> are only allowed between <a href="reference/./types/primitives.html#scalar">Scalars</a> of the same unit. They are simple comparison operators with their rules evaluated based on the relative difference between the two values.</p>
+<p>The operator <code>=</code> (and its negation, <code>!=</code>) is allowed between <a href="reference/./types/primitives.html#scalar">Scalars</a> of the same unit and <a href="reference/./types/primitives.html#point">Points</a>. Its rule is evaluated based on the absolute distance between the two values.</p>
+<h2 id="lies_on"><a class="header" href="#lies_on"><code>lies_on</code></a></h2>
+<ul>
+<li><code>P: [Point](./types/primitives.md#point) lies_on k: [Line](./types/primitives.md#Line)</code></li>
+</ul>
+<p>Tells Geo-AID that point <code>P</code> lies on (has zero distance) from line <code>k</code>. Note: zero distance rules do not have any impact on the distance variable and decrease figure stability much less than other distance rules.</p>
+<ul>
+<li><code>P: [Point](./types/primitives.md#point) lies_on k: [Segment](./types/bundle-types.md#Segment)</code></li>
+</ul>
+<p>Tells Geo-AID that point <code>P</code> lies on (has zero distance) from the line of segment <code>k</code> and between its ends. Note: zero distance rules do not have any impact on the distance variable and decrease figure stability much less than other distance rules.</p>
+<ul>
+<li><code>P: [Point](./types/primitives.md#point) lies_on omega: [Circle](./types/primitives.md#Circle)</code></li>
+</ul>
+<p>Tells Geo-AID that point <code>P</code> lies on (has zero distance) from circle <code>omega</code>. Note: zero distance rules do not have any impact on the distance variable and decrease figure stability much less than other distance rules.</p>
+<ul>
+<li><code>col: [0-P](./types/bundle-types.md#) lies_on omega: [Circle](./types/primitives.md#Circle)</code></li>
+</ul>
+<p>Tells Geo-AID that points in the collection <code>col</code> lie on (have zero distance) from circle <code>omega</code> <em>in exactly the given order</em>. Note: zero distance rules do not have any impact on the distance variable and decrease figure stability much less than other distance rules.</p>
 
                     </main>
 
