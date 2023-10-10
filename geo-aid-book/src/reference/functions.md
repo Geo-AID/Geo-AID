@@ -2,14 +2,14 @@
 
 ## `angle`
 
-* `angle(ABC: [3-P](./types/bundle-types.md#point-collections))`
-* `angle(A: [Point](./types/primitives.md#point), B: [Point](./types/primitives.md#point), C: [Point](./types/primitives.md#point))`
+* `angle(ABC: 3-P)`
+* `angle(A: Point, B: Point, C: Point)`
 
 **Return type**: [Scalar (angle)](./types/primitives.md#scalar)
 
 **Returns**: measurement of the angle `ABC`
 
-* `angle(k: [Line](./types/primitives.md#point), l: [Line](./types/primitives.md#line))`
+* `angle(k: Line, l: Line)`
 
 **Return type**: [Scalar (angle)](./types/primitives.md#scalar)
 
@@ -17,15 +17,15 @@
 
 ## `bisector`
 
-* `bisector(AB: [2-P](./types/bundle-types.md#point-collections))`
-* `bisector(A: [Point](./types/primitives.md#point), B: [Point](./types/primitives.md#point))`
+* `bisector(AB: 2-P)`
+* `bisector(A: Point, B: Point)`
 
 **Return type**: [Line](./types/primitives.md#Line)
 
 **Returns**: a bisector of the segment `AB` - a perpendicular line passing through its center.
 
-* `bisector(ABC: [3-P](./types/bundle-types.md#point-collections))`
-* `bisector(A: [Point](./types/primitives.md#point), B: [Point](./types/primitives.md#point), C: [Point](./types/primitives.md#point))`
+* `bisector(ABC: 3-P)`
+* `bisector(A: Point, B: Point, C: Point)`
 
 **Return type**: [Line](./types/primitives.md#Line)
 
@@ -33,8 +33,8 @@
 
 ## `Circle`
 
-* `Circle(center: [Point](./types/primitives.md#point), radius: [Scalar (distance)](./types/primitives.md#point))`
-* `circle(radius: [Scalar (distance)](./types/primitives.md#point), center: [Point](./types/primitives.md#point))`
+* `Circle(center: Point, radius: Scalar (distance))`
+* `circle(radius: Scalar (distance), center: Point)`
 
 **Return type**: [Circle](./types/primitives.md#Circle)
 
@@ -48,29 +48,29 @@
 
 ## `degrees`
 
-* `degrees(value: [Scalar (no unit)])`
+* `degrees(value: Scalar (no unit))`
 
 **Return type**: [Scalar (angle)](./types/primitives.md#Scalar)
 
-**Returns**: an angle with the given measurement in degreees. Related: [radians](#radians)
+**Returns**: an angle with the given measurement in degrees. Related: [radians](#radians)
 
 ## `dst`
 
-* `dst(AB: [2-P](./types/bundle-types.md#point-collections))`
-* `dst(A: [Point](./types/primitives.md#point), B: [Point](./types/primitives.md#point))`
+* `dst(AB: 2-P)`
+* `dst(A: Point, B: Point)`
 
 **Return type**: [Scalar (distance)](./types/primitives.md#Scalar)
 
 **Returns**: the distance between points `A` and `B`.
 
-* `dst(P: [Point](./types/primitives.md#point), k: [Line](./types/primitives.md#line))`
-* `dst(k: [Line](./types/primitives.md#line), P: [Point](./types/primitives.md#point))`
+* `dst(P: Point, k: Line)`
+* `dst(k: Line, P: Point)`
 
 **Return type**: [Scalar (distance)](./types/primitives.md#Scalar)
 
 **Returns**: the distance between point `P` and line `k`.
 
-* `dst(value: [Scalar (no unit / distance)])`
+* `dst(value: Scalar (no unit / distance))`
 
 **Return type**: [Scalar (angle)](./types/primitives.md#Scalar)
 
@@ -78,7 +78,7 @@
 
 ## `intersection`
 
-* `intersection(k: [Line](./types/primitives.md#point), l: [Line](./types/primitives.md#line))`
+* `intersection(k: Line, l: Line)`
 
 **Return type**: [Point](./types/primitives.md#point)
 
@@ -88,13 +88,13 @@
 
 **Note**: The following functions allow any positive numbers of arguments.
 
-* `mid(v_1: [Scalar (any unit u)](./types/primitives.md#Scalar), v_2 [Scalar (the same unit u)](./types/primitives.md#Scalar), ..., v_n: [Scalar (the same unit u)](./types/primitives.md#Scalar))`
+* `mid(v_1: Scalar (any unit u), v_2 Scalar (the same unit u), ..., v_n: Scalar (the same unit u))`
 
 **Return type**: [Scalar (the same unit u)](./types/primitives.md#Scalar)
 
 **Returns**: The average value of `v_1`, `v_2`, ... `v_n`.
 
-* `mid(P_1: [Point](./types/primitives.md#Point), P_2 [Point](./types/primitives.md#Point), ..., P_n: [Point](./types/primitives.md#Point))`
+* `mid(P_1: Point, P_2 Point, ..., P_n: Point)`
 
 **Return type**: [Point](./types/primitives.md#Point)
 
@@ -102,8 +102,8 @@
 
 ## `parallel_through`
 
-* `parallel_through(P: [Point](./types/primitives.md#point), k: [Line](./types/primitives.md#Line))`
-* `parallel_through(k: [Line](./types/primitives.md#line), P: [Point](./types/primitives.md#Point))`
+* `parallel_through(P: Point, k: Line)`
+* `parallel_through(k: Line, P: Point)`
 
 **Return type**: [Line](./types/primitives.md#Line)
 
@@ -111,8 +111,8 @@
 
 ## `perpendicular_through`
 
-* `perpendicular_through(P: [Point](./types/primitives.md#point), k: [Line](./types/primitives.md#Line))`
-* `perpendicular_through(k: [Line](./types/primitives.md#line), P: [Point](./types/primitives.md#Point))`
+* `perpendicular_through(P: Point, k: Line)`
+* `perpendicular_through(k: Line, P: Point)`
 
 **Return type**: [Line](./types/primitives.md#Line)
 
@@ -128,7 +128,7 @@
 
 ## `radians`
 
-* `radians(value: [Scalar (no unit)])`
+* `radians(value: Scalar (no unit))`
 
 **Return type**: [Scalar (angle)](./types/primitives.md#Scalar)
 
@@ -136,9 +136,9 @@
 
 ## `Segment`
 
-* `Segment(AB: [2-P](./types/bundle-types.md#point-collections))`
-* `Segment(A: [Point](./types/primitives.md#point), B: [Point](./types/primitives.md#point))`
+* `Segment(AB: 2-P)`
+* `Segment(A: Point, B: Point)`
 
 **Return type**: [Segment](./types/bundle-types.md#segment)
 
-**Returns**: the semgent `AB`.
+**Returns**: the segment `AB`.

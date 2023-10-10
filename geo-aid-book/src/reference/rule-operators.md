@@ -8,18 +8,18 @@ The operator `=` (and its negation, `!=`) is allowed between [Scalars](./types/p
 
 ## `lies_on`
 
-* `P: [Point](./types/primitives.md#point) lies_on k: [Line](./types/primitives.md#Line)`
+* `P: Point lies_on k: Line`
 
 Tells Geo-AID that point `P` lies on (has zero distance) from line `k`. Note: zero distance rules do not have any impact on the distance variable and decrease figure stability much less than other distance rules.
 
-* `P: [Point](./types/primitives.md#point) lies_on k: [Segment](./types/bundle-types.md#Segment)`
+* `P: Point lies_on k: Segment`
 
 Tells Geo-AID that point `P` lies on (has zero distance) from the line of segment `k` and between its ends. Note: zero distance rules do not have any impact on the distance variable and decrease figure stability much less than other distance rules.
 
-* `P: [Point](./types/primitives.md#point) lies_on omega: [Circle](./types/primitives.md#Circle)`
+* `P: Point lies_on omega: Circle`
 
 Tells Geo-AID that point `P` lies on (has zero distance) from circle `omega`. Note: zero distance rules do not have any impact on the distance variable and decrease figure stability much less than other distance rules.
 
-* `col: [0-P](./types/bundle-types.md#) lies_on omega: [Circle](./types/primitives.md#Circle)`
+* `col: 0-P lies_on omega: Circle`
 
 Tells Geo-AID that points in the collection `col` lie on (have zero distance) from circle `omega` *in exactly the given order*. Note: zero distance rules do not have any impact on the distance variable and decrease figure stability much less than other distance rules.
