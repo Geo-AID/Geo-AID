@@ -51,3 +51,5 @@
 - Huge compiler & generator refactor
 - A point laying on two lines is now defined as an intersection of them.
 - Added proper documentation.
+
+## Version 0.2.6
