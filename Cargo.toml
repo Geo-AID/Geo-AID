@@ -1,10 +1,10 @@
 [package]
 name = "geo-aid"
 description = "A tool designed to generate geometrical figures based on given rules."
-version = "0.2.5"
+version = "0.2.6"
 edition = "2021"
 license = "MIT"
-repository = "https://www.github.com/DragonGamesStudios/Geo-AID"
+repository = "https://github.com/DragonGamesStudios/Geo-AID/tree/v0.2"
 
 [dependencies]
 rand = "0.8.5"
