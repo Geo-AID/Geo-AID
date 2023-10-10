@@ -20,7 +20,7 @@
         - [Variables](./reference/syntax/variables.md)
     - [Types](./reference/types.md)
         -[Primitives](./reference/types/primitives.md)
-        -[Bundle types](./reference/types/budnle-types.md)
+        -[Bundle types](./reference/types/bundle-types.md)
     - [Operators](./reference/operators.md)
     - [Functions](./reference/functions.md)
     - [Rule operators](./reference/rule-operators.md)
