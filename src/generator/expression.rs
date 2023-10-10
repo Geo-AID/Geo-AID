@@ -489,7 +489,7 @@ pub mod expr {
             // Divide direction vectors and get the arg.
             let div = line1.direction / line2.direction;
 
-            div.arg()
+            div.arg().abs()
         }
     }
 

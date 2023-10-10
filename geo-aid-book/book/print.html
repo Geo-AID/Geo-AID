@@ -1,0 +1,925 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>The Geo-AID Book</title>
+        <meta name="robots" content="noindex">
+
+
+        <!-- Custom HTML head -->
+        
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="favicon.svg">
+        <link rel="shortcut icon" href="favicon.png">
+        <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+        <link rel="stylesheet" href="css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="highlight.css">
+        <link rel="stylesheet" href="tomorrow-night.css">
+        <link rel="stylesheet" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+    </head>
+    <body class="sidebar-visible no-js">
+    <div id="body-container">
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('light')
+            html.classList.add(theme);
+            var body = document.querySelector('body');
+            body.classList.remove('no-js')
+            body.classList.add('js');
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var body = document.querySelector('body');
+            var sidebar = null;
+            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            sidebar_toggle.checked = sidebar === 'visible';
+            body.classList.remove('sidebar-visible');
+            body.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded "><a href="introduction.html"><strong aria-hidden="true">1.</strong> Introduction</a></li><li class="chapter-item expanded "><a href="guide.html"><strong aria-hidden="true">2.</strong> Beginner guide</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="guide/getting-started.html"><strong aria-hidden="true">2.1.</strong> Getting started</a></li><li class="chapter-item expanded "><a href="guide/distances.html"><strong aria-hidden="true">2.2.</strong> Working with distances</a></li><li class="chapter-item expanded "><a href="guide/complicated-figures.html"><strong aria-hidden="true">2.3.</strong> Dealing with complicated figures</a></li></ol></li><li class="chapter-item expanded "><a href="cli.html"><strong aria-hidden="true">3.</strong> CLI Reference</a></li><li class="chapter-item expanded "><a href="renderers.html"><strong aria-hidden="true">4.</strong> Renderers</a></li><li class="chapter-item expanded "><a href="reference.html"><strong aria-hidden="true">5.</strong> GeoScript reference</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="reference/syntax.html"><strong aria-hidden="true">5.1.</strong> Syntax</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="reference/syntax/display-options.html"><strong aria-hidden="true">5.1.1.</strong> Display Options</a></li><li class="chapter-item expanded "><a href="reference/syntax/expressions.html"><strong aria-hidden="true">5.1.2.</strong> Expressions</a></li><li class="chapter-item expanded "><a href="reference/syntax/figure.html"><strong aria-hidden="true">5.1.3.</strong> Figure</a></li><li class="chapter-item expanded "><a href="reference/syntax/flags.html"><strong aria-hidden="true">5.1.4.</strong> Flags</a></li><li class="chapter-item expanded "><a href="reference/syntax/identifiers.html"><strong aria-hidden="true">5.1.5.</strong> Identifiers</a></li><li class="chapter-item expanded "><a href="reference/syntax/iterators.html"><strong aria-hidden="true">5.1.6.</strong> Iterators</a></li><li class="chapter-item expanded "><a href="reference/syntax/numbers.html"><strong aria-hidden="true">5.1.7.</strong> Numbers</a></li><li class="chapter-item expanded "><a href="reference/syntax/rules.html"><strong aria-hidden="true">5.1.8.</strong> Rules</a></li><li class="chapter-item expanded "><a href="reference/syntax/variables.html"><strong aria-hidden="true">5.1.9.</strong> Variables</a></li></ol></li><li class="chapter-item expanded "><a href="reference/types.html"><strong aria-hidden="true">5.2.</strong> Types</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="reference/types/primitives.html"><strong aria-hidden="true">5.2.1.</strong> Primitives</a></li><li class="chapter-item expanded "><a href="reference/types/bundle-types.html"><strong aria-hidden="true">5.2.2.</strong> Bundle types</a></li></ol></li><li class="chapter-item expanded "><a href="reference/operators.html"><strong aria-hidden="true">5.3.</strong> Operators</a></li><li class="chapter-item expanded "><a href="reference/functions.html"><strong aria-hidden="true">5.4.</strong> Functions</a></li><li class="chapter-item expanded "><a href="reference/rule-operators.html"><strong aria-hidden="true">5.5.</strong> Rule operators</a></li></ol></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
+        </nav>
+
+        <!-- Track and set sidebar scroll position -->
+        <script>
+            var sidebarScrollbox = document.querySelector('#sidebar .sidebar-scrollbox');
+            sidebarScrollbox.addEventListener('click', function(e) {
+                if (e.target.tagName === 'A') {
+                    sessionStorage.setItem('sidebar-scroll', sidebarScrollbox.scrollTop);
+                }
+            }, { passive: true });
+            var sidebarScrollTop = sessionStorage.getItem('sidebar-scroll');
+            sessionStorage.removeItem('sidebar-scroll');
+            if (sidebarScrollTop) {
+                // preserve sidebar scroll position when navigating via links within sidebar
+                sidebarScrollbox.scrollTop = sidebarScrollTop;
+            } else {
+                // scroll sidebar to current active section when navigating via "next/previous chapter" buttons
+                var activeSection = document.querySelector('#sidebar .active');
+                if (activeSection) {
+                    activeSection.scrollIntoView({ block: 'center' });
+                }
+            }
+        </script>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">The Geo-AID Book</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="introduction"><a class="header" href="#introduction">Introduction</a></h1>
+<p>Geo-AID is a tool to generate figures based off of rules given in the script file. Its main purpose is to minimize the pain related to drawing figures for certain mathematical problems or theorems. It's currently in the early development.</p>
+<blockquote>
+<p><strong>Note:</strong> Geo-AID is not designed to produce <em>perfect</em> output. It is designed to produce <em>best</em> output. This means that it might sacrifice partial accuracy in favor of better readability. It may also make other compromises and produce unexpected results at times. If you're having trouble with this kind of behavior, visit <a href="./guide/complicated-figures.html">Dealing with complicated figures</a> </p>
+</blockquote>
+<p>As an entry point, Geo-AID uses GeoScript - a language used to describe a figure. Aside from that, special parameters can be set as command line arguments. This book is meant to serve as a guide to anyone starting to use Geo-AID and as a reference to anyone who wants to know more.</p>
+<blockquote>
+<p><strong>Note:</strong> This book is held up-do-date with the latest released version on <a href="https://crates.io/crates/geo-aid">crates.io</a>.</p>
+</blockquote>
+<h2 id="how-does-geo-aid-work"><a class="header" href="#how-does-geo-aid-work">How does Geo-AID work?</a></h2>
+<p>First, the input script is compiled into a series of rules and definitions. All type-checking happens here. Geo-AID will also try to apply certain optimizations, if possible. Then, the compiled rules are fed to the generator. The generator itself consists of two core parts - the &quot;Magic Box&quot; (which got its name when Geo-AID was just an idea on a piece of paper) and the critic. The image data (point locations etc.) is then generated over tens of thousands of generation cycles. A single cycle consists the following steps:</p>
+<ul>
+<li>The current version of the data passes through the Magic Box, which adjusts the points/reals (adjustables) by a random vector based on the adjustable's quality.</li>
+<li>The adjusted data is then rated by the critic, which checks how well the new figure meets the given requirements (rules) and gives each adjustable a score in 0-1 range.</li>
+<li>If the new data is considered better than the previous one, it replaces the current version. Otherwise it gets discarder.</li>
+</ul>
+<p>The above cycle runs for each of the 512 (by default) threads and after each cycle a new version gets chosen (or all new versions get discarded). The generation process lasts until a certain requirement is met, e. g. the average overall figure quality increase over the last few thousands of cycles does not exceed a certain value.</p>
+<p>After an image is generated, the data goes to the projector, which designs how it should be rendered and passed on to the selected renderer, which creates the final output.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="beginner-guide"><a class="header" href="#beginner-guide">Beginner guide</a></h1>
+<p>This guide will get you through your first steps with Geo-AID. You will install the tool (if you haven't already) and create your first figure. Then, you will learn how to deal with figures that require distances and how to use Geo-AID parameters to your advantage.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="getting-started"><a class="header" href="#getting-started">Getting started</a></h1>
+<h2 id="installation"><a class="header" href="#installation">Installation</a></h2>
+<p>Before you start using Geo-AID, you'll need to install it. Unfortunately, it does not come in the form of precompiled binaries and you'll need some other tools to build it. First, <a href="https://www.rust-lang.org/">install Rust and Cargo</a>. Once you're done, there are two ways of setting up Geo-AID:</p>
+<p>The first way is to simply use the <code>cargo install</code> method:</p>
+<pre><code class="language-shell">cargo install geo-aid
+</code></pre>
+<p>This has the advantage of installing Geo-AID globally, so that you can run it from anywhere. It will take care of all dependencies for you. Building may take some time, but once it's done, it's done for good (unless you'll want to update it).</p>
+<p>The second way is to clone/download the <a href="https://github.com/DragonGamesStudios/Geo-AID/tree/v0.2">GitHub repository</a> (remember to get the last vX.X version) and build Geo-AID yourself. In this, case, you will also need the <a href="https://github.com/DragonGamesStudios/geo_aid_derive">geo_aid_derive</a> source. To download the repos, you'll need to download the .zip file and unpack it somewhere. If you want to clone it (recommended), you'll need <a href="https://git-scm.com/">git</a>. The clone way is shown below</p>
+<pre><code class="language-shell">mkdir geo-aid
+cd geo-aid
+git clone https://github.com/DragonGamesStudios/Geo-AID.git
+git clone https://github.com/DragonGamesStudios/geo_aid_derive.git
+cd Geo-AID
+git checkout v0.2
+</code></pre>
+<p>It's important that if you compile from source, you should preserve this file structure:</p>
+<pre><code>| some_folder:
+    | geo-aid
+    | geo_aid_derive
+</code></pre>
+<p>Then, either build it with <code>cargo build --release</code> and use the produced executable or run it with <code>cargo run --release -- &lt;geo-aid arguments here&gt;</code>.</p>
+<p>Run the program with the <code>--version</code> flag to check if it works properly. You can also run <code>geo-aid --help</code> (replace <code>geo-aid</code> with <code>cargo run --release --</code> if using the second way) if you want to see how to use the tool CLI (you can also check the <a href="guide/../cli.html">CLI reference</a>).</p>
+<p>The rest of this book will assume you have the command globally available (as if it was installed).</p>
+<h2 id="your-first-figure"><a class="header" href="#your-first-figure">Your first figure</a></h2>
+<p>In order to use Geo-AID, we have to tell it exactly what we want. We can do this with a script file. Geo-AID uses a special language called GeoScript that lets us give specific instructions. Create the following file with a name of your choice, say <code>figure.geo</code>:</p>
+<pre><code>let A = Point();
+let B = Point();
+let C = Point();
+
+AB = AC;
+AB = BC;
+</code></pre>
+<p>and run it with the following command:</p>
+<pre><code class="language-shell">geo-aid figure.geo figure.svg
+</code></pre>
+<p>After a short wait a new file <code>figure.svg</code> should show up. Open it in any SVG previewer (could even be your browser) and gaze at your first figure in awe:</p>
+<p><img style="background-color: white;" src="guide/first-figure.svg" alt="An equilateral triangle ABC"></p>
+<p>Ok, but what exactly happened here? Let's take a closer look at the script we've just given to Geo-AID:</p>
+<p>First, we have the three <code>let</code> statements. These statements are used to create variables. In our case, these variables are points created with the <code>Point()</code> function. You can also add special display parameters to the variable definitions to change how they are rendered. For example, if you change the first line to the following:</p>
+<pre><code>let A [label = G] = Point();
+</code></pre>
+<p>you should get something like this:</p>
+<p><img style="background-color: white;" src="guide/renamed-a.svg" alt="An equilateral triangle BCG"></p>
+<p>After the variable definitions, we have the two lines:</p>
+<pre><code>AB = AC;
+AB = BC;
+</code></pre>
+<p>These are called rule statements. They represent a relationship between the left hand side and the right hand side. In this case, the relationship is the equality of lengths AB, BC and AC. It's worth noting that the equality sign represents a <em>rule</em>, not a <em>definition</em> or a <em>redefinition</em>. GeoScript is a description language, not a programming one.</p>
+<p>Geo-AID takes these requirements and attempts to create a figure that meets them.</p>
+<p><code>let</code> statements and rules can be sometimes combined by adding rules <em>after</em> the left hand side of a <code>let</code> statement. For example:</p>
+<pre><code># This is a comment
+let A = Point();
+let B = Point();
+let C = Point();
+let r = BC &lt; AB;
+
+let omega = Circle(A, r);
+</code></pre>
+<p>Here, <code>r</code> is set to the distance <code>BC</code> and said to be smaller than <code>AB</code>.</p>
+<h2 id="expressions"><a class="header" href="#expressions">Expressions</a></h2>
+<p>Geo-AID mostly operates on expressions. They are variable definitions and both sides of rules. Expressions can be mathematical operations, function calls, lines, distances and literals. All expressions produce values of certain types. These can be divided into the following categories:</p>
+<ul>
+<li>primitives</li>
+<li>point collections</li>
+<li>bundle types</li>
+</ul>
+<p>Primitives are points, lines, circles and scalars. They're what the generator operates on and what everything is ultimately compiled into. Everything else is just an abstraction over these primitives. Additionally, scalars can have units. Performing addition or subtraction on scalars with incompatible units is an error.</p>
+<p>Point collections are sequences of point letters, like <code>AB</code>, <code>ABC</code>, <code>GFED</code>, <code>X</code>, <code>A'V</code>. For a name to be collectable, it has to be a single, uppercase letter with an arbitrary number of ticks (<code>'</code>) following it, that represents a point. Point collections can also be constructed using <code>&amp;(...)</code> syntax. You can use them on the left-hand side of <code>let</code> statements to unpack the rhs expression onto a point collection. Note, however, that not all types have that option.</p>
+<pre><code>let ABC = &amp;(intersection(XY, GH), mid(G, H), intersection(TU, KL));
+</code></pre>
+<p>Bundle types are essentially like structs in programming languages. They have their primitive fields and functions defined on them that can be used for more comfortable workflow.</p>
+<h3 id="implicit-conversions"><a class="header" href="#implicit-conversions">Implicit conversions</a></h3>
+<p>Geo-AID is capable of performing some implicit conversions:</p>
+<ul>
+<li>Unknown-unit scalars (usually literals) can be converted into a scalar with a distance unit.</li>
+<li>A point collection consisting of two points can be converted into a line or the distance between the two points, depending on the context.</li>
+<li>A point collection of length one is always automatically converted into a point.</li>
+<li>When performing mutliplication/division over a scalar with a unit and a scalar with an unknwon unit, the latter is automatically converted into a unitless scalar (standard scalar in mathematics).</li>
+<li>Any variable defined with an unknown-unit scalar is assumed to be unitless.</li>
+</ul>
+<h2 id="shortening-the-code-with-iterators"><a class="header" href="#shortening-the-code-with-iterators">Shortening the code with iterators</a></h2>
+<p>Many figures feature multiple points and defining each one with a separate <code>let</code> statement can feel very verbose. To help that, GeoScript has a powerful iterator system. Iterators can be used in <code>let</code> statements and rules on both sides. A sequence of expressions separated by a comma is called an <em>implicit iterator</em>. Using these, we can collapse multiple lines of a script into a single one. For example, our first figure script becomes the following:</p>
+<pre><code>let A, B, C = Point();
+
+AB = AC, BC;
+</code></pre>
+<p>Iterators are expanded into multiple rules/statement by simply iterating over the given sequence. Note that implicit iterators take precedence over binary arithmetic operators. Here's a few examples:</p>
+<pre><code>AB, BC = CD, EF;
+
+# Becomes
+AB = CD;
+BC = EF;
+</code></pre>
+<pre><code>AB &lt; XY + YZ, OI;
+
+# Becomes.
+AB &lt; XY + YZ;
+AB &lt; XY + OI;
+</code></pre>
+<p>whereas</p>
+<pre><code>AB &lt; (XY + YZ), OI;
+
+# Becomes
+
+AB &lt; XY + YZ;
+AB &lt; OI;
+</code></pre>
+<p>To use implicit iterators inside a function call, simply put parentheses around them: <code>intersection(AB, (KL, XY))</code></p>
+<p>Another type of an iterator is an <em>explicit iterator</em>. These are written in the following way:</p>
+<pre><code>AB = $1(AC, BC);
+</code></pre>
+<p>The above example is equivalent to just writing</p>
+<pre><code>AB = AC, BC;
+</code></pre>
+<p>The number after the dollar sign is the <em>id</em> of the iterator. If you're using a single id, they function just like implicit iterators. However, when using multiple different ids, you can get some interesting results:</p>
+<pre><code>$1(AB, CD) &lt; $2(XY, YZ);
+
+# Becomes
+AB &lt; XY;
+CD &lt; XY;
+AB &lt; YZ;
+CD &lt; YZ;
+</code></pre>
+<p>Explicit iterators can also be nested, allowing for even more complicated rules. For example:</p>
+<pre><code>$1(AB, BC) &gt; $1(x, $2(a, b)), $3(9, 4, 3);
+
+# Becomes
+AB &gt; x;
+BC &gt; a;
+BC &gt; b;
+AB &gt; 9;
+AB &gt; 4;
+AB &gt; 3;
+BC &gt; 9;
+BC &gt; 4;
+BC &gt; 3;
+</code></pre>
+<p>There are a few important things to remember about iterators:</p>
+<ul>
+<li>implicit iterators have a default id of 0,</li>
+<li><code>let</code> statements only accept implicit iterators on their left hand side,</li>
+<li><code>let</code> statements only accept one level of iteration in their defining expressions,</li>
+<li>all iterators of the same id must have the same length.</li>
+</ul>
+<p>Exact rules regarding the iterators can be found here.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="working-with-distances"><a class="header" href="#working-with-distances">Working with distances</a></h1>
+<p><strong>NOTE: EVERYTHING REGARDING THIS CHAPTER IS VERY LIKELY TO CHANGE IN THE COMING UPDATES.</strong></p>
+<p>If we run the following code in Geo-AID:</p>
+<pre><code>let A, B, C = Point();
+
+AB, BC, AC = 1, 2, 3;
+</code></pre>
+<p>We'll get the following compiler error:</p>
+<pre><code>error: you must set a value for flag `distance_literals`.
+ --&gt; test.geo:3:14
+  |
+3 | AB, BC, AC = 1, 2, 3;
+  |              ^ note: Required because of this line.
+  |              ^ help: possible values: `adjust`, `solve`
+Fix: Consider defining this flag at the top of the file.
+ --&gt; test.geo:1:1
+  |
+1 | @distance_literals: adjust;
+  | +++++++++++++++++++++++++++
+  | let A, B, C = Point();
+</code></pre>
+<p>Why is that?</p>
+<p>Geo-AID operates on its own coordinate system and has to accept figures with lengths specified in thousands, as well as lengths specified in numbers lower than 1. Because of this, distance literals have to be treated in a special way. Geo-AID handles them by creating a special variable representing a distance unit. This variable then mutliplies every distance literal. For that to work, the compiler has to be informed that you are aware of using distance literals by adding a flag.</p>
+<h2 id="flags"><a class="header" href="#flags">Flags</a></h2>
+<p>Flags can modify the behavior of the generator. They are grouped in categories and can be set two different ways.</p>
+<pre><code># Way 1:
+@optimizations {
+    @identical_expressions: false;
+};
+
+# Way 2:
+@optimizations.identical_expressions: false;
+</code></pre>
+<p>This time, we'll want to set the <code>distance_literals</code> flag to <code>adjust</code>. (<code>solve</code> is currently not supported), as the fix proposal in the compiler error message suggets:</p>
+<pre><code>@distance_literals: adjust;
+let A, B, C = Point();
+
+AB, BC, AC = 1, 2, 3;
+</code></pre>
+<p>Doing so will make Geo-AID create an adjustable scalar that will serve as the distance unit.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="dealing-with-complicated-figures"><a class="header" href="#dealing-with-complicated-figures">Dealing with complicated figures</a></h1>
+<p>Every now and then you will stumble on a figure that is quite challenging to draw, even for Geo-AID. In these cases, it's worth knowing a few tricks to guide Geo-AID through them.</p>
+<p>When Geo-AID generates a figure, it does so with a certain amount of workers, over multiple cycles, until a certain condition (currently: average quality delta over the last x cycles goes below a certain value) is met. That's a lot of different generation parameters and all of them are modifiable.</p>
+<ol>
+<li>Worker count (<code>-c</code> option, 512 by default)</li>
+</ol>
+<p>By modifying this parameter, you change how many different versions of a generation cycle are created. The higher the value, the more likely Geo-AID is to find the right spot for every point. It will, however, take more time and it might make certain flaws of Geo-AID's generation more visible.</p>
+<ol start="2">
+<li>Generation break average delta treshold (<code>-d</code> option, 0.0001 by default)</li>
+</ol>
+<p>Lowering this makes Geo-AID go on with generation for a little longer, essentially postponing the moment it decides it won't really get much better.</p>
+<ol start="3">
+<li>Count of last records used in calculating the average delta (<code>-m</code> option, 128 by default)</li>
+</ol>
+<p>Increasing this makes Geo-AID take more of the last cycles into consideration when deciding whether to stop.</p>
+<ol start="4">
+<li>Maximum adjustment per generation cycle (<code>-a</code> option, 0.5 by default)</li>
+</ol>
+<p>This modifies how much can a single point/scalar be changed when adjusting for another cycle. Keep in mind that this is only a base for calculations. In reality, the amount of adjustment allowed depends on the given point's quality and is different between different workers to allow both big <em>and</em> small changes in the same generation cycle.</p>
+<hr />
+<p>Usually, the most visible effect comes from increasing the worker count. There is also a way to modify Geo-AID's behavior outside of its parameters. You can do so by modifying the <code>point_bounds</code> flag. Enabling them adds rules for points to be contained within (0,0) -&gt; (1,1) range. This will heavily afftect the generation process and severely increase the time it will tak to complete. The result might not be the desired one, so don't expect too much.</p>
+<p>Ultimately the best way of increasing odds for Geo-AID is to write the script as best as you can, relying strongly on defining points with expressions. The golden rule is: the less rules, the better.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="command-line-interface-of-geo-aid"><a class="header" href="#command-line-interface-of-geo-aid">Command-Line Interface of Geo-AID</a></h1>
+<p><strong>Command Overview:</strong></p>
+<ul>
+<li><a href="cli.html#Geo-AID"><code>Geo-AID</code></a></li>
+</ul>
+<h2 id="geo-aid"><a class="header" href="#geo-aid"><code>Geo-AID</code></a></h2>
+<p><strong>Usage:</strong> <code>Geo-AID [OPTIONS] &lt;INPUT&gt; &lt;OUTPUT&gt;</code></p>
+<h6 id="arguments"><a class="header" href="#arguments"><strong>Arguments:</strong></a></h6>
+<ul>
+<li><code>&lt;INPUT&gt;</code> — The input script file</li>
+<li><code>&lt;OUTPUT&gt;</code> — The output target</li>
+</ul>
+<h6 id="options"><a class="header" href="#options"><strong>Options:</strong></a></h6>
+<ul>
+<li>
+<p><code>-d</code>, <code>--delta-max-mean &lt;DELTA_MAX_MEAN&gt;</code> — The maximum mean quality delta. Geo-AID will keep doing generation cycles until the average quality delta over the last <code>m</code> cycles gets below <code>d</code>.</p>
+<p>Default value: <code>0.0001</code></p>
+</li>
+<li>
+<p><code>-c</code>, <code>--count-of-workers &lt;COUNT_OF_WORKERS&gt;</code> — The count of threads to use for generation</p>
+<p>Default value: <code>512</code></p>
+</li>
+<li>
+<p><code>-m</code>, <code>--mean-count &lt;MEAN_COUNT&gt;</code> — The count of last deltas to include in mean calculation. Geo-AID will keep doing generation cycles until the average quality delta over the last <code>m</code> cycles gets below <code>d</code>.</p>
+<p>Default value: <code>128</code></p>
+</li>
+<li>
+<p><code>-a</code>, <code>--adjustment-max &lt;ADJUSTMENT_MAX&gt;</code> — Maximal adjustment of an adjustable during generation. Treated differently for different adjustables.</p>
+<p>Default value: <code>0.5</code></p>
+</li>
+<li>
+<p><code>-r</code>, <code>--renderer &lt;RENDERER&gt;</code> — What renderer to use.</p>
+<p>Default value: <code>latex</code></p>
+<p>Possible values:</p>
+<ul>
+<li><code>latex</code>:
+The LaTeX + tikz renderer</li>
+<li><code>svg</code>:
+The SVG format renderer</li>
+<li><code>json</code>:
+The JSON (machine-readable) format renderer</li>
+<li><code>raw</code>:
+The raw (human-readable) format renderer</li>
+</ul>
+</li>
+<li>
+<p><code>--width &lt;WIDTH&gt;</code> — Canvas width (treated very differently for LaTeX)</p>
+<p>Default value: <code>500</code></p>
+</li>
+<li>
+<p><code>--height &lt;HEIGHT&gt;</code> — Canvas height (treated very differently for LaTeX)</p>
+<p>Default value: <code>500</code></p>
+</li>
+<li>
+<p><code>-l</code>, <code>--log &lt;LOG&gt;</code> — Where to put the log output. Geo-AID has a logging feature for concise information about the rendering process (quality and time).</p>
+</li>
+</ul>
+<hr/>
+<p><small><i>
+This document was generated with the help of
+<a href="https://crates.io/crates/clap-markdown"><code>clap-markdown</code></a>.
+</i></small></p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="renderers"><a class="header" href="#renderers">Renderers</a></h1>
+<p>Geo-AID supports four different renderers, also called drawers. One more is planned.</p>
+<h2 id="json"><a class="header" href="#json">JSON</a></h2>
+<p>The popularized <a href="https://www.json.org/json-en.html">JSON</a> format. Currently very not standardized, mostly useless - enforcing a better standard is work in progress.</p>
+<h2 id="raw"><a class="header" href="#raw">Raw</a></h2>
+<p>A human-readable format, pure <a href="https://en.wikipedia.org/wiki/Plain_text">text</a>. Contains descriptions of the positions of each object in the figure.</p>
+<h2 id="latex"><a class="header" href="#latex">LaTeX</a></h2>
+<p>Using <a href="https://www.latex-project.org/"><code>LaTeX</code></a>, <a href="https://www.overleaf.com/learn/latex/TikZ_package"><code>tikz</code></a> and <a href="https://ctan.org/pkg/tkz-euclide"><code>tikz-euclide</code></a>, one of the two recommended ways of drawing the figure.</p>
+<h2 id="svg"><a class="header" href="#svg">SVG</a></h2>
+<p>Outputs the figure in the <a href="https://developer.mozilla.org/en-US/docs/Web/SVG"><code>svg</code></a> format. One of the two - and the most tested - way of drawing the figure.</p>
+<h2 id="geogebra"><a class="header" href="#geogebra">GeoGebra</a></h2>
+<p>Work in progress, Geo-AID will support outputting in the GeoGebra format importable in the very tool.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="geoscript-reference"><a class="header" href="#geoscript-reference">GeoScript reference</a></h1>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="syntax"><a class="header" href="#syntax">Syntax</a></h1>
+<p>This chapter describes the syntax of GeoScript. The notation used is the same as deifned in <a href="https://doc.rust-lang.org/reference/notation.html">The Rust Reference</a>. Geo-AID expects utf8 encoded files. All whitespaces are ignored beyond distinguishing separate tokens</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="display-options"><a class="header" href="#display-options">Display Options</a></h1>
+<blockquote>
+<p><sup><strong>Syntax</strong></sup><br />
+<em>Display Properties</em> :<br />
+   <code>[</code> <em>Property</em> (<code>;</code> <em>Property</em>)<sup>*</sup> <code>]</code><br />
+<br />
+<em>Property</em> :<br />
+   <a href="reference/syntax/identifiers.html">NAMED_IDENT</a> <code>=</code> <em>PropertyValue</em><br />
+<br />
+<em>PropertyValue</em> :<br />
+      <a href="reference/syntax/numbers.html">NUMBER</a><br />
+   | <a href="reference/syntax/identifiers.html">IDENT</a></p>
+</blockquote>
+<p>Display options are a simple sequence of key-value pairs used to represent certain options regarding how the figure should be displayed. They're accepted in expressions and variable definitions. Display options with invalid values will cause an error and the ones with invalid names will be ignored (likely to change in the coming versions).</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="expressions-1"><a class="header" href="#expressions-1">Expressions</a></h1>
+<blockquote>
+<p><sup><strong>Syntax</strong></sup><br />
+<em>Expressions&lt;iter&gt;</em> :<br />
+      <a href="reference/syntax/iterators.html"><em>ImplicitIterator</em></a><sub>only if <em>iter</em> = <code>true</code></sub><br />
+   | <em>SimpleExpression</em><br />
+   | <em>Expression&lt;iter&gt;</em> <em>BinOp</em> <em>Expression&lt;iter&gt;</em>;<br />
+<br />
+<em>BinOp</em> :<br />
+   <code>+</code> | <code>-</code> | <code>*</code> | <code>/</code><br />
+<br />
+<em>SimpleExpression</em> :<br />
+   <em>SimpleExpressionKind</em> <em>DisplayOptions</em><sup>?</sup><br />
+<br />
+<em>SimpleExpressionKind</em> :<br />
+      <a href="reference/syntax/identifiers.html">IDENT</a><br />
+   | <a href="reference/syntax/numbers.html">NUMBER</a><br />
+   | <em>ExprCall</em><br />
+   | <em>UnOp</em> <em>SimpleExpression</em><br />
+   | <code>(</code> <em>Expression&lt;true&gt;</em> <code>)</code><br />
+   | <a href="reference/syntax/iterators.html"><em>ExplicitIterator</em></a><br />
+   | <em>PointCollectionConstructor</em><br />
+<br />
+<em>ExprCall</em> :<br />
+   <a href="reference/syntax/identifiers.html">NAMED_IDENT</a> <code>(</code> (<em>Expression&lt;false&gt;</em> (<code>,</code> <em>Expression&lt;false&gt;</em>)<sup>*</sup>)<sup>?</sup> <code>)</code><br />
+<br />
+<em>UnOp</em> :<br />
+   <code>-</code><br />
+<br />
+<em>PointCollectionConstructor</em> :<br />
+   <code>&amp;</code> <code>(</code> <em>Expression&lt;false&gt;</em> (<code>,</code> <em>Expression&lt;false&gt;</em>)<sup>*</sup> <code>)</code></p>
+</blockquote>
+<p>Expressions represent all values in GeoScript. A simple example of an expression is a variable reference with the variable's value or a number literal. After most expressions display options can be given, modifying how the expression affects the final figure visually.</p>
+<h2 id="functions"><a class="header" href="#functions">Functions</a></h2>
+<p>Using a typical call syntax (<code>funcname(arg1, arg2, ...)</code>) one can also call functions with specified parameters. Functions can modify the visual output of the figure, e. g. add a line/ray. This behavior can be usually modified using display options. Some functions accept parameter groups, allowing infinite number of parameters. All functions return a single value. Implicit iterators cannot be used in function parameters, unless surrounded by parenthesis.</p>
+<h2 id="operators"><a class="header" href="#operators">Operators</a></h2>
+<p>Binary operators all have the standard mathematical operation order. Unary operators always precede binary operators and implicit iterators always precede all operators. You can define your own order with parenthesis.</p>
+<p>Currently, Geo-AID supports only addition, subtraction, multiplication and division as binary operators and negation as unary.</p>
+<h2 id="point-collections"><a class="header" href="#point-collections">Point Collections</a></h2>
+<p>Expressions can also be used to construct point collections out of other expressions with <code>&amp;(A, B, ...)</code> syntax. All expressions inside must be convertible to points.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="figure"><a class="header" href="#figure">Figure</a></h1>
+<blockquote>
+<p><sup><strong>Syntax</strong></sup><br />
+<em>Figure</em> :<br />
+   <em>Statement</em><sup>*</sup><br />
+<br />
+<em>Statement</em> :<br />
+      <a href="reference/syntax/flags.html"><em>FlagStatement</em></a><br />
+   | <a href="reference/syntax/variables.html"><em>LetStatement</em></a><br />
+   | <a href="reference/syntax/rules.html"><em>RuleStatement</em></a>
+   | <code>;</code></p>
+</blockquote>
+<p>A <em>Figure</em> describes how a figure should be generated in terms of generator flags, variable definitions and rules.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="flags-1"><a class="header" href="#flags-1">Flags</a></h1>
+<blockquote>
+<p><sup><strong>Syntax</strong></sup><br />
+<em>FlagStatement</em> :<br />
+   <em>FlagName</em> <em>FlagValue</em><br />
+<br />
+<em>FlagName</em> :<br />
+   <code>@</code> <a href="reference/syntax/identifiers.html">NAMED_IDENT</a> (<code>.</code> <a href="reference/syntax/identifiers.html">NAMED_IDENT</a>)<sup>*</sup> <code>:</code><br />
+<br />
+<em>FlagValue</em> :<br />
+      <a href="reference/syntax/identifiers.html">NAMED_IDENT</a><br />
+   | <em>FlagSet</em><br />
+   | <a href="reference/syntax/numbers.html">NUMBER</a><br />
+<br />
+<em>FlagSet</em> :<br />
+   <code>{</code> <em>FlagStatement</em><sup>*</sup> <code>}</code></p>
+</blockquote>
+<p>Flags modify the behavior of Geo-AID's generator. They have default values, though some of them need to be explicitly specified to enable certain features (e. g. <code>distance_literals</code>).</p>
+<p>A flag statement composes of the flag's name and its value. Each flag has a predefined type and will only accept values of that type. Identifier flags accept identifiers in general, though usually only a subset of identifiers is valid, representing certain behavior options. Boolean flags are used to enable or disable certain features/modifications to the standard behavior. They accept <code>1</code>, <code>true</code>, <code>enabled</code> and <code>yes</code> as a <code>true</code> value and <code>0</code>, <code>false</code>, <code>disabled</code> and <code>no</code> as a <code>false</code> value. Number flags may accept floats or integers, depending on the flag. Flag sets are special flags that categorize other flags. If you want to modify multiple flags of the same category, simply set the value of the parent set flag to a flag set with the respective statements.</p>
+<p>Flag statements also accept a syntatic sugar for flag indexing. Instead of writing</p>
+<pre><code>@optimizations {
+    @identical_expressions: false
+}
+</code></pre>
+<p>You can simply write</p>
+<pre><code>@optimizations.identical_expressions: false
+</code></pre>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="identifiers"><a class="header" href="#identifiers">Identifiers</a></h1>
+<blockquote>
+<p><sup><strong>Lexer</strong></sup><br />
+IDENT :<br />
+      NAMED_IDENT<br />
+   | POINT_COLLECTION<br />
+<br />
+NAMED_IDENT :<br />
+   Start Continue<sup>*</sup><br />
+<br />
+POINT_COLLECTION :<br />
+   (Point <code>'</code><sup>*</sup>)<sup>+</sup></p>
+</blockquote>
+<p>Where <code>Start</code> is any unicode character with the <em>Alphabetic</em> property or an underscore (<code>_</code>) character, <code>Continue</code> is <code>Start</code> or a tick (<code>'</code>) character and <code>Point</code> is any unicode character with the <em>Uppercase</em> property.</p>
+<p>Identifiers mostly represent variables, though they may also serve as a rule operator, a function, a value for a display property or a flag value. </p>
+<p>Point collections are a special kind of identifiers. They essentially represent a sequence of variables, each being a point.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="iterators"><a class="header" href="#iterators">Iterators</a></h1>
+<blockquote>
+<p><sup><strong>Syntax</strong></sup><br />
+<em>ImplicitIterator</em> :<br />
+   <a href="reference/syntax/expressions.html"><em>Expression&lt;false&gt;</em></a> (<code>,</code> <a href="reference/syntax/expressions.html"><em>Expression&lt;false&gt;</em></a>)<sup>+</sup><br />
+<br />
+<em>ExplicitIterator</em> :<br />
+   <code>$</code> <code>(</code> <a href="reference/syntax/expressions.html"><em>Expression&lt;false&gt;</em></a> (<code>,</code> <a href="reference/syntax/expressions.html"><em>Expression&lt;false&gt;</em></a>)<sup>*</sup> <code>)</code></p>
+</blockquote>
+<p>Iterators can be used in <code>let</code> statements and rules on both sides. A sequence of expressions separated by a comma is called an <em>implicit iterator</em>. Using these, multiple lines of a script can be collapsed into a single one. For example:</p>
+<pre><code>let A, B, C = Point();
+
+AB = AC, BC;
+</code></pre>
+<p>Iterators are expanded into multiple rules/statement by simply iterating over the given sequence. Implicit iterators take precedence over any arithmetic operators. Here's a few examples:</p>
+<pre><code>AB, BC = CD, EF;
+
+# Becomes
+AB = CD;
+BC = EF;
+</code></pre>
+<pre><code>AB &lt; XY + YZ, OI;
+
+# Becomes.
+AB &lt; XY + YZ;
+AB &lt; XY + OI;
+</code></pre>
+<p>whereas</p>
+<pre><code>AB &lt; (XY + YZ), OI;
+
+# Becomes
+
+AB &lt; XY + YZ;
+AB &lt; OI;
+</code></pre>
+<p>To use implicit iterators inside a function call, simply put parentheses around them: <code>intersection(AB, (KL, XY))</code></p>
+<p>Another type of an iterator is an <em>explicit iterator</em>. These are written in the following way:</p>
+<pre><code>AB = $1(AC, BC);
+</code></pre>
+<p>The above example is equivalent to just writing</p>
+<pre><code>AB = AC, BC;
+</code></pre>
+<p>The number after the dollar sign is the <em>id</em> of the iterator. If only a single id is used, they function just like implicit iterators. However, when using multiple different ids, more complicated results can be achieved:</p>
+<pre><code>$1(AB, CD) &lt; $2(XY, YZ);
+
+# Becomes
+AB &lt; XY;
+CD &lt; XY;
+AB &lt; YZ;
+CD &lt; YZ;
+</code></pre>
+<p>Explicit iterators can also be nested, allowing for even more complicated rules. For example:</p>
+<pre><code>$1(AB, BC) &gt; $1(x, $2(a, b)), $3(9, 4, 3);
+
+# Becomes
+AB &gt; x;
+BC &gt; a;
+BC &gt; b;
+AB &gt; 9;
+AB &gt; 4;
+AB &gt; 3;
+BC &gt; 9;
+BC &gt; 4;
+BC &gt; 3;
+</code></pre>
+<p>Iterators have a few rules. Not obeying them causes compilation errors.</p>
+<ul>
+<li>All implicit iterators have an id of 0;</li>
+<li>All iterators of the same id must have the same length;</li>
+<li>The left hand side of let statements only accept implicit iterators;</li>
+<li>The right hand side of let statements accepts at most one level of iteration;</li>
+<li>The right hand side of a let statement may only contain iterators, if so does the left side;</li>
+<li>All iterators must have at least two variants;</li>
+<li>An iterator with id x must not contain another iterator with id x;</li>
+<li>Iterator length must not exceed 255;</li>
+<li>Iterator id must be an integer;</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="numbers"><a class="header" href="#numbers">Numbers</a></h1>
+<blockquote>
+<p><sup><strong>Lexer</strong></sup><br />
+NUMBER :<br />
+   Digit<sup>+</sup> (<code>.</code> Digit<sup>+</sup>)<sup>?</sup></p>
+</blockquote>
+<p>Where <em>Digit</em> is an ASCII digit (<code>0-9</code>). Either integers or decimals.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="rules"><a class="header" href="#rules">Rules</a></h1>
+<blockquote>
+<p><sup><strong>Syntax</strong></sup><br />
+<em>RuleStatement</em> :<br />
+   <em><a href="reference/syntax/expressions.html">Expression&lt;true&gt;</a></em> <em>RuleOp</em> <a href="reference/syntax/expressions.html">Expression&lt;true&gt;</a>* <code>;</code><br />
+<br />
+<em>RuleOp</em> :<br />
+      <code>&lt;</code> | <code>&lt;=</code> | <code>=</code> | <code>&gt;=</code> | <code>&gt;</code><br />
+   | <a href="reference/syntax/identifiers.html">IDENT</a><br />
+   | <code>!</code> <em>RuleOp</em></p>
+</blockquote>
+<p>Rules are the basic building blocks of a figure. They define relationships between figure objects. Geo-AID attempts to generate a figure that obeys them as best as it can. Rules tie two expressions (left and right hand side) with a relationship, otherwise known as the rule operator. Currently supported rule operators are all comparison operators. When given an identifier, a proper <em>defined rule operator</em> is looked up and compiled accordingly (currently none supported). Rules can also be inverted with an exclamation mark in front of the operator.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="variables"><a class="header" href="#variables">Variables</a></h1>
+<blockquote>
+<p><sup><strong>Syntax</strong></sup><br />
+<em>LetStatement</em> :<br />
+   <code>let</code> <em>VariableDefinition</em> (<code>,</code> <em>VariableDefinition</em>)<sup>*</sup> <code>=</code> <em><a href="reference/syntax/expressions.html">Expression&lt;true&gt;</a></em> (<a href="reference/syntax/rules.html"><em>RuleOp</em></a> <em><a href="reference/syntax/expressions.html">Expression&lt;true&gt;</a></em>)<sup>*</sup> <code>;</code><br />
+<br />
+<em>VariableDefinition</em> :<br />
+   <code>@</code> <a href="reference/syntax/identifiers.html">IDENT</a> <a href="reference/syntax/display-options.html"><em>DisplayOptions</em></a><sup>?</sup></p>
+</blockquote>
+<p>A let statement creates variables given on the left hand side. The lhs of the statement can contain multiple variables. In that, case if the rhs has no iteration, all variables will be set to the given definition (no the same value, though). If there is one level of iteration, all variables will get their respective definition. More levels of iteration are not allowed.</p>
+<p>The rhs expression of the statement can either become the variable's definition or it can be unpacked onto a point collection.</p>
+<p>After each variable name there can be display options given, modifying how the construct is displayed.</p>
+<p>The let statement accepts rules after its right hand side. They behave as if the lhs was a sequence of variable accesses in a 0-id iterator.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="types"><a class="header" href="#types">Types</a></h1>
+<p>GeoScript has two kinds of types: primitives and bundles.</p>
+<p>Primitives - the points, lines, scalars and circles, are the building blocks of every value in GeoScript. Bundles, on the other hand, consist of multiple primitives.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="primitives"><a class="header" href="#primitives">Primitives</a></h1>
+<h2 id="scalar"><a class="header" href="#scalar">Scalar</a></h2>
+<p>A scalar is a simple real value with a unit - a unit is a product of integer powers of simple units. The simple units are:</p>
+<ul>
+<li>Distance</li>
+<li>Angle</li>
+</ul>
+<p>Any scalar, whose unit cannot be determined, is assumed to be unitless. Scalars in this reference are denoted as <code>Scalar(&lt;unit&gt;)</code>.</p>
+<p>Note: A literal will never be coerced to an angle, since that would introduce uncertainty whether it should be treated as given in radians or degrees. Instead, look for their respective functions.</p>
+<h2 id="point"><a class="header" href="#point">Point</a></h2>
+<p>A point is defined as a point on a euclidean plane. Denoted as <code>Point</code>.</p>
+<h2 id="circle"><a class="header" href="#circle">Circle</a></h2>
+<p>A circle is given a center and a radius. It is a set of points with the distance to its center equal to its radius. Denoted as <code>Circle</code>.</p>
+<h2 id="line"><a class="header" href="#line">Line</a></h2>
+<p>A line is a line in euclidean sense. Denoted as <code>Line</code>.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="bundle-types"><a class="header" href="#bundle-types">Bundle types</a></h1>
+<p>Bundle types are zero-cost abstractions over primitives. There are two types of bundles: point collections and named bundles.</p>
+<h2 id="point-collections-1"><a class="header" href="#point-collections-1">Point collections</a></h2>
+<p>Point collections are simply ordered collections of points. It is never a seperate entity, only an abstraction over a set of points. Denoted as <code>&lt;length&gt;-P</code>. If <code>&lt;length&gt;</code> is given as <code>0</code>, it means a collection of any length. Most functions that accept points as arguments, also accept point collections.</p>
+<h2 id="named-bundles"><a class="header" href="#named-bundles">Named Bundles</a></h2>
+<p>Named bundles are similar to structs in C. They have names and named fields of any type (not yet accessible). Denoted with their unique names different from the names of any other type.</p>
+<h3 id="segment"><a class="header" href="#segment">Segment</a></h3>
+<pre><code>Segment {
+    A: [Point](primitives.md#point),
+    B: [Point](primitives.md#point)
+}
+</code></pre>
+<p><code>Segment</code>s have two fields denoting their ends.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="operators-1"><a class="header" href="#operators-1">Operators</a></h1>
+<p>Standard arithmetic operations - addition (<code>+</code>), subtraction (<code>-</code>), multiplication (<code>*</code>) and division (<code>/</code>) are only allowed between scalars. Addition and subtraction must only be performed between scalars of the same unit, whereas multiplication and division can be done with any two scalars. The resulting unit will simply be a product of the operation. Beyond that, negation with the <code>-</code> operator can be performed on any scalar.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="functions-1"><a class="header" href="#functions-1">Functions</a></h1>
+<h2 id="angle"><a class="header" href="#angle"><code>angle</code></a></h2>
+<ul>
+<li><code>angle(ABC: [3-P](./types/bundle-types.md#point-collections))</code></li>
+<li><code>angle(A: [Point](./types/primitives.md#point), B: [Point](./types/primitives.md#point), C: [Point](./types/primitives.md#point))</code></li>
+</ul>
+<p><strong>Return type</strong>: <a href="reference/./types/primitives.html#scalar">Scalar (angle)</a></p>
+<p><strong>Returns</strong>: measurement of the angle <code>ABC</code></p>
+<ul>
+<li><code>angle(k: [Line](./types/primitives.md#point), l: [Line](./types/primitives.md#line))</code></li>
+</ul>
+<p><strong>Return type</strong>: <a href="reference/./types/primitives.html#scalar">Scalar (angle)</a></p>
+<p><strong>Returns</strong>: measurement of the angle between <code>k</code> and <code>l</code>. Which angle, depends on the order of the lines. For predictable outcome, the point versions are strongly recommended.</p>
+<h2 id="bisector"><a class="header" href="#bisector"><code>bisector</code></a></h2>
+<ul>
+<li><code>bisector(AB: [2-P](./types/bundle-types.md#point-collections))</code></li>
+<li><code>bisector(A: [Point](./types/primitives.md#point), B: [Point](./types/primitives.md#point))</code></li>
+</ul>
+<p><strong>Return type</strong>: <a href="reference/./types/primitives.html#Line">Line</a></p>
+<p><strong>Returns</strong>: a bisector of the segment <code>AB</code> - a perpendicular line passing through its center.</p>
+<ul>
+<li><code>bisector(ABC: [3-P](./types/bundle-types.md#point-collections))</code></li>
+<li><code>bisector(A: [Point](./types/primitives.md#point), B: [Point](./types/primitives.md#point), C: [Point](./types/primitives.md#point))</code></li>
+</ul>
+<p><strong>Return type</strong>: <a href="reference/./types/primitives.html#Line">Line</a></p>
+<p><strong>Returns</strong>: a bisector of the angle <code>ABC</code> - a line between lines <code>AB</code> and <code>BC</code>, where each point is in the same distance from both of these lines.</p>
+<h2 id="circle-1"><a class="header" href="#circle-1"><code>Circle</code></a></h2>
+<ul>
+<li><code>Circle(center: [Point](./types/primitives.md#point), radius: [Scalar (distance)](./types/primitives.md#point))</code></li>
+<li><code>circle(radius: [Scalar (distance)](./types/primitives.md#point), center: [Point](./types/primitives.md#point))</code></li>
+</ul>
+<p><strong>Return type</strong>: <a href="reference/./types/primitives.html#Circle">Circle</a></p>
+<p><strong>Returns</strong>: a circle with the given <code>center</code> and <code>radius</code>.</p>
+<ul>
+<li><code>Circle()</code></li>
+</ul>
+<p><strong>Return type</strong>: <a href="reference/./types/primitives.html#Circle">Circle</a></p>
+<p><strong>Returns</strong>: a circle with an adjusted (free point) <code>center</code> and an adjusted (free scalar) <code>radius</code>.</p>
+<h2 id="degrees"><a class="header" href="#degrees"><code>degrees</code></a></h2>
+<ul>
+<li><code>degrees(value: [Scalar (no unit)])</code></li>
+</ul>
+<p><strong>Return type</strong>: <a href="reference/./types/primitives.html#Scalar">Scalar (angle)</a></p>
+<p><strong>Returns</strong>: an angle with the given measurement in degreees. Related: <a href="reference/functions.html#radians">radians</a></p>
+<h2 id="dst"><a class="header" href="#dst"><code>dst</code></a></h2>
+<ul>
+<li><code>dst(AB: [2-P](./types/bundle-types.md#point-collections))</code></li>
+<li><code>dst(A: [Point](./types/primitives.md#point), B: [Point](./types/primitives.md#point))</code></li>
+</ul>
+<p><strong>Return type</strong>: <a href="reference/./types/primitives.html#Scalar">Scalar (distance)</a></p>
+<p><strong>Returns</strong>: the distance between points <code>A</code> and <code>B</code>.</p>
+<ul>
+<li><code>dst(P: [Point](./types/primitives.md#point), k: [Line](./types/primitives.md#line))</code></li>
+<li><code>dst(k: [Line](./types/primitives.md#line), P: [Point](./types/primitives.md#point))</code></li>
+</ul>
+<p><strong>Return type</strong>: <a href="reference/./types/primitives.html#Scalar">Scalar (distance)</a></p>
+<p><strong>Returns</strong>: the distance between point <code>P</code> and line <code>k</code>.</p>
+<ul>
+<li><code>dst(value: [Scalar (no unit / distance)])</code></li>
+</ul>
+<p><strong>Return type</strong>: <a href="reference/./types/primitives.html#Scalar">Scalar (angle)</a></p>
+<p><strong>Returns</strong>: the value with a distance unit.</p>
+<h2 id="intersection"><a class="header" href="#intersection"><code>intersection</code></a></h2>
+<ul>
+<li><code>intersection(k: [Line](./types/primitives.md#point), l: [Line](./types/primitives.md#line))</code></li>
+</ul>
+<p><strong>Return type</strong>: <a href="reference/./types/primitives.html#point">Point</a></p>
+<p><strong>Returns</strong>: intersection of lines <code>k</code> and <code>l</code>.</p>
+<h2 id="mid"><a class="header" href="#mid"><code>mid</code></a></h2>
+<p><strong>Note</strong>: The following functions allow any positive numbers of arguments.</p>
+<ul>
+<li><code>mid(v_1: [Scalar (any unit u)](./types/primitives.md#Scalar), v_2 [Scalar (the same unit u)](./types/primitives.md#Scalar), ..., v_n: [Scalar (the same unit u)](./types/primitives.md#Scalar))</code></li>
+</ul>
+<p><strong>Return type</strong>: <a href="reference/./types/primitives.html#Scalar">Scalar (the same unit u)</a></p>
+<p><strong>Returns</strong>: The average value of <code>v_1</code>, <code>v_2</code>, ... <code>v_n</code>.</p>
+<ul>
+<li><code>mid(P_1: [Point](./types/primitives.md#Point), P_2 [Point](./types/primitives.md#Point), ..., P_n: [Point](./types/primitives.md#Point))</code></li>
+</ul>
+<p><strong>Return type</strong>: <a href="reference/./types/primitives.html#Point">Point</a></p>
+<p><strong>Returns</strong>: The middle point of <code>P_1</code>, <code>P_2</code>, ... <code>P_n</code>. Special cases: when <code>n=2</code>, the middle of a segment; When <code>n=3</code>, the centroid of a triangle.</p>
+<h2 id="parallel_through"><a class="header" href="#parallel_through"><code>parallel_through</code></a></h2>
+<ul>
+<li><code>parallel_through(P: [Point](./types/primitives.md#point), k: [Line](./types/primitives.md#Line))</code></li>
+<li><code>parallel_through(k: [Line](./types/primitives.md#line), P: [Point](./types/primitives.md#Point))</code></li>
+</ul>
+<p><strong>Return type</strong>: <a href="reference/./types/primitives.html#Line">Line</a></p>
+<p><strong>Returns</strong>: a line parallel to <code>k</code>, passing through <code>P</code>.</p>
+<h2 id="perpendicular_through"><a class="header" href="#perpendicular_through"><code>perpendicular_through</code></a></h2>
+<ul>
+<li><code>perpendicular_through(P: [Point](./types/primitives.md#point), k: [Line](./types/primitives.md#Line))</code></li>
+<li><code>perpendicular_through(k: [Line](./types/primitives.md#line), P: [Point](./types/primitives.md#Point))</code></li>
+</ul>
+<p><strong>Return type</strong>: <a href="reference/./types/primitives.html#Line">Line</a></p>
+<p><strong>Returns</strong>: a line perpendicular to <code>k</code>, passing through <code>P</code>.</p>
+<h2 id="point-1"><a class="header" href="#point-1"><code>Point</code></a></h2>
+<ul>
+<li><code>Point()</code></li>
+</ul>
+<p><strong>Return type</strong>: <a href="reference/./types/primitives.html#Circle">Point</a></p>
+<p><strong>Returns</strong>: an adjusted (free) point.</p>
+<h2 id="radians"><a class="header" href="#radians"><code>radians</code></a></h2>
+<ul>
+<li><code>radians(value: [Scalar (no unit)])</code></li>
+</ul>
+<p><strong>Return type</strong>: <a href="reference/./types/primitives.html#Scalar">Scalar (angle)</a></p>
+<p><strong>Returns</strong>: an angle with the given measurement in radians. Related: <a href="reference/functions.html#degrees">degrees</a></p>
+<h2 id="segment-1"><a class="header" href="#segment-1"><code>Segment</code></a></h2>
+<ul>
+<li><code>Segment(AB: [2-P](./types/bundle-types.md#point-collections))</code></li>
+<li><code>Segment(A: [Point](./types/primitives.md#point), B: [Point](./types/primitives.md#point))</code></li>
+</ul>
+<p><strong>Return type</strong>: <a href="reference/./types/bundle-types.html#segment">Segment</a></p>
+<p><strong>Returns</strong>: the semgent <code>AB</code>.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="rule-operators"><a class="header" href="#rule-operators">Rule operators</a></h1>
+<h2 id="comparison"><a class="header" href="#comparison">Comparison</a></h2>
+<p>The operators <code>&lt;</code>, <code>&lt;=</code>, <code>&gt;</code>, <code>&gt;=</code> are only allowed between <a href="reference/./types/primitives.html#scalar">Scalars</a> of the same unit. They are simple comparison operators with their rules evaluated based on the relative difference between the two values.</p>
+<p>The operator <code>=</code> (and its negation, <code>!=</code>) is allowed between <a href="reference/./types/primitives.html#scalar">Scalars</a> of the same unit and <a href="reference/./types/primitives.html#point">Points</a>. Its rule is evaluated based on the absolute distance between the two values.</p>
+<h2 id="lies_on"><a class="header" href="#lies_on"><code>lies_on</code></a></h2>
+<ul>
+<li><code>P: [Point](./types/primitives.md#point) lies_on k: [Line](./types/primitives.md#Line)</code></li>
+</ul>
+<p>Tells Geo-AID that point <code>P</code> lies on (has zero distance) from line <code>k</code>. Note: zero distance rules do not have any impact on the distance variable and decrease figure stability much less than other distance rules.</p>
+<ul>
+<li><code>P: [Point](./types/primitives.md#point) lies_on k: [Segment](./types/bundle-types.md#Segment)</code></li>
+</ul>
+<p>Tells Geo-AID that point <code>P</code> lies on (has zero distance) from the line of segment <code>k</code> and between its ends. Note: zero distance rules do not have any impact on the distance variable and decrease figure stability much less than other distance rules.</p>
+<ul>
+<li><code>P: [Point](./types/primitives.md#point) lies_on omega: [Circle](./types/primitives.md#Circle)</code></li>
+</ul>
+<p>Tells Geo-AID that point <code>P</code> lies on (has zero distance) from circle <code>omega</code>. Note: zero distance rules do not have any impact on the distance variable and decrease figure stability much less than other distance rules.</p>
+<ul>
+<li><code>col: [0-P](./types/bundle-types.md#) lies_on omega: [Circle](./types/primitives.md#Circle)</code></li>
+</ul>
+<p>Tells Geo-AID that points in the collection <code>col</code> lie on (have zero distance) from circle <code>omega</code> <em>in exactly the given order</em>. Note: zero distance rules do not have any impact on the distance variable and decrease figure stability much less than other distance rules.</p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+
+            </nav>
+
+        </div>
+
+        <!-- Livereload script (if served using the cli tool) -->
+        <script>
+            const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsAddress = wsProtocol + "//" + location.host + "/" + "__livereload";
+            const socket = new WebSocket(wsAddress);
+            socket.onmessage = function (event) {
+                if (event.data === "reload") {
+                    socket.close();
+                    location.reload();
+                }
+            };
+
+            window.onbeforeunload = function() {
+                socket.close();
+            }
+        </script>
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="elasticlunr.min.js"></script>
+        <script src="mark.min.js"></script>
+        <script src="searcher.js"></script>
+
+        <script src="clipboard.min.js"></script>
+        <script src="highlight.js"></script>
+        <script src="book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+        <script>
+        window.addEventListener('load', function() {
+            window.setTimeout(window.print, 100);
+        });
+        </script>
+
+    </div>
+    </body>
+</html>

@@ -1,0 +1,3 @@
+# Operators
+
+Standard arithmetic operations - addition (`+`), subtraction (`-`), multiplication (`*`) and division (`/`) are only allowed between scalars. Addition and subtraction must only be performed between scalars of the same unit, whereas multiplication and division can be done with any two scalars. The resulting unit will simply be a product of the operation. Beyond that, negation with the `-` operator can be performed on any scalar.

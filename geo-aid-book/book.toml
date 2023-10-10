@@ -1,0 +1,6 @@
+[book]
+authors = ["DragonGamesStudios"]
+language = "en"
+multilingual = false
+src = "src"
+title = "The Geo-AID Book"
