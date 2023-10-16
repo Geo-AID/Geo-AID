@@ -25,8 +25,31 @@ use crate::{
     projector::{
         Output, Rendered, RenderedAngle, RenderedCircle, RenderedLine, RenderedPoint, RenderedRay,
         RenderedSegment,
-    },
+    }, script::figure::Mode::{self, Dotted, Dashed, Bolded, Default},
 };
+
+/// Function that assigns modes to the rendered variants.
+fn assign_mode(rendered: &Rendered, mode: Mode) -> (String, String) {
+    let default_width = "1".to_string();
+    let default_strarray = "1,0".to_string();
+    match rendered {
+        Rendered::Point(_) => unreachable!(),
+        _ => match mode {
+            Dotted => {
+                (default_width, "0.8,1".to_string())
+            }
+            Dashed => {
+                (default_width, "2,2".to_string())
+            }
+            Bolded => {
+                ("2".to_string(), default_strarray)
+            }
+            Default => {
+                ("1".to_string(), default_strarray)
+            }
+        }
+    }
+}
 
 fn points(point: &Rc<RenderedPoint>) -> String {
     // This of course requires a change. Labels will soon get an overhaul.
@@ -51,21 +74,23 @@ fn points(point: &Rc<RenderedPoint>) -> String {
     )
 }
 
-fn lines(line: &RenderedLine) -> String {
-    let p1 = Complex::new(line.points.0.real, line.points.0.imaginary);
-    let p2 = Complex::new(line.points.1.real, line.points.1.imaginary);
+fn lines(ln: &RenderedLine, rendered: &Rendered) -> String {
+    let p1 = Complex::new(ln.points.0.real, ln.points.0.imaginary);
+    let p2 = Complex::new(ln.points.1.real, ln.points.1.imaginary);
     format!(
-        r#"<line stroke="black" x1="{}" x2="{}" y1="{}" y2="{}"/>"#,
-        p1.real, p2.real, p1.imaginary, p2.imaginary
+        r#"
+        <line stroke-width="{}" stroke-dasharray="{}" stroke="black" x1="{}" x2="{}" y1="{}" y2="{}"/>
+        "#,
+        assign_mode(rendered, ln.mode).0, assign_mode(rendered, ln.mode).1, p1.real, p2.real, p1.imaginary, p2.imaginary
     )
 }
 
-fn angles(angle: &RenderedAngle) -> String {
+fn angles(angle: &RenderedAngle, rendered: &Rendered) -> String {
     let x: u32 = 45;
     format!(
         r#"
             <g transform="translate({}, {}) rotate({}, 0, 0)" fill="transparent">
-            <path d="M {}, 0 A 45, 45, 0, 0, 0, {}, {}" stroke="black" stroke-width="0.4" /> 
+            <path stroke-dasharray="{}" d="M {}, 0 A 45, 45, 0, 0, 0, {}, {}" stroke="black" stroke-width="{}" /> 
             </g>
         "#,
         angle.points.1.real,
@@ -74,17 +99,21 @@ fn angles(angle: &RenderedAngle) -> String {
             .direction
             .arg()
             .to_degrees(),
-        x, //It should probably be a constant. For now we will leave it like this.
+        assign_mode(rendered, angle.mode).1,
+        x, // It should probably be a constant. For now we will leave it like this.
         angle.angle_value.cos() * 45.0,
-        -angle.angle_value.sin() * 45.0
+        -angle.angle_value.sin() * 45.0,
+        assign_mode(rendered, angle.mode).0
     )
 }
 
-fn segments(segment: &RenderedSegment) -> String {
+fn segments(segment: &RenderedSegment, rendered: &Rendered) -> String {
     format!(
         r#"
-            <line stroke="black" x1="{}" x2="{}" y1="{}" y2="{}"/>
+            <line stroke-width="{}" stroke-dasharray="{}" stroke="black" x1="{}" x2="{}" y1="{}" y2="{}"/>
         "#,
+        assign_mode(rendered, segment.mode).0,
+        assign_mode(rendered, segment.mode).1,
         segment.points.0.real,
         segment.points.1.real,
         segment.points.0.imaginary,
@@ -92,23 +121,29 @@ fn segments(segment: &RenderedSegment) -> String {
     )
 }
 
-fn rays(ray: &RenderedRay) -> String {
+fn rays(ray: &RenderedRay, rendered: &Rendered) -> String {
     format!(
         r#"
-            <line stroke="black" x1="{}" x2="{}" y1="{}" y2="{}"/>
+            <line stroke-width="{}" stroke-dasharray="{}" stroke="black" x1="{}" x2="{}" y1="{}" y2="{}"/>
         "#,
-        ray.points.0.real, ray.points.1.real, ray.points.0.imaginary, ray.points.1.imaginary
+        assign_mode(rendered, ray.mode).0,
+        assign_mode(rendered, ray.mode).1,
+        ray.points.0.real,
+        ray.points.1.real,
+        ray.points.0.imaginary,
+        ray.points.1.imaginary,
     )
 }
 
-fn circles(circle: &RenderedCircle) -> String {
+fn circles(circle: &RenderedCircle, rendered: &Rendered) -> String {
     format!(
         r#"
-            <circle cx="{}" cy="{}" r="{}" stroke="black" stroke-width="1" fill="transparent"/>
+            <circle cx="{}" cy="{}" r="{}" stroke="black" stroke-width="{}" stroke-dasharray="{}" fill="transparent"/>
         "#,
-        circle.center.real, circle.center.imaginary, circle.radius
+        circle.center.real, circle.center.imaginary, circle.radius, assign_mode(rendered, circle.mode).0, assign_mode(rendered, circle.mode).1
     )
 }
+
 /// Draws the given figure as .svg format.
 ///
 /// # Panics
@@ -123,11 +158,11 @@ pub fn draw(target: &Path, canvas_size: (usize, usize), output: &Output) {
     for elem in &output.vec_rendered {
         content += &match elem {
             Rendered::Point(point) => points(point),
-            Rendered::Line(line) => lines(line),
-            Rendered::Angle(angle) => angles(angle),
-            Rendered::Segment(segment) => segments(segment),
-            Rendered::Ray(ray) => rays(ray),
-            Rendered::Circle(circle) => circles(circle),
+            Rendered::Line(line) => lines(line, elem),
+            Rendered::Angle(angle) => angles(angle, elem),
+            Rendered::Segment(segment) => segments(segment, elem),
+            Rendered::Ray(ray) => rays(ray, elem),
+            Rendered::Circle(circle) => circles(circle, elem),
         };
     }
     content += "</svg>";

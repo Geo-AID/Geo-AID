@@ -53,3 +53,4 @@
 - Added proper documentation.
 
 ## Version 0.2.6
+- Added drawing modes for lines, segments, rays, angles and circles (dashed, dotted, bolded, default)
