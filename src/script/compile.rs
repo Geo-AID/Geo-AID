@@ -45,6 +45,7 @@ use crate::{
     span,
 };
 
+use super::figure::Mode;
 use super::{
     figure::Figure,
     unroll::{
@@ -592,22 +593,22 @@ impl Compiler {
             lines: figure
                 .lines
                 .into_iter()
-                .map(|expr| self.compile(&expr))
+                .map(|expr| (self.compile(&expr), Mode::Default))
                 .collect(),
             segments: figure
                 .segments
                 .into_iter()
-                .map(|(a, b)| (self.compile(&a), self.compile(&b)))
+                .map(|(a, b)| (self.compile(&a), self.compile(&b), Mode::Default))
                 .collect(),
             rays: figure
                 .rays
                 .into_iter()
-                .map(|(a, b)| (self.compile(&a), self.compile(&b)))
+                .map(|(a, b)| (self.compile(&a), self.compile(&b), Mode::Default))
                 .collect(),
             circles: figure
                 .circles
                 .into_iter()
-                .map(|expr| self.compile(&expr))
+                .map(|expr| (self.compile(&expr), Mode::Default))
                 .collect(),
             ..Default::default()
         }
