@@ -1,36 +1,36 @@
 /*
- Copyright (c) 2023 Michał Wilczek, Michał Margos
+Copyright (c) 2023 Michał Wilczek, Michał Margos
 
- Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
- associated documentation files (the “Software”), to deal in the Software without restriction,
- including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
- and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do
- so, subject to the following conditions:
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
+associated documentation files (the “Software”), to deal in the Software without restriction,
+including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
+and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do
+so, subject to the following conditions:
 
- The above copyright notice and this permission notice shall be included in all copies or substantial
- portions of the Software.
+The above copyright notice and this permission notice shall be included in all copies or substantial
+portions of the Software.
 
- THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
- FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS
- OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
- WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
- CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- */
+THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS
+OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*/
 
+use crate::script::builtins;
 use std::{
     fmt::{Debug, Display},
-    iter::Peekable
+    iter::Peekable,
 };
-use crate::script::builtins;
 
 use crate::span;
 
 use super::{
     token::{
         Ampersant, Asterisk, At, Colon, Comma, Dollar, Dot, Eq, Exclamation, Gt, Gteq, Ident,
-        LBrace, LParen, LSquare, Let, Lt, Lteq, Minus, NamedIdent, Number, Plus, RBrace,
-        RParen, RSquare, Semi, Slash, Span, Token, Vertical,
+        LBrace, LParen, LSquare, Let, Lt, Lteq, Minus, NamedIdent, Number, Plus, RBrace, RParen,
+        RSquare, Semi, Slash, Span, Token, Vertical,
     },
     unit, ComplexUnit, Error,
 };
@@ -39,7 +39,7 @@ macro_rules! impl_token_parse {
     ($token:ident) => {
         impl Parse for $token {
             fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-                it: &mut Peekable<I>
+                it: &mut Peekable<I>,
             ) -> Result<Self, Error> {
                 match it.next() {
                     Some(Token::$token(tok)) => Ok(*tok),
@@ -150,7 +150,6 @@ pub struct PointCollectionConstructor {
 impl Parse for PointCollectionConstructor {
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
         it: &mut Peekable<I>,
-        
     ) -> Result<Self, Error> {
         Ok(Self {
             ampersant: Ampersant::parse(it)?,
@@ -199,7 +198,6 @@ impl ExplicitIterator {
 impl Parse for ImplicitIterator {
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
         it: &mut Peekable<I>,
-        
     ) -> Result<Self, Error> {
         Ok(ImplicitIterator {
             exprs: Punctuated::parse(it)?,
@@ -214,7 +212,6 @@ impl Parse for ImplicitIterator {
 impl Parse for ExplicitIterator {
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
         it: &mut Peekable<I>,
-        
     ) -> Result<Self, Error> {
         let dollar = Dollar::parse(it)?;
         let id_token = ExprNumber::parse(it)?;
@@ -282,7 +279,7 @@ pub struct SimpleExpression {
     /// The kind of the expression.
     pub kind: SimpleExpressionKind,
     /// The additional display information.
-    pub display: Option<DisplayProperties>
+    pub display: Option<DisplayProperties>,
 }
 
 /// A parsed simple expression.
@@ -435,7 +432,7 @@ pub struct GteqOp {
 #[derive(Debug)]
 pub struct DefinedRuleOperator {
     /// The ident.
-    pub ident: NamedIdent
+    pub ident: NamedIdent,
 }
 
 /// A builtin rule operator
@@ -482,7 +479,6 @@ pub struct FlagName {
 impl Parse for FlagName {
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
         it: &mut Peekable<I>,
-        
     ) -> Result<Self, Error> {
         Ok(Self {
             at: At::parse(it)?,
@@ -507,7 +503,6 @@ pub struct FlagSet {
 impl Parse for FlagSet {
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
         it: &mut Peekable<I>,
-        
     ) -> Result<Self, Error> {
         let mut flags = Vec::new();
 
@@ -540,14 +535,11 @@ pub enum FlagValue {
 impl Parse for FlagValue {
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
         it: &mut Peekable<I>,
-        
     ) -> Result<Self, Error> {
         let peeked = it.peek().copied();
 
         Ok(match peeked {
-            Some(Token::Ident(Ident::Named(_))) => {
-                FlagValue::Ident(NamedIdent::parse(it)?)
-            }
+            Some(Token::Ident(Ident::Named(_))) => FlagValue::Ident(NamedIdent::parse(it)?),
             Some(Token::LBrace(_)) => FlagValue::Set(FlagSet::parse(it)?),
             Some(Token::Number(_)) => FlagValue::Number(Number::parse(it)?),
             Some(t) => return Err(Error::InvalidToken { token: t.clone() }),
@@ -574,7 +566,6 @@ pub struct FlagStatement {
 impl Parse for FlagStatement {
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
         it: &mut Peekable<I>,
-        
     ) -> Result<Self, Error> {
         Ok(Self {
             name: FlagName::parse(it)?,
@@ -706,7 +697,7 @@ pub trait Parse: Sized {
     /// # Errors
     /// Errors originate from invalid scripts.
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-        it: &mut Peekable<I>
+        it: &mut Peekable<I>,
     ) -> Result<Self, Error>;
 
     /// Gets the parsed item's span.
@@ -715,7 +706,7 @@ pub trait Parse: Sized {
 
 impl Parse for ExprCall {
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-        _it: &mut Peekable<I>
+        _it: &mut Peekable<I>,
     ) -> Result<Self, Error> {
         unreachable!("ExprCall::parse should never be called.")
     }
@@ -728,7 +719,7 @@ impl Parse for ExprCall {
 
 impl Parse for Statement {
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-        it: &mut Peekable<I>
+        it: &mut Peekable<I>,
     ) -> Result<Self, Error> {
         let tok = it.peek().unwrap();
         Ok(match tok {
@@ -766,7 +757,6 @@ impl Parse for Noop {
 impl Parse for RuleStatement {
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
         it: &mut Peekable<I>,
-        
     ) -> Result<Self, Error> {
         Ok(RuleStatement {
             lhs: Expression::parse(it)?,
@@ -791,7 +781,6 @@ impl Parse for VariableDefinition {
 
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
         it: &mut Peekable<I>,
-        
     ) -> Result<Self, Error> {
         Ok(Self {
             name: Ident::parse(it)?,
@@ -806,7 +795,6 @@ impl Parse for VariableDefinition {
 impl Parse for LetStatement {
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
         it: &mut Peekable<I>,
-        
     ) -> Result<Self, Error> {
         let let_token = Let::parse(it)?;
         let ident = Punctuated::parse(it)?;
@@ -820,10 +808,7 @@ impl Parse for LetStatement {
 
             match next {
                 Some(Token::Semi(_)) => break,
-                Some(_) => rules.push((
-                    RuleOperator::parse(it)?,
-                    Expression::parse(it)?,
-                )),
+                Some(_) => rules.push((RuleOperator::parse(it)?, Expression::parse(it)?)),
                 None => return Err(Error::EndOfInput),
             };
         }
@@ -845,7 +830,7 @@ impl Parse for LetStatement {
 
 impl Parse for ExprNumber {
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-        it: &mut Peekable<I>
+        it: &mut Peekable<I>,
     ) -> Result<Self, Error> {
         match it.next() {
             // The integral and decimal parts have to be merged into one floating point number.
@@ -875,7 +860,6 @@ impl Parse for ExprNumber {
 impl<const ITER: bool> Parse for Expression<ITER> {
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
         it: &mut Peekable<I>,
-        
     ) -> Result<Self, Error> {
         let mut expr = if ITER {
             let punct = Punctuated::parse(it)?;
@@ -980,11 +964,11 @@ fn dispatch_order<const ITER: bool>(
 
 impl Parse for SimpleExpression {
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-            it: &mut Peekable<I>
-        ) -> Result<Self, Error> {
+        it: &mut Peekable<I>,
+    ) -> Result<Self, Error> {
         Ok(Self {
             kind: SimpleExpressionKind::parse(it)?,
-            display: Option::parse(it)?
+            display: Option::parse(it)?,
         })
     }
 
@@ -1000,7 +984,6 @@ impl Parse for SimpleExpression {
 impl Parse for SimpleExpressionKind {
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
         it: &mut Peekable<I>,
-        
     ) -> Result<Self, Error> {
         let next = it.peek().copied();
 
@@ -1038,20 +1021,14 @@ impl Parse for SimpleExpressionKind {
                                 Self::Ident(Ident::Named(name.clone()))
                             }
                         }
-                        Ident::Collection(c) => {
-                            Self::Ident(Ident::Collection(c.clone()))
-                        }
+                        Ident::Collection(c) => Self::Ident(Ident::Collection(c.clone())),
                     }
                 }
-                Token::LParen(_) => {
-                    Self::Parenthised(ExprParenthised::parse(it)?)
+                Token::LParen(_) => Self::Parenthised(ExprParenthised::parse(it)?),
+                Token::Dollar(_) => Self::ExplicitIterator(ExplicitIterator::parse(it)?),
+                Token::Ampersant(_) => {
+                    Self::PointCollection(PointCollectionConstructor::parse(it)?)
                 }
-                Token::Dollar(_) => {
-                    Self::ExplicitIterator(ExplicitIterator::parse(it)?)
-                }
-                Token::Ampersant(_) => Self::PointCollection(
-                    PointCollectionConstructor::parse(it)?,
-                ),
                 tok => return Err(Error::invalid_token(tok.clone())),
             },
             None => return Err(Error::EndOfInput),
@@ -1078,7 +1055,6 @@ impl Parse for SimpleExpressionKind {
 impl<T: Parse, U: Parse> Parse for Punctuated<T, U> {
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
         it: &mut Peekable<I>,
-        
     ) -> Result<Self, Error> {
         let mut collection = Vec::new();
 
@@ -1102,7 +1078,6 @@ impl<T: Parse, U: Parse> Parse for Punctuated<T, U> {
 impl<T: Parse> Parse for Option<T> {
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
         it: &mut Peekable<I>,
-        
     ) -> Result<Self, Error> {
         let mut it_cloned = it.clone();
 
@@ -1126,7 +1101,6 @@ impl<T: Parse> Parse for Option<T> {
 impl Parse for ExprParenthised {
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
         it: &mut Peekable<I>,
-        
     ) -> Result<Self, Error> {
         Ok(Self {
             lparen: LParen::parse(it)?,
@@ -1143,7 +1117,6 @@ impl Parse for ExprParenthised {
 impl Parse for RuleOperator {
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
         it: &mut Peekable<I>,
-        
     ) -> Result<Self, Error> {
         let next = it.next();
         match next {
@@ -1165,7 +1138,7 @@ impl Parse for RuleOperator {
                 }))),
                 Token::Ident(Ident::Named(name)) => {
                     Ok(RuleOperator::Defined(DefinedRuleOperator {
-                        ident: name.clone()
+                        ident: name.clone(),
                     }))
                 }
                 Token::Exclamation(excl) => Ok(RuleOperator::Inverted(InvertedRuleOperator {
@@ -1218,7 +1191,7 @@ impl_token_parse! {Dot}
 
 impl Parse for NamedIdent {
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-        it: &mut Peekable<I>
+        it: &mut Peekable<I>,
     ) -> Result<Self, Error> {
         match it.next() {
             Some(Token::Ident(Ident::Named(named))) => Ok(named.clone()),
@@ -1234,7 +1207,7 @@ impl Parse for NamedIdent {
 
 impl Parse for Ident {
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-        it: &mut Peekable<I>
+        it: &mut Peekable<I>,
     ) -> Result<Self, Error> {
         match it.next() {
             Some(Token::Ident(ident)) => Ok(ident.clone()),
@@ -1254,7 +1227,6 @@ impl Parse for Ident {
 impl<T: Parse> Parse for Box<T> {
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
         it: &mut Peekable<I>,
-        
     ) -> Result<Self, Error> {
         Ok(Box::new(T::parse(it)?))
     }
@@ -1381,7 +1353,6 @@ impl Parse for Property {
 
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
         it: &mut Peekable<I>,
-        
     ) -> Result<Self, Error> {
         Ok(Self {
             name: NamedIdent::parse(it)?,
@@ -1447,7 +1418,6 @@ impl Parse for PropertyValue {
 
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
         it: &mut Peekable<I>,
-        
     ) -> Result<Self, Error> {
         let peeked = it.peek().copied();
 
@@ -1474,7 +1444,6 @@ pub struct DisplayProperties {
 impl Parse for DisplayProperties {
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
         it: &mut Peekable<I>,
-
     ) -> Result<Self, Error> {
         Ok(Self {
             lsquare: LSquare::parse(it)?,

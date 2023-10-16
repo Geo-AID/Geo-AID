@@ -1,22 +1,22 @@
 /*
- Copyright (c) 2023 Michał Wilczek, Michał Margos
+Copyright (c) 2023 Michał Wilczek, Michał Margos
 
- Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
- associated documentation files (the “Software”), to deal in the Software without restriction,
- including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
- and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do
- so, subject to the following conditions:
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
+associated documentation files (the “Software”), to deal in the Software without restriction,
+including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
+and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do
+so, subject to the following conditions:
 
- The above copyright notice and this permission notice shall be included in all copies or substantial
- portions of the Software.
+The above copyright notice and this permission notice shall be included in all copies or substantial
+portions of the Software.
 
- THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
- FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS
- OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
- WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
- CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- */
+THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS
+OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*/
 
 use std::sync::Arc;
 use std::{collections::HashMap, rc::Rc};
@@ -28,6 +28,7 @@ use uuid::Uuid;
 use crate::generator::expression::expr::{AngleLine, AnglePoint};
 use crate::generator::expression::{LineExpr, PointExpr, ScalarExpr};
 use crate::generator::geometry::get_line;
+use crate::script::figure::Mode;
 use crate::{
     generator::{
         critic::EvaluationArgs, expression::Expression, expression::Line, geometry, Adjustable,
@@ -40,6 +41,7 @@ use crate::{
 mod tests {
     use std::{path::PathBuf, sync::Arc};
 
+    use crate::generator::fast_float::FastFloat;
     use crate::{
         drawer,
         generator::{
@@ -49,17 +51,23 @@ mod tests {
             },
             Adjustable, Complex,
         },
-        script::{figure::Figure, unroll::PointMeta},
+        script::{
+            figure::{Figure, Mode},
+            unroll::PointMeta,
+        },
     };
-    use crate::generator::fast_float::FastFloat;
 
     use super::project;
 
-    /// Utility function used in fn `test_project`(), it makes the code below less messy and more readable.
+    /// Utility function used in fn `test_project()`, it makes the code below less messy and more readable.
     fn create_point_expr(index: usize) -> Arc<Expression<PointExpr>> {
-        Arc::new(Expression::new(PointExpr::Free(FreePoint { index }), FastFloat::One))
+        Arc::new(Expression::new(
+            PointExpr::Free(FreePoint { index }),
+            FastFloat::One,
+        ))
     }
 
+    /// Utility function used in fn `test_project()`, creates point meta, makes the code below more bearable.
     fn create_point_meta(character: char, primes: u8, index: Option<u16>) -> PointMeta {
         PointMeta {
             letter: character,
@@ -68,6 +76,7 @@ mod tests {
         }
     }
 
+    /// Function that tests the performance of the projector and drawers.
     #[test]
     fn test_project() {
         let x: u8 = 1;
@@ -102,20 +111,26 @@ mod tests {
                 (create_point_expr(2), create_point_meta('C', 0, None)),
             ],
             lines: vec![
-                Arc::new(Expression::new(
-                    LineExpr::Line(LinePoint {
-                        a: create_point_expr(0),
-                        b: create_point_expr(1),
-                    }),
-                    FastFloat::One,
-                )),
-                Arc::new(Expression::new(
-                    LineExpr::Line(LinePoint {
-                        a: create_point_expr(1),
-                        b: create_point_expr(2),
-                    }),
-                    FastFloat::One,
-                )),
+                (
+                    Arc::new(Expression::new(
+                        LineExpr::Line(LinePoint {
+                            a: create_point_expr(0),
+                            b: create_point_expr(1),
+                        }),
+                        FastFloat::One,
+                    )),
+                    Mode::Dashed,
+                ),
+                (
+                    Arc::new(Expression::new(
+                        LineExpr::Line(LinePoint {
+                            a: create_point_expr(1),
+                            b: create_point_expr(2),
+                        }),
+                        FastFloat::One,
+                    )),
+                    Mode::Default,
+                ),
             ],
             angles: vec![(
                 Arc::new(Expression::new(
@@ -127,24 +142,28 @@ mod tests {
                     FastFloat::One,
                 )),
                 x,
+                Mode::Dashed,
             )],
 
             segments: vec![
-                (create_point_expr(0), create_point_expr(1)),
-                (create_point_expr(1), create_point_expr(2)),
+                (create_point_expr(0), create_point_expr(1), Mode::Dashed),
+                (create_point_expr(1), create_point_expr(2), Mode::Default),
             ],
-            rays: vec![(create_point_expr(0), create_point_expr(1))],
+            rays: vec![(create_point_expr(0), create_point_expr(1), Mode::Default)],
 
-            circles: vec![Arc::new(Expression::new(
-                CircleExpr::CenterRadius(CenterRadius {
-                    center: create_point_expr(0),
-                    radius: Arc::new(Expression::new(
-                        ScalarExpr::Literal(Literal { value: 0.124 }),
-                        FastFloat::One,
-                    )),
-                }),
-                FastFloat::One,
-            ))],
+            circles: vec![(
+                Arc::new(Expression::new(
+                    CircleExpr::CenterRadius(CenterRadius {
+                        center: create_point_expr(0),
+                        radius: Arc::new(Expression::new(
+                            ScalarExpr::Literal(Literal { value: 0.124 }),
+                            FastFloat::One,
+                        )),
+                    }),
+                    FastFloat::One,
+                )),
+                Mode::Dashed,
+            )],
 
             canvas_size: (200, 200),
         };
@@ -162,7 +181,7 @@ mod tests {
     }
 }
 
-/// Enum representing things that are later drawn in the drawers.
+/// Enum representing the things that are later drawn in the drawers.
 #[derive(Serialize)]
 #[serde(tag = "type")]
 #[serde(rename_all = "snake_case")]
@@ -202,6 +221,8 @@ pub struct RenderedLine {
     pub points: (Complex, Complex),
     /// Expression defining the line
     pub expr: Arc<Expression<LineExpr>>,
+    /// Enum defining the mode in which the expression should be drawn
+    pub mode: Mode,
 }
 
 #[derive(Serialize)]
@@ -214,8 +235,10 @@ pub struct RenderedAngle {
     pub no_arcs: u8,
     /// Expression that the angle was defined by
     pub expr: Arc<Expression<ScalarExpr>>,
-    // Value of the angle (who'd have guessed)
+    /// Value of the angle (who'd have guessed)
     pub angle_value: f64,
+    /// Enum defining the mode in which the expression should be drawn
+    pub mode: Mode,
 }
 #[derive(Serialize)]
 pub struct RenderedSegment {
@@ -223,6 +246,8 @@ pub struct RenderedSegment {
     pub label: String,
     /// Points defining the segment
     pub points: (Complex, Complex),
+    /// Enum defining the mode in which the expression should be drawn
+    pub mode: Mode,
 }
 
 #[derive(Serialize)]
@@ -233,6 +258,8 @@ pub struct RenderedRay {
     pub points: (Complex, Complex),
     /// Second drawing point
     pub draw_point: Complex,
+    /// Enum defining the mode in which the expression should be drawn
+    pub mode: Mode,
 }
 
 #[derive(Serialize)]
@@ -245,6 +272,8 @@ pub struct RenderedCircle {
     pub draw_point: Complex,
     /// Radius
     pub radius: f64,
+    /// Enum defining the mode in which the expression should be drawn
+    pub mode: Mode,
 }
 /// Function getting the points defining the angle from the Expression defining it.
 ///
@@ -280,10 +309,7 @@ fn get_angle_points(
 
 /// Function getting the intersection points of the line with the picture's frame.
 fn get_line_ends(figure: &Figure, ln_c: Line) -> (Complex, Complex) {
-    fn choose_intersection(
-        i: usize,
-        j: usize,
-    ) -> impl Fn(f64, &[Complex]) -> Complex {
+    fn choose_intersection(i: usize, j: usize) -> impl Fn(f64, &[Complex]) -> Complex {
         move |width, intersections| {
             let x = intersections[i];
 
@@ -364,13 +390,14 @@ fn lines(
 ) -> Vec<RenderedLine> {
     let mut blueprint_lines = Vec::new();
     for ln in &figure.lines {
-        let mut ln_c = ln.evaluate(args);
+        let mut ln_c = ln.0.evaluate(args);
         ln_c.origin = transform(offset, scale, size, ln_c.origin);
         let line_ends = get_line_ends(figure, ln_c);
         blueprint_lines.push(RenderedLine {
             label: String::new(),
             points: (line_ends.0, line_ends.1),
-            expr: Arc::clone(ln),
+            expr: Arc::clone(&ln.0),
+            mode: ln.1,
         });
     }
     blueprint_lines
@@ -400,6 +427,7 @@ fn angles(
             no_arcs: ang.1,
             expr: Arc::clone(&ang.0),
             angle_value: ang.0.evaluate(args),
+            mode: ang.2,
         });
     }
     blueprint_angles
@@ -426,6 +454,7 @@ fn segments(
                 transform(offset, scale, size, seg1),
                 transform(offset, scale, size, seg2),
             ),
+            mode: segment.2,
         });
     }
     blueprint_segments
@@ -469,6 +498,7 @@ fn rays(
             label: String::new(),
             points: (ray_a, second_point),
             draw_point: ray_b,
+            mode: ray.2,
         });
     }
 
@@ -483,8 +513,8 @@ fn circles(
     args: &EvaluationArgs,
 ) -> Vec<RenderedCircle> {
     let mut blueprint_circles = Vec::new();
-    for circle in &figure.circles {
-        let circle = circle.evaluate(args);
+    for circle_main in &figure.circles {
+        let circle = circle_main.0.evaluate(args);
         let center = transform(offset, scale, size, circle.center);
         let draw_point = Complex::new(circle.center.real + circle.radius, circle.center.imaginary);
         let sc_rad = circle.radius * scale;
@@ -493,6 +523,7 @@ fn circles(
             center,
             draw_point: transform(offset, scale, size, draw_point),
             radius: sc_rad,
+            mode: circle_main.1,
         });
     }
 
@@ -586,7 +617,7 @@ pub fn project(
         }));
     }
 
-    // Creating a HashMap (the bridge between Expression defining the point and those points).
+    // Creating a HashMap (the bridge between Expressions defining the points and those points).
     let mut iden = HashMap::new();
     for (i, pt) in figure.points.clone().iter().enumerate() {
         let point = HashableArc::new(Arc::clone(&pt.0));

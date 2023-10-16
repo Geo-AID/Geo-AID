@@ -1,33 +1,33 @@
 /*
- Copyright (c) 2023 Michał Wilczek, Michał Margos
+Copyright (c) 2023 Michał Wilczek, Michał Margos
 
- Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
- associated documentation files (the “Software”), to deal in the Software without restriction,
- including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
- and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do
- so, subject to the following conditions:
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
+associated documentation files (the “Software”), to deal in the Software without restriction,
+including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
+and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do
+so, subject to the following conditions:
 
- The above copyright notice and this permission notice shall be included in all copies or substantial
- portions of the Software.
+The above copyright notice and this permission notice shall be included in all copies or substantial
+portions of the Software.
 
- THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
- FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS
- OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
- WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
- CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- */
+THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS
+OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*/
 
+use serde::Serialize;
 use std::iter::Sum;
 use std::ops::{Add, AddAssign, Div, Mul};
-use serde::Serialize;
 
 /// A floating point value for optimized operations with often use of values 1 and 0.
 #[derive(Debug, Clone, Copy, Serialize)]
 pub enum FastFloat {
     Zero,
     One,
-    Other(f64)
+    Other(f64),
 }
 
 impl FastFloat {
@@ -43,7 +43,7 @@ impl FastFloat {
         match self {
             Self::One => 1.0,
             Self::Zero => 0.0,
-            Self::Other(v) => v
+            Self::Other(v) => v,
         }
     }
 }
@@ -57,13 +57,13 @@ impl Add for FastFloat {
             Self::One => match rhs {
                 Self::Zero => Self::One,
                 Self::One => Self::Other(2.0),
-                Self::Other(v) => Self::Other(1.0 + v)
+                Self::Other(v) => Self::Other(1.0 + v),
             },
             Self::Other(v) => match rhs {
                 Self::Zero => self,
                 Self::One => Self::Other(1.0 + v),
-                Self::Other(u) => Self::Other(u + v)
-            }
+                Self::Other(u) => Self::Other(u + v),
+            },
         }
     }
 }
@@ -84,8 +84,8 @@ impl Mul for FastFloat {
             Self::Other(v) => match rhs {
                 Self::Zero => Self::Zero,
                 Self::One => self,
-                Self::Other(u) => Self::Other(v * u)
-            }
+                Self::Other(u) => Self::Other(v * u),
+            },
         }
     }
 }
@@ -100,14 +100,14 @@ impl Div for FastFloat {
             Self::Other(v) => match self {
                 Self::Zero => Self::Zero,
                 Self::One => Self::Other(1.0 / v),
-                Self::Other(u) => Self::Other(u / v)
-            }
+                Self::Other(u) => Self::Other(u / v),
+            },
         }
     }
 }
 
 impl Sum<Self> for FastFloat {
-    fn sum<I: Iterator<Item=Self>>(iter: I) -> Self {
+    fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
         let mut s = FastFloat::Zero;
 
         for v in iter {

@@ -1,34 +1,39 @@
 /*
- Copyright (c) 2023 Michał Wilczek, Michał Margos
+Copyright (c) 2023 Michał Wilczek, Michał Margos
 
- Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
- associated documentation files (the “Software”), to deal in the Software without restriction,
- including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
- and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do
- so, subject to the following conditions:
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
+associated documentation files (the “Software”), to deal in the Software without restriction,
+including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
+and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do
+so, subject to the following conditions:
 
- The above copyright notice and this permission notice shall be included in all copies or substantial
- portions of the Software.
+The above copyright notice and this permission notice shall be included in all copies or substantial
+portions of the Software.
 
- THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
- FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS
- OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
- WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
- CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- */
+THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS
+OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*/
 
-use std::{collections::HashMap, rc::Rc, sync::Arc, unreachable, cell::RefCell, mem};
+use std::{cell::RefCell, collections::HashMap, mem, rc::Rc, sync::Arc, unreachable};
 
+use crate::generator::expression::expr::PointOnLine;
+use crate::generator::fast_float::FastFloat;
+use crate::script::figure::Mode;
+use crate::script::unit;
 use crate::{
     generator::{
         self,
         expression::{
             expr::{
-                AngleBisector, AngleLine, AnglePoint, Average, CenterRadius, Difference, FreePoint,
-                LineLineIntersection, LinePoint, Literal, Negation, ParallelThrough,
-                PerpendicularThrough, PointLineDistance, PointPointDistance, PointX, PointY,
-                Product, Quotient, SetUnit, Sum, Real, PointOnCircle, CircleCenter, CircleRadius, AnglePointDir,
+                AngleBisector, AngleLine, AnglePoint, AnglePointDir, Average, CenterRadius,
+                CircleCenter, CircleRadius, Difference, FreePoint, LineLineIntersection, LinePoint,
+                Literal, Negation, ParallelThrough, PerpendicularThrough, PointLineDistance,
+                PointOnCircle, PointPointDistance, PointX, PointY, Product, Quotient, Real,
+                SetUnit, Sum,
             },
             AnyExpr, CircleExpr, Expression, LineExpr, PointExpr, ScalarExpr, Weights,
         },
@@ -36,17 +41,13 @@ use crate::{
     },
     span,
 };
-use crate::generator::expression::expr::PointOnLine;
-use crate::generator::fast_float::FastFloat;
-use crate::script::unit;
 
 use super::{
     figure::Figure,
     ty,
     unroll::{
-        self, Flag, UnrolledExpression, UnrolledExpressionData,
-        UnrolledRuleKind, Variable, CompileContext, PointMeta, Entity,
-        EntScalar, EntCircle, EntLine, EntPoint
+        self, CompileContext, EntCircle, EntLine, EntPoint, EntScalar, Entity, Flag, PointMeta,
+        UnrolledExpression, UnrolledExpressionData, UnrolledRuleKind, Variable,
     },
     Criteria, CriteriaKind, Error, HashableRc, SimpleUnit, Weighed,
 };
@@ -144,7 +145,7 @@ pub enum CompiledEntity {
     Scalar(CompiledScalar),
     Circle(CompiledCircle),
     Line(CompiledLine),
-    None // Used for not-yet compiled entities.
+    None, // Used for not-yet compiled entities.
 }
 
 impl CompiledEntity {
@@ -179,7 +180,7 @@ struct Compiler {
     entities: Vec<CompiledEntity>,
     dst_var: Rc<RefCell<Variable>>,
     context: CompileContext,
-    template: Vec<AdjustableTemplate>
+    template: Vec<AdjustableTemplate>,
 }
 
 impl Compiler {
@@ -188,33 +189,33 @@ impl Compiler {
         let dst_var = context.add_scalar();
 
         let dst_var = Rc::clone(
-        context
-            .variables
-            .entry(String::from("@distance"))
-            .or_insert_with(|| {
-                Rc::new(RefCell::new(Variable {
-                    name: String::from("@distance"),
-                    definition_span: span!(0, 0, 0, 0),
-                    definition: UnrolledExpression {
-                        weight: FastFloat::Other(0.1), // We reduce the weight of distance to reduce its changes.
-                        data: Rc::new(UnrolledExpressionData::Entity(dst_var)),
-                        ty: ty::SCALAR,
-                        span: span!(0, 0, 0, 0),
-                    }
-                }))
-            }),
+            context
+                .variables
+                .entry(String::from("@distance"))
+                .or_insert_with(|| {
+                    Rc::new(RefCell::new(Variable {
+                        name: String::from("@distance"),
+                        definition_span: span!(0, 0, 0, 0),
+                        definition: UnrolledExpression {
+                            weight: FastFloat::Other(0.1), // We reduce the weight of distance to reduce its changes.
+                            data: Rc::new(UnrolledExpressionData::Entity(dst_var)),
+                            ty: ty::SCALAR,
+                            span: span!(0, 0, 0, 0),
+                        },
+                    }))
+                }),
         );
 
         let mut entities = Vec::new();
         entities.resize(context.entities.len(), CompiledEntity::None);
-        
+
         Self {
             variables: VariableRecord::default(),
             expressions: ExpressionRecord::default(),
             dst_var,
             entities,
             context,
-            template: Vec::new()
+            template: Vec::new(),
         }
     }
 }
@@ -235,16 +236,14 @@ impl Compile<PointExpr> for Compiler {
 
         // Otherwise we compile.
         let compiled = match expr.data.as_ref() {
-            UnrolledExpressionData::VariableAccess(var) => {
-                self.compile_variable(var)
-            }
+            UnrolledExpressionData::VariableAccess(var) => self.compile_variable(var),
             UnrolledExpressionData::Entity(i) => {
                 self.compile_entity(*i).as_point().unwrap().clone()
             }
-            UnrolledExpressionData::Boxed(expr) => {
-                self.compile(expr)
+            UnrolledExpressionData::Boxed(expr) => self.compile(expr),
+            UnrolledExpressionData::IndexCollection(expr, index) => {
+                self.compile(&index_collection(expr, *index))
             }
-            UnrolledExpressionData::IndexCollection(expr, index) => self.compile(&index_collection(expr, *index)),
             UnrolledExpressionData::LineLineIntersection(k, l) => Arc::new(Expression::new(
                 PointExpr::LineLineIntersection(LineLineIntersection {
                     k: self.compile(k),
@@ -254,20 +253,19 @@ impl Compile<PointExpr> for Compiler {
             )),
             UnrolledExpressionData::Average(exprs) => Arc::new(Expression::new(
                 PointExpr::Average(Average {
-                    items: exprs
-                        .iter()
-                        .map(|expr| self.compile(expr))
-                        .collect(),
+                    items: exprs.iter().map(|expr| self.compile(expr)).collect(),
                 }),
                 FastFloat::One,
             )),
             UnrolledExpressionData::CircleCenter(circle) => Arc::new(Expression::new(
                 PointExpr::CircleCenter(CircleCenter {
-                    circle: self.compile(circle)
+                    circle: self.compile(circle),
                 }),
-                FastFloat::One
+                FastFloat::One,
             )),
-            UnrolledExpressionData::IndexBundle(bundle, field) => self.compile(&index_bundle(bundle, field)),
+            UnrolledExpressionData::IndexBundle(bundle, field) => {
+                self.compile(&index_bundle(bundle, field))
+            }
             _ => unreachable!("A point should never be compiled this way"),
         };
 
@@ -289,12 +287,8 @@ impl Compile<LineExpr> for Compiler {
 
         // Otherwise we compile.
         let compiled = match expr.data.as_ref() {
-            UnrolledExpressionData::VariableAccess(var) => {
-                self.compile_variable(var)
-            }
-            UnrolledExpressionData::Boxed(expr) => {
-                self.compile(expr)
-            }
+            UnrolledExpressionData::VariableAccess(var) => self.compile_variable(var),
+            UnrolledExpressionData::Boxed(expr) => self.compile(expr),
             UnrolledExpressionData::LineFromPoints(p1, p2) => Arc::new(Expression::new(
                 LineExpr::Line(LinePoint {
                     a: self.compile(p1),
@@ -339,7 +333,9 @@ impl Compile<LineExpr> for Compiler {
 /// Takes the unrolled expression of type `PointCollection` and takes the point at `index`, isolating it out of the entire expression.
 pub fn index_collection(expr: &UnrolledExpression, index: usize) -> UnrolledExpression {
     match expr.data.as_ref() {
-        UnrolledExpressionData::VariableAccess(var) => index_collection(&var.borrow().definition, index),
+        UnrolledExpressionData::VariableAccess(var) => {
+            index_collection(&var.borrow().definition, index)
+        }
         UnrolledExpressionData::PointCollection(col) => col.get(index).unwrap().clone(),
         UnrolledExpressionData::Boxed(expr) => index_collection(expr, index),
         _ => unreachable!("PointCollection should never be achievable by this expression."),
@@ -349,10 +345,12 @@ pub fn index_collection(expr: &UnrolledExpression, index: usize) -> UnrolledExpr
 /// Takes the unrolled expression of a bundle type and takes out the given field.
 pub fn index_bundle(bundle: &UnrolledExpression, field: &str) -> UnrolledExpression {
     match bundle.data.as_ref() {
-        UnrolledExpressionData::VariableAccess(var) => index_bundle(&var.borrow().definition, field),
+        UnrolledExpressionData::VariableAccess(var) => {
+            index_bundle(&var.borrow().definition, field)
+        }
         UnrolledExpressionData::ConstructBundle(map) => map.get(field).unwrap().clone(),
         UnrolledExpressionData::Boxed(bundle) => index_bundle(bundle, field),
-        _ => unreachable!("A bundle type should never be achievable by this expression.")
+        _ => unreachable!("A bundle type should never be achievable by this expression."),
     }
 }
 
@@ -374,10 +372,10 @@ impl Compile<CircleExpr> for Compiler {
                 }),
                 FastFloat::One,
             )),
-            UnrolledExpressionData::Boxed(expr) => {
-                self.compile(expr)
+            UnrolledExpressionData::Boxed(expr) => self.compile(expr),
+            UnrolledExpressionData::IndexBundle(bundle, field) => {
+                self.compile(&index_bundle(bundle, field))
             }
-            UnrolledExpressionData::IndexBundle(bundle, field) => self.compile(&index_bundle(bundle, field)),
             _ => unreachable!("A circle should never be compiled this way"),
         };
 
@@ -389,11 +387,7 @@ impl Compile<CircleExpr> for Compiler {
 
 impl Compiler {
     #[must_use]
-    pub fn fix_distance(
-        &self,
-        expr: UnrolledExpression,
-        power: i8
-    ) -> UnrolledExpression {
+    pub fn fix_distance(&self, expr: UnrolledExpression, power: i8) -> UnrolledExpression {
         let sp = expr.span;
         let t = expr.ty;
 
@@ -406,7 +400,9 @@ impl Compiler {
                         weight: FastFloat::One,
                         ty: ty::SCALAR,
                         span: sp,
-                        data: Rc::new(UnrolledExpressionData::VariableAccess(Rc::clone(&self.dst_var))),
+                        data: Rc::new(UnrolledExpressionData::VariableAccess(Rc::clone(
+                            &self.dst_var,
+                        ))),
                     },
                 )),
                 ty: t,
@@ -421,7 +417,9 @@ impl Compiler {
                         weight: FastFloat::One,
                         ty: ty::SCALAR,
                         span: sp,
-                        data: Rc::new(UnrolledExpressionData::VariableAccess(Rc::clone(&self.dst_var))),
+                        data: Rc::new(UnrolledExpressionData::VariableAccess(Rc::clone(
+                            &self.dst_var,
+                        ))),
                     },
                 )),
                 ty: t,
@@ -430,11 +428,7 @@ impl Compiler {
         }
     }
 
-    fn compile_number(
-        &mut self,
-        expr: &UnrolledExpression,
-        v: f64
-    ) -> Arc<Expression<ScalarExpr>> {
+    fn compile_number(&mut self, expr: &UnrolledExpression, v: f64) -> Arc<Expression<ScalarExpr>> {
         if expr.ty == ty::SCALAR {
             // If a scalar, we treat it as a standard literal.
             Arc::new(Expression::new(
@@ -443,34 +437,25 @@ impl Compiler {
             ))
         } else {
             // Otherwise we pretend it's a scalar literal inside a SetUnit.
-            self.compile(
-                &UnrolledExpression {
-                    weight: FastFloat::One,
-                    ty: expr.ty,
-                    span: expr.span,
-                    data: Rc::new(UnrolledExpressionData::SetUnit(
-                        UnrolledExpression {
-                            weight: FastFloat::One,
-                            ty: ty::SCALAR,
-                            span: expr.span,
-                            data: expr.data.clone(),
-                        },
-                        *expr.ty
-                            .as_scalar()
-                            .unwrap()
-                            .as_ref()
-                            .unwrap()
-                    )),
-                }
-            )
+            self.compile(&UnrolledExpression {
+                weight: FastFloat::One,
+                ty: expr.ty,
+                span: expr.span,
+                data: Rc::new(UnrolledExpressionData::SetUnit(
+                    UnrolledExpression {
+                        weight: FastFloat::One,
+                        ty: ty::SCALAR,
+                        span: expr.span,
+                        data: expr.data.clone(),
+                    },
+                    *expr.ty.as_scalar().unwrap().as_ref().unwrap(),
+                )),
+            })
         }
     }
 
     /// Attempts to compile the variable. If the variable is a `PointCollection`, leaves it unrolled. Otherwise everything is compiled properly.
-    fn compile_variable<T>(
-        &mut self,
-        var: &Rc<RefCell<Variable>>
-    ) -> Arc<Expression<T>>
+    fn compile_variable<T>(&mut self, var: &Rc<RefCell<Variable>>) -> Arc<Expression<T>>
     where
         VariableRecord: Mapping<RefCell<Variable>, T>,
         Self: Compile<T>,
@@ -487,15 +472,13 @@ impl Compiler {
         let compiled = self.compile(&var.borrow().definition);
 
         // We insert for memory
-        self.variables.insert(HashableRc::new(Rc::clone(var)), compiled.clone());
+        self.variables
+            .insert(HashableRc::new(Rc::clone(var)), compiled.clone());
         compiled
     }
 
     /// Compiles the entity by index.
-    fn compile_entity(
-        &mut self,
-        entity: usize
-    ) -> CompiledEntity {
+    fn compile_entity(&mut self, entity: usize) -> CompiledEntity {
         // If the expression is compiled, there's no problem
         match self.entities[entity].clone() {
             CompiledEntity::None => {
@@ -507,9 +490,9 @@ impl Compiler {
                             self.template.push(AdjustableTemplate::Real);
                             Arc::new(Expression::new(
                                 ScalarExpr::Real(Real {
-                                    index: self.template.len() - 1
+                                    index: self.template.len() - 1,
                                 }),
-                                FastFloat::One
+                                FastFloat::One,
                             ))
                         }
                         EntScalar::Bind(expr) => self.compile(expr),
@@ -519,9 +502,9 @@ impl Compiler {
                             self.template.push(AdjustableTemplate::Point);
                             Arc::new(Expression::new(
                                 PointExpr::Free(FreePoint {
-                                    index: self.template.len() - 1
+                                    index: self.template.len() - 1,
                                 }),
-                                FastFloat::One
+                                FastFloat::One,
                             ))
                         }
                         EntPoint::OnCircle(circle) => {
@@ -529,9 +512,9 @@ impl Compiler {
                             Arc::new(Expression::new(
                                 PointExpr::OnCircle(PointOnCircle {
                                     index: self.template.len() - 1,
-                                    circle: self.compile(circle)
+                                    circle: self.compile(circle),
                                 }),
-                                FastFloat::One
+                                FastFloat::One,
                             ))
                         }
                         EntPoint::OnLine(line) => {
@@ -539,9 +522,9 @@ impl Compiler {
                             Arc::new(Expression::new(
                                 PointExpr::OnLine(PointOnLine {
                                     index: self.template.len() - 1,
-                                    line: self.compile(line)
+                                    line: self.compile(line),
                                 }),
-                                FastFloat::One
+                                FastFloat::One,
                             ))
                         }
                         EntPoint::Bind(expr) => self.compile(&expr),
@@ -554,10 +537,10 @@ impl Compiler {
                         EntCircle::Temporary => unreachable!(),
                     }),
                 };
-    
+
                 self.entities[entity].clone()
-            },
-            v => v
+            }
+            v => v,
         }
     }
 
@@ -570,38 +553,26 @@ impl Compiler {
                 let crit = match rule.kind {
                     UnrolledRuleKind::Eq => {
                         if rule.lhs.ty == ty::POINT {
-                            let lhs = self.compile(
-                                &rule.lhs
-                            );
-                            let rhs = self.compile(
-                                &rule.rhs
-                            );
+                            let lhs = self.compile(&rule.lhs);
+                            let rhs = self.compile(&rule.rhs);
 
                             Weighed::one(CriteriaKind::EqualPoint(lhs, rhs))
                         } else {
-                            let lhs = self.compile(
-                                &rule.lhs
-                            );
-                            let rhs = self.compile(
-                                &rule.rhs
-                            );
+                            let lhs = self.compile(&rule.lhs);
+                            let rhs = self.compile(&rule.rhs);
 
                             Weighed::one(CriteriaKind::EqualScalar(lhs, rhs))
                         }
                     }
                     UnrolledRuleKind::Gt => {
-                        let lhs =
-                            self.compile(&rule.lhs);
-                        let rhs =
-                            self.compile(&rule.rhs);
+                        let lhs = self.compile(&rule.lhs);
+                        let rhs = self.compile(&rule.rhs);
 
                         Weighed::one(CriteriaKind::Greater(lhs, rhs))
                     }
                     UnrolledRuleKind::Lt => {
-                        let lhs =
-                            self.compile(&rule.lhs);
-                        let rhs =
-                            self.compile(&rule.rhs);
+                        let lhs = self.compile(&rule.lhs);
+                        let rhs = self.compile(&rule.rhs);
 
                         Weighed::one(CriteriaKind::Less(lhs, rhs))
                     }
@@ -620,39 +591,36 @@ impl Compiler {
     }
 
     /// Builds an actual figure.
-    fn build_figure(
-        &mut self,
-        canvas_size: (usize, usize)
-    ) -> Figure {
+    fn build_figure(&mut self, canvas_size: (usize, usize)) -> Figure {
         let figure = mem::take(&mut self.context.figure);
 
         Figure {
             canvas_size,
-            points: figure.points.into_iter().map(|(expr, meta)| (self.compile(
-                &expr
-            ), meta)).collect(),
-            lines: figure.lines.into_iter().map(|expr| self.compile(
-                &expr
-            )).collect(),
-            segments: figure.segments.into_iter().map(|(a, b)| (
-                self.compile(
-                    &a
-                ),
-                self.compile(
-                    &b
-                )
-            )).collect(),
-            rays: figure.rays.into_iter().map(|(a, b)| (
-                self.compile(
-                    &a
-                ),
-                self.compile(
-                    &b
-                )
-            )).collect(),
-            circles: figure.circles.into_iter().map(|expr| self.compile(
-                &expr
-            )).collect(),
+            points: figure
+                .points
+                .into_iter()
+                .map(|(expr, meta)| (self.compile(&expr), meta))
+                .collect(),
+            lines: figure
+                .lines
+                .into_iter()
+                .map(|expr| (self.compile(&expr), Mode::Default))
+                .collect(),
+            segments: figure
+                .segments
+                .into_iter()
+                .map(|(a, b)| (self.compile(&a), self.compile(&b), Mode::Default))
+                .collect(),
+            rays: figure
+                .rays
+                .into_iter()
+                .map(|(a, b)| (self.compile(&a), self.compile(&b), Mode::Default))
+                .collect(),
+            circles: figure
+                .circles
+                .into_iter()
+                .map(|expr| (self.compile(&expr), Mode::Default))
+                .collect(),
             ..Default::default()
         }
     }
@@ -660,10 +628,7 @@ impl Compiler {
 
 impl Compile<ScalarExpr> for Compiler {
     #[allow(clippy::too_many_lines)]
-    fn compile(
-        &mut self,
-        expr: &UnrolledExpression
-    ) -> CompiledScalar {
+    fn compile(&mut self, expr: &UnrolledExpression) -> CompiledScalar {
         // First we have to check if this expression has been compiled already.
         let key = HashableRc::new(Rc::clone(&expr.data));
 
@@ -674,37 +639,32 @@ impl Compile<ScalarExpr> for Compiler {
 
         // Otherwise we compile.
         let compiled = match expr.data.as_ref() {
-            UnrolledExpressionData::VariableAccess(var) => {
-                self.compile_variable(var)
-            }
-            UnrolledExpressionData::Number(v) => {
-                self.compile_number(expr, *v)
-            }
+            UnrolledExpressionData::VariableAccess(var) => self.compile_variable(var),
+            UnrolledExpressionData::Number(v) => self.compile_number(expr, *v),
             UnrolledExpressionData::DstLiteral(v) => Arc::new(Expression::new(
                 ScalarExpr::SetUnit(SetUnit {
                     unit: unit::DISTANCE,
-                    value: Arc::new(Expression::new(ScalarExpr::Literal(Literal {
-                        value: *v
-                    }), FastFloat::One))
+                    value: Arc::new(Expression::new(
+                        ScalarExpr::Literal(Literal { value: *v }),
+                        FastFloat::One,
+                    )),
                 }),
-                FastFloat::One
+                FastFloat::One,
             )),
-            UnrolledExpressionData::Entity(i) => self.compile_entity(*i).as_scalar().unwrap().clone(),
-            UnrolledExpressionData::Boxed(expr) => {
-                self.compile(expr)
+            UnrolledExpressionData::Entity(i) => {
+                self.compile_entity(*i).as_scalar().unwrap().clone()
             }
+            UnrolledExpressionData::Boxed(expr) => self.compile(expr),
             UnrolledExpressionData::SetUnit(expr, unit) => Arc::new(Expression::new(
                 ScalarExpr::SetUnit(SetUnit {
-                    value: self.compile(
-                        &self.fix_distance(
-                            expr.clone(),
-                            unit[SimpleUnit::Distance as usize]
-                                - match expr.ty.as_scalar().unwrap() {
-                                    Some(unit) => unit[SimpleUnit::Distance as usize],
-                                    None => 0,
-                                },
-                        )
-                    ),
+                    value: self.compile(&self.fix_distance(
+                        expr.clone(),
+                        unit[SimpleUnit::Distance as usize]
+                            - match expr.ty.as_scalar().unwrap() {
+                                Some(unit) => unit[SimpleUnit::Distance as usize],
+                                None => 0,
+                            },
+                    )),
                     unit: *unit,
                 }),
                 FastFloat::One,
@@ -771,7 +731,7 @@ impl Compile<ScalarExpr> for Compiler {
                     origin: self.compile(v2),
                     arm2: self.compile(v3),
                 }),
-                FastFloat::One
+                FastFloat::One,
             )),
             UnrolledExpressionData::TwoLineAngle(v1, v2) => Arc::new(Expression::new(
                 ScalarExpr::AngleLine(AngleLine {
@@ -782,20 +742,19 @@ impl Compile<ScalarExpr> for Compiler {
             )),
             UnrolledExpressionData::Average(exprs) => Arc::new(Expression::new(
                 ScalarExpr::Average(Average {
-                    items: exprs
-                        .iter()
-                        .map(|expr| self.compile(expr))
-                        .collect(),
+                    items: exprs.iter().map(|expr| self.compile(expr)).collect(),
                 }),
                 FastFloat::One,
             )),
             UnrolledExpressionData::CircleRadius(circle) => Arc::new(Expression::new(
                 ScalarExpr::CircleRadius(CircleRadius {
-                    circle: self.compile(circle)
+                    circle: self.compile(circle),
                 }),
-                FastFloat::One
+                FastFloat::One,
             )),
-            UnrolledExpressionData::IndexBundle(bundle, field) => self.compile(&index_bundle(bundle, field)),
+            UnrolledExpressionData::IndexBundle(bundle, field) => {
+                self.compile(&index_bundle(bundle, field))
+            }
             _ => unreachable!("A scalar should never be compiled this way"),
         };
 
@@ -829,7 +788,7 @@ pub struct PreFigure {
     /// Rays in the figure
     pub rays: Vec<(UnrolledExpression, UnrolledExpression)>,
     /// Circles in the figure
-    pub circles: Vec<UnrolledExpression>
+    pub circles: Vec<UnrolledExpression>,
 }
 
 /// Compiles the given script.
