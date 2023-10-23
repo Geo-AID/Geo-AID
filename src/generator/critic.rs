@@ -161,6 +161,26 @@ fn evaluate_single(
             (invert(quality), ws)
         }
         CriteriaKind::Bias(expr) => (1.0, expr.weights.clone().0),
+        CriteriaKind::Alternative(rules) => {
+            let mut evaluated = rules.iter().map(|x| evaluate_single(
+                &x.object,
+                adjustables,
+                logger,
+                generation,
+                flags,
+                cache
+            ));
+
+            let mut max = evaluated.next().unwrap();
+
+            for pair in evaluated {
+                if pair.0 > max.0 {
+                    max = pair;
+                }
+            }
+
+            max
+        }
     }
 }
 
