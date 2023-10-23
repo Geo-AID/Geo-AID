@@ -306,6 +306,7 @@ impl CompileContext {
             circle_radius!(rhs)
         ));
     }
+
     pub fn point_on_line(&mut self, lhs: &Expr<UnrolledPoint>, rhs: &Expr<UnrolledLine>) {
         if let Some(point) = self.get_point_entity_mut(lhs) {
             match point {

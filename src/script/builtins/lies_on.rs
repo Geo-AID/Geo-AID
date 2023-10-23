@@ -22,9 +22,9 @@ use geo_aid_derive::overload;
 use std::rc::Rc;
 
 use crate::script::builtins::macros::{distance, field, line2};
-use crate::script::unroll::{Bundle, Circle, Line, Point, PointCollection, Simplify};
+use crate::script::unroll::{Bundle, Circle, Line, Point, PointCollection, Simplify, UnrolledRule, UnrolledRuleKind};
 use crate::script::{
-    builtins::macros::{angle_expr, index, math, number, rule},
+    builtins::macros::{angle_expr, index, math, number, rule, circle_center, circle_radius},
     unroll::{CompileContext, Expr, Library, Properties, Rule},
 };
 
@@ -33,12 +33,21 @@ fn pt_lies_on_circle(
     rhs: &Expr<Circle>,
     context: &mut CompileContext,
     properties: Option<Properties>,
+    invert: bool
 ) {
     drop(properties);
 
     let point = lhs.simplify(context);
     let circle = rhs.simplify(context);
-    context.point_on_circle(&point, &circle);
+
+    if invert {
+        rule!(context:S=(
+            circle_radius!(circle),
+            distance!(PP: point, circle_center!(circle))
+        ) neg=true);
+    } else {
+        context.point_on_circle(&point, &circle);
+    }
 }
 
 fn pt_lies_on_line(
@@ -46,12 +55,21 @@ fn pt_lies_on_line(
     rhs: &Expr<Line>,
     context: &mut CompileContext,
     properties: Option<Properties>,
+    invert: bool
 ) {
     drop(properties);
 
     let point = lhs.simplify(context);
     let line = rhs.simplify(context);
-    context.point_on_line(&point, &line);
+
+    if invert {
+        rule!(context:S=(
+            number!(=0.0),
+            distance!(PL: point, line)
+        ) neg=true);
+    } else {
+        context.point_on_line(&point, &line);
+    }
 }
 
 fn col_lies_on_circle(
@@ -59,12 +77,13 @@ fn col_lies_on_circle(
     rhs: &Expr<Circle>,
     context: &mut CompileContext,
     properties: Option<Properties>,
+    invert: bool
 ) {
     drop(properties);
     let len = lhs.data.length;
 
     for i in 0..len {
-        rule!(context:pt_lies_on_circle(index!(lhs, i), rhs));
+        rule!(context:pt_lies_on_circle(index!(lhs, i), rhs) neg=invert);
     }
 
     /*
@@ -72,18 +91,20 @@ fn col_lies_on_circle(
      * (A_1, A_2, A_3), (A_2, A_3, A_4), ... (A_n-1, A_n, A_1)
      */
 
-    for i in 1..len {
-        let i_plus_1 = (i + 1) % len;
-        let i_plus_2 = (i + 2) % len;
+    if !invert {
+        for i in 1..len {
+            let i_plus_1 = (i + 1) % len;
+            let i_plus_2 = (i + 2) % len;
 
-        rule!(context:>(
-            math!(
-                *,
-                angle_expr!(dir index!(lhs, i), index!(lhs, i-1), index!(lhs, i_plus_1)),
-                angle_expr!(dir index!(lhs, i_plus_1), index!(lhs, i), index!(lhs, i_plus_2))
-            ),
-            number!(ANGLE 0.0)
-        ));
+            rule!(context:>(
+                math!(
+                    *,
+                    angle_expr!(dir index!(lhs, i), index!(lhs, i-1), index!(lhs, i_plus_1)),
+                    angle_expr!(dir index!(lhs, i_plus_1), index!(lhs, i), index!(lhs, i_plus_2))
+                ),
+                number!(ANGLE 0.0)
+            ));
+        }
     }
 }
 
@@ -92,17 +113,51 @@ fn pt_lies_on_segment(
     rhs: &Expr<Bundle>,
     context: &mut CompileContext,
     properties: Option<Properties>,
+    invert: bool
 ) {
     drop(properties);
 
     let point = lhs.simplify(context);
     let line = line2!(field!(POINT rhs, A), field!(POINT rhs, B)).simplify(context);
-    context.point_on_line(&point, &line);
 
-    rule!(context:S=(
-        distance!(PP: field!(POINT rhs, A), lhs),
-        distance!(PP: field!(POINT rhs, B), lhs)
-    ));
+    if invert {
+        // not on line or not between A, B
+        context.rules.push(UnrolledRule {
+            kind: UnrolledRuleKind::Alternative(vec![
+                UnrolledRule {
+                    kind: UnrolledRuleKind::ScalarEq(
+                        math!(
+                            +, distance!(PP: field!(POINT rhs, A), lhs),
+                            distance!(PP: field!(POINT rhs, B), lhs)
+                        ),
+                        distance!(PP: field!(POINT rhs, A), field!(POINT rhs, B))
+                    ),
+                    inverted: true
+                },
+                UnrolledRule {
+                    kind: UnrolledRuleKind::ScalarEq(
+                        math!(
+                            +, distance!(PP: field!(POINT rhs, A), lhs),
+                            distance!(PP: field!(POINT rhs, B), lhs)
+                        ),
+                        distance!(PP: field!(POINT rhs, A), field!(POINT rhs, B))
+                    ),
+                    inverted: true
+                }
+            ]),
+            inverted: false
+        });
+    } else {
+        context.point_on_line(&point, &line);
+
+        rule!(context:S=(
+            math!(
+                +, distance!(PP: field!(POINT rhs, A), lhs),
+                distance!(PP: field!(POINT rhs, B), lhs)
+            ),
+            distance!(PP: field!(POINT rhs, A), field!(POINT rhs, B))
+        ));
+    }
 }
 
 pub fn register(library: &mut Library) {

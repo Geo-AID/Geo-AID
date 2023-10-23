@@ -327,7 +327,7 @@ pub struct RuleOverload {
 }
 
 /// geoscript rule declaration
-type GeoRule = dyn Fn(&AnyExpr, &AnyExpr, &mut CompileContext, Option<Properties>);
+type GeoRule = dyn Fn(&AnyExpr, &AnyExpr, &mut CompileContext, Option<Properties>, bool);
 
 /// A function definition.
 pub struct RuleDefinition(pub Box<GeoRule>);
@@ -810,6 +810,7 @@ pub enum UnrolledRuleKind {
     ScalarEq(Expr<Scalar>, Expr<Scalar>),
     Gt(Expr<Scalar>, Expr<Scalar>),
     Lt(Expr<Scalar>, Expr<Scalar>),
+    Alternative(Vec<UnrolledRule>)
 }
 
 pub trait ConvertFrom<T> {
@@ -1874,6 +1875,12 @@ impl Display for UnrolledRule {
             UnrolledRuleKind::Lt(a, b) => {
                 write!(f, "{a} {} {b}", if self.inverted { ">=" } else { "<" })
             }
+            UnrolledRuleKind::Alternative(v) => {
+                write!(f, "{}", v.iter()
+                    .map(|x| format!("{x}"))
+                    .collect::<Vec<String>>()
+                    .join(" || "))
+            }
         }
     }
 }
@@ -2558,14 +2565,14 @@ fn unroll_eq(
         match rhs.get_type() {
             Type::Point => context.rules.push(UnrolledRule {
                 kind: UnrolledRuleKind::PointEq(lhs.convert()?, rhs.convert()?),
-                inverted: false,
+                inverted,
             }),
             Type::Scalar(_) => context.rules.push(UnrolledRule {
                 kind: UnrolledRuleKind::ScalarEq(
                     lhs.convert()?.specify_unit(),
                     rhs.convert()?.specify_unit(),
                 ),
-                inverted: false,
+                inverted,
             }),
             ty => {
                 return Err(Error::ComparisonDoesNotExist {
@@ -2598,7 +2605,7 @@ fn unroll_gt(
 
         context.rules.push(UnrolledRule {
             kind: UnrolledRuleKind::Gt(lhs, rhs),
-            inverted: false,
+            inverted,
         });
     } else if rhs.data.unit.is_some() {
         context.rules.push(UnrolledRule {
@@ -2637,7 +2644,7 @@ fn unroll_lt(
 
         context.rules.push(UnrolledRule {
             kind: UnrolledRuleKind::Lt(lhs, rhs),
-            inverted: false,
+            inverted,
         });
     } else if rhs.data.unit.is_some() {
         context.rules.push(UnrolledRule {
@@ -2720,7 +2727,7 @@ fn unroll_rule(
                 });
             };
 
-            def(&lhs, &rhs, context, None);
+            def(&lhs, &rhs, context, None, invert);
             Ok(())
         }
         RuleOperator::Inverted(op) => {
