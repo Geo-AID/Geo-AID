@@ -126,11 +126,8 @@ fn pt_lies_on_segment(
             kind: UnrolledRuleKind::Alternative(vec![
                 UnrolledRule {
                     kind: UnrolledRuleKind::ScalarEq(
-                        math!(
-                            +, distance!(PP: field!(POINT rhs, A), lhs),
-                            distance!(PP: field!(POINT rhs, B), lhs)
-                        ),
-                        distance!(PP: field!(POINT rhs, A), field!(POINT rhs, B))
+                        number!(=0.0),
+                        distance!(PL: point, line)
                     ),
                     inverted: true
                 },
