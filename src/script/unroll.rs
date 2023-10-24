@@ -810,7 +810,7 @@ pub enum UnrolledRuleKind {
     ScalarEq(Expr<Scalar>, Expr<Scalar>),
     Gt(Expr<Scalar>, Expr<Scalar>),
     Lt(Expr<Scalar>, Expr<Scalar>),
-    Alternative(Vec<UnrolledRule>)
+    Alternative(Vec<UnrolledRule>),
 }
 
 pub trait ConvertFrom<T> {
@@ -1876,10 +1876,14 @@ impl Display for UnrolledRule {
                 write!(f, "{a} {} {b}", if self.inverted { ">=" } else { "<" })
             }
             UnrolledRuleKind::Alternative(v) => {
-                write!(f, "{}", v.iter()
-                    .map(|x| format!("{x}"))
-                    .collect::<Vec<String>>()
-                    .join(" || "))
+                write!(
+                    f,
+                    "{}",
+                    v.iter()
+                        .map(|x| format!("{x}"))
+                        .collect::<Vec<String>>()
+                        .join(" || ")
+                )
             }
         }
     }

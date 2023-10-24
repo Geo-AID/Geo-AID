@@ -444,7 +444,7 @@ pub mod macros {
 
     pub(crate) use {
         angle_expr, average, bisector, call, circle_center, circle_expr, circle_radius,
-        construct_bundle, distance, entity, field, index, intersection, line2, math, number,
-        parallel_through, perpendicular_through, rule, set_unit, mneg
+        construct_bundle, distance, entity, field, index, intersection, line2, math, mneg, number,
+        parallel_through, perpendicular_through, rule, set_unit,
     };
 }

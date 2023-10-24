@@ -221,7 +221,7 @@ pub fn draw(target: &Path, canvas_size: (usize, usize), output: &Output) {
             Rendered::Angle(angle) => angles(angle, scale, output, item),
             Rendered::Segment(segment) => segments(segment, scale, item),
             Rendered::Ray(ray) => rays(ray, scale, item),
-            Rendered::Circle(circle) => circles(circle, scale, item)
+            Rendered::Circle(circle) => circles(circle, scale, item),
         }
     }
     content += "\\end{tikzpicture} \\end{document}";

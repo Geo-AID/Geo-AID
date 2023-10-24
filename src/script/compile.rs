@@ -214,7 +214,7 @@ struct Compiler {
     context: CompileContext,
     template: Vec<AdjustableTemplate>,
     // Specifically for bounds.
-    adjustable_points: Vec<Arc<Expression<PointExpr>>>
+    adjustable_points: Vec<Arc<Expression<PointExpr>>>,
 }
 
 impl Compiler {
@@ -241,7 +241,7 @@ impl Compiler {
             entities,
             context,
             template: Vec::new(),
-            adjustable_points: Vec::new()
+            adjustable_points: Vec::new(),
         }
     }
 
@@ -839,7 +839,12 @@ pub fn compile(
     // println!("{:#?}", criteria);
 
     // Add standard bounds
-    add_bounds(&compiler.template, &compiler.adjustable_points, &mut criteria, &flags);
+    add_bounds(
+        &compiler.template,
+        &compiler.adjustable_points,
+        &mut criteria,
+        &flags,
+    );
 
     // Print the compiled (debugging)
     // for rule in &criteria {

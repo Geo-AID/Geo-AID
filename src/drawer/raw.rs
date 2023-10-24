@@ -29,7 +29,10 @@ use crate::{
         Output, Rendered, RenderedAngle, RenderedCircle, RenderedLine, RenderedPoint, RenderedRay,
         RenderedSegment,
     },
-    script::{HashableArc, figure::Mode::{self, Bolded, Dashed, Default, Dotted}},
+    script::{
+        figure::Mode::{self, Bolded, Dashed, Default, Dotted},
+        HashableArc,
+    },
 };
 
 /// Function getting the point's name (if it exists, otherwise it returns the point's coordinates).
@@ -73,7 +76,12 @@ fn lines(mut file: &File, line: &RenderedLine, rendered: &Rendered) {
         format!(
             "\nline: label - \"{}\", 
             x and y coordinates of the two points - ({:.3}, {:.3}) and ({:.3}, {:.3}), mode: {}",
-            line.label, p1.real, p1.imaginary, p2.real, p2.imaginary, assign_mode(rendered, line.mode)
+            line.label,
+            p1.real,
+            p1.imaginary,
+            p2.real,
+            p2.imaginary,
+            assign_mode(rendered, line.mode)
         )
         .as_bytes(),
     )
@@ -133,14 +141,17 @@ fn circles(mut file: &File, circle: &RenderedCircle, rendered: &Rendered) {
     file.write_all(
         format!(
             "\ncircle: center - ({:.3}, {:.3}) radius - {:.3}, mode: {}",
-            circle.center.real, circle.center.imaginary, circle.radius, assign_mode(rendered, circle.mode)
+            circle.center.real,
+            circle.center.imaginary,
+            circle.radius,
+            assign_mode(rendered, circle.mode)
         )
         .as_bytes(),
     )
     .unwrap();
 }
 
-/// Outputs a file which can be read 
+/// Outputs a file which can be read
 ///
 /// # Panics
 /// Panics whenever there is a filesystem problem

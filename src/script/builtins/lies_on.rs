@@ -22,9 +22,11 @@ use geo_aid_derive::overload;
 use std::rc::Rc;
 
 use crate::script::builtins::macros::{distance, field, line2};
-use crate::script::unroll::{Bundle, Circle, Line, Point, PointCollection, Simplify, UnrolledRule, UnrolledRuleKind};
+use crate::script::unroll::{
+    Bundle, Circle, Line, Point, PointCollection, Simplify, UnrolledRule, UnrolledRuleKind,
+};
 use crate::script::{
-    builtins::macros::{angle_expr, index, math, number, rule, circle_center, circle_radius},
+    builtins::macros::{angle_expr, circle_center, circle_radius, index, math, number, rule},
     unroll::{CompileContext, Expr, Library, Properties, Rule},
 };
 
@@ -33,7 +35,7 @@ fn pt_lies_on_circle(
     rhs: &Expr<Circle>,
     context: &mut CompileContext,
     properties: Option<Properties>,
-    invert: bool
+    invert: bool,
 ) {
     drop(properties);
 
@@ -55,7 +57,7 @@ fn pt_lies_on_line(
     rhs: &Expr<Line>,
     context: &mut CompileContext,
     properties: Option<Properties>,
-    invert: bool
+    invert: bool,
 ) {
     drop(properties);
 
@@ -77,7 +79,7 @@ fn col_lies_on_circle(
     rhs: &Expr<Circle>,
     context: &mut CompileContext,
     properties: Option<Properties>,
-    invert: bool
+    invert: bool,
 ) {
     drop(properties);
     let len = lhs.data.length;
@@ -113,7 +115,7 @@ fn pt_lies_on_segment(
     rhs: &Expr<Bundle>,
     context: &mut CompileContext,
     properties: Option<Properties>,
-    invert: bool
+    invert: bool,
 ) {
     drop(properties);
 
@@ -125,11 +127,8 @@ fn pt_lies_on_segment(
         context.rules.push(UnrolledRule {
             kind: UnrolledRuleKind::Alternative(vec![
                 UnrolledRule {
-                    kind: UnrolledRuleKind::ScalarEq(
-                        number!(=0.0),
-                        distance!(PL: point, line)
-                    ),
-                    inverted: true
+                    kind: UnrolledRuleKind::ScalarEq(number!(=0.0), distance!(PL: point, line)),
+                    inverted: true,
                 },
                 UnrolledRule {
                     kind: UnrolledRuleKind::ScalarEq(
@@ -137,12 +136,12 @@ fn pt_lies_on_segment(
                             +, distance!(PP: field!(POINT rhs, A), lhs),
                             distance!(PP: field!(POINT rhs, B), lhs)
                         ),
-                        distance!(PP: field!(POINT rhs, A), field!(POINT rhs, B))
+                        distance!(PP: field!(POINT rhs, A), field!(POINT rhs, B)),
                     ),
-                    inverted: true
-                }
+                    inverted: true,
+                },
             ]),
-            inverted: false
+            inverted: false,
         });
     } else {
         context.point_on_line(&point, &line);

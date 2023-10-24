@@ -77,7 +77,7 @@ struct Args {
     #[arg(long, short)]
     log: Option<PathBuf>,
     #[arg(long, hide = true)]
-    markdown_help: Option<PathBuf>
+    markdown_help: Option<PathBuf>,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum, Debug)]

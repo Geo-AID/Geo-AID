@@ -162,14 +162,9 @@ fn evaluate_single(
         }
         CriteriaKind::Bias(expr) => (1.0, expr.weights.clone().0),
         CriteriaKind::Alternative(rules) => {
-            let mut evaluated = rules.iter().map(|x| evaluate_single(
-                &x.object,
-                adjustables,
-                logger,
-                generation,
-                flags,
-                cache
-            ));
+            let mut evaluated = rules
+                .iter()
+                .map(|x| evaluate_single(&x.object, adjustables, logger, generation, flags, cache));
 
             let mut max = evaluated.next().unwrap();
 

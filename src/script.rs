@@ -619,7 +619,7 @@ pub enum CriteriaKind {
     /// Bias. Always evaluates to 1.0. Artificially raises quality for everything contained  in the arc.
     Bias(Arc<Expression<AnyExpr>>),
     /// Maximal quality of the given rules.
-    Alternative(Vec<Criteria>)
+    Alternative(Vec<Criteria>),
 }
 
 impl CriteriaKind {
