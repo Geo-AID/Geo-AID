@@ -45,9 +45,9 @@ use crate::{
     span,
 };
 
-use super::figure::Mode;
+use super::unroll::UnrolledRule;
 use super::{
-    figure::Figure,
+    figure::{Figure, Mode},
     unroll::{
         self, CompileContext, EntCircle, EntLine, EntPoint, EntScalar, Entity, Expr, Flag,
         LabelMeta, UnrolledRuleKind, Variable,
@@ -213,6 +213,8 @@ struct Compiler {
     dst_var: Expr<Scalar>,
     context: CompileContext,
     template: Vec<AdjustableTemplate>,
+    // Specifically for bounds.
+    adjustable_points: Vec<Arc<Expression<PointExpr>>>,
 }
 
 impl Compiler {
@@ -239,6 +241,7 @@ impl Compiler {
             entities,
             context,
             template: Vec::new(),
+            adjustable_points: Vec::new(),
         }
     }
 
@@ -489,32 +492,38 @@ impl Compiler {
                     Entity::Point(v) => CompiledEntity::Point(match v {
                         EntPoint::Free => {
                             self.template.push(AdjustableTemplate::Point);
-                            Arc::new(Expression::new(
+                            let expr = Arc::new(Expression::new(
                                 PointExpr::Free(FreePoint {
                                     index: self.template.len() - 1,
                                 }),
                                 FastFloat::One,
-                            ))
+                            ));
+                            self.adjustable_points.push(Arc::clone(&expr));
+                            expr
                         }
                         EntPoint::OnCircle(circle) => {
                             self.template.push(AdjustableTemplate::PointOnCircle);
-                            Arc::new(Expression::new(
+                            let expr = Arc::new(Expression::new(
                                 PointExpr::OnCircle(PointOnCircle {
                                     index: self.template.len() - 1,
                                     circle: self.compile(circle),
                                 }),
                                 FastFloat::One,
-                            ))
+                            ));
+                            self.adjustable_points.push(Arc::clone(&expr));
+                            expr
                         }
                         EntPoint::OnLine(line) => {
                             self.template.push(AdjustableTemplate::PointOnLine);
-                            Arc::new(Expression::new(
+                            let expr = Arc::new(Expression::new(
                                 PointExpr::OnLine(PointOnLine {
                                     index: self.template.len() - 1,
                                     line: self.compile(line),
                                 }),
                                 FastFloat::One,
-                            ))
+                            ));
+                            self.adjustable_points.push(Arc::clone(&expr));
+                            expr
                         }
                         EntPoint::Bind(expr) => self.compile(expr),
                     }),
@@ -533,50 +542,56 @@ impl Compiler {
         }
     }
 
+    fn compile_rule_vec(&mut self, rules: &[UnrolledRule]) -> Vec<Criteria> {
+        rules.iter().map(|rule| self.compile_rule(rule)).collect()
+    }
+
+    fn compile_rule(&mut self, rule: &UnrolledRule) -> Criteria {
+        let crit = match &rule.kind {
+            UnrolledRuleKind::PointEq(lhs, rhs) => {
+                let lhs = self.compile(lhs);
+                let rhs = self.compile(rhs);
+
+                Weighed::one(CriteriaKind::EqualPoint(lhs, rhs))
+            }
+            UnrolledRuleKind::ScalarEq(lhs, rhs) => {
+                let lhs = self.compile(lhs);
+                let rhs = self.compile(rhs);
+
+                Weighed::one(CriteriaKind::EqualScalar(lhs, rhs))
+            }
+            UnrolledRuleKind::Gt(lhs, rhs) => {
+                let lhs = self.compile(lhs);
+                let rhs = self.compile(rhs);
+
+                Weighed::one(CriteriaKind::Greater(lhs, rhs))
+            }
+            UnrolledRuleKind::Lt(lhs, rhs) => {
+                let lhs = self.compile(lhs);
+                let rhs = self.compile(rhs);
+
+                Weighed::one(CriteriaKind::Less(lhs, rhs))
+            }
+            UnrolledRuleKind::Alternative(rules) => {
+                Weighed::one(CriteriaKind::Alternative(self.compile_rule_vec(rules)))
+            }
+        };
+
+        if rule.inverted {
+            Weighed {
+                object: CriteriaKind::Inverse(Box::new(crit.object)),
+                weight: crit.weight,
+            }
+        } else {
+            crit
+        }
+    }
+
     #[must_use]
     fn compile_rules(&mut self) -> Vec<Criteria> {
         let rules = mem::take(&mut self.context.rules);
 
-        rules
-            .iter()
-            .map(|rule| {
-                let crit = match &rule.kind {
-                    UnrolledRuleKind::PointEq(lhs, rhs) => {
-                        let lhs = self.compile(lhs);
-                        let rhs = self.compile(rhs);
-
-                        Weighed::one(CriteriaKind::EqualPoint(lhs, rhs))
-                    }
-                    UnrolledRuleKind::ScalarEq(lhs, rhs) => {
-                        let lhs = self.compile(lhs);
-                        let rhs = self.compile(rhs);
-
-                        Weighed::one(CriteriaKind::EqualScalar(lhs, rhs))
-                    }
-                    UnrolledRuleKind::Gt(lhs, rhs) => {
-                        let lhs = self.compile(lhs);
-                        let rhs = self.compile(rhs);
-
-                        Weighed::one(CriteriaKind::Greater(lhs, rhs))
-                    }
-                    UnrolledRuleKind::Lt(lhs, rhs) => {
-                        let lhs = self.compile(lhs);
-                        let rhs = self.compile(rhs);
-
-                        Weighed::one(CriteriaKind::Less(lhs, rhs))
-                    }
-                };
-
-                if rule.inverted {
-                    Weighed {
-                        object: CriteriaKind::Inverse(Box::new(crit.object)),
-                        weight: crit.weight,
-                    }
-                } else {
-                    crit
-                }
-            })
-            .collect()
+        self.compile_rule_vec(&rules)
     }
 
     /// Builds an actual figure.
@@ -797,15 +812,10 @@ pub fn compile(
 
     let flags = read_flags(&context.flags);
 
-    // Print variables (debugging)
-    // for var in context.variables.values() {
-    //     println!("let {} = {}", var.name, var.definition);
-    // }
-
     // Print rules (debugging)
-    // for rule in &unrolled {
-    //     println!("{rule}");
-    // }
+    for rule in &context.rules {
+        println!("{}: {rule}", rule.inverted);
+    }
 
     let mut compiler = Compiler::new(context);
 
@@ -826,8 +836,15 @@ pub fn compile(
         });
     }
 
+    // println!("{:#?}", criteria);
+
     // Add standard bounds
-    add_bounds(&compiler.template, &mut criteria, &flags);
+    add_bounds(
+        &compiler.template,
+        &compiler.adjustable_points,
+        &mut criteria,
+        &flags,
+    );
 
     // Print the compiled (debugging)
     // for rule in &criteria {
@@ -841,11 +858,14 @@ pub fn compile(
 /// Inequality principle and the point plane limit.
 fn add_bounds(
     template: &[AdjustableTemplate],
+    points: &[Arc<Expression<PointExpr>>],
     criteria: &mut Vec<Weighed<CriteriaKind>>,
     flags: &Flags,
 ) {
     // Point inequality principle.
     for (i, _) in template.iter().enumerate().filter(|v: _| v.1.is_point()) {
+        let point = Arc::clone(&points[i]);
+
         // For each of the next points, add an inequality rule.
         for (j, _) in template
             .iter()
@@ -856,14 +876,8 @@ fn add_bounds(
             // println!("{i} != {j}");
             criteria.push(Weighed {
                 object: CriteriaKind::Inverse(Box::new(CriteriaKind::EqualPoint(
-                    Arc::new(Expression {
-                        weights: Weights::one_at(i),
-                        kind: PointExpr::Free(FreePoint { index: i }),
-                    }),
-                    Arc::new(Expression {
-                        weights: Weights::one_at(j),
-                        kind: PointExpr::Free(FreePoint { index: j }),
-                    }),
+                    Arc::clone(&point),
+                    Arc::clone(&points[j]),
                 ))),
                 weight: FastFloat::One,
             });
@@ -876,10 +890,7 @@ fn add_bounds(
                     Arc::new(Expression {
                         weights: Weights::one_at(i),
                         kind: ScalarExpr::PointX(PointX {
-                            point: Arc::new(Expression {
-                                weights: Weights::one_at(i),
-                                kind: PointExpr::Free(FreePoint { index: i }),
-                            }),
+                            point: Arc::clone(&point),
                         }),
                     }),
                     Arc::new(Expression {
@@ -895,10 +906,7 @@ fn add_bounds(
                     Arc::new(Expression {
                         weights: Weights::one_at(i),
                         kind: ScalarExpr::PointY(PointY {
-                            point: Arc::new(Expression {
-                                weights: Weights::one_at(i),
-                                kind: PointExpr::Free(FreePoint { index: i }),
-                            }),
+                            point: Arc::clone(&point),
                         }),
                     }),
                     Arc::new(Expression {
@@ -914,10 +922,7 @@ fn add_bounds(
                     Arc::new(Expression {
                         weights: Weights::one_at(i),
                         kind: ScalarExpr::PointX(PointX {
-                            point: Arc::new(Expression {
-                                weights: Weights::one_at(i),
-                                kind: PointExpr::Free(FreePoint { index: i }),
-                            }),
+                            point: Arc::clone(&point),
                         }),
                     }),
                     Arc::new(Expression {
@@ -933,10 +938,7 @@ fn add_bounds(
                     Arc::new(Expression {
                         weights: Weights::one_at(i),
                         kind: ScalarExpr::PointY(PointY {
-                            point: Arc::new(Expression {
-                                weights: Weights::one_at(i),
-                                kind: PointExpr::Free(FreePoint { index: i }),
-                            }),
+                            point: Arc::clone(&point),
                         }),
                     }),
                     Arc::new(Expression {

@@ -618,6 +618,8 @@ pub enum CriteriaKind {
     Inverse(Box<CriteriaKind>),
     /// Bias. Always evaluates to 1.0. Artificially raises quality for everything contained  in the arc.
     Bias(Arc<Expression<AnyExpr>>),
+    /// Maximal quality of the given rules.
+    Alternative(Vec<Criteria>),
 }
 
 impl CriteriaKind {
@@ -634,6 +636,11 @@ impl CriteriaKind {
             CriteriaKind::EqualPoint(lhs, rhs) => {
                 lhs.collect(exprs);
                 rhs.collect(exprs);
+            }
+            CriteriaKind::Alternative(v) => {
+                for crit in v {
+                    crit.object.collect(exprs);
+                }
             }
         }
     }

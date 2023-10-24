@@ -65,7 +65,7 @@ struct Args {
     #[arg(long, short, default_value_t = 0.5)]
     adjustment_max: f64,
     /// Renderer to use.
-    #[arg(long, short, default_value_t = Renderer::Latex, value_enum)]
+    #[arg(long, short, default_value_t = Renderer::Svg, value_enum)]
     renderer: Renderer,
     /// Canvas width
     #[arg(long, default_value_t = 500)]
@@ -77,7 +77,7 @@ struct Args {
     #[arg(long, short)]
     log: Option<PathBuf>,
     #[arg(long, hide = true)]
-    markdown_help: Option<PathBuf>
+    markdown_help: Option<PathBuf>,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum, Debug)]

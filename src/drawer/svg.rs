@@ -25,7 +25,8 @@ use crate::{
     projector::{
         Output, Rendered, RenderedAngle, RenderedCircle, RenderedLine, RenderedPoint, RenderedRay,
         RenderedSegment,
-    }, script::figure::Mode::{self, Dotted, Dashed, Bolded, Default},
+    },
+    script::figure::Mode::{self, Bolded, Dashed, Default, Dotted},
 };
 
 /// Function that assigns modes to the rendered variants.
@@ -35,19 +36,11 @@ fn assign_mode(rendered: &Rendered, mode: Mode) -> (String, String) {
     match rendered {
         Rendered::Point(_) => unreachable!(),
         _ => match mode {
-            Dotted => {
-                (default_width, "0.8,1".to_string())
-            }
-            Dashed => {
-                (default_width, "2,2".to_string())
-            }
-            Bolded => {
-                ("2".to_string(), default_strarray)
-            }
-            Default => {
-                ("1".to_string(), default_strarray)
-            }
-        }
+            Dotted => (default_width, "0.8,1".to_string()),
+            Dashed => (default_width, "2,2".to_string()),
+            Bolded => ("2".to_string(), default_strarray),
+            Default => ("1".to_string(), default_strarray),
+        },
     }
 }
 
@@ -81,7 +74,12 @@ fn lines(ln: &RenderedLine, rendered: &Rendered) -> String {
         r#"
         <line stroke-width="{}" stroke-dasharray="{}" stroke="black" x1="{}" x2="{}" y1="{}" y2="{}"/>
         "#,
-        assign_mode(rendered, ln.mode).0, assign_mode(rendered, ln.mode).1, p1.real, p2.real, p1.imaginary, p2.imaginary
+        assign_mode(rendered, ln.mode).0,
+        assign_mode(rendered, ln.mode).1,
+        p1.real,
+        p2.real,
+        p1.imaginary,
+        p2.imaginary
     )
 }
 
@@ -140,7 +138,11 @@ fn circles(circle: &RenderedCircle, rendered: &Rendered) -> String {
         r#"
             <circle cx="{}" cy="{}" r="{}" stroke="black" stroke-width="{}" stroke-dasharray="{}" fill="transparent"/>
         "#,
-        circle.center.real, circle.center.imaginary, circle.radius, assign_mode(rendered, circle.mode).0, assign_mode(rendered, circle.mode).1
+        circle.center.real,
+        circle.center.imaginary,
+        circle.radius,
+        assign_mode(rendered, circle.mode).0,
+        assign_mode(rendered, circle.mode).1
     )
 }
 

@@ -246,6 +246,16 @@ pub mod macros {
                 }),
             }
         };
+        (+, $a:expr, $b:expr) => {
+            $crate::script::unroll::Expr {
+                weight: $crate::generator::fast_float::FastFloat::One,
+                span: $crate::span!(0, 0, 0, 0),
+                data: std::rc::Rc::new($crate::script::unroll::Scalar {
+                    unit: $a.data.unit,
+                    data: $crate::script::unroll::ScalarData::Add($a.clone(), $b.clone()),
+                }),
+            }
+        };
     }
 
     macro_rules! number {
@@ -393,39 +403,48 @@ pub mod macros {
         };
     }
 
+    macro_rules! mneg {
+        (neg = $neg:expr) => {
+            $neg
+        };
+        () => {
+            false
+        };
+    }
+
     macro_rules! rule {
-        ($context:ident : $rule_op:ident($lhs:expr, $rhs:expr)) => {
-            $rule_op(&$lhs, &$rhs, $context, None)
+        ($context:ident : $rule_op:ident($lhs:expr, $rhs:expr) $(neg = $neg:expr)?) => {
+            $rule_op(&$lhs, &$rhs, $context, None, $crate::script::builtins::macros::mneg!($(neg = $neg)?))
         };
-        ($context:ident : $rule_op:ident($lhs:expr, $rhs:expr); $props:expr) => {
-            $rule_op(&$lhs, &$rhs, $context, $props)
+        ($context:ident : $rule_op:ident($lhs:expr, $rhs:expr); $props:expr; $(neg = $neg:expr)?) => {
+            $rule_op(&$lhs, &$rhs, $context, $props, $crate::script::builtins::macros::mneg!($(neg = $neg)?))
         };
-        ($context:ident : > ($lhs:expr, $rhs:expr)) => {
+        ($context:ident : > ($lhs:expr, $rhs:expr) $(neg = $neg:expr)?) => {
             $context.rules.push($crate::script::unroll::UnrolledRule {
                 kind: $crate::script::unroll::UnrolledRuleKind::Gt($lhs.clone(), $rhs.clone()),
-                inverted: false,
+                inverted: $crate::script::builtins::macros::mneg!($(neg = $neg)?),
             })
         };
-        ($context:ident : S= ($lhs:expr, $rhs:expr)) => {
+        ($context:ident : S = ($lhs:expr, $rhs:expr) $(neg = $neg:expr)?) => {
             $context.rules.push($crate::script::unroll::UnrolledRule {
                 kind: $crate::script::unroll::UnrolledRuleKind::ScalarEq(
                     $lhs.clone(),
                     $rhs.clone(),
                 ),
-                inverted: false,
+                inverted: $crate::script::builtins::macros::mneg!($(neg = $neg)?),
             })
         };
-        ($context:ident : P= ($lhs:expr, $rhs:expr)) => {
+        ($context:ident : P  = ($lhs:expr, $rhs:expr) $(neg = $neg:expr)?) => {
             $context.rules.push($crate::script::unroll::UnrolledRule {
                 kind: $crate::script::unroll::UnrolledRuleKind::PointEq($lhs.clone(), $rhs.clone()),
-                inverted: false,
+                inverted: $crate::script::builtins::macros::mneg!($(neg = $neg)?),
             })
         };
     }
 
     pub(crate) use {
         angle_expr, average, bisector, call, circle_center, circle_expr, circle_radius,
-        construct_bundle, distance, entity, field, index, intersection, line2, math, number,
+        construct_bundle, distance, entity, field, index, intersection, line2, math, mneg, number,
         parallel_through, perpendicular_through, rule, set_unit,
     };
 }

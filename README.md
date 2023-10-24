@@ -26,3 +26,7 @@ and run it with
 ```
 geo-aid <arguments here, type --help for help>.
 ```
+
+## Useful resources
+
+You can access the Geo-AID book through the git repository, by opening the file at `geo-aid-book/book/index.html`.

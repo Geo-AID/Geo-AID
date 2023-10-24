@@ -54,3 +54,8 @@
 
 ## Version 0.2.6
 - Added drawing modes for lines, segments, rays, angles and circles (dashed, dotted, bolded, default)
+- Fixed that any file involving the `lies_on` rule would inevitably crash because of point equality prevention rules.
+- Fixed that negating some normal rules would not actually negate them.
+- Fixed that negating `lies_on` would not actually negate it (no effect would be achieved).
+- The `SVG` drawing option is now default.
+- Updated README to contain information about the book.
