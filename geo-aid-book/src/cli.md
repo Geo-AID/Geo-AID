@@ -29,7 +29,7 @@
   Default value: `0.5`
 * `-r`, `--renderer <RENDERER>` — What renderer to use.
 
-  Default value: `latex`
+  Default value: `svg`
 
   Possible values:
   - `latex`:
