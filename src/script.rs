@@ -35,7 +35,7 @@ use crate::{
     span,
 };
 
-use self::parser::Type;
+use self::{parser::Type, figure::{SPECIAL_MATH, MathSpecial}};
 use self::token::{NamedIdent, Span, Token};
 
 mod builtins;
@@ -44,7 +44,6 @@ pub mod figure;
 pub mod parser;
 pub mod token;
 pub mod unroll;
-
 #[derive(Debug)]
 pub enum Error {
     InvalidToken {
@@ -179,6 +178,25 @@ pub enum Error {
         error_span: Span,
         ty: Type,
     },
+    EmptyLabel {
+        error_span: Span
+    },
+    UnclosedBrace {
+        error_span: Span,
+        parsed_special: String
+    },
+    SpecialNotRecongised {
+        error_span: Span,
+        code: String,
+        suggested: Option<&'static str>
+    },
+    LabelMustStartWithAlphabetic {
+        error_span: Span,
+        special: MathSpecial
+    },
+    LabelIndexInsideIndex {
+        error_span: Span
+    }
 }
 
 impl Error {
@@ -414,6 +432,40 @@ impl Error {
             Self::ComparisonDoesNotExist { error_span, ty } => {
                 DiagnosticData::new(&format!("Comparison between values of type {ty} does not exist."))
                     .add_span(error_span)
+            }
+            Self::EmptyLabel { error_span } => {
+                DiagnosticData::new(&"Labels cannot be empty.")
+                    .add_span(error_span)
+            }
+            Self::LabelMustStartUppercase { error_span } => {
+                DiagnosticData::new(&"Point labels must start with an uppercase letter.")
+                    .add_span(error_span)
+            }
+            Self::UnclosedBrace { error_span, parsed_special } => {
+                // Try to figure out if any of the chars could show up here.
+                let found = SPECIAL_MATH.iter().find(|x| parsed_special.starts_with(*x));
+
+                let mut d = DiagnosticData::new(&"There's a missing ']' somewhere here. Braces denote special characters To escape a brace, use \\[.")
+                    .add_span(error_span);
+
+                if let Some(found) = found {
+                    d.add_fix(Fix {
+                        message: String::from("You may have forgotten to put a `]` here."),
+                        changes: vec![
+                            Change {
+                                span: span!(
+                                    error_span.start.line, error_span.start.column + found.len() + 1,
+                                    error_span.start.line, error_span.start.column + found.len() + 1
+                                ),
+                                new_content: vec![
+                                    format!("]")
+                                ]
+                            }
+                        ]
+                    });
+                }
+
+                d
             }
         }
     }

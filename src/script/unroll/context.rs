@@ -23,14 +23,11 @@ use std::{collections::HashMap, fmt::Debug};
 
 use crate::script::builtins::macros::{intersection, number};
 use crate::script::unroll::{AnyExpr, Simplify};
-use crate::script::{
-    builtins::macros::{circle_center, circle_radius, distance, rule},
-    compile::PreFigure,
-};
+use crate::script::builtins::macros::{circle_center, circle_radius, distance, rule};
 
 use super::{
     Circle as UnrolledCircle, Expr, FlagSet, FlagSetConstructor, Line as UnrolledLine,
-    Point as UnrolledPoint, Scalar as UnrolledScalar, UnrolledRule,
+    Point as UnrolledPoint, Scalar as UnrolledScalar, UnrolledRule
 };
 
 /// For everything that can have an order (how modifiable the entity is).
@@ -174,9 +171,7 @@ pub struct CompileContext {
     /// Entities (primitives).
     pub entities: Vec<Entity>,
     /// Unrolled rules
-    pub rules: Vec<UnrolledRule>,
-    /// Pre-compiled figure
-    pub figure: PreFigure,
+    pub rules: Vec<UnrolledRule>
 }
 
 impl Default for CompileContext {
@@ -198,8 +193,7 @@ impl CompileContext {
                 .add_bool_def(&"point_bounds", false)
                 .finish(),
             entities: vec![],
-            rules: Vec::new(),
-            figure: PreFigure::default(),
+            rules: Vec::new()
         }
     }
 

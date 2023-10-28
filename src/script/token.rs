@@ -25,7 +25,7 @@ use super::{parser::Parse, Error};
 #[cfg(test)]
 mod tests {
     use crate::{
-        script::token::{Dot, Eq, Ident, Let, NamedIdent, Number, PointCollection, Semi},
+        script::token::{Dot, Eq, Ident, Let, NamedIdent, Number, PointCollection, Semi, PointCollectionItem},
         span,
     };
 
@@ -46,7 +46,8 @@ let ABC = Triangle;
                 }),
                 Token::Ident(Ident::Named(NamedIdent {
                     ident: String::from("x"),
-                    span: span!(1, 5, 1, 6)
+                    span: span!(1, 5, 1, 6),
+                    collection_likeness: 0.0
                 })),
                 Token::Eq(Eq {
                     span: span!(1, 7, 1, 8)
@@ -66,7 +67,8 @@ let ABC = Triangle;
                 }),
                 Token::Ident(Ident::Named(NamedIdent {
                     ident: String::from("y"),
-                    span: span!(2, 5, 2, 6)
+                    span: span!(2, 5, 2, 6),
+                    collection_likeness: 0.0
                 })),
                 Token::Eq(Eq {
                     span: span!(2, 7, 2, 8)
@@ -87,7 +89,26 @@ let ABC = Triangle;
                     span: span!(3, 1, 3, 4)
                 }),
                 Token::Ident(Ident::Collection(PointCollection {
-                    collection: vec![('A', 0), ('B', 0), ('C', 0),],
+                    collection: vec![
+                        PointCollectionItem {
+                            letter: 'A',
+                            index: None,
+                            primes: 0,
+                            span: span!(3, 5, 3, 6)
+                        },
+                        PointCollectionItem {
+                            letter: 'B',
+                            index: None,
+                            primes: 0,
+                            span: span!(3, 6, 3, 7)
+                        },
+                        PointCollectionItem {
+                            letter: 'B',
+                            index: None,
+                            primes: 0,
+                            span: span!(3, 7, 3, 8)
+                        }
+                    ],
                     span: span!(3, 5, 3, 8)
                 })),
                 Token::Eq(Eq {
@@ -95,7 +116,8 @@ let ABC = Triangle;
                 }),
                 Token::Ident(Ident::Named(NamedIdent {
                     ident: String::from("Triangle"),
-                    span: span!(3, 11, 3, 19)
+                    span: span!(3, 11, 3, 19),
+                    collection_likeness: 0.0
                 })),
                 Token::Semi(Semi {
                     span: span!(3, 19, 3, 20)
@@ -413,11 +435,7 @@ impl Display for Token {
                 "{}",
                 match ident {
                     Ident::Named(named) => named.ident.clone(),
-                    Ident::Collection(col) => col
-                        .collection
-                        .iter()
-                        .map(|(letter, primes)| format!("{letter}{}", "'".repeat(*primes as usize)))
-                        .collect::<String>(),
+                    Ident::Collection(col) => format!("{col}")
                 }
             ),
             Self::Number(num) => match num.dot {
@@ -470,16 +488,38 @@ impl Token {
 }
 
 /// A name.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub struct NamedIdent {
     pub span: Span,
     pub ident: String,
+    pub collection_likeness: f64
+}
+
+impl PartialEq for NamedIdent {
+    fn eq(&self, other: &Self) -> bool {
+        self.span == other.span && self.ident == other.ident
+    }
+}
+
+impl std::cmp::Eq for NamedIdent {}
+
+/// An item of a point collection.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PointCollectionItem {
+    /// The point's letter
+    pub letter: char,
+    /// The point's optional index.
+    pub index: Option<String>,
+    /// The prime count.
+    pub primes: u8,
+    /// The span of the point
+    pub span: Span
 }
 
 /// A point collection composed of point characters and the number of `'` characters following them.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PointCollection {
-    pub collection: Vec<(char, u8)>,
+    pub collection: Vec<PointCollectionItem>,
     pub span: Span,
 }
 
@@ -497,11 +537,19 @@ impl PointCollection {
 
 impl Display for PointCollection {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        for (c, p) in &self.collection {
-            write!(f, "{c}{:'^1$}", "", usize::from(*p))?;
-        }
-
-        Ok(())
+        write!(
+            f,
+            "{}",
+            self.collection
+                .iter()
+                .map(|item| format!(
+                    "{}{}{}",
+                    item.letter,
+                    "'".repeat(item.primes as usize),
+                    item.index.map_or(String::new(), |x| format!("_{x}"))
+                ))
+                .collect::<String>()
+        )
     }
 }
 
@@ -649,14 +697,68 @@ fn dispatch_ident(sp: Span, ident: String) -> Ident {
         span: sp,
     };
 
-    for c in ident.chars() {
-        if c.is_uppercase() {
-            collection.collection.push((c, 0));
-        } else if c == '\'' && !collection.collection.is_empty() {
-            collection.collection.last_mut().unwrap().1 += 1;
-        } else {
-            return Ident::Named(NamedIdent { span: sp, ident });
+    let mut chars = ident.chars().peekable();
+    let mut offset = 0;
+
+    // If the point collection is not a point collection, we mark this true
+    let mut ret_ident = false;
+
+    let mut invalid = 0;
+
+    while let Some(letter) = chars.next() {
+        if !letter.is_ascii_uppercase() {
+            ret_ident = true;
+            invalid += 1;
         }
+
+        let mut len = 1;
+        let mut primes = 0;
+
+        while let Some('\'') = chars.peek().copied() {
+            primes += 1;
+            len += 1;
+            chars.next();
+        }
+
+        let index = if chars.peek().copied() == Some('_') {
+            chars.next();
+            len += 1;
+            let mut index = String::new();
+
+            while chars.peek().is_some_and(char::is_ascii_digit) {
+                len += 1;
+                index.push(chars.next().unwrap());
+            }
+
+            if index.is_empty() {
+                // Assume index exists, go on
+                ret_ident = true;
+                invalid += 1;
+            }
+
+            Some(index)
+        } else {
+            None
+        };
+
+        collection.collection.push(PointCollectionItem {
+            letter,
+            index,
+            primes,
+            span: span!(sp.start.line, sp.start.column + offset, sp.start.line, sp.start.column + offset + len)
+        });
+
+        offset += len;
+    }
+
+    invalid += chars.count();
+
+    if invalid > 0 {
+        return Ident::Named(NamedIdent {
+            span: sp,
+            ident,
+            collection_likeness: (offset - invalid) as f64 / (offset as f64)
+        });
     }
 
     Ident::Collection(collection)

@@ -51,54 +51,17 @@ use super::{
 };
 
 mod context;
+mod figure;
+
+pub use figure::{
+    Node as FigureNode, Object as FigureObject, Point as FigurePoint
+};
 
 /// A definition for a user-defined rule operator.
 #[derive(Debug)]
 pub struct RuleOperatorDefinition {
     /// Operator's name.
     pub name: String,
-}
-
-/// Meta info about a point.
-#[derive(Debug, Clone)]
-pub struct LabelMeta {
-    /// The letter of a point.
-    pub letter: char,
-    /// The count of `'` in the point's name.
-    pub primes: u8,
-    /// The point index.
-    pub index: Option<u16>,
-}
-
-/// A point in variable meta.
-#[derive(Debug, Clone)]
-pub struct PointMeta {
-    /// A point meta is optional, since not every point has a letter.
-    pub meta: Option<LabelMeta>,
-    /// Whether or not to display the point.
-    pub display: bool,
-}
-
-/// Defines meta information about variables, mostly in regard to the displaying of them.
-#[derive(Debug)]
-pub enum VariableMeta {
-    /// Point variable
-    Point(PointMeta),
-    Scalar,
-    Line,
-    PointCollection,
-    Circle,
-}
-
-impl VariableMeta {
-    #[must_use]
-    pub fn as_point(&self) -> Option<&PointMeta> {
-        if let Self::Point(v) = self {
-            Some(v)
-        } else {
-            None
-        }
-    }
 }
 
 /// A variable created with a let statement.
@@ -2214,45 +2177,71 @@ fn unroll_expression<const ITER: bool>(
 // }
 
 #[derive(Debug, Clone)]
-struct PointProperties {
-    display: bool,
-    label: String,
-}
+pub struct Properties(HashMap<String, PropertyValue>);
 
-impl PointProperties {
-    pub fn parse(props: Option<Properties>, default_label: String) -> Result<Self, Error> {
-        Ok(match props {
-            Some(mut props) => {
-                let display = props.get_bool("display", true)?;
-                let label = props.get_string("label", default_label)?;
+impl Properties {
+    fn get_bool(&mut self, property: &str) -> Result<Property<bool>, Error> {
+        self.0
+            .remove(property)
+            .as_ref()
+            .map_or(
+                Ok(Property { value: None }),
+                |x| Ok(Property {
+                    value: Some(RealProperty {
+                        value: x.as_bool()?,
+                        span: x.get_span()
+                    })
+                })
+            )
+    }
 
-                PointProperties { display, label }
-            }
-            None => PointProperties {
-                display: true,
-                label: default_label,
-            },
-        })
+    fn get_string(&mut self, property: &str) -> Result<Property<String>, Error> {
+        self.0
+            .remove(property)
+            .as_ref()
+            .map_or(
+                Ok(Property { value: None }),
+                |x| Ok(Property {
+                    value: Some(RealProperty {
+                        value: x.as_string()?,
+                        span: x.get_span()
+                    })
+                })
+            )
     }
 }
 
 #[derive(Debug, Clone)]
-pub struct Properties(HashMap<String, PropertyValue>);
+pub struct Property<T> {
+    value: Option<RealProperty<T>>
+}
 
-impl Properties {
-    fn get_bool(&mut self, property: &str, default: bool) -> Result<bool, Error> {
-        self.0
-            .remove(property)
-            .as_ref()
-            .map_or(Ok(default), PropertyValue::as_bool)
+impl<T> Property<T> {
+    #[must_use]
+    pub fn get(self) -> Option<T> {
+        self.value.map(|x| x.value)
     }
 
-    fn get_string(&mut self, property: &str, default: String) -> Result<String, Error> {
-        self.0
-            .remove(property)
-            .as_ref()
-            .map_or(Ok(default), PropertyValue::as_string)
+    #[must_use]
+    pub fn get_or(self, default: T) -> T {
+        self.value.map(|x| x.value).unwrap_or(default)
     }
+
+    #[must_use]
+    pub fn get_prop(self) -> Option<RealProperty<T>> {
+        self.value
+    }
+
+    #[must_use]
+    pub fn get_span(&self) -> Option<Span> {
+        self.value.as_ref().map(|x| x.span)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct RealProperty<T> {
+    pub value: T,
+    pub span: Span
 }
 
 fn create_variable_named(
@@ -2262,6 +2251,7 @@ fn create_variable_named(
     display: Option<&DisplayProperties>,
     rhs_unrolled: AnyExpr,
     variables: &mut Vec<AnyExpr>,
+    node: &mut FigureNode
 ) -> Result<(), Error> {
     let display: Option<Properties> = display.map(unroll_properties);
 
@@ -2281,6 +2271,7 @@ fn create_variable_named(
                 let props = PointProperties::parse(display, named.ident.clone())?;
 
                 if props.display {
+                    let point_node = FigureNode::new_point(display, named.ident.clone())?;
                     context.figure.points.push((
                         var_pt.clone(),
                         LabelMeta {
@@ -2935,7 +2926,7 @@ fn set_flag(set: &mut FlagSet, flag: &FlagStatement) -> Result<(), Error> {
 ///
 /// # Errors
 /// Specific error descriptions are in `ScriptError` documentation.
-pub fn unroll(input: &str) -> Result<CompileContext, Error> {
+pub fn unroll(input: &str) -> Result<(CompileContext, FigureNode), Error> {
     // Unfortunately, due to how context-dependent geoscript is, the code must be compiled immediately after parsing.
     let mut context = CompileContext::new();
     let mut library = Library::new();
@@ -2956,6 +2947,8 @@ pub fn unroll(input: &str) -> Result<CompileContext, Error> {
         set_flag(&mut context.flags, flag)?;
     }
 
+    let mut figure = FigureNode::default();
+
     for stat in statements {
         // Unroll the statement
         match stat {
@@ -2973,5 +2966,5 @@ pub fn unroll(input: &str) -> Result<CompileContext, Error> {
     //     println!("{x}");
     // }
 
-    Ok(context)
+    Ok((context, figure))
 }

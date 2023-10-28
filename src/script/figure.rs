@@ -20,13 +20,66 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 use std::sync::Arc;
 
+use num_derive::FromPrimitive;
+use num_traits::FromPrimitive;
 use serde::Serialize;
 
-use crate::generator::expression::{CircleExpr, Expression, LineExpr, PointExpr, ScalarExpr};
+use crate::{generator::expression::{CircleExpr, Expression, LineExpr, PointExpr, ScalarExpr}, span};
 
-use super::unroll::LabelMeta;
+use super::{Error, token::{Span, PointCollectionItem}};
 
 type Point = Arc<Expression<PointExpr>>;
+
+pub const SPECIAL_MATH: [&'static str; 48] = [
+    "alpha",
+    "Alpha",
+    "beta",
+    "Beta",
+    "gamma",
+    "Gamma",
+    "delta",
+    "Delta",
+    "epsilon",
+    "Epsilon",
+    "zeta",
+    "Zeta",
+    "eta",
+    "Eta",
+    "theta",
+    "Theta",
+    "iota",
+    "Iota",
+    "kappa",
+    "Kappa",
+    "lambda",
+    "Lambda",
+    "mu",
+    "Mu",
+    "nu",
+    "Nu",
+    "xi",
+    "Xi",
+    "omicron",
+    "Omicorn",
+    "phi",
+    "Phi",
+    "rho",
+    "Rho",
+    "sigma",
+    "Sigma",
+    "tau",
+    "Tau",
+    "upsilon",
+    "Upsilon",
+    "phi",
+    "Phi",
+    "chi",
+    "Chi",
+    "psi",
+    "Psi",
+    "omega",
+    "Omega"
+];
 
 /// The display mode of the expression.
 #[derive(Debug, Clone, Serialize, Copy)]
@@ -41,7 +94,7 @@ pub enum Mode {
 #[derive(Debug, Default)]
 pub struct Figure {
     /// Points to be displayed
-    pub points: Vec<(Arc<Expression<PointExpr>>, LabelMeta)>,
+    pub points: Vec<(Arc<Expression<PointExpr>>, MathString)>,
     /// Lines to be displayed
     pub lines: Vec<(Arc<Expression<LineExpr>>, Mode)>,
     /// Angles to be displayed
@@ -54,4 +107,246 @@ pub struct Figure {
     pub circles: Vec<(Arc<Expression<CircleExpr>>, Mode)>,
     /// The canvas size.
     pub canvas_size: (usize, usize),
+}
+
+/// Normal/lower index in math text.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MathIndex {
+    Normal,
+    Lower
+}
+
+/// A math character is either just an ASCII character or a special character.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MathChar {
+    /// A standard ASCII character.
+    Ascii(char),
+    /// Special character denoted by a string.
+    Special(MathSpecial),
+    /// Starts lower index.
+    SetIndex(MathIndex),
+    /// Prime (a tick)
+    Prime
+}
+
+/// A special character.
+#[derive(Debug, Clone, Copy, FromPrimitive, PartialEq, Eq)]
+pub enum MathSpecial {
+    Alpha,
+    AlphaUpper,
+    Beta,
+    BetaUpper,
+    Gamma,
+    GammaUpper,
+    Delta,
+    DeltaUpper,
+    Epsilon,
+    EpsilonUpper,
+    Zeta,
+    ZetaUpper,
+    Eta,
+    EtaUpper,
+    Theta,
+    ThetaUpper,
+    Iota,
+    IotaUpper,
+    Kappa,
+    KappaUpper,
+    Lambda,
+    LambdaUpper,
+    Mu,
+    MuUpper,
+    Nu,
+    NuUpper,
+    Xi,
+    XiUpper,
+    Omicron,
+    OmicronUpper,
+    Pi,
+    PiUpper,
+    Rho,
+    RhoUpper,
+    Sigma,
+    SigmaUpper,
+    Tau,
+    TauUpper,
+    Upsilon,
+    UpsilonUpper,
+    Phi,
+    PhiUpper,
+    Chi,
+    ChiUpper,
+    Psi,
+    PsiUpper,
+    Omega,
+    OmegaUpper,
+}
+
+impl MathSpecial {
+    #[must_use]
+    pub fn is_alphabetic(self) -> bool {
+        true
+    }
+
+    #[must_use]
+    pub fn parse(charcode: &str, content_span: Span) -> Result<Self, Error> {
+        SPECIAL_MATH
+        .iter()
+        .enumerate()
+        .find(|x| *x.1 == charcode)
+        .map(|x| MathSpecial::from_usize(x.0).unwrap())
+        .ok_or_else(|| {
+            let best = SPECIAL_MATH
+                    .iter()
+                    .map(|v| {
+                        (
+                            v,
+                            (strsim::jaro(v, &charcode) * 1000.0).floor() as i64,
+                        )
+                    })
+                    .filter(|v| v.1 > 600)
+                    .max_by_key(|v| v.1)
+                    .map(|x| x.0)
+                    .copied();
+
+                Error::SpecialNotRecongised {
+                    error_span: content_span,
+                    code: charcode.to_string(),
+                    suggested: best
+                }
+        })
+    }
+}
+
+/// A series of math characters.
+#[derive(Debug, Clone)]
+pub struct MathString(Vec<MathChar>);
+
+impl MathString {
+    pub fn displayed_by_default(&self) -> Option<MathString> {
+        let mut result = Vec::new();
+
+        // The first set of characters must be either a single character or a special code.
+        let mut letter = String::new();
+
+        let mut chars = self.0.iter().copied().peekable();
+
+        while let Some(MathChar::Ascii(c)) = chars.peek() {
+            chars.next();
+            letter.push(*c);
+        }
+
+        if let Some(special) = MathSpecial::parse(&letter, span!(0,0,0,0)).ok() {
+            result.push(MathChar::Special(special));
+        } else if letter.len() == 1 {
+            result.push(MathChar::Ascii(letter.chars().next().unwrap()));
+        } else {
+            return None;
+        }
+
+        while Some(MathChar::Prime) == chars.peek().copied() {
+            chars.next();
+            result.push(MathChar::Prime);
+        }
+
+        if chars.next() == Some(MathChar::SetIndex(MathIndex::Lower)) {
+            result.push(MathChar::SetIndex(MathIndex::Lower));
+            while let Some(c) = chars.next() {
+                if c == MathChar::SetIndex(MathIndex::Normal) {
+                    break;
+                } else {
+                    result.push(c);
+                }
+            }
+            result.push(MathChar::SetIndex(MathIndex::Normal));
+        }
+
+        if chars.next().is_none() {
+            Some(Self(result))
+        } else {
+            None
+        }
+    }
+
+    pub fn parse(content: &str, content_span: Span) -> Result<Self, Error> {
+        let mut ignore_next = false;
+        let mut math_string = Vec::new();
+        let mut indexed = false;
+        let mut collect_special = false;
+        let mut special = String::new();
+        let mut index_delimited = false;
+
+        for c in content.chars() {
+            if collect_special {
+                if ignore_next || c != ']' || c != '\\' {
+                    special.push(c);
+                    ignore_next = false;
+                } else if c == ']' {
+                    math_string.push(MathChar::Special(MathSpecial::parse(&special, content_span)?));
+
+                    special.clear();
+                    collect_special = false;
+                } else {
+                    ignore_next = true;
+                }
+            } else {
+                if ignore_next {
+                    math_string.push(MathChar::Ascii(c));
+                    ignore_next = false;
+                } else if c == '\\' {
+                    ignore_next = true;
+                } else if c == '_' {
+                    if indexed {
+                        return Err(Error::LabelIndexInsideIndex {
+                            error_span: content_span
+                        });
+                    } else {
+                        math_string.push(MathChar::SetIndex(MathIndex::Lower));
+                        indexed = true;
+                    }
+                } else if c == '[' {
+                    collect_special = true;
+                } else if c == ' ' {
+                    if indexed && !index_delimited {
+                        indexed = false;
+                        math_string.push(MathChar::SetIndex(MathIndex::Normal));
+                    }
+
+                    math_string.push(MathChar::Ascii(c));
+                } else if c == '{' && math_string.last().copied() == Some(MathChar::SetIndex(MathIndex::Lower)) {
+                    index_delimited = true;
+                } else if c == '}' && index_delimited {
+                    indexed = false;
+                    index_delimited = false;
+                    math_string.push(MathChar::SetIndex(MathIndex::Normal));
+                } else if c == '\'' {
+                    math_string.push(MathChar::Prime);
+                } else {
+                    math_string.push(MathChar::Ascii(c));
+                }
+            }
+        }
+
+        if indexed {
+            math_string.push(MathChar::SetIndex(MathIndex::Normal));
+        }
+
+        Ok(Self(math_string))
+    }
+}
+
+impl From<PointCollectionItem> for MathString {
+    fn from(value: PointCollectionItem) -> Self {
+        let mut math_string = vec![MathChar::Ascii(value.letter)];
+
+        math_string.extend(
+            value.index
+                .into_iter()
+                .flat_map(|v| v.chars().map(|c| MathChar::Ascii(c)))
+        );
+
+        math_string.extend(vec![MathChar::Prime].repeat(value.primes.into()));
+
+        Self(math_string)
+    }
 }

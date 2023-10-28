@@ -47,10 +47,10 @@ use crate::{
 
 use super::unroll::UnrolledRule;
 use super::{
-    figure::{Figure, Mode},
+    figure::Figure,
     unroll::{
         self, CompileContext, EntCircle, EntLine, EntPoint, EntScalar, Entity, Expr, Flag,
-        LabelMeta, UnrolledRuleKind, Variable,
+        UnrolledRuleKind, Variable, FigureNode, FigureObject
     },
     Criteria, CriteriaKind, Error, HashableRc, SimpleUnit, Weighed,
 };
@@ -594,39 +594,34 @@ impl Compiler {
         self.compile_rule_vec(&rules)
     }
 
-    /// Builds an actual figure.
-    fn build_figure(&mut self, canvas_size: (usize, usize)) -> Figure {
-        let figure = mem::take(&mut self.context.figure);
-
-        Figure {
-            canvas_size,
-            points: figure
-                .points
-                .into_iter()
-                .map(|(expr, meta)| (self.compile(&expr), meta))
-                .collect(),
-            lines: figure
-                .lines
-                .into_iter()
-                .map(|expr| (self.compile(&expr), Mode::Default))
-                .collect(),
-            segments: figure
-                .segments
-                .into_iter()
-                .map(|(a, b)| (self.compile(&a), self.compile(&b), Mode::Default))
-                .collect(),
-            rays: figure
-                .rays
-                .into_iter()
-                .map(|(a, b)| (self.compile(&a), self.compile(&b), Mode::Default))
-                .collect(),
-            circles: figure
-                .circles
-                .into_iter()
-                .map(|expr| (self.compile(&expr), Mode::Default))
-                .collect(),
-            ..Default::default()
+    /// Adds an object into a figure.
+    fn add_object_to_figure(&mut self, figure: &mut Figure, object: FigureObject) {
+        match object {
+            FigureObject::Empty => (),
+            FigureObject::Point(point) => figure.points.push(
+                (self.compile(&point.expr), point.label)
+            ),
         }
+    }
+
+    /// Builds an actual figure.
+    fn build_figure(&mut self, figure: FigureNode, canvas_size: (usize, usize)) -> Figure {
+        let mut compiled = Figure {
+            canvas_size,
+            ..Default::default()
+        };
+
+        let mut visit = vec![figure];
+
+        while let Some(last) = visit.pop() {
+            if last.display {
+                visit.extend(last.children);
+                
+                self.add_object_to_figure(&mut compiled, last.object);
+            }
+        }
+
+        compiled
     }
 }
 
@@ -773,21 +768,6 @@ fn read_flags(flags: &HashMap<String, Flag>) -> Flags {
     }
 }
 
-/// A figure before expression compilation.
-#[derive(Debug, Clone, Default)]
-pub struct PreFigure {
-    /// Points of the figure.
-    pub points: Vec<(Expr<Point>, LabelMeta)>,
-    /// Lines in the figure.
-    pub lines: Vec<Expr<Line>>,
-    /// Segments in the figure.
-    pub segments: Vec<(Expr<Point>, Expr<Point>)>,
-    /// Rays in the figure
-    pub rays: Vec<(Expr<Point>, Expr<Point>)>,
-    /// Circles in the figure
-    pub circles: Vec<Expr<Circle>>,
-}
-
 /// Compiles the given script.
 ///
 /// # Errors
@@ -808,7 +788,7 @@ pub fn compile(
     Error,
 > {
     // First, we have to unroll the script.
-    let context = unroll::unroll(input)?;
+    let (context, figure) = unroll::unroll(input)?;
 
     let flags = read_flags(&context.flags);
 
@@ -851,7 +831,7 @@ pub fn compile(
     //     println!("{rule:?}");
     // }
 
-    let figure = compiler.build_figure(canvas_size);
+    let figure = compiler.build_figure(figure, canvas_size);
     Ok((criteria, figure, compiler.template, flags))
 }
 
