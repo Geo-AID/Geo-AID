@@ -20,6 +20,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 use geo_aid_derive::Definition;
 use std::fmt::Formatter;
+use std::mem;
 use std::{
     cell::RefCell,
     collections::{hash_map::Entry, HashMap},
@@ -2250,12 +2251,9 @@ fn create_variable_named(
     stat: &LetStatement,
     context: &mut CompileContext,
     named: &NamedIdent,
-    _display: Option<&DisplayProperties>,
     rhs_unrolled: AnyExpr,
     variables: &mut Vec<AnyExpr>
 ) -> Result<(), Error> {
-    // let display: Properties = Properties::from(display);
-
     match context.variables.entry(named.ident.clone()) {
         // If the variable already exists, it's a redefinition error.
         Entry::Occupied(entry) => Err(Error::RedefinedVariable {
@@ -2267,12 +2265,6 @@ fn create_variable_named(
         Entry::Vacant(entry) => {
             let var = rhs_unrolled.make_variable(entry.key().clone());
             variables.push(var.clone());
-
-            // if let AnyExpr::Point(var_pt) = &var {
-            //     let point_node = FigureNode::new_point(var_pt.clone(), display, IdentOrItem::Ident(named.clone()))?;
-
-            //     node.add(point_node);
-            // }
 
             entry.insert(var);
 
@@ -2346,7 +2338,7 @@ fn create_variable_collection(
 }
 
 fn create_variables(
-    stat: &LetStatement,
+    stat: LetStatement,
     context: &mut CompileContext,
     library: &Library
 ) -> Result<Vec<AnyExpr>, Error> {
@@ -2405,6 +2397,8 @@ fn create_variables(
 
     // Iterate over each identifier.
     for def in stat.ident.iter() {
+        
+
         let rhs_unrolled = unroll_expression(
             &stat.expr,
             context,
@@ -2420,7 +2414,6 @@ fn create_variables(
                     stat,
                     context,
                     named,
-                    def.display_properties.as_ref(),
                     rhs_unrolled,
                     &mut variables
                 )?;
@@ -2442,12 +2435,10 @@ fn create_variables(
 }
 
 fn unroll_let(
-    stat: &LetStatement,
+    mut stat: LetStatement,
     context: &mut CompileContext,
     library: &Library
 ) -> Result<(), Error> {
-    create_variables(stat, context, library)?;
-
     // First, we construct an iterator out of lhs
     let lhs: Expression<true> = Expression::ImplicitIterator(ImplicitIterator {
         exprs: Punctuated {
@@ -2472,12 +2463,17 @@ fn unroll_let(
         },
     });
 
+    let stat_span = stat.get_span();
+    let rules = mem::take(&mut stat.rules);
+    
+    create_variables(stat, context, library)?;
+
     // Then, we run each rule through a tree iterator.
-    for (rule, expr) in &stat.rules {
-        let tree = IterNode::from2(&lhs, expr);
+    for (rule, expr) in rules {
+        let tree = IterNode::from2(&lhs, &expr);
 
         // Check the lengths
-        tree.get_iter_lengths(&mut HashMap::new(), stat.get_span())?;
+        tree.get_iter_lengths(&mut HashMap::new(), stat_span)?;
 
         // And create the index
         let mut index = IterTreeIterator::new(&tree);
@@ -2485,11 +2481,11 @@ fn unroll_let(
         while let Some(it_index) = index.get_currents() {
             unroll_rule(
                 unroll_expression(&lhs, context, library, it_index)?,
-                rule,
-                unroll_expression(expr, context, library, it_index)?,
+                &rule,
+                unroll_expression(&expr, context, library, it_index)?,
                 context,
                 library,
-                stat.get_span(),
+                stat_span,
                 false
             )?;
 
