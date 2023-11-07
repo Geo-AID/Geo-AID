@@ -31,7 +31,7 @@ fn segment_function_point_point(
     a: &Expr<Point>,
     b: &Expr<Point>,
     _context: &mut CompileContext,
-    display: Option<Properties>,
+    display: Properties,
 ) -> Expr<Bundle> {
     drop(display);
 

@@ -29,12 +29,10 @@ pub fn line_point(
     line: &Expr<Line>,
     point: &Expr<Point>,
     context: &mut CompileContext,
-    display: Option<Properties>,
+    display: Properties,
 ) -> Expr<Line> {
     drop(display);
     let expr = perpendicular_through!(line, point);
-
-    context.figure.lines.push(expr.clone());
 
     expr
 }

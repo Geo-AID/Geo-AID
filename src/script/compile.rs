@@ -45,12 +45,12 @@ use crate::{
     span,
 };
 
-use super::unroll::UnrolledRule;
+use super::unroll::{UnrolledRule, CollectionNode, Node};
 use super::{
     figure::Figure,
     unroll::{
         self, CompileContext, EntCircle, EntLine, EntPoint, EntScalar, Entity, Expr, Flag,
-        UnrolledRuleKind, Variable, FigureNode, FigureObject
+        UnrolledRuleKind, Variable
     },
     Criteria, CriteriaKind, Error, HashableRc, SimpleUnit, Weighed,
 };
@@ -206,7 +206,7 @@ impl CompiledEntity {
     }
 }
 
-struct Compiler {
+pub struct Compiler {
     variables: VariableRecord,
     expressions: ExpressionRecord,
     entities: Vec<CompiledEntity>,
@@ -258,7 +258,7 @@ impl Compiler {
     }
 }
 
-trait Compile<T, U> {
+pub trait Compile<T, U> {
     fn compile(&mut self, expr: &Expr<T>) -> Arc<Expression<U>>;
 }
 
@@ -594,32 +594,14 @@ impl Compiler {
         self.compile_rule_vec(&rules)
     }
 
-    /// Adds an object into a figure.
-    fn add_object_to_figure(&mut self, figure: &mut Figure, object: FigureObject) {
-        match object {
-            FigureObject::Empty => (),
-            FigureObject::Point(point) => figure.points.push(
-                (self.compile(&point.expr), point.label)
-            ),
-        }
-    }
-
     /// Builds an actual figure.
-    fn build_figure(&mut self, figure: FigureNode, canvas_size: (usize, usize)) -> Figure {
+    fn build_figure(&mut self, figure: CollectionNode, canvas_size: (usize, usize)) -> Figure {
         let mut compiled = Figure {
             canvas_size,
             ..Default::default()
         };
 
-        let mut visit = vec![figure];
-
-        while let Some(last) = visit.pop() {
-            if last.display {
-                visit.extend(last.children);
-                
-                self.add_object_to_figure(&mut compiled, last.object);
-            }
-        }
+        figure.build(self, &mut compiled);
 
         compiled
     }

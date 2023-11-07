@@ -23,7 +23,7 @@ use std::rc::Rc;
 
 use crate::script::builtins::macros::{distance, field, line2};
 use crate::script::unroll::{
-    Bundle, Circle, Line, Point, PointCollection, Simplify, UnrolledRule, UnrolledRuleKind,
+    Bundle, Circle, Line, Point, PointCollection, Simplify, UnrolledRule, UnrolledRuleKind, EmptyNode,
 };
 use crate::script::{
     builtins::macros::{angle_expr, circle_center, circle_radius, index, math, number, rule},
@@ -34,9 +34,9 @@ fn pt_lies_on_circle(
     lhs: &Expr<Point>,
     rhs: &Expr<Circle>,
     context: &mut CompileContext,
-    properties: Option<Properties>,
+    properties: Properties,
     invert: bool,
-) {
+) -> EmptyNode {
     drop(properties);
 
     let point = lhs.simplify(context);
@@ -50,15 +50,17 @@ fn pt_lies_on_circle(
     } else {
         context.point_on_circle(&point, &circle);
     }
+
+    EmptyNode
 }
 
 fn pt_lies_on_line(
     lhs: &Expr<Point>,
     rhs: &Expr<Line>,
     context: &mut CompileContext,
-    properties: Option<Properties>,
+    properties: Properties,
     invert: bool,
-) {
+) -> EmptyNode {
     drop(properties);
 
     let point = lhs.simplify(context);
@@ -72,15 +74,17 @@ fn pt_lies_on_line(
     } else {
         context.point_on_line(&point, &line);
     }
+
+    EmptyNode
 }
 
 fn col_lies_on_circle(
     lhs: &Expr<PointCollection>,
     rhs: &Expr<Circle>,
     context: &mut CompileContext,
-    properties: Option<Properties>,
+    properties: Properties,
     invert: bool,
-) {
+) -> EmptyNode {
     drop(properties);
     let len = lhs.data.length;
 
@@ -108,15 +112,17 @@ fn col_lies_on_circle(
             ));
         }
     }
+
+    EmptyNode
 }
 
 fn pt_lies_on_segment(
     lhs: &Expr<Point>,
     rhs: &Expr<Bundle>,
     context: &mut CompileContext,
-    properties: Option<Properties>,
+    properties: Properties,
     invert: bool,
-) {
+) -> EmptyNode {
     drop(properties);
 
     let point = lhs.simplify(context);
@@ -154,6 +160,8 @@ fn pt_lies_on_segment(
             distance!(PP: field!(POINT rhs, A), field!(POINT rhs, B))
         ));
     }
+
+    EmptyNode
 }
 
 pub fn register(library: &mut Library) {

@@ -54,7 +54,7 @@ mod context;
 mod figure;
 
 pub use figure::{
-    Node as FigureNode, Object as FigureObject, Point as FigurePoint
+    Node, PointNode, CircleNode, CollectionNode, EmptyNode
 };
 
 /// A definition for a user-defined rule operator.
@@ -290,7 +290,7 @@ pub struct RuleOverload {
 }
 
 /// geoscript rule declaration
-type GeoRule = dyn Fn(&AnyExpr, &AnyExpr, &mut CompileContext, Option<Properties>, bool);
+type GeoRule = dyn Fn(&AnyExpr, &AnyExpr, &mut CompileContext, Properties, bool) -> Box<dyn Node>;
 
 /// A function definition.
 pub struct RuleDefinition(pub Box<GeoRule>);
@@ -351,7 +351,7 @@ pub struct FunctionOverload {
 }
 
 /// geoscript function declaration
-type GeoFunc = dyn Fn(&[AnyExpr], &mut CompileContext, Option<Properties>) -> AnyExpr;
+type GeoFunc = dyn Fn(&[AnyExpr], &mut CompileContext, Properties) -> AnyExpr;
 
 /// A function definition.
 pub struct FunctionDefinition(pub Box<GeoFunc>);
@@ -1869,20 +1869,10 @@ pub fn construct_point_name(letter: char, primes: u8) -> String {
 pub fn unroll_parameters(
     definition: &FunctionDefinition,
     params: &[AnyExpr],
-    display: Option<Properties>,
-    context: &mut CompileContext,
+    display: Properties,
+    context: &mut CompileContext
 ) -> AnyExpr {
     definition(params, context, display)
-}
-
-fn unroll_properties(props: &DisplayProperties) -> Properties {
-    Properties(
-        props
-            .properties
-            .iter()
-            .map(|v| (v.name.ident.clone(), v.value.clone()))
-            .collect(),
-    )
 }
 
 fn fetch_variable(
@@ -1920,9 +1910,9 @@ fn unroll_simple(
     expr: &SimpleExpression,
     context: &mut CompileContext,
     library: &Library,
-    it_index: &HashMap<u8, usize>,
+    it_index: &HashMap<u8, usize>
 ) -> Result<AnyExpr, Error> {
-    let display: Option<Properties> = expr.display.as_ref().map(unroll_properties);
+    let display = Properties::from(expr.display.as_ref());
 
     Ok(match &expr.kind {
         SimpleExpressionKind::Ident(i) => match i {
@@ -1934,10 +1924,10 @@ fn unroll_simple(
                     data: PointCollectionData::PointCollection(
                         col.collection
                             .iter()
-                            .map(|(letter, primes)| {
+                            .map(|item| {
                                 fetch_variable(
                                     context,
-                                    &construct_point_name(*letter, *primes),
+                                    &format!("{item}"),
                                     col.span,
                                 )
                                 .and_then(|var| var.convert::<Point>())
@@ -2036,7 +2026,7 @@ fn unroll_simple(
             it.get(it_index[&it.id]).unwrap(),
             context,
             library,
-            it_index,
+            it_index
         )?,
         SimpleExpressionKind::PointCollection(col) => AnyExpr::PointCollection(Expr {
             weight: FastFloat::One, // TODO: UPDATE FOR WEIGHING SUPPORT IN GEOSCRIPT
@@ -2134,7 +2124,7 @@ fn unroll_expression<const ITER: bool>(
     expr: &Expression<ITER>,
     context: &mut CompileContext,
     library: &Library,
-    it_index: &HashMap<u8, usize>,
+    it_index: &HashMap<u8, usize>
 ) -> Result<AnyExpr, Error> {
     match expr {
         Expression::Single(simple) => unroll_simple(simple.as_ref(), context, library, it_index),
@@ -2142,7 +2132,7 @@ fn unroll_expression<const ITER: bool>(
             it.get(it_index[&0]).unwrap(), // Implicit iterators always have an id of 0.
             context,
             library,
-            it_index,
+            it_index
         ),
         Expression::Binop(op) => {
             let lhs = unroll_expression(&op.lhs, context, library, it_index)?;
@@ -2211,6 +2201,18 @@ impl Properties {
     }
 }
 
+impl From<Option<&DisplayProperties>> for Properties {
+    fn from(value: Option<&DisplayProperties>) -> Self {
+        Self(
+            value.into_iter().flat_map(
+                |x| x.properties.iter()
+            )
+                .map(|v| (v.name.ident.clone(), v.value.clone()))
+                .collect(),
+        )
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Property<T> {
     value: Option<RealProperty<T>>
@@ -2248,12 +2250,11 @@ fn create_variable_named(
     stat: &LetStatement,
     context: &mut CompileContext,
     named: &NamedIdent,
-    display: Option<&DisplayProperties>,
+    _display: Option<&DisplayProperties>,
     rhs_unrolled: AnyExpr,
-    variables: &mut Vec<AnyExpr>,
-    node: &mut FigureNode
+    variables: &mut Vec<AnyExpr>
 ) -> Result<(), Error> {
-    let display: Option<Properties> = display.map(unroll_properties);
+    // let display: Properties = Properties::from(display);
 
     match context.variables.entry(named.ident.clone()) {
         // If the variable already exists, it's a redefinition error.
@@ -2267,21 +2268,11 @@ fn create_variable_named(
             let var = rhs_unrolled.make_variable(entry.key().clone());
             variables.push(var.clone());
 
-            if let AnyExpr::Point(var_pt) = &var {
-                let props = PointProperties::parse(display, named.ident.clone())?;
+            // if let AnyExpr::Point(var_pt) = &var {
+            //     let point_node = FigureNode::new_point(var_pt.clone(), display, IdentOrItem::Ident(named.clone()))?;
 
-                if props.display {
-                    let point_node = FigureNode::new_point(display, named.ident.clone())?;
-                    context.figure.points.push((
-                        var_pt.clone(),
-                        LabelMeta {
-                            letter: props.label.chars().next().unwrap(),
-                            primes: 0,
-                            index: None,
-                        },
-                    ));
-                }
-            }
+            //     node.add(point_node);
+            // }
 
             entry.insert(var);
 
@@ -2296,42 +2287,41 @@ fn create_variable_collection(
     context: &mut CompileContext,
     col: &PCToken,
     rhs_unrolled: &AnyExpr,
-    display: Option<&DisplayProperties>,
-    variables: &mut Vec<AnyExpr>,
+    _display: Option<&DisplayProperties>,
+    variables: &mut Vec<AnyExpr>
 ) -> Result<(), Error> {
-    let display: Option<Properties> = display.map(unroll_properties);
+    // let display = Properties::from(display);
 
-    let rhs_unpacked = rhs_unrolled.clone().convert::<PointCollection>()?.data;
+    let rhs_unpacked = rhs_unrolled.clone().convert::<PointCollection>()?;
 
-    if rhs_unpacked.length != col.len() {
+    if rhs_unpacked.data.length != col.len() {
         return Err(Error::CannotUnpack {
             error_span: rhs_unrolled.get_span(),
             ty: rhs_unrolled.get_type(),
         });
     }
 
-    let pt_letter = if col.collection.len() == 1 {
-        let props = PointProperties::parse(
-            display,
-            construct_point_name(col.collection[0].0, col.collection[0].1),
-        )?;
+    // let pt_node = if col.collection.len() == 1 {
+    //     Some(FigureNode::new_point(
+    //         rhs_unpacked.index(0),
+    //         display,
+    //         IdentOrItem::PointCollectionItem(col.collection[0].clone())
+    //     )?)
+    // } else {
+    //     None
+    // };
 
-        Some((props.label.chars().next().unwrap(), props.display))
-    } else {
-        None
-    };
-
-    let mut rhs_unpacked = rhs_unpacked.data.as_collection().unwrap().iter().cloned();
+    let mut rhs_unpacked = rhs_unpacked.data.data.as_collection().unwrap().iter().cloned();
     for pt in &col.collection {
-        let id = construct_point_name(pt.0, pt.1);
+        let id = format!("{pt}");
 
-        match context.variables.entry(id) {
+        match context.variables.entry(id.clone()) {
             // If the variable already exists, it's a redefinition error.
             Entry::Occupied(entry) => {
                 return Err(Error::RedefinedVariable {
                     defined_at: entry.get().get_variable_span(),
                     error_span: stat.get_span(),
-                    variable_name: construct_point_name(pt.0, pt.1),
+                    variable_name: id,
                 })
             }
             // Otherwise, create a new variable
@@ -2341,16 +2331,9 @@ fn create_variable_collection(
                     .unwrap()
                     .make_variable(entry.key().clone());
 
-                if let Some((letter, true)) = pt_letter {
-                    context.figure.points.push((
-                        var.clone(),
-                        LabelMeta {
-                            letter,
-                            primes: 0,
-                            index: None,
-                        },
-                    ));
-                }
+                // if let Some(node) = pt_node {
+                //     todo!()
+                // }
 
                 let var = AnyExpr::Point(var);
                 variables.push(var.clone());
@@ -2365,7 +2348,7 @@ fn create_variable_collection(
 fn create_variables(
     stat: &LetStatement,
     context: &mut CompileContext,
-    library: &Library,
+    library: &Library
 ) -> Result<Vec<AnyExpr>, Error> {
     let mut variables = Vec::new();
 
@@ -2427,7 +2410,7 @@ fn create_variables(
             context,
             library,
             ind.as_ref()
-                .unwrap_or_else(|| it_index.get_currents().unwrap()),
+                .unwrap_or_else(|| it_index.get_currents().unwrap())
         )?;
         it_index.next();
 
@@ -2439,7 +2422,7 @@ fn create_variables(
                     named,
                     def.display_properties.as_ref(),
                     rhs_unrolled,
-                    &mut variables,
+                    &mut variables
                 )?;
             }
             Ident::Collection(col) => {
@@ -2449,7 +2432,7 @@ fn create_variables(
                     col,
                     &rhs_unrolled,
                     def.display_properties.as_ref(),
-                    &mut variables,
+                    &mut variables
                 )?;
             }
         }
@@ -2461,7 +2444,7 @@ fn create_variables(
 fn unroll_let(
     stat: &LetStatement,
     context: &mut CompileContext,
-    library: &Library,
+    library: &Library
 ) -> Result<(), Error> {
     create_variables(stat, context, library)?;
 
@@ -2507,7 +2490,7 @@ fn unroll_let(
                 context,
                 library,
                 stat.get_span(),
-                false,
+                false
             )?;
 
             index.next();
@@ -2522,7 +2505,7 @@ fn unroll_eq(
     rhs: AnyExpr,
     context: &mut CompileContext,
     full_span: Span,
-    inverted: bool,
+    inverted: bool
 ) -> Result<(), Error> {
     let lhs_type = lhs.get_type();
     let rhs_type = rhs.get_type();
@@ -2666,7 +2649,7 @@ fn unroll_rule(
     context: &mut CompileContext,
     library: &Library,
     full_span: Span,
-    invert: bool,
+    invert: bool
 ) -> Result<(), Error> {
     match op {
         RuleOperator::Predefined(pre) => match pre {
@@ -2722,7 +2705,7 @@ fn unroll_rule(
                 });
             };
 
-            def(&lhs, &rhs, context, None, invert);
+            def(&lhs, &rhs, context, Properties::from(None), invert);
             Ok(())
         }
         RuleOperator::Inverted(op) => {
@@ -2734,7 +2717,7 @@ fn unroll_rule(
 fn unroll_rulestat(
     rule: &RuleStatement,
     context: &mut CompileContext,
-    library: &Library,
+    library: &Library
 ) -> Result<(), Error> {
     let tree = IterNode::from2(&rule.lhs, &rule.rhs);
     tree.get_iter_lengths(&mut HashMap::new(), rule.get_span())?;
@@ -2749,7 +2732,7 @@ fn unroll_rulestat(
             context,
             library,
             rule.get_span(),
-            false,
+            false
         )?;
 
         it_index.next();
@@ -2926,7 +2909,7 @@ fn set_flag(set: &mut FlagSet, flag: &FlagStatement) -> Result<(), Error> {
 ///
 /// # Errors
 /// Specific error descriptions are in `ScriptError` documentation.
-pub fn unroll(input: &str) -> Result<(CompileContext, FigureNode), Error> {
+pub fn unroll(input: &str) -> Result<(CompileContext, CollectionNode), Error> {
     // Unfortunately, due to how context-dependent geoscript is, the code must be compiled immediately after parsing.
     let mut context = CompileContext::new();
     let mut library = Library::new();
@@ -2947,7 +2930,7 @@ pub fn unroll(input: &str) -> Result<(CompileContext, FigureNode), Error> {
         set_flag(&mut context.flags, flag)?;
     }
 
-    let mut figure = FigureNode::default();
+    let figure = CollectionNode::new();
 
     for stat in statements {
         // Unroll the statement

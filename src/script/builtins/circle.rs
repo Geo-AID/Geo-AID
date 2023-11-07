@@ -19,7 +19,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
 use crate::script::unroll::{
-    Circle, CompileContext, Expr, Function, Library, Point, Properties, Scalar,
+    Circle, CompileContext, Expr, Function, Library, Point, Properties, Scalar
 };
 use geo_aid_derive::overload;
 
@@ -31,12 +31,10 @@ fn circle_function(
     center: &Expr<Point>,
     radius: &Expr<Scalar>,
     context: &mut CompileContext,
-    display: Option<Properties>,
+    display: Properties
 ) -> Expr<Circle> {
-    drop(display);
     let expr = circle_expr!(center, radius);
 
-    context.figure.circles.push(expr.clone());
     expr
 }
 

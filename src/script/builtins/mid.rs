@@ -26,7 +26,7 @@ use super::macros::average;
 pub fn function_point(
     args: &[Expr<Point>],
     _context: &mut CompileContext,
-    display: Option<Properties>,
+    display: Properties,
 ) -> Expr<Point> {
     drop(display);
     average!(POINT : args)
@@ -35,7 +35,7 @@ pub fn function_point(
 fn function_scalar(
     args: &[Expr<Scalar>],
     _context: &mut CompileContext,
-    display: Option<Properties>,
+    display: Properties,
 ) -> Expr<Scalar> {
     drop(display);
     average!(SCALAR : args)

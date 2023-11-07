@@ -18,7 +18,7 @@ WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use std::sync::Arc;
+use std::{sync::Arc, str::FromStr, fmt::Display};
 
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
@@ -116,6 +116,15 @@ pub enum MathIndex {
     Lower
 }
 
+impl Display for MathIndex {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Normal => write!(f, "}}"),
+            Self::Lower => write!(f, "_{{")
+        }
+    }
+}
+
 /// A math character is either just an ASCII character or a special character.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MathChar {
@@ -127,6 +136,17 @@ pub enum MathChar {
     SetIndex(MathIndex),
     /// Prime (a tick)
     Prime
+}
+
+impl Display for MathChar {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Ascii(c) => write!(f, "{c}"),
+            Self::Special(c) => write!(f, "[{c}]"),
+            Self::SetIndex(x) => write!(f, "{x}"),
+            Self::Prime => write!(f, "'"),
+        }
+    }
 }
 
 /// A special character.
@@ -218,11 +238,22 @@ impl MathSpecial {
     }
 }
 
+impl Display for MathSpecial {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", SPECIAL_MATH[*self as usize])
+    }
+}
+
 /// A series of math characters.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct MathString(Vec<MathChar>);
 
 impl MathString {
+    #[must_use]
+    pub fn new() -> Self {
+        Self(Vec::new())
+    }
+
     pub fn displayed_by_default(&self) -> Option<MathString> {
         let mut result = Vec::new();
 
@@ -231,9 +262,9 @@ impl MathString {
 
         let mut chars = self.0.iter().copied().peekable();
 
-        while let Some(MathChar::Ascii(c)) = chars.peek() {
+        while let Some(MathChar::Ascii(c)) = chars.peek().copied() {
             chars.next();
-            letter.push(*c);
+            letter.push(c);
         }
 
         if let Some(special) = MathSpecial::parse(&letter, span!(0,0,0,0)).ok() {
@@ -333,6 +364,11 @@ impl MathString {
 
         Ok(Self(math_string))
     }
+
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
 }
 
 impl From<PointCollectionItem> for MathString {
@@ -341,12 +377,30 @@ impl From<PointCollectionItem> for MathString {
 
         math_string.extend(
             value.index
-                .into_iter()
+                .iter()
                 .flat_map(|v| v.chars().map(|c| MathChar::Ascii(c)))
         );
 
         math_string.extend(vec![MathChar::Prime].repeat(value.primes.into()));
 
         Self(math_string)
+    }
+}
+
+impl Display for MathString {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for c in &self.0 {
+            write!(f, "{c}")?
+        }
+
+        Ok(())
+    }
+}
+
+impl FromStr for MathString {
+    type Err = Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Self::parse(s, span!(0,0,0,0))
     }
 }

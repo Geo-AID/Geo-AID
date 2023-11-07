@@ -21,6 +21,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 use geo_aid_derive::Definition;
 use std::{collections::HashMap, fmt::Debug};
 
+use crate::script::Error;
 use crate::script::builtins::macros::{intersection, number};
 use crate::script::unroll::{AnyExpr, Simplify};
 use crate::script::builtins::macros::{circle_center, circle_radius, distance, rule};
@@ -171,7 +172,9 @@ pub struct CompileContext {
     /// Entities (primitives).
     pub entities: Vec<Entity>,
     /// Unrolled rules
-    pub rules: Vec<UnrolledRule>
+    pub rules: Vec<UnrolledRule>,
+    /// Errors collected.
+    errors: Vec<Error>
 }
 
 impl Default for CompileContext {
@@ -193,8 +196,13 @@ impl CompileContext {
                 .add_bool_def(&"point_bounds", false)
                 .finish(),
             entities: vec![],
-            rules: Vec::new()
+            rules: Vec::new(),
+            errors: Vec::new()
         }
+    }
+
+    pub fn push_error(&mut self, err: Error) {
+        self.errors.push(err);
     }
 
     /// Gets the entity of the given index.

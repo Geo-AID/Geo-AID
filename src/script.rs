@@ -35,7 +35,7 @@ use crate::{
     span,
 };
 
-use self::{parser::Type, figure::{SPECIAL_MATH, MathSpecial}};
+use self::{parser::Type, figure::SPECIAL_MATH};
 use self::token::{NamedIdent, Span, Token};
 
 mod builtins;
@@ -189,10 +189,6 @@ pub enum Error {
         error_span: Span,
         code: String,
         suggested: Option<&'static str>
-    },
-    LabelMustStartWithAlphabetic {
-        error_span: Span,
-        special: MathSpecial
     },
     LabelIndexInsideIndex {
         error_span: Span
@@ -348,51 +344,51 @@ impl Error {
                     .add_annotation(var_span, AnnotationKind::Note, "There was no iterator of left-hand side, so the same is expected for the right.")
             }
             Self::IteratorWithSameIdIterator { error_span, parent_span, contained_span } => {
-                DiagnosticData::new(&"An iterator with an id of `x` must not contain an iterator with an id of `x`.")
+                DiagnosticData::new(&"an iterator with an id of `x` must not contain an iterator with an id of `x`.")
                     .add_span(error_span)
                     .add_annotation(parent_span, AnnotationKind::Note, "Parent iterator here.")
                     .add_annotation(contained_span, AnnotationKind::Note, "Child iterator here.")
             }
             Self::LetStatMoreThanOneIterator { error_span, first_span, second_span } => {
-                DiagnosticData::new(&"Right hand side of a let statement must contain at most a single level of iteration.")
+                DiagnosticData::new(&"right hand side of a let statement must contain at most a single level of iteration.")
                     .add_span(error_span)
                     .add_annotation(first_span, AnnotationKind::Note, "First iterator here.")
                     .add_annotation(second_span, AnnotationKind::Note, "Second iterator here.")
             }
             Self::IteratorIdMustBeAnInteger { error_span } => {
-                DiagnosticData::new(&"Iterator id must be an integer.")
+                DiagnosticData::new(&"iterator id must be an integer.")
                     .add_span(error_span)
             }
             Self::IteratorIdExceeds255 { error_span } => {
-                DiagnosticData::new(&"Iterator id must be smaller than 256.")
+                DiagnosticData::new(&"iterator id must be smaller than 256.")
                     .add_span(error_span)
             }
             Self::SingleVariantExplicitIterator { error_span } => {
-                DiagnosticData::new(&"Explicit iterators must have at least two variants.")
+                DiagnosticData::new(&"explicit iterators must have at least two variants.")
                     .add_span(error_span)
             }
             Self::NonPointInPointCollection { error_span, received } => {
-                DiagnosticData::new(&"All values in a point collection constructor must be points.")
+                DiagnosticData::new(&"all values in a point collection constructor must be points.")
                     .add_span(error_span)
                     .add_annotation(received.0, AnnotationKind::Note, &format!("Value should be a point, received {}.", received.1))
             }
             Self::FlagDoesNotExist { flag_name, flag_span, error_span, suggested } => {
                 let message = suggested.map(|v| format!("Did you mean: `{v}`?"));
-                DiagnosticData::new(&format!("Compiler flag `{flag_name}` does not exist."))
+                DiagnosticData::new(&format!("compiler flag `{flag_name}` does not exist."))
                     .add_span(error_span)
                     .add_annotation(flag_span, AnnotationKind::Note, &"This does not exist.")
                     .add_annotation_opt_msg(flag_span, AnnotationKind::Help, message.as_ref())
             }
             Self::FlagSetExpected { error_span } => {
-                DiagnosticData::new(&"Expected a flag set ({...}).")
+                DiagnosticData::new(&"expected a flag set ({...}).")
                     .add_span(error_span)
             }
             Self::StringExpected { error_span } => {
-                DiagnosticData::new(&"Expected a string (identifier).")
+                DiagnosticData::new(&"expected a string (identifier).")
                     .add_span(error_span)
             }
             Self::BooleanExpected { error_span } => {
-                DiagnosticData::new(&"Expected a boolean value (enabled, disabled, on, off, true, false, 1 or 0).")
+                DiagnosticData::new(&"expected a boolean value (enabled, disabled, on, off, true, false, 1 or 0).")
                     .add_span(error_span)
             }
             Self::RedefinedFlag {
@@ -403,14 +399,14 @@ impl Error {
                 .add_span(error_span)
                 .add_annotation(first_defined, AnnotationKind::Note, "First defined here."),
             Self::FlagEnumInvalidValue { error_span, available_values, received_value } => {
-                DiagnosticData::new(&format!("Invalid value for an enum flag: `{received_value}`"))
+                DiagnosticData::new(&format!("invalid value for an enum flag: `{received_value}`"))
                     .add_span(error_span)
                     .add_annotation(error_span, AnnotationKind::Help, &format!("Supported values: {}", available_values.iter().map(
                         |v| format!("`{v}`")
                     ).collect::<Vec<String>>().join(", ")))
             }
             Self::RequiredFlagNotSet { flag_name, required_because, flagdef_span, available_values } => {
-                DiagnosticData::new(&format!("You must set a value for flag `{flag_name}`."))
+                DiagnosticData::new(&format!("you must set a value for flag `{flag_name}`."))
                     .add_annotation(required_because, AnnotationKind::Note, &"Required because of this line.")
                     .add_annotation(required_because, AnnotationKind::Help, &format!("Possible values: {}", available_values.iter().map(
                         |v| format!("`{v}`")
@@ -430,25 +426,21 @@ impl Error {
                     })
             }
             Self::ComparisonDoesNotExist { error_span, ty } => {
-                DiagnosticData::new(&format!("Comparison between values of type {ty} does not exist."))
+                DiagnosticData::new(&format!("comparison between values of type {ty} does not exist."))
                     .add_span(error_span)
             }
             Self::EmptyLabel { error_span } => {
-                DiagnosticData::new(&"Labels cannot be empty.")
-                    .add_span(error_span)
-            }
-            Self::LabelMustStartUppercase { error_span } => {
-                DiagnosticData::new(&"Point labels must start with an uppercase letter.")
+                DiagnosticData::new(&"labels cannot be empty.")
                     .add_span(error_span)
             }
             Self::UnclosedBrace { error_span, parsed_special } => {
                 // Try to figure out if any of the chars could show up here.
                 let found = SPECIAL_MATH.iter().find(|x| parsed_special.starts_with(*x));
 
-                let mut d = DiagnosticData::new(&"There's a missing ']' somewhere here. Braces denote special characters To escape a brace, use \\[.")
+                let d = DiagnosticData::new(&"there's a missing ']' somewhere here. Braces denote special characters To escape a brace, use \\[.")
                     .add_span(error_span);
 
-                if let Some(found) = found {
+               if let Some(found) = found {
                     d.add_fix(Fix {
                         message: String::from("You may have forgotten to put a `]` here."),
                         changes: vec![
@@ -462,10 +454,24 @@ impl Error {
                                 ]
                             }
                         ]
-                    });
+                    })
+                } else {
+                    d
                 }
-
-                d
+            }
+            Self::SpecialNotRecongised {
+                error_span,
+                code,
+                suggested
+            } => {
+                let message = suggested.map(|v| format!("Did you mean: `{v}`?"));
+                DiagnosticData::new(&format!("special code not recognised: `{code}`"))
+                    .add_span(error_span)
+                    .add_annotation_opt_msg(error_span, AnnotationKind::Help, message.as_ref())
+            }
+            Self::LabelIndexInsideIndex { error_span } => {
+                DiagnosticData::new(&"lower index cannot be used inside another lower index.")
+                    .add_span(error_span)
             }
         }
     }

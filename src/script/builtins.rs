@@ -75,7 +75,7 @@ pub fn register(library: &mut Library) {
 pub mod macros {
     macro_rules! call {
         ($fig:ident : $func:ident($($arg:expr),*)) => {
-            $func($(&$arg.clone()),*, $fig, None)
+            $func($(&$arg.clone()),*, $fig, $crate::script::unroll::Properties::from(None))
         };
     }
 
@@ -414,7 +414,7 @@ pub mod macros {
 
     macro_rules! rule {
         ($context:ident : $rule_op:ident($lhs:expr, $rhs:expr) $(neg = $neg:expr)?) => {
-            $rule_op(&$lhs, &$rhs, $context, None, $crate::script::builtins::macros::mneg!($(neg = $neg)?))
+            $rule_op(&$lhs, &$rhs, $context, $crate::script::unroll::Properties::from(None), $crate::script::builtins::macros::mneg!($(neg = $neg)?))
         };
         ($context:ident : $rule_op:ident($lhs:expr, $rhs:expr); $props:expr; $(neg = $neg:expr)?) => {
             $rule_op(&$lhs, &$rhs, $context, $props, $crate::script::builtins::macros::mneg!($(neg = $neg)?))

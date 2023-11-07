@@ -33,20 +33,20 @@ pub fn point_point_point(
     b: &Expr<Point>,
     c: &Expr<Point>,
     context: &mut CompileContext,
-    display: Option<Properties>,
+    display: Properties,
 ) -> Expr<Line> {
     drop(display);
     let expr = bisector!(a, b, c);
 
     // Render the bisector.
-    context
-        .figure
-        .rays
-        .push((b.clone(), intersection!(expr, line2!(a, c))));
+    // context
+    //     .figure
+    //     .rays
+    //     .push((b.clone(), intersection!(expr, line2!(a, c))));
 
-    context.figure.segments.push((a.clone(), b.clone()));
+    // context.figure.segments.push((a.clone(), b.clone()));
 
-    context.figure.segments.push((c.clone(), b.clone()));
+    // context.figure.segments.push((c.clone(), b.clone()));
 
     expr
 }
@@ -56,7 +56,7 @@ pub fn point_point(
     a: &Expr<Point>,
     b: &Expr<Point>,
     context: &mut CompileContext,
-    display: Option<Properties>,
+    display: Properties,
 ) -> Expr<Line> {
     use super::mid::function_point;
     use super::perpendicular::line_point;
@@ -64,7 +64,7 @@ pub fn point_point(
 
     let expr = call!(context:line_point(line2!(a, b), call!(context:function_point(&[a.clone(), b.clone()]))));
 
-    context.figure.lines.push(expr.clone());
+    // context.figure.lines.push(expr.clone());
 
     expr
 }

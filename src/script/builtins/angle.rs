@@ -33,7 +33,7 @@ fn angle_function_point_point_point(
     b: &Expr<Point>,
     c: &Expr<Point>,
     _context: &mut CompileContext,
-    display: Option<Properties>,
+    display: Properties,
 ) -> Expr<Scalar> {
     drop(display);
     angle_expr!(a, b, c)
@@ -44,7 +44,7 @@ fn angle_function_line_line(
     k: &Expr<Line>,
     l: &Expr<Line>,
     _context: &mut CompileContext,
-    display: Option<Properties>,
+    display: Properties,
 ) -> Expr<Scalar> {
     drop(display);
     angle_expr!(k, l)

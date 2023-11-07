@@ -516,6 +516,18 @@ pub struct PointCollectionItem {
     pub span: Span
 }
 
+impl Display for PointCollectionItem {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}{}{}",
+            self.letter,
+            "'".repeat(self.primes as usize),
+            self.index.as_ref().map_or(String::new(), |x| format!("_{x}"))
+        )
+    }
+}
+
 /// A point collection composed of point characters and the number of `'` characters following them.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PointCollection {
@@ -542,12 +554,7 @@ impl Display for PointCollection {
             "{}",
             self.collection
                 .iter()
-                .map(|item| format!(
-                    "{}{}{}",
-                    item.letter,
-                    "'".repeat(item.primes as usize),
-                    item.index.map_or(String::new(), |x| format!("_{x}"))
-                ))
+                .map(|item| format!("{item}"))
                 .collect::<String>()
         )
     }
@@ -700,14 +707,11 @@ fn dispatch_ident(sp: Span, ident: String) -> Ident {
     let mut chars = ident.chars().peekable();
     let mut offset = 0;
 
-    // If the point collection is not a point collection, we mark this true
-    let mut ret_ident = false;
-
+    // If the point collection is not a point collection, this will be non-zero
     let mut invalid = 0;
 
     while let Some(letter) = chars.next() {
         if !letter.is_ascii_uppercase() {
-            ret_ident = true;
             invalid += 1;
         }
 
@@ -732,7 +736,6 @@ fn dispatch_ident(sp: Span, ident: String) -> Ident {
 
             if index.is_empty() {
                 // Assume index exists, go on
-                ret_ident = true;
                 invalid += 1;
             }
 
