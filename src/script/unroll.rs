@@ -1951,7 +1951,7 @@ fn unroll_simple(
             let params = match &e.params {
                 Some(params) => params
                     .iter()
-                    .map(|p| unroll_expression(p, context, library, it_index))
+                    .map(|p| unroll_expression(p, context, library, it_index, None))
                     .collect::<Result<Vec<AnyExpr>, Error>>()?,
                 None => Vec::new(),
             };
@@ -2021,13 +2021,14 @@ fn unroll_simple(
             })
         }
         SimpleExpressionKind::Parenthised(expr) => {
-            unroll_expression(&expr.content, context, library, it_index)?
+            unroll_expression(&expr.content, context, library, it_index, None)?
         }
         SimpleExpressionKind::ExplicitIterator(it) => unroll_expression(
             it.get(it_index[&it.id]).unwrap(),
             context,
             library,
-            it_index
+            it_index,
+            None
         )?,
         SimpleExpressionKind::PointCollection(col) => AnyExpr::PointCollection(Expr {
             weight: FastFloat::One, // TODO: UPDATE FOR WEIGHING SUPPORT IN GEOSCRIPT
@@ -2038,7 +2039,7 @@ fn unroll_simple(
                     col.points
                         .iter()
                         .map(|expr| {
-                            unroll_expression(expr, context, library, it_index)?
+                            unroll_expression(expr, context, library, it_index, None)?
                                 .convert()
                                 .map_err(|v| {
                                     let err = v.as_implicit_does_not_exist().unwrap();
@@ -2125,7 +2126,8 @@ fn unroll_expression<const ITER: bool>(
     expr: &Expression<ITER>,
     context: &mut CompileContext,
     library: &Library,
-    it_index: &HashMap<u8, usize>
+    it_index: &HashMap<u8, usize>,
+    external_display: Option<&DisplayProperties>
 ) -> Result<AnyExpr, Error> {
     match expr {
         Expression::Single(simple) => unroll_simple(simple.as_ref(), context, library, it_index),
@@ -2136,8 +2138,8 @@ fn unroll_expression<const ITER: bool>(
             it_index
         ),
         Expression::Binop(op) => {
-            let lhs = unroll_expression(&op.lhs, context, library, it_index)?;
-            let rhs = unroll_expression(&op.rhs, context, library, it_index)?;
+            let lhs = unroll_expression(&op.lhs, context, library, it_index, None)?;
+            let rhs = unroll_expression(&op.rhs, context, library, it_index, None)?;
 
             unroll_binop(&lhs, &op.operator, &rhs)
         }
@@ -2397,7 +2399,8 @@ fn create_variables(
 
     // Iterate over each identifier.
     for def in stat.ident.iter() {
-        
+        let mut expr = stat.expr;
+        expr.
 
         let rhs_unrolled = unroll_expression(
             &stat.expr,
@@ -2411,7 +2414,7 @@ fn create_variables(
         match &def.name {
             Ident::Named(named) => {
                 create_variable_named(
-                    stat,
+                    &stat,
                     context,
                     named,
                     rhs_unrolled,
@@ -2420,7 +2423,7 @@ fn create_variables(
             }
             Ident::Collection(col) => {
                 create_variable_collection(
-                    stat,
+                    &stat,
                     context,
                     col,
                     &rhs_unrolled,
@@ -2480,9 +2483,9 @@ fn unroll_let(
 
         while let Some(it_index) = index.get_currents() {
             unroll_rule(
-                unroll_expression(&lhs, context, library, it_index)?,
+                unroll_expression(&lhs, context, library, it_index, None)?,
                 &rule,
-                unroll_expression(&expr, context, library, it_index)?,
+                unroll_expression(&expr, context, library, it_index, None)?,
                 context,
                 library,
                 stat_span,
@@ -2722,9 +2725,9 @@ fn unroll_rulestat(
 
     while let Some(index) = it_index.get_currents() {
         unroll_rule(
-            unroll_expression(&rule.lhs, context, library, index)?,
+            unroll_expression(&rule.lhs, context, library, index, None)?,
             &rule.op,
-            unroll_expression(&rule.rhs, context, library, index)?,
+            unroll_expression(&rule.rhs, context, library, index, None)?,
             context,
             library,
             rule.get_span(),
@@ -2932,7 +2935,7 @@ pub fn unroll(input: &str) -> Result<(CompileContext, CollectionNode), Error> {
         // Unroll the statement
         match stat {
             Statement::Noop(_) | Statement::Flag(_) => (),
-            Statement::Let(stat) => unroll_let(&stat, &mut context, &library)?,
+            Statement::Let(stat) => unroll_let(stat, &mut context, &library)?,
             Statement::Rule(stat) => unroll_rulestat(&stat, &mut context, &library)?,
         }
     }
