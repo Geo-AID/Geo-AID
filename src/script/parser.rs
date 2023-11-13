@@ -32,7 +32,7 @@ use super::{
         LBrace, LParen, LSquare, Let, Lt, Lteq, Minus, NamedIdent, Number, Plus, RBrace, RParen,
         RSquare, Semi, Slash, Span, Token, Vertical,
     },
-    unit, ComplexUnit, Error,
+    unit, ComplexUnit, Error, figure::MathString
 };
 
 macro_rules! impl_token_parse {
@@ -667,6 +667,13 @@ impl<T, P> Punctuated<T, P> {
         vec![self.first.as_ref()]
             .into_iter()
             .chain(self.collection.iter().map(|x| &x.1))
+    }
+
+    /// Turns the punctuated into an iterator on the items.
+    pub fn into_iter(self) -> impl Iterator<Item = T> {
+        vec![*self.first]
+            .into_iter()
+            .chain(self.collection.into_iter().map(|x| x.1))
     }
 
     /// Gets the item count.
@@ -1367,6 +1374,7 @@ impl Parse for Property {
 pub enum PropertyValue {
     Number(ExprNumber),
     Ident(Ident),
+    MathString(MathString)
 }
 
 impl PropertyValue {
@@ -1393,6 +1401,9 @@ impl PropertyValue {
                     error_span: num.get_span(),
                 }),
             },
+            Self::MathString(s) => Err(Error::BooleanExpected {
+                error_span: s.get_span(),
+            })
         }
     }
 
@@ -1404,6 +1415,9 @@ impl PropertyValue {
             PropertyValue::Number(num) => Err(Error::StringExpected {
                 error_span: num.get_span(),
             }),
+            Self::MathString(s) => Err(Error::StringExpected {
+                error_span: s.get_span(),
+            })
         }
     }
 }
@@ -1413,6 +1427,7 @@ impl Parse for PropertyValue {
         match self {
             Self::Number(n) => n.get_span(),
             Self::Ident(i) => i.get_span(),
+            Self::MathString(s) => s.get_span(),
         }
     }
 
@@ -1439,6 +1454,23 @@ pub struct DisplayProperties {
     pub properties: Punctuated<Property, Semi>,
     /// ']'
     pub rsquare: RSquare,
+}
+
+impl DisplayProperties {
+    pub fn merge(this: Option<Self>, other: Option<Self>) -> Option<Self> {
+        match this {
+            Some(mut this) => {
+                if let Some(other) = other {
+                    for pair in other.properties.collection {
+                        this.properties.collection.push(pair);
+                    }
+                }
+                
+                Some(this)
+            },
+            None => other
+        }
+    }
 }
 
 impl Parse for DisplayProperties {

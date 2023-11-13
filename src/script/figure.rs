@@ -245,13 +245,19 @@ impl Display for MathSpecial {
 }
 
 /// A series of math characters.
-#[derive(Debug, Clone, Default)]
-pub struct MathString(Vec<MathChar>);
+#[derive(Debug, Clone)]
+pub struct MathString {
+    chars: Vec<MathChar>,
+    span: Span
+}
 
 impl MathString {
     #[must_use]
-    pub fn new() -> Self {
-        Self(Vec::new())
+    pub fn new(span: Span) -> Self {
+        Self {
+            chars: Vec::new(),
+            span
+        }
     }
 
     pub fn displayed_by_default(&self) -> Option<MathString> {
@@ -260,7 +266,7 @@ impl MathString {
         // The first set of characters must be either a single character or a special code.
         let mut letter = String::new();
 
-        let mut chars = self.0.iter().copied().peekable();
+        let mut chars = self.chars.iter().copied().peekable();
 
         while let Some(MathChar::Ascii(c)) = chars.peek().copied() {
             chars.next();
@@ -293,7 +299,10 @@ impl MathString {
         }
 
         if chars.next().is_none() {
-            Some(Self(result))
+            Some(Self {
+                chars: result,
+                span: self.span
+            })
         } else {
             None
         }
@@ -362,12 +371,20 @@ impl MathString {
             math_string.push(MathChar::SetIndex(MathIndex::Normal));
         }
 
-        Ok(Self(math_string))
+        Ok(Self {
+            chars: math_string,
+            span: content_span
+        })
     }
 
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        self.0.is_empty()
+        self.chars.is_empty()
+    }
+
+    #[must_use]
+    pub fn get_span(&self) -> Span {
+        self.span
     }
 }
 
@@ -383,13 +400,16 @@ impl From<PointCollectionItem> for MathString {
 
         math_string.extend(vec![MathChar::Prime].repeat(value.primes.into()));
 
-        Self(math_string)
+        Self {
+            chars: math_string,
+            span: value.span
+        }
     }
 }
 
 impl Display for MathString {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        for c in &self.0 {
+        for c in &self.chars {
             write!(f, "{c}")?
         }
 

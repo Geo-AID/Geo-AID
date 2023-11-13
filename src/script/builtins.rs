@@ -73,6 +73,19 @@ pub fn register(library: &mut Library) {
 
 /// Helper macros
 pub mod macros {
+    macro_rules! expr_with {
+        () => {
+            $crate::script::unroll::Expr {
+                weight: $crate::generator::fast_float::FastFloat::One,
+                span: $crate::span!(0, 0, 0, 0),
+                data: std::rc::Rc::new($crate::script::unroll::Line::LineFromPoints(
+                    $a.clone(),
+                    $b.clone(),
+                )),
+            }
+        }
+    }
+
     macro_rules! call {
         ($fig:ident : $func:ident($($arg:expr),*)) => {
             $func($(&$arg.clone()),*, $fig, $crate::script::unroll::Properties::from(None))

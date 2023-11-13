@@ -45,7 +45,7 @@ use crate::{
     span,
 };
 
-use super::unroll::{UnrolledRule, CollectionNode, Node};
+use super::unroll::{UnrolledRule, CollectionNode, Node, Displayed};
 use super::{
     figure::Figure,
     unroll::{
@@ -258,7 +258,7 @@ impl Compiler {
     }
 }
 
-pub trait Compile<T, U> {
+pub trait Compile<T: Displayed, U> {
     fn compile(&mut self, expr: &Expr<T>) -> Arc<Expression<U>>;
 }
 
@@ -446,7 +446,7 @@ impl Compiler {
     }
 
     /// Attempts to compile the variable. If the variable is a `PointCollection`, leaves it unrolled. Otherwise everything is compiled properly.
-    fn compile_variable<T, U>(&mut self, var: &Rc<RefCell<Variable<T>>>) -> Arc<Expression<U>>
+    fn compile_variable<T: Displayed, U>(&mut self, var: &Rc<RefCell<Variable<T>>>) -> Arc<Expression<U>>
     where
         VariableRecord: Mapping<RefCell<Variable<T>>, U>,
         Self: Compile<T, U>,

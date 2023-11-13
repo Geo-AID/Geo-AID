@@ -40,6 +40,9 @@ pub use context::{
     Scalar as EntScalar,
 };
 
+use super::figure::MathString;
+use super::parser;
+use super::token::{LSquare, RSquare};
 use super::{
     builtins,
     parser::{
@@ -67,7 +70,7 @@ pub struct RuleOperatorDefinition {
 
 /// A variable created with a let statement.
 #[derive(Debug)]
-pub struct Variable<T> {
+pub struct Variable<T: Displayed> {
     /// Variable's name
     pub name: String,
     /// Variable's definition span.
@@ -777,13 +780,13 @@ pub enum UnrolledRuleKind {
     Alternative(Vec<UnrolledRule>),
 }
 
-pub trait ConvertFrom<T> {
+pub trait ConvertFrom<T>: Displayed {
     /// # Errors
     /// Returns an error if the conversion is invalid.
     fn convert_from(value: T) -> Result<Expr<Self>, Error>;
 }
 
-impl<T> ConvertFrom<Expr<T>> for T {
+impl<T: Displayed> ConvertFrom<Expr<T>> for T {
     fn convert_from(value: Expr<T>) -> Result<Expr<Self>, Error> {
         Ok(value)
     }
@@ -867,6 +870,7 @@ macro_rules! impl_make_variable {
                             definition_span: sp,
                         }),
                     )))),
+                    node: None // Variable references are NEVER displayed
                 }
             }
         }
@@ -890,6 +894,7 @@ macro_rules! impl_make_variable {
                             },
                         )))),
                     }),
+                    node: None // Variable references are NEVER displayed
                 }
             }
         }
@@ -906,16 +911,16 @@ macro_rules! impl_any_from_x {
     };
 }
 
-#[derive(Debug, Clone, Definition)]
+#[derive(Debug, Definition)]
 pub enum Generic<T>
 where
-    T: Definition,
+    T: Definition + Displayed,
 {
     VariableAccess(#[def(variable)] Rc<RefCell<Variable<T>>>),
     Boxed(Expr<T>),
 }
 
-impl<T: Display + Definition> Display for Generic<T> {
+impl<T: Display + Definition + Displayed> Display for Generic<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::VariableAccess(name) => write!(f, "{}", name.borrow().name),
@@ -942,6 +947,10 @@ impl Point {
     }
 }
 
+impl Displayed for Point {
+    type Node = CollectionNode;
+}
+
 impl Simplify for Expr<Point> {
     fn simplify(&self, context: &CompileContext) -> Expr<Point> {
         match self.data.as_ref() {
@@ -961,11 +970,14 @@ impl Simplify for Expr<Point> {
 
 impl Expr<Point> {
     #[must_use]
-    pub fn boxed(self, weight: FastFloat, span: Span) -> Self {
+    pub fn boxed(mut self, weight: FastFloat, span: Span) -> Self {
+        let node = self.node.take();
+
         Self {
             weight,
             span,
             data: Rc::new(Point::Generic(Generic::Boxed(self))),
+            node
         }
     }
 }
@@ -1042,6 +1054,10 @@ impl Circle {
     }
 }
 
+impl Displayed for Circle {
+    type Node = CollectionNode;
+}
+
 impl Simplify for Expr<Circle> {
     fn simplify(&self, context: &CompileContext) -> Self {
         match self.data.as_ref() {
@@ -1057,11 +1073,14 @@ impl Simplify for Expr<Circle> {
 
 impl Expr<Circle> {
     #[must_use]
-    pub fn boxed(self, weight: FastFloat, span: Span) -> Self {
+    pub fn boxed(mut self, weight: FastFloat, span: Span) -> Self {
+        let node = self.node.take();
+
         Self {
             weight,
             span,
             data: Rc::new(Circle::Generic(Generic::Boxed(self))),
+            node
         }
     }
 }
@@ -1101,6 +1120,10 @@ impl Line {
     }
 }
 
+impl Displayed for Line {
+    type Node = CollectionNode;
+}
+
 impl Simplify for Expr<Line> {
     fn simplify(&self, context: &CompileContext) -> Expr<Line> {
         match self.data.as_ref() {
@@ -1119,11 +1142,14 @@ impl Simplify for Expr<Line> {
 
 impl Expr<Line> {
     #[must_use]
-    pub fn boxed(self, weight: FastFloat, span: Span) -> Self {
+    pub fn boxed(mut self, weight: FastFloat, span: Span) -> Self {
+        let node = self.node.take();
+
         Self {
             weight,
             span,
             data: Rc::new(Line::Generic(Generic::Boxed(self))),
+            node
         }
     }
 }
@@ -1247,6 +1273,10 @@ impl_convert_err! {Line -> Scalar}
 impl_convert_err! {Bundle -> Scalar}
 
 impl_make_variable! {Scalar {other: unit, data: ScalarData}}
+
+impl Displayed for Scalar {
+    type Node = CollectionNode;
+}
 
 impl ConvertFrom<Expr<PointCollection>> for Scalar {
     fn convert_from(value: Expr<PointCollection>) -> Result<Expr<Self>, Error> {
@@ -1445,6 +1475,10 @@ impl_convert_err! {Bundle -> PointCollection}
 
 impl_make_variable! {PointCollection {other: length, data: PointCollectionData}}
 
+impl Displayed for PointCollection {
+    type Node = CollectionNode;
+}
+
 impl ConvertFrom<Expr<Point>> for PointCollection {
     fn convert_from(value: Expr<Point>) -> Result<Expr<Self>, Error> {
         Ok(Expr {
@@ -1570,6 +1604,10 @@ impl Bundle {
             BundleData::ConstructBundle(map) => map.get(field).unwrap().clone(),
         }
     }
+}
+
+impl Displayed for Bundle {
+    type Node = CollectionNode;
 }
 
 impl Expr<Bundle> {
@@ -1774,20 +1812,45 @@ pub fn display_vec<T: Display>(v: &[T]) -> String {
         .join(", ")
 }
 
-#[derive(Debug, Clone)]
-pub struct Expr<T: ?Sized> {
+pub trait Displayed {
+    type Node: Node;
+}
+
+#[derive(Debug)]
+pub struct Expr<T: ?Sized + Displayed> {
     pub data: Rc<T>,
     pub span: Span,
     pub weight: FastFloat, // Assigned weight.
+    pub node: Option<T::Node>
 }
 
-impl<T: GetValueType> GetValueType for Expr<T> {
+impl<T: ?Sized + Displayed> Expr<T> {
+    pub fn clone_with_node(&mut self) -> Self {
+        Self {
+            data: Rc::clone(&self.data),
+            span: self.span,
+            weight: self.weight,
+            node: self.node.take()
+        }
+    }
+
+    pub fn clone_without_node(&self) -> Self {
+        Self {
+            data: Rc::clone(&self.data),
+            span: self.span,
+            weight: self.weight,
+            node: None
+        }
+    }
+}
+
+impl<T: GetValueType + Displayed> GetValueType for Expr<T> {
     fn get_value_type(&self) -> Type {
         self.data.get_value_type()
     }
 }
 
-impl<T: Definition> Definition for Expr<T> {
+impl<T: Definition + Displayed> Definition for Expr<T> {
     fn order(&self, context: &CompileContext) -> usize {
         self.data.order(context)
     }
@@ -1797,13 +1860,13 @@ impl<T: Definition> Definition for Expr<T> {
     }
 }
 
-impl<T: Display> Display for Expr<T> {
+impl<T: Display + Displayed> Display for Expr<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.data)
     }
 }
 
-impl<T: Clone> Expr<T> {
+impl<T: Clone + Displayed> Expr<T> {
     pub fn new_spanless(data: T) -> Self {
         Self {
             span: span!(0, 0, 0, 0),
@@ -1911,9 +1974,10 @@ fn unroll_simple(
     expr: &SimpleExpression,
     context: &mut CompileContext,
     library: &Library,
-    it_index: &HashMap<u8, usize>
+    it_index: &HashMap<u8, usize>,
+    external_display: Option<&DisplayProperties>
 ) -> Result<AnyExpr, Error> {
-    let display = Properties::from(expr.display.as_ref());
+    let display = Properties::from(DisplayProperties::merge(expr.display.clone(), external_display.cloned()));
 
     Ok(match &expr.kind {
         SimpleExpressionKind::Ident(i) => match i {
@@ -2009,7 +2073,7 @@ fn unroll_simple(
         }
         SimpleExpressionKind::Unop(op) => {
             let unrolled: Expr<Scalar> =
-                unroll_simple(&op.rhs, context, library, it_index)?.convert()?;
+                unroll_simple(&op.rhs, context, library, it_index, external_display)?.convert()?;
 
             AnyExpr::Scalar(Expr {
                 weight: FastFloat::One,
@@ -2130,12 +2194,15 @@ fn unroll_expression<const ITER: bool>(
     external_display: Option<&DisplayProperties>
 ) -> Result<AnyExpr, Error> {
     match expr {
-        Expression::Single(simple) => unroll_simple(simple.as_ref(), context, library, it_index),
+        Expression::Single(simple) => {
+            unroll_simple(simple.as_ref(), context, library, it_index, external_display)
+        }
         Expression::ImplicitIterator(it) => unroll_simple(
             it.get(it_index[&0]).unwrap(), // Implicit iterators always have an id of 0.
             context,
             library,
-            it_index
+            it_index,
+            external_display
         ),
         Expression::Binop(op) => {
             let lhs = unroll_expression(&op.lhs, context, library, it_index, None)?;
@@ -2204,11 +2271,11 @@ impl Properties {
     }
 }
 
-impl From<Option<&DisplayProperties>> for Properties {
-    fn from(value: Option<&DisplayProperties>) -> Self {
+impl From<Option<DisplayProperties>> for Properties {
+    fn from(value: Option<DisplayProperties>) -> Self {
         Self(
             value.into_iter().flat_map(
-                |x| x.properties.iter()
+                |x| x.properties.into_iter()
             )
                 .map(|v| (v.name.ident.clone(), v.value.clone()))
                 .collect(),
@@ -2281,7 +2348,6 @@ fn create_variable_collection(
     context: &mut CompileContext,
     col: &PCToken,
     rhs_unrolled: &AnyExpr,
-    _display: Option<&DisplayProperties>,
     variables: &mut Vec<AnyExpr>
 ) -> Result<(), Error> {
     // let display = Properties::from(display);
@@ -2399,15 +2465,42 @@ fn create_variables(
 
     // Iterate over each identifier.
     for def in stat.ident.iter() {
-        let mut expr = stat.expr;
-        expr.
+        let default_label = match &def.name {
+            Ident::Named(named) => MathString::parse(&named.ident, named.span).ok(),
+            Ident::Collection(col) => if col.len() == 1 {
+                Some(MathString::from(col.collection[0].clone()))
+            } else {
+                None
+            },
+        }.and_then(|x| x.displayed_by_default()).unwrap_or_else(|| MathString::new(span!(0, 0, 0, 0)));
+
+        let display = DisplayProperties::merge(
+            def.display_properties.clone(),
+            Some(DisplayProperties {
+                lsquare: LSquare { span: span!(0, 0, 0, 0) },
+                properties: Punctuated {
+                    first: Box::new(parser::Property {
+                        name: NamedIdent {
+                            span: span!(0, 0, 0, 0),
+                            ident: String::from("default-label"),
+                            collection_likeness: 0.0
+                        },
+                        eq: token::Eq { span: span!(0, 0, 0, 0) },
+                        value: PropertyValue::MathString(default_label)
+                    }),
+                    collection: Vec::new()
+                },
+                rsquare: RSquare { span: span!(0, 0, 0, 0) }
+            })
+        );
 
         let rhs_unrolled = unroll_expression(
             &stat.expr,
             context,
             library,
             ind.as_ref()
-                .unwrap_or_else(|| it_index.get_currents().unwrap())
+                .unwrap_or_else(|| it_index.get_currents().unwrap()),
+            display.as_ref()
         )?;
         it_index.next();
 
@@ -2427,7 +2520,6 @@ fn create_variables(
                     context,
                     col,
                     &rhs_unrolled,
-                    def.display_properties.as_ref(),
                     &mut variables
                 )?;
             }

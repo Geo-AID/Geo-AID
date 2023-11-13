@@ -31,7 +31,8 @@ pub fn register(library: &mut Library) {
         Function {
             name: String::from("Point"),
             overloads: vec![overload!(() -> POINT {
-                |context: &mut CompileContext, _| {
+                |context: &mut CompileContext, display| {
+                    println!("{display:#?}");
                     entity!(POINT context.add_point())
                 }
             })],

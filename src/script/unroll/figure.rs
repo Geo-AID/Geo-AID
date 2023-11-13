@@ -20,7 +20,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 use std::{ops::Deref, fmt::Debug};
 
-use crate::script::{figure::{MathString, Figure, Mode}, token::{PointCollectionItem, NamedIdent}, compile::{Compiler, Compile}};
+use crate::{script::{figure::{MathString, Figure, Mode}, token::{PointCollectionItem, NamedIdent}, compile::{Compiler, Compile}}, span};
 
 use super::{Expr, Point, Circle};
 
@@ -197,7 +197,7 @@ impl Node for PointNode {
                         label.clone()
                     }
                 } else {
-                    MathString::new()
+                    MathString::new(span!(0, 0, 0, 0))
                 }
             ))
         }
