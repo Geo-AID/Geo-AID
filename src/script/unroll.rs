@@ -931,7 +931,7 @@ impl<T: Display + Definition + Displayed> Display for Generic<T> {
     }
 }
 
-#[derive(Debug, Clone, Definition)]
+#[derive(Debug, Definition)]
 pub enum Point {
     Generic(Generic<Self>),
     Entity(#[def(entity)] usize),
@@ -946,6 +946,8 @@ impl Point {
         Type::Point
     }
 }
+
+impl CloneWithNode {}
 
 impl Displayed for Point {
     type Node = CollectionNode;
@@ -1816,6 +1818,24 @@ pub trait Displayed {
     type Node: Node;
 }
 
+pub trait CloneWithNode {
+    #[must_use]
+    fn clone_with_node(&mut self) -> Self;
+
+    #[must_use]
+    fn clone_without_node(&self) -> Self;
+}
+
+impl<T: Clone> CloneWithNode for T {
+    fn clone_with_node(&mut self) -> Self {
+        self.clone()
+    }
+
+    fn clone_without_node(&self) -> Self {
+        self.clone()
+    }
+}
+
 #[derive(Debug)]
 pub struct Expr<T: ?Sized + Displayed> {
     pub data: Rc<T>,
@@ -1824,8 +1844,8 @@ pub struct Expr<T: ?Sized + Displayed> {
     pub node: Option<T::Node>
 }
 
-impl<T: ?Sized + Displayed> Expr<T> {
-    pub fn clone_with_node(&mut self) -> Self {
+impl<T: ?Sized + Displayed> CloneWithNode for Expr<T> {
+    fn clone_with_node(&mut self) -> Self {
         Self {
             data: Rc::clone(&self.data),
             span: self.span,
@@ -1834,7 +1854,7 @@ impl<T: ?Sized + Displayed> Expr<T> {
         }
     }
 
-    pub fn clone_without_node(&self) -> Self {
+    fn clone_without_node(&self) -> Self {
         Self {
             data: Rc::clone(&self.data),
             span: self.span,
