@@ -74,7 +74,9 @@ pub fn register(library: &mut Library) {
 /// Helper macros
 pub mod macros {
     macro_rules! expr_with {
-        () => {
+        ($ty:ident :: $kind:ident ($($arg1:expr),*) with ($($arg2:expr),*)) => {
+            $($arg2.clone_with_node())
+
             $crate::script::unroll::Expr {
                 weight: $crate::generator::fast_float::FastFloat::One,
                 span: $crate::span!(0, 0, 0, 0),

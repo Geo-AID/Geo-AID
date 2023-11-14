@@ -18,7 +18,7 @@ WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use geo_aid_derive::Definition;
+use geo_aid_derive::{Definition, CloneWithNode};
 use std::fmt::Formatter;
 use std::mem;
 use std::{
@@ -931,7 +931,7 @@ impl<T: Display + Definition + Displayed> Display for Generic<T> {
     }
 }
 
-#[derive(Debug, Definition)]
+#[derive(Debug, Definition, CloneWithNode)]
 pub enum Point {
     Generic(Generic<Self>),
     Entity(#[def(entity)] usize),
@@ -946,8 +946,6 @@ impl Point {
         Type::Point
     }
 }
-
-impl CloneWithNode {}
 
 impl Displayed for Point {
     type Node = CollectionNode;
@@ -1299,7 +1297,9 @@ impl Scalar {
 
 impl Expr<Scalar> {
     #[must_use]
-    pub fn boxed(self, weight: FastFloat, span: Span) -> Self {
+    pub fn boxed(mut self, weight: FastFloat, span: Span) -> Self {
+        let node = self.node.take();
+
         Self {
             weight,
             span,
@@ -1307,6 +1307,7 @@ impl Expr<Scalar> {
                 unit: self.data.unit,
                 data: ScalarData::Generic(Generic::Boxed(self)),
             }),
+            node
         }
     }
 
@@ -1328,8 +1329,6 @@ impl Expr<Scalar> {
         } else {
             // `unit` is concrete and self.unit is not
             Ok(Self {
-                weight: self.weight,
-                span: self.span,
                 data: Rc::new(Scalar {
                     unit,
                     data: match &self.data.data {
@@ -1388,6 +1387,7 @@ impl Expr<Scalar> {
                         }
                     },
                 }),
+                ..self
             })
         }
     }
@@ -1503,7 +1503,9 @@ impl PointCollection {
 
 impl Expr<PointCollection> {
     #[must_use]
-    pub fn boxed(self, weight: FastFloat, span: Span) -> Self {
+    pub fn boxed(mut self, weight: FastFloat, span: Span) -> Self {
+        let node = self.node.take();
+
         Self {
             weight,
             span,
@@ -1511,6 +1513,7 @@ impl Expr<PointCollection> {
                 length: self.data.length,
                 data: PointCollectionData::Generic(Generic::Boxed(self)),
             }),
+            node
         }
     }
 
@@ -1614,7 +1617,9 @@ impl Displayed for Bundle {
 
 impl Expr<Bundle> {
     #[must_use]
-    pub fn boxed(self, weight: FastFloat, span: Span) -> Self {
+    pub fn boxed(mut self, weight: FastFloat, span: Span) -> Self {
+        let node = self.node.take();
+
         Self {
             weight,
             span,
@@ -1622,6 +1627,7 @@ impl Expr<Bundle> {
                 name: self.data.name,
                 data: BundleData::Generic(Generic::Boxed(self)),
             }),
+            node
         }
     }
 
@@ -1887,11 +1893,13 @@ impl<T: Display + Displayed> Display for Expr<T> {
 }
 
 impl<T: Clone + Displayed> Expr<T> {
+    /// Creates a new expression without a declared span. WARNING: the expression has no node.
     pub fn new_spanless(data: T) -> Self {
         Self {
             span: span!(0, 0, 0, 0),
             data: Rc::new(data),
             weight: FastFloat::One,
+            node: None
         }
     }
 
@@ -2021,6 +2029,7 @@ fn unroll_simple(
                     ),
                 }),
                 span: col.span,
+                node: None // Point collections always reference variables. The is no point generating a node.
             }),
         },
         SimpleExpressionKind::Number(num) => AnyExpr::Scalar(Expr {
@@ -2030,6 +2039,7 @@ fn unroll_simple(
                 data: ScalarData::Number(num.value.to_float()),
             }),
             span: num.get_span(),
+            node: None
         }),
         SimpleExpressionKind::Call(e) => {
             let params = match &e.params {
@@ -2092,8 +2102,10 @@ fn unroll_simple(
             }
         }
         SimpleExpressionKind::Unop(op) => {
-            let unrolled: Expr<Scalar> =
+            let mut unrolled: Expr<Scalar> =
                 unroll_simple(&op.rhs, context, library, it_index, external_display)?.convert()?;
+
+            let node = unrolled.node.take();
 
             AnyExpr::Scalar(Expr {
                 weight: FastFloat::One,
@@ -2102,6 +2114,7 @@ fn unroll_simple(
                     unit: unrolled.data.unit,
                     data: ScalarData::Negate(unrolled),
                 }),
+                node
             })
         }
         SimpleExpressionKind::Parenthised(expr) => {
@@ -2136,6 +2149,7 @@ fn unroll_simple(
                         .collect::<Result<Vec<Expr<Point>>, Error>>()?,
                 ),
             }),
+            node: None // Point collections always reference variables. No point in creating a node.
         }),
     })
 }
@@ -2143,7 +2157,7 @@ fn unroll_simple(
 fn unroll_binop(lhs: &AnyExpr, op: &BinaryOperator, rhs: &AnyExpr) -> Result<AnyExpr, Error> {
     let full_span = lhs.get_span().join(rhs.get_span());
 
-    let lhs = lhs
+    let mut lhs = lhs
         .clone()
         .convert::<Scalar>()
         .map_err(|_| Error::InvalidOperandType {
@@ -2152,7 +2166,7 @@ fn unroll_binop(lhs: &AnyExpr, op: &BinaryOperator, rhs: &AnyExpr) -> Result<Any
             op: op.to_string(),
         })?;
 
-    let rhs = rhs
+    let mut rhs = rhs
         .clone()
         .convert::<Scalar>()
         .map_err(|_| Error::InvalidOperandType {
@@ -2160,6 +2174,17 @@ fn unroll_binop(lhs: &AnyExpr, op: &BinaryOperator, rhs: &AnyExpr) -> Result<Any
             got: (rhs.get_type(), rhs.get_span()),
             op: op.to_string(),
         })?;
+
+    // Binary operators generate collection nodes for the lhs and rhs nodes.
+    let mut node = CollectionNode::new();
+
+    if let Some(lhs_node) = lhs.node.take() {
+        node.children.push(Box::new(lhs_node));
+    }
+
+    if let Some(rhs_node) = rhs.node.take() {
+        node.children.push(Box::new(rhs_node));
+    }
 
     match op {
         BinaryOperator::Add(_) | BinaryOperator::Sub(_) => {
@@ -2182,6 +2207,7 @@ fn unroll_binop(lhs: &AnyExpr, op: &BinaryOperator, rhs: &AnyExpr) -> Result<Any
                         _ => unreachable!(),
                     },
                 }),
+                node: Some(node)
             }))
         }
         BinaryOperator::Mul(_) | BinaryOperator::Div(_) => {
@@ -2200,6 +2226,7 @@ fn unroll_binop(lhs: &AnyExpr, op: &BinaryOperator, rhs: &AnyExpr) -> Result<Any
                         _ => unreachable!(),
                     },
                 }),
+                node: Some(node)
             }))
         }
     }
