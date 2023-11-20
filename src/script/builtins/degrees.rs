@@ -34,7 +34,7 @@ pub fn register(library: &mut Library) {
         Function {
             name: String::from("degrees"),
             overloads: vec![overload!((SCALAR) -> ANGLE {
-                |v: &Expr<Scalar>, _, _| set_unit!(math!(*, v, number!(PI / 180.0)), %ANGLE)
+                |mut v: Expr<Scalar>, _, _| set_unit!(math!(*, v, number!(PI / 180.0)), %ANGLE)
             })],
         },
     );

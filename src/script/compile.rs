@@ -45,7 +45,7 @@ use crate::{
     span,
 };
 
-use super::unroll::{UnrolledRule, CollectionNode, Node, Displayed};
+use super::unroll::{UnrolledRule, CollectionNode, Node, Displayed, CloneWithNode};
 use super::{
     figure::Figure,
     unroll::{
@@ -229,6 +229,7 @@ impl Compiler {
                 data: ScalarData::Entity(dst_var),
             }),
             span: span!(0, 0, 0, 0),
+            node: None
         };
 
         let mut entities = Vec::new();
@@ -389,29 +390,33 @@ impl Compiler {
         let u = expr.data.unit;
 
         match power.cmp(&0) {
-            std::cmp::Ordering::Less => Expr {
-                weight: FastFloat::One,
-                data: Rc::new(Scalar {
-                    unit: u,
-                    data: ScalarData::Divide(
-                        self.fix_distance(expr, power + 1),
-                        self.dst_var.clone(),
-                    ),
-                }),
-                span: sp,
-            },
+            std::cmp::Ordering::Less =>
+                Expr {
+                    weight: FastFloat::One,
+                    data: Rc::new(Scalar {
+                        unit: u,
+                        data: ScalarData::Divide(
+                            self.fix_distance(expr, power + 1),
+                            self.dst_var.clone_without_node(),
+                        ),
+                    }),
+                    span: sp,
+                    node: None
+                },
             std::cmp::Ordering::Equal => expr,
-            std::cmp::Ordering::Greater => Expr {
-                weight: FastFloat::One,
-                data: Rc::new(Scalar {
-                    unit: u,
-                    data: ScalarData::Multiply(
-                        self.fix_distance(expr, power - 1),
-                        self.dst_var.clone(),
-                    ),
-                }),
-                span: sp,
-            },
+            std::cmp::Ordering::Greater => 
+                Expr {
+                    weight: FastFloat::One,
+                    data: Rc::new(Scalar {
+                        unit: u,
+                        data: ScalarData::Multiply(
+                            self.fix_distance(expr, power - 1),
+                            self.dst_var.clone_without_node(),
+                        ),
+                    }),
+                    span: sp,
+                    node: None
+                },
         }
     }
 
@@ -435,12 +440,14 @@ impl Compiler {
                             span: expr.span,
                             data: Rc::new(Scalar {
                                 unit: Some(unit::SCALAR),
-                                data: expr.data.data.clone(),
+                                data: expr.data.data.clone_without_node(),
                             }),
+                            node: None
                         },
                         expr.data.unit.unwrap(),
                     ),
                 }),
+                node: None
             })
         }
     }
@@ -474,7 +481,7 @@ impl Compiler {
         // If the expression is compiled, there's no problem
         match self.entities[entity].clone() {
             CompiledEntity::None => {
-                let ent = self.context.entities[entity].clone();
+                let ent = self.context.entities[entity].clone_without_node();
 
                 self.entities[entity] = match &ent {
                     Entity::Scalar(v) => CompiledEntity::Scalar(match v {
@@ -543,10 +550,10 @@ impl Compiler {
     }
 
     fn compile_rule_vec(&mut self, rules: &[UnrolledRule]) -> Vec<Criteria> {
-        rules.iter().map(|rule| self.compile_rule(rule)).collect()
+        rules.iter().flat_map(|rule| self.compile_rule(rule)).collect()
     }
 
-    fn compile_rule(&mut self, rule: &UnrolledRule) -> Criteria {
+    fn compile_rule(&mut self, rule: &UnrolledRule) -> Option<Criteria> {
         let crit = match &rule.kind {
             UnrolledRuleKind::PointEq(lhs, rhs) => {
                 let lhs = self.compile(lhs);
@@ -575,16 +582,17 @@ impl Compiler {
             UnrolledRuleKind::Alternative(rules) => {
                 Weighed::one(CriteriaKind::Alternative(self.compile_rule_vec(rules)))
             }
+            UnrolledRuleKind::Display => return None
         };
 
-        if rule.inverted {
+        Some(if rule.inverted {
             Weighed {
                 object: CriteriaKind::Inverse(Box::new(crit.object)),
                 weight: crit.weight,
             }
         } else {
             crit
-        }
+        })
     }
 
     #[must_use]
@@ -636,7 +644,7 @@ impl Compile<Scalar, ScalarExpr> for Compiler {
             ScalarData::SetUnit(expr, unit) => Arc::new(Expression::new(
                 ScalarExpr::SetUnit(SetUnit {
                     value: self.compile(&self.fix_distance(
-                        expr.clone(),
+                        expr.clone_without_node(),
                         unit[SimpleUnit::Distance as usize]
                             - match expr.data.unit {
                                 Some(unit) => unit[SimpleUnit::Distance as usize],
@@ -775,9 +783,9 @@ pub fn compile(
     let flags = read_flags(&context.flags);
 
     // Print rules (debugging)
-    for rule in &context.rules {
-        println!("{}: {rule}", rule.inverted);
-    }
+    // for rule in &context.rules {
+    //     println!("{}: {rule}", rule.inverted);
+    // }
 
     let mut compiler = Compiler::new(context);
 

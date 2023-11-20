@@ -29,9 +29,9 @@ use super::macros::{angle_expr, call, index};
 
 /// angle(point, point, point) - angle depicted by 3 points.
 fn angle_function_point_point_point(
-    a: &Expr<Point>,
-    b: &Expr<Point>,
-    c: &Expr<Point>,
+    mut a: Expr<Point>,
+    mut b: Expr<Point>,
+    mut c: Expr<Point>,
     _context: &mut CompileContext,
     display: Properties,
 ) -> Expr<Scalar> {
@@ -41,8 +41,8 @@ fn angle_function_point_point_point(
 
 /// angle(line, line) - distance between a point and a line.
 fn angle_function_line_line(
-    k: &Expr<Line>,
-    l: &Expr<Line>,
+    mut k: Expr<Line>,
+    mut l: Expr<Line>,
     _context: &mut CompileContext,
     display: Properties,
 ) -> Expr<Scalar> {
@@ -57,10 +57,10 @@ pub fn register(library: &mut Library) {
             name: String::from("angle"),
             overloads: vec![
                 overload!((3-P) -> ANGLE {
-                    |col: &Expr<PointCollection>, context, _| call!(context:angle_function_point_point_point(
-                        index!(col, 0),
-                        index!(col, 1),
-                        index!(col, 2)
+                    |mut col: Expr<PointCollection>, context, _| call!(context:angle_function_point_point_point(
+                        index!(node col, 0),
+                        index!(node col, 1),
+                        index!(node col, 2)
                     ))
                 }),
                 overload!((POINT, POINT, POINT) -> ANGLE : angle_function_point_point_point),

@@ -24,7 +24,7 @@ use geo_aid_derive::overload;
 use super::macros::average;
 
 pub fn function_point(
-    args: &[Expr<Point>],
+    args: Vec<Expr<Point>>,
     _context: &mut CompileContext,
     display: Properties,
 ) -> Expr<Point> {
@@ -33,7 +33,7 @@ pub fn function_point(
 }
 
 fn function_scalar(
-    args: &[Expr<Scalar>],
+    args: Vec<Expr<Scalar>>,
     _context: &mut CompileContext,
     display: Properties,
 ) -> Expr<Scalar> {

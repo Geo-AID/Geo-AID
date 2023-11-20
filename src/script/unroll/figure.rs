@@ -18,11 +18,11 @@ WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use std::{ops::Deref, fmt::Debug};
+use std::{ops::Deref, fmt::Debug, collections::HashMap};
 
 use crate::{script::{figure::{MathString, Figure, Mode}, token::{PointCollectionItem, NamedIdent}, compile::{Compiler, Compile}}, span};
 
-use super::{Expr, Point, Circle};
+use super::{Expr, Point, Circle, Displayed, Line, Scalar, PointCollection, Bundle};
 
 #[derive(Debug, Clone)]
 pub enum IdentOrItem {
@@ -132,6 +132,14 @@ impl CollectionNode {
             children: Vec::new()
         }
     }
+
+    pub fn push<T: Node + 'static>(&mut self, node: T) {
+        self.children.push(Box::new(node));
+    }
+
+    pub fn extend<T: Node + 'static, U: IntoIterator<Item = T>>(&mut self, nodes: U) {
+        self.children.extend(nodes.into_iter().map(|x| Box::new(x) as Box::<dyn Node>));
+    }
 }
 
 impl Node for CollectionNode {
@@ -146,6 +154,221 @@ impl Node for CollectionNode {
     fn build(&self, compiler: &mut Compiler, figure: &mut Figure) {
         if self.display.copied() {
             for child in &self.children {
+                child.build(compiler, figure);
+            }
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct PCNode {
+    pub display: MaybeUnset<bool>,
+    pub children: Vec<Option<<Point as Displayed>::Node>>
+}
+
+impl PCNode {
+    pub fn new() -> Self {
+        Self {
+            display: MaybeUnset::new(true),
+            children: Vec::new()
+        }
+    }
+
+    pub fn push(&mut self, node: Option<<Point as Displayed>::Node>) {
+        self.children.push(node);
+    }
+
+    pub fn extend<U: IntoIterator<Item = Option<<Point as Displayed>::Node>>>(&mut self, nodes: U) {
+        self.children.extend(nodes);
+    }
+}
+
+impl Node for PCNode {
+    fn set_display(&mut self, display: bool) {
+        self.display.set(display);
+    }
+
+    fn get_display(&self) -> bool {
+        self.display.copied()
+    }
+
+    fn build(&self, compiler: &mut Compiler, figure: &mut Figure) {
+        if self.display.copied() {
+            for child in self.children.iter().flatten() {
+                child.build(compiler, figure);
+            }
+        }
+    }
+}
+
+macro_rules! impl_from_for_any {
+    ($from:ident) => {
+        impl From<<$from as Displayed>::Node> for AnyExprNode {
+            fn from(value: <$from as Displayed>::Node) -> Self {
+                Self::$from(value)
+            }
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum AnyExprNode {
+    Point(<Point as Displayed>::Node),
+    Line(<Line as Displayed>::Node),
+    Circle(<Circle as Displayed>::Node),
+    Scalar(<Scalar as Displayed>::Node),
+    PointCollection(<PointCollection as Displayed>::Node),
+    Bundle(<Bundle as Displayed>::Node),
+}
+
+impl_from_for_any! {Point}
+// impl_from_for_any! {Line}
+// impl_from_for_any! {Circle}
+// impl_from_for_any! {Scalar}
+impl_from_for_any! {PointCollection}
+impl_from_for_any! {Bundle}
+
+impl AnyExprNode {
+    /// # Panics
+    /// If the node is not a point node.
+    #[must_use]
+    pub fn as_point(self) -> <Point as Displayed>::Node {
+        if let Self::Point(v) = self {
+            v
+        } else {
+            panic!("not a point")
+        }
+    }
+
+    /// # Panics
+    /// If the node is not a line node.
+    #[must_use]
+    pub fn as_line(self) -> <Line as Displayed>::Node {
+        if let Self::Line(v) = self {
+            v
+        } else {
+            panic!("not a line")
+        }
+    }
+
+    /// # Panics
+    /// If the node is not a circle node.
+    #[must_use]
+    pub fn as_circle(self) -> <Circle as Displayed>::Node {
+        if let Self::Circle(v) = self {
+            v
+        } else {
+            panic!("not a circle")
+        }
+    }
+
+    /// # Panics
+    /// If the node is not a scalar node.
+    #[must_use]
+    pub fn as_scalar(self) -> <Scalar as Displayed>::Node {
+        if let Self::Scalar(v) = self {
+            v
+        } else {
+            panic!("not a scalar")
+        }
+    }
+
+    /// # Panics
+    /// If the node is not a point collection node.
+    #[must_use]
+    pub fn as_point_collection(self) -> <PointCollection as Displayed>::Node {
+        if let Self::PointCollection(v) = self {
+            v
+        } else {
+            panic!("not a point collection")
+        }
+    }
+
+    /// # Panics
+    /// If the node is not a bundle node.
+    #[must_use]
+    pub fn as_bundle(self) -> <Bundle as Displayed>::Node {
+        if let Self::Bundle(v) = self {
+            v
+        } else {
+            panic!("not a bundle")
+        }
+    }
+}
+
+impl Node for AnyExprNode {
+    fn set_display(&mut self, display: bool) {
+        match self {
+            Self::Point(v) => v.set_display(display),
+            Self::Line(v) => v.set_display(display),
+            Self::Circle(v) => v.set_display(display),
+            Self::Scalar(v) => v.set_display(display),
+            Self::PointCollection(v) => v.set_display(display),
+            Self::Bundle(v) => v.set_display(display),
+        }
+    }
+
+    fn get_display(&self) -> bool {
+        match self {
+            Self::Point(v) => v.get_display(),
+            Self::Line(v) => v.get_display(),
+            Self::Circle(v) => v.get_display(),
+            Self::Scalar(v) => v.get_display(),
+            Self::PointCollection(v) => v.get_display(),
+            Self::Bundle(v) => v.get_display(),
+        }
+    }
+
+    fn build(&self, compiler: &mut Compiler, figure: &mut Figure) {
+        match self {
+            Self::Point(v) => v.build(compiler, figure),
+            Self::Line(v) => v.build(compiler, figure),
+            Self::Circle(v) => v.build(compiler, figure),
+            Self::Scalar(v) => v.build(compiler, figure),
+            Self::PointCollection(v) => v.build(compiler, figure),
+            Self::Bundle(v) => v.build(compiler, figure),
+        }
+    }
+}
+
+type BundleNodeItem = Option<AnyExprNode>;
+
+#[derive(Debug)]
+pub struct BundleNode {
+    pub display: MaybeUnset<bool>,
+    pub children: HashMap<String, BundleNodeItem>
+}
+
+impl BundleNode {
+    pub fn new() -> Self {
+        Self {
+            display: MaybeUnset::new(true),
+            children: HashMap::new()
+        }
+    }
+
+    pub fn insert<T>(&mut self, key: String, node: Option<T>)
+        where AnyExprNode: From<T> {
+        self.children.insert(key, node.map(AnyExprNode::from));
+    }
+
+    pub fn extend<U: IntoIterator<Item = (String, BundleNodeItem)>>(&mut self, nodes: U) {
+        self.children.extend(nodes);
+    }
+}
+
+impl Node for BundleNode {
+    fn set_display(&mut self, display: bool) {
+        self.display.set(display);
+    }
+
+    fn get_display(&self) -> bool {
+        self.display.copied()
+    }
+
+    fn build(&self, compiler: &mut Compiler, figure: &mut Figure) {
+        if self.display.copied() {
+            for child in self.children.values().flatten() {
                 child.build(compiler, figure);
             }
         }

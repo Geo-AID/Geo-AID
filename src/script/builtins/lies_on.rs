@@ -23,7 +23,7 @@ use std::rc::Rc;
 
 use crate::script::builtins::macros::{distance, field, line2};
 use crate::script::unroll::{
-    Bundle, Circle, Line, Point, PointCollection, Simplify, UnrolledRule, UnrolledRuleKind, EmptyNode,
+    Bundle, Circle, Line, Point, PointCollection, Simplify, UnrolledRule, UnrolledRuleKind, CollectionNode, CloneWithNode
 };
 use crate::script::{
     builtins::macros::{angle_expr, circle_center, circle_radius, index, math, number, rule},
@@ -31,16 +31,20 @@ use crate::script::{
 };
 
 fn pt_lies_on_circle(
-    lhs: &Expr<Point>,
-    rhs: &Expr<Circle>,
+    mut lhs: Expr<Point>,
+    mut rhs: Expr<Circle>,
     context: &mut CompileContext,
     properties: Properties,
     invert: bool,
-) -> EmptyNode {
+) {
     drop(properties);
 
-    let point = lhs.simplify(context);
-    let circle = rhs.simplify(context);
+    let mut node = CollectionNode::new();
+    node.extend(lhs.node.take());
+    node.extend(rhs.node.take());
+
+    let mut point = lhs.simplify(context);
+    let mut circle = rhs.simplify(context);
 
     if invert {
         rule!(context:S=(
@@ -51,20 +55,24 @@ fn pt_lies_on_circle(
         context.point_on_circle(&point, &circle);
     }
 
-    EmptyNode
+    rule!(context:display node);
 }
 
 fn pt_lies_on_line(
-    lhs: &Expr<Point>,
-    rhs: &Expr<Line>,
+    mut lhs: Expr<Point>,
+    mut rhs: Expr<Line>,
     context: &mut CompileContext,
     properties: Properties,
     invert: bool,
-) -> EmptyNode {
+) {
     drop(properties);
 
-    let point = lhs.simplify(context);
-    let line = rhs.simplify(context);
+    let mut node = CollectionNode::new();
+    node.extend(lhs.node.take());
+    node.extend(rhs.node.take());
+
+    let mut point = lhs.simplify(context);
+    let mut line = rhs.simplify(context);
 
     if invert {
         rule!(context:S=(
@@ -75,21 +83,21 @@ fn pt_lies_on_line(
         context.point_on_line(&point, &line);
     }
 
-    EmptyNode
+    rule!(context:display node);
 }
 
 fn col_lies_on_circle(
-    lhs: &Expr<PointCollection>,
-    rhs: &Expr<Circle>,
+    mut lhs: Expr<PointCollection>,
+    mut rhs: Expr<Circle>,
     context: &mut CompileContext,
     properties: Properties,
     invert: bool,
-) -> EmptyNode {
+) {
     drop(properties);
     let len = lhs.data.length;
 
     for i in 0..len {
-        rule!(context:pt_lies_on_circle(index!(lhs, i), rhs) neg=invert);
+        rule!(context:pt_lies_on_circle(index!(node lhs, i), rhs.clone_with_node()) neg=invert);
     }
 
     /*
@@ -105,28 +113,30 @@ fn col_lies_on_circle(
             rule!(context:>(
                 math!(
                     *,
-                    angle_expr!(dir index!(lhs, i), index!(lhs, i-1), index!(lhs, i_plus_1)),
-                    angle_expr!(dir index!(lhs, i_plus_1), index!(lhs, i), index!(lhs, i_plus_2))
+                    angle_expr!(dir index!(no-node lhs, i), index!(no-node lhs, i-1), index!(no-node lhs, i_plus_1)),
+                    angle_expr!(dir index!(no-node lhs, i_plus_1), index!(no-node lhs, i), index!(no-node lhs, i_plus_2))
                 ),
                 number!(ANGLE 0.0)
             ));
         }
     }
-
-    EmptyNode
 }
 
 fn pt_lies_on_segment(
-    lhs: &Expr<Point>,
-    rhs: &Expr<Bundle>,
+    mut lhs: Expr<Point>,
+    mut rhs: Expr<Bundle>,
     context: &mut CompileContext,
     properties: Properties,
     invert: bool,
-) -> EmptyNode {
+) {
     drop(properties);
 
-    let point = lhs.simplify(context);
-    let line = line2!(field!(POINT rhs, A), field!(POINT rhs, B)).simplify(context);
+    let mut node = CollectionNode::new();
+    node.extend(lhs.node.take());
+    node.extend(rhs.node.take());
+
+    let mut point = lhs.simplify(context);
+    let mut line = line2!(field!(node POINT rhs, A), field!(node POINT rhs, B)).simplify(context);
 
     if invert {
         // not on line or not between A, B
@@ -135,33 +145,36 @@ fn pt_lies_on_segment(
                 UnrolledRule {
                     kind: UnrolledRuleKind::ScalarEq(number!(=0.0), distance!(PL: point, line)),
                     inverted: true,
+                    node: None
                 },
                 UnrolledRule {
                     kind: UnrolledRuleKind::ScalarEq(
                         math!(
-                            +, distance!(PP: field!(POINT rhs, A), lhs),
-                            distance!(PP: field!(POINT rhs, B), lhs)
+                            +, distance!(PP: field!(no-node POINT rhs, A), lhs),
+                            distance!(PP: field!(no-node POINT rhs, B), lhs)
                         ),
-                        distance!(PP: field!(POINT rhs, A), field!(POINT rhs, B)),
+                        distance!(PP: field!(no-node POINT rhs, A), field!(no-node POINT rhs, B)),
                     ),
                     inverted: true,
+                    node: None
                 },
             ]),
             inverted: false,
+            node: None
         });
     } else {
         context.point_on_line(&point, &line);
 
         rule!(context:S=(
             math!(
-                +, distance!(PP: field!(POINT rhs, A), lhs),
-                distance!(PP: field!(POINT rhs, B), lhs)
+                +, distance!(PP: field!(no-node POINT rhs, A), lhs),
+                distance!(PP: field!(no-node POINT rhs, B), lhs)
             ),
-            distance!(PP: field!(POINT rhs, A), field!(POINT rhs, B))
+            distance!(PP: field!(no-node POINT rhs, A), field!(no-node POINT rhs, B))
         ));
     }
 
-    EmptyNode
+    rule!(context:display node);
 }
 
 pub fn register(library: &mut Library) {

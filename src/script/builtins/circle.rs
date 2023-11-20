@@ -28,11 +28,12 @@ use super::macros::{call, circle_expr, entity};
 
 /// Circle constructor. Creates a circle based off of its center and radius.
 fn circle_function(
-    center: &Expr<Point>,
-    radius: &Expr<Scalar>,
-    context: &mut CompileContext,
+    mut center: Expr<Point>,
+    mut radius: Expr<Scalar>,
+    _context: &mut CompileContext,
     display: Properties
 ) -> Expr<Circle> {
+    drop(display);
     let expr = circle_expr!(center, radius);
 
     expr
@@ -46,7 +47,7 @@ pub fn register(library: &mut Library) {
             overloads: vec![
                 overload!((POINT, DISTANCE) -> CIRCLE : circle_function),
                 overload!((DISTANCE, POINT) -> CIRCLE {
-                    |radius: &Expr<Scalar>, center: &Expr<Point>, context, _| call!(context:circle_function(center, radius))
+                    |radius: Expr<Scalar>, center: Expr<Point>, context, _| call!(context:circle_function(center, radius))
                 }),
                 overload!(() -> CIRCLE {
                     |context: &mut CompileContext, _| call!(

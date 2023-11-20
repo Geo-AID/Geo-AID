@@ -32,19 +32,19 @@ pub fn register(library: &mut Library) {
             name: String::from("dst"),
             overloads: vec![
                 overload!((DISTANCE) -> DISTANCE {
-                    |v: &Expr<Scalar>, _, _| v.clone()
+                    |v: Expr<Scalar>, _, _| v
                 }),
                 overload!((SCALAR) -> DISTANCE {
-                    |v: &Expr<Scalar>, _, _| set_unit!(v, %DISTANCE)
+                    |mut v: Expr<Scalar>, _, _| set_unit!(v, %DISTANCE)
                 }),
                 overload!((POINT, POINT) -> DISTANCE {
-                    |a: &Expr<Point>, b: &Expr<Point>, _, _| distance!(PP: a, b)
+                    |mut a: Expr<Point>, mut b: Expr<Point>, _, _| distance!(PP: a, b)
                 }),
                 overload!((POINT, LINE) -> DISTANCE {
-                    |a: &Expr<Point>, k: &Expr<Line>, _, _| distance!(PL: a, k)
+                    |mut a: Expr<Point>, mut k: Expr<Line>, _, _| distance!(PL: a, k)
                 }),
                 overload!((LINE, POINT) -> DISTANCE {
-                    |k: &Expr<Line>, a: &Expr<Point>, _, _| distance!(PL: a, k)
+                    |mut k: Expr<Line>, mut a: Expr<Point>, _, _| distance!(PL: a, k)
                 }),
             ],
         },

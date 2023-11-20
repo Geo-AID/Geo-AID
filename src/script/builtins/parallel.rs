@@ -26,9 +26,9 @@ use super::macros::{call, parallel_through};
 
 /// `parallel_through(line, point)` - returns a line parallel to the 1st argument going through point at 2nd argument.
 fn parallel_function_line_point(
-    line: &Expr<Line>,
-    point: &Expr<Point>,
-    context: &mut CompileContext,
+    mut line: Expr<Line>,
+    mut point: Expr<Point>,
+    _context: &mut CompileContext,
     display: Properties,
 ) -> Expr<Line> {
     drop(display);
@@ -44,7 +44,7 @@ pub fn register(library: &mut Library) {
             name: String::from("parallel_through"),
             overloads: vec![
                 overload!((POINT, LINE) -> LINE {
-                    |point: &Expr<Point>, line: &Expr<Line>, figure, _| {
+                    |point: Expr<Point>, line: Expr<Line>, figure, _| {
                         call!(figure:parallel_function_line_point(line, point))
                     }
                 }),

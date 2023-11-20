@@ -31,7 +31,7 @@ pub fn register(library: &mut Library) {
         Function {
             name: String::from("radians"),
             overloads: vec![overload!((SCALAR) -> ANGLE {
-                |v: &Expr<Scalar>, _, _| set_unit!(v, %ANGLE)
+                |mut v: Expr<Scalar>, _, _| set_unit!(v, %ANGLE)
             })],
         },
     );

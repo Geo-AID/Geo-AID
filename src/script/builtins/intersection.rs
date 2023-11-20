@@ -31,7 +31,7 @@ pub fn register(library: &mut Library) {
         Function {
             name: String::from("intersection"),
             overloads: vec![overload!((LINE, LINE) -> POINT {
-                |k: &Expr<Line>, l: &Expr<Line>, _, _| intersection!(k, l)
+                |mut k: Expr<Line>, mut l: Expr<Line>, _, _| intersection!(k, l)
             })],
         },
     );

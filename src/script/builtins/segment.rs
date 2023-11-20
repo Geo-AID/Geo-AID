@@ -28,8 +28,8 @@ use crate::script::unroll::{
 };
 
 fn segment_function_point_point(
-    a: &Expr<Point>,
-    b: &Expr<Point>,
+    mut a: Expr<Point>,
+    mut b: Expr<Point>,
     _context: &mut CompileContext,
     display: Properties,
 ) -> Expr<Bundle> {
@@ -45,9 +45,9 @@ pub fn register(library: &mut Library) {
             name: String::from("Segment"),
             overloads: vec![
                 overload!((2-P) -> Segment {
-                    |col: &Expr<PointCollection>, context, _| call!(context:segment_function_point_point(
-                        index!(col, 0),
-                        index!(col, 1)
+                    |mut col: Expr<PointCollection>, context, _| call!(context:segment_function_point_point(
+                        index!(node col, 0),
+                        index!(node col, 1)
                     ))
                 }),
                 overload!((POINT, POINT) -> Segment : segment_function_point_point),

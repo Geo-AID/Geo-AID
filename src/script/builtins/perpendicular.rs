@@ -26,9 +26,9 @@ use super::macros::{call, perpendicular_through};
 
 /// `perpendicular_through(line, point)` - returns a line perpendicular to the 1st argument going through point at 2nd argument.
 pub fn line_point(
-    line: &Expr<Line>,
-    point: &Expr<Point>,
-    context: &mut CompileContext,
+    mut line: Expr<Line>,
+    mut point: Expr<Point>,
+    _context: &mut CompileContext,
     display: Properties,
 ) -> Expr<Line> {
     drop(display);
@@ -44,7 +44,7 @@ pub fn register(library: &mut Library) {
             name: String::from("perpendicular_through"),
             overloads: vec![
                 overload!((POINT, LINE) -> LINE {
-                    |point: &Expr<Point>, line: &Expr<Line>, figure, _| {
+                    |point: Expr<Point>, line: Expr<Line>, figure, _| {
                         call!(figure:line_point(line, point))
                     }
                 }),

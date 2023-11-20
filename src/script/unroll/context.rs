@@ -23,7 +23,7 @@ use std::{collections::HashMap, fmt::Debug};
 
 use crate::script::Error;
 use crate::script::builtins::macros::{intersection, number};
-use crate::script::unroll::{AnyExpr, Simplify};
+use crate::script::unroll::{AnyExpr, Simplify, CloneWithNode};
 use crate::script::builtins::macros::{circle_center, circle_radius, distance, rule};
 
 use super::{
@@ -41,7 +41,7 @@ pub trait Definition {
 }
 
 /// A scalar is either a bind or a free real value.
-#[derive(Debug, Clone)]
+#[derive(Debug, CloneWithNode)]
 pub enum Scalar {
     /// A free, adjusted real.
     Free,
@@ -66,7 +66,7 @@ impl Definition for Scalar {
 }
 
 /// A point is either a bind or a free complex value.
-#[derive(Debug, Clone, Definition)]
+#[derive(Debug, CloneWithNode, Definition)]
 pub enum Point {
     /// A free, adjusted complex.
     #[def(order(2))]
@@ -80,14 +80,14 @@ pub enum Point {
 }
 
 /// A line is always a bind.
-#[derive(Debug, Clone, Definition)]
+#[derive(Debug, CloneWithNode, Definition)]
 pub enum Line {
     /// A bind
     Bind(Expr<UnrolledLine>),
 }
 
 /// A circle is always a bind.
-#[derive(Debug, Clone, Definition)]
+#[derive(Debug, CloneWithNode, Definition)]
 pub enum Circle {
     /// A bind
     Bind(Expr<UnrolledCircle>),
@@ -97,7 +97,7 @@ pub enum Circle {
 }
 
 /// An entity is a single primitive on the figure plane.
-#[derive(Debug, Clone)]
+#[derive(Debug, CloneWithNode)]
 pub enum Entity {
     /// A scalar
     Scalar(Scalar),
@@ -296,7 +296,7 @@ impl CompileContext {
         if let Some(point) = self.get_point_entity_mut(lhs) {
             match point {
                 Point::Free => {
-                    *point = Point::OnCircle(rhs.clone());
+                    *point = Point::OnCircle(rhs.clone_without_node());
                     return;
                 }
                 Point::OnCircle(_) | Point::OnLine(_) | Point::Bind(_) => (),
@@ -304,8 +304,8 @@ impl CompileContext {
         }
 
         rule!(self:S=(
-            distance!(PP: lhs, circle_center!(rhs)),
-            circle_radius!(rhs)
+            distance!(PP: lhs.clone_without_node(), circle_center!(rhs.clone_without_node())),
+            circle_radius!(rhs.clone_without_node())
         ));
     }
 
@@ -313,11 +313,11 @@ impl CompileContext {
         if let Some(point) = self.get_point_entity_mut(lhs) {
             match point {
                 Point::Free => {
-                    *point = Point::OnLine(rhs.clone());
+                    *point = Point::OnLine(rhs.clone_without_node());
                     return;
                 }
                 Point::OnLine(k) => {
-                    *point = Point::Bind(intersection!(k, rhs));
+                    *point = Point::Bind(intersection!(k.clone_without_node(), rhs.clone_without_node()));
                     return;
                 }
                 Point::OnCircle(_) | Point::Bind(_) => (),
@@ -325,7 +325,7 @@ impl CompileContext {
         }
 
         rule!(self:S=(
-            distance!(PL: lhs, rhs),
+            distance!(PL: lhs.clone_without_node(), rhs.clone_without_node()),
             number!(=0.0)
         ));
     }

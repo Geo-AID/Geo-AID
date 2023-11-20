@@ -29,10 +29,10 @@ use super::macros::{bisector, call, index, intersection, line2};
 
 /// bisector(point, point, point) - angle bisector.
 pub fn point_point_point(
-    a: &Expr<Point>,
-    b: &Expr<Point>,
-    c: &Expr<Point>,
-    context: &mut CompileContext,
+    mut a: Expr<Point>,
+    mut b: Expr<Point>,
+    mut c: Expr<Point>,
+    _context: &mut CompileContext,
     display: Properties,
 ) -> Expr<Line> {
     drop(display);
@@ -53,8 +53,8 @@ pub fn point_point_point(
 
 /// bisector(point, point) - bisector of a segment.
 pub fn point_point(
-    a: &Expr<Point>,
-    b: &Expr<Point>,
+    mut a: Expr<Point>,
+    mut b: Expr<Point>,
     context: &mut CompileContext,
     display: Properties,
 ) -> Expr<Line> {
@@ -62,7 +62,7 @@ pub fn point_point(
     use super::perpendicular::line_point;
     drop(display);
 
-    let expr = call!(context:line_point(line2!(a, b), call!(context:function_point(&[a.clone(), b.clone()]))));
+    let expr = call!(context:line_point(line2!(a, b), call!(context:function_point(vec![a, b]))));
 
     // context.figure.lines.push(expr.clone());
 
@@ -76,17 +76,17 @@ pub fn register(library: &mut Library) {
             name: String::from("bisector"),
             overloads: vec![
                 overload!((3-P) -> LINE {
-                    |col: &Expr<PointCollection>, context, _| call!(context:point_point_point(
-                        index!(col, 0),
-                        index!(col, 1),
-                        index!(col, 2)
+                    |mut col: Expr<PointCollection>, context, _| call!(context:point_point_point(
+                        index!(node col, 0),
+                        index!(node col, 1),
+                        index!(node col, 2)
                     ))
                 }),
                 overload!((POINT, POINT, POINT) -> LINE : point_point_point),
                 overload!((2-P) -> LINE {
-                    |col: &Expr<PointCollection>, context, _| call!(context:point_point(
-                        index!(col, 0),
-                        index!(col, 1)
+                    |mut col: Expr<PointCollection>, context, _| call!(context:point_point(
+                        index!(node col, 0),
+                        index!(node col, 1)
                     ))
                 }),
                 overload!((POINT, POINT) -> LINE : point_point),
