@@ -192,7 +192,17 @@ pub enum Error {
     },
     LabelIndexInsideIndex {
         error_span: Span
+    },
+    UnexpectedDisplayOptions {
+        errors: Vec<DisplayOptionError>
     }
+}
+
+#[derive(Debug)]
+pub struct DisplayOptionError {
+    pub option: String,
+    pub span: Span,
+    pub suggested: Option<String>
 }
 
 impl Error {
@@ -472,6 +482,9 @@ impl Error {
             Self::LabelIndexInsideIndex { error_span } => {
                 DiagnosticData::new(&"lower index cannot be used inside another lower index.")
                     .add_span(error_span)
+            }
+            Self::UnexpectedDisplayOptions { errors } => {
+                let diagnostic: 
             }
         }
     }

@@ -20,7 +20,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 use std::{ops::Deref, fmt::Debug, collections::HashMap};
 
-use crate::{script::{figure::{MathString, Figure, Mode}, token::{PointCollectionItem, NamedIdent}, compile::{Compiler, Compile}}, span};
+use crate::{script::{figure::{MathString, Figure, Mode}, token::{PointCollectionItem, NamedIdent}, compile::{Compiler, Compile}, Error}, span};
 
 use super::{Expr, Point, Circle, Displayed, Line, Scalar, PointCollection, Bundle, Properties};
 
@@ -81,6 +81,14 @@ impl<T> MaybeUnset<T> {
 
     pub fn unwrap(self) -> T {
         self.value
+    }
+
+    #[must_use]
+    pub fn map<U, P: FnOnce(T) -> U>(self, func: P) -> Self {
+        Self {
+            value: func(self.value),
+            ..self
+        }
     }
 }
 
@@ -473,10 +481,19 @@ impl Node for PointNode {
 
 impl PointNode {
     #[must_use]
-    fn new(props: Properties) -> Self {
-        Self {
-            display: props.get_bool("display")
-        }
+    fn new(expr: Expr<Point>, mut props: Properties) -> Result<Self, Error> {
+        let node = Self {
+            display: props.get_bool("display")?.maybe_unset(true),
+            label: props.get_math_string("label")?.maybe_unset(MathString::new(span!(0, 0, 0, 0))),
+            display_label: props.get_bool("display_label")?.maybe_unset(true),
+            display_dot: props.get_bool("display_dot")?.maybe_unset(true),
+            default_label: props.get_math_string("default-label")?.get_or(MathString::new(span!(0, 0, 0, 0))),
+            expr
+        };
+
+        props.finish();
+
+        Ok(node)
     }
 }
 

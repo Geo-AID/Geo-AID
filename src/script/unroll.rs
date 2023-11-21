@@ -2526,7 +2526,22 @@ fn unroll_expression<const ITER: bool>(
 pub struct Properties(HashMap<String, PropertyValue>);
 
 impl Properties {
-    fn get_bool(&mut self, property: &str) -> Result<Property<bool>, Error> {
+    pub fn finish(self, expected_fields: Vec<&'static str>) -> Result<(), Error> {
+        if self.0.is_empty() {
+            Ok(())
+        } else {
+            let mut errors = self.0.into_iter()
+                .map(|(name, value)| {
+                    (name, value.get_span())
+                })
+
+            Err(Error::UnexpectedDisplayOption {
+                errors: vec![]
+            })
+        }
+    }
+
+    pub fn get_bool(&mut self, property: &str) -> Result<Property<bool>, Error> {
         self.0
             .remove(property)
             .as_ref()
@@ -2541,7 +2556,7 @@ impl Properties {
             )
     }
 
-    fn get_string(&mut self, property: &str) -> Result<Property<String>, Error> {
+    pub fn get_string(&mut self, property: &str) -> Result<Property<String>, Error> {
         self.0
             .remove(property)
             .as_ref()
@@ -2550,6 +2565,21 @@ impl Properties {
                 |x| Ok(Property {
                     value: Some(RealProperty {
                         value: x.as_string()?,
+                        span: x.get_span()
+                    })
+                })
+            )
+    }
+
+    pub fn get_math_string(&mut self, property: &str) -> Result<Property<MathString>, Error> {
+        self.0
+            .remove(property)
+            .as_ref()
+            .map_or(
+                Ok(Property { value: None }),
+                |x| Ok(Property {
+                    value: Some(RealProperty {
+                        value: MathString::parse(&x.as_string()?, x.get_span())?,
                         span: x.get_span()
                     })
                 })
