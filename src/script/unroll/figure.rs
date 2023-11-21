@@ -22,7 +22,7 @@ use std::{ops::Deref, fmt::Debug, collections::HashMap};
 
 use crate::{script::{figure::{MathString, Figure, Mode}, token::{PointCollectionItem, NamedIdent}, compile::{Compiler, Compile}}, span};
 
-use super::{Expr, Point, Circle, Displayed, Line, Scalar, PointCollection, Bundle};
+use super::{Expr, Point, Circle, Displayed, Line, Scalar, PointCollection, Bundle, Properties};
 
 #[derive(Debug, Clone)]
 pub enum IdentOrItem {
@@ -157,6 +157,50 @@ impl Node for CollectionNode {
                 child.build(compiler, figure);
             }
         }
+    }
+}
+
+/// Contains a root node, apart from its children. Simulates a hierarchy.
+#[derive(Debug)]
+pub struct HierarchyNode<T: Node> {
+    pub root: T,
+    pub children: Vec<Box<dyn Node>>
+}
+
+impl<T: Node> Node for HierarchyNode<T> {
+    fn get_display(&self) -> bool {
+        self.root.get_display()
+    }
+
+    fn set_display(&mut self, display: bool) {
+        self.root.set_display(display);
+    }
+
+    fn build(&self, compiler: &mut Compiler, figure: &mut Figure) {
+        if self.root.get_display() {
+            self.root.build(compiler, figure);
+
+            for child in &self.children {
+                child.build(compiler, figure);
+            }
+        }
+    }
+}
+
+impl<T: Node> HierarchyNode<T> {
+    pub fn new(root: T) -> Self {
+        Self {
+            root,
+            children: Vec::new()
+        }
+    }
+
+    pub fn push_child<U: Node + 'static>(&mut self, node: U) {
+        self.children.push(Box::new(node));
+    }
+
+    pub fn extend_children<U: Node + 'static, Iter: IntoIterator<Item = U>>(&mut self, nodes: Iter) {
+        self.children.extend(nodes.into_iter().map(|x| Box::new(x) as Box::<dyn Node>));
     }
 }
 
@@ -423,6 +467,15 @@ impl Node for PointNode {
                     MathString::new(span!(0, 0, 0, 0))
                 }
             ))
+        }
+    }
+}
+
+impl PointNode {
+    #[must_use]
+    fn new(props: Properties) -> Self {
+        Self {
+            display: props.get_bool("display")
         }
     }
 }

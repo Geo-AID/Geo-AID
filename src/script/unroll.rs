@@ -41,6 +41,8 @@ pub use context::{
     Scalar as EntScalar,
 };
 
+use self::figure::MaybeUnset;
+
 use super::builtins::macros::rule;
 use super::figure::MathString;
 use super::parser;
@@ -60,7 +62,7 @@ mod context;
 mod figure;
 
 pub use figure::{
-    Node, PointNode, CircleNode, CollectionNode, EmptyNode, PCNode, BundleNode, AnyExprNode
+    Node, PointNode, CircleNode, CollectionNode, EmptyNode, PCNode, BundleNode, AnyExprNode, HierarchyNode
 };
 
 /// A definition for a user-defined rule operator.
@@ -2591,6 +2593,14 @@ impl<T> Property<T> {
     #[must_use]
     pub fn get_span(&self) -> Option<Span> {
         self.value.as_ref().map(|x| x.span)
+    }
+
+    #[must_use]
+    pub fn maybe_unset(self, default: T) -> MaybeUnset<T> {
+        let mut value = MaybeUnset::new(default);
+        value.try_set(self.get());
+        
+        value
     }
 }
 

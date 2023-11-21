@@ -73,14 +73,20 @@ pub fn register(library: &mut Library) {
 
 /// Helper macros
 pub mod macros {
+    macro_rules! root_node {
+        (Point) => {
+            $crate::script::unroll::PointNode::new(None)
+        }
+    }
+
     macro_rules! expr_with {
         ($ty:ident :: $kind:ident ($($arg1:expr),*) with ($($arg2:expr),*)) => {
             {
-                let mut node = $crate::script::unroll::CollectionNode::new();
+                let mut node = $crate::script::unroll::HierarchyNode::new($crate::script::builtins::macros::root_node!($ty));
 
                 $(
                     let mut v = $crate::script::unroll::CloneWithNode::clone_without_node(&mut $arg2);
-                    node.children.extend(v.node.take().map(|x| Box::new(x) as Box<dyn $crate::script::unroll::Node>));
+                    node.extend_children(v.node.take());
                 )*
 
                 $crate::script::unroll::Expr {
@@ -496,6 +502,6 @@ pub mod macros {
     pub(crate) use {
         angle_expr, average, bisector, call, circle_center, circle_expr, circle_radius,
         construct_bundle, distance, entity, field, index, intersection, line2, math, mneg, number,
-        parallel_through, perpendicular_through, rule, set_unit, expr_with
+        parallel_through, perpendicular_through, rule, set_unit, expr_with, root_node
     };
 }
