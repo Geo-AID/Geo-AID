@@ -28,7 +28,7 @@ use crate::script::builtins::macros::{circle_center, circle_radius, distance, ru
 
 use super::{
     Circle as UnrolledCircle, Expr, FlagSet, FlagSetConstructor, Line as UnrolledLine,
-    Point as UnrolledPoint, Scalar as UnrolledScalar, UnrolledRule
+    Point as UnrolledPoint, Scalar as UnrolledScalar, UnrolledRule, Displayed, HierarchyNode
 };
 
 /// For everything that can have an order (how modifiable the entity is).
@@ -328,5 +328,28 @@ impl CompileContext {
             distance!(PL: lhs.clone_without_node(), rhs.clone_without_node()),
             number!(=0.0)
         ));
+    }
+}
+
+// Expression constructors
+impl CompileContext {
+    fn expr_with<T: Displayed>(&mut self, content: T, nodes: Vec<>) -> Expr<T> {
+        let mut node = HierarchyNode::new(T::Node::from(None));
+
+        $(
+            let mut v = $crate::script::unroll::CloneWithNode::clone_without_node(&mut $arg2);
+            node.extend_children(v.node.take());
+        )*
+
+        Expr {
+            weight: FastFloat::One,
+            span: span!(0, 0, 0, 0),
+            data: Rc::new(content),
+            node: Some(node)
+        }
+    }
+
+    pub fn intersection(&mut self, k: Expr<Line>, l: Expr<Line>) {
+
     }
 }

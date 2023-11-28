@@ -2523,17 +2523,29 @@ fn unroll_expression<const ITER: bool>(
 // }
 
 #[derive(Debug, Clone)]
-pub struct Properties(HashMap<String, PropertyValue>);
+pub struct Properties{
+    props: HashMap<String, PropertyValue>,
+    finished: bool
+}
 
 impl Properties {
+    pub fn protected<'props>(&'props mut self, context: &'props mut CompileContext) -> ProtectedProps<'props> {
+        ProtectedProps {
+            context,
+            props: self
+        }
+    }
+
     pub fn finish(self, expected_fields: Vec<&'static str>) -> Result<(), Error> {
-        if self.0.is_empty() {
+        self.finished = true;
+
+        if self.props.is_empty() {
             Ok(())
         } else {
             let mut errors = self.0.into_iter()
                 .map(|(name, value)| {
                     (name, value.get_span())
-                })
+                });
 
             Err(Error::UnexpectedDisplayOption {
                 errors: vec![]
@@ -2589,13 +2601,44 @@ impl Properties {
 
 impl From<Option<DisplayProperties>> for Properties {
     fn from(value: Option<DisplayProperties>) -> Self {
-        Self(
-            value.into_iter().flat_map(
+        Self {
+            props: value.into_iter().flat_map(
                 |x| x.properties.into_iter()
             )
                 .map(|v| (v.name.ident.clone(), v.value.clone()))
                 .collect(),
-        )
+            finished: false
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct ProtectedProps<'props> {
+    props: &'props mut Properties,
+    context: &'props mut CompileContext,
+}
+
+impl<'props> ProtectedProps<'props> {
+    pub fn get_bool(&mut self, property: &str) -> Property<bool> {
+        self.0
+            .remove(property)
+            .as_ref()
+            .map_or(
+                Property { value: None },
+                |x| Ok(Property {
+                    value: match x.as_bool() {
+                        Ok(v) => Some(RealProperty {
+                            value: v,
+                            span: x.get_span()
+                        }),
+                        Err(err) => {
+                            self.context.push_error(err);
+    
+                            None
+                        }
+                    }
+                })
+            )
     }
 }
 

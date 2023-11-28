@@ -22,7 +22,7 @@ use std::{ops::Deref, fmt::Debug, collections::HashMap};
 
 use crate::{script::{figure::{MathString, Figure, Mode}, token::{PointCollectionItem, NamedIdent}, compile::{Compiler, Compile}, Error}, span};
 
-use super::{Expr, Point, Circle, Displayed, Line, Scalar, PointCollection, Bundle, Properties};
+use super::{Expr, Point, Circle, Displayed, Line, Scalar, PointCollection, Bundle, Properties, CompileContext};
 
 #[derive(Debug, Clone)]
 pub enum IdentOrItem {
@@ -37,6 +37,11 @@ pub trait Node: Debug {
     fn get_display(&self) -> bool;
 
     fn build(&self, compiler: &mut Compiler, figure: &mut Figure);
+
+    fn from_props(context: &mut CompileContext, props: Properties) -> Self where Self: Sized {
+        let view = props.view(context);
+        let display = view.get_bool("display");
+    };
 }
 
 #[derive(Debug, Clone)]
@@ -205,6 +210,10 @@ impl<T: Node> HierarchyNode<T> {
 
     pub fn push_child<U: Node + 'static>(&mut self, node: U) {
         self.children.push(Box::new(node));
+    }
+
+    pub fn extend_boxed<Iter: IntoIterator<Item = Box<dyn Node>>>(&mut self, nodes: Iter) {
+        self.children.extend(nodes.into_iter());
     }
 
     pub fn extend_children<U: Node + 'static, Iter: IntoIterator<Item = U>>(&mut self, nodes: Iter) {
