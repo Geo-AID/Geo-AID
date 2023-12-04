@@ -194,16 +194,6 @@ pub mod macros {
         };
     }
 
-    macro_rules! intersection {
-        ($a:expr, $b:expr) => {
-            $crate::script::builtins::macros::expr_with!(Point::LineLineIntersection(
-                $a, $b
-            ) with (
-                $a, $b
-            ))
-        };
-    }
-
     macro_rules! average {
         (POINT : $x:expr) => {
             {
@@ -417,27 +407,6 @@ pub mod macros {
         }};
     }
 
-    macro_rules! distance {
-        (PP: $a:expr, $b:expr) => {
-            $crate::script::builtins::macros::expr_with!(
-                [Some($crate::script::unit::DISTANCE)]::PointPointDistance(
-                    $a, $b
-                ) with (
-                    $a, $b
-                )
-            )
-        };
-        (PL: $a:expr, $b:expr) => {
-            $crate::script::builtins::macros::expr_with!(
-                [Some($crate::script::unit::DISTANCE)]::PointLineDistance(
-                    $a, $b
-                ) with (
-                    $a, $b
-                )
-            )
-        };
-    }
-
     macro_rules! mneg {
         (neg = $neg:expr) => {
             $neg
@@ -491,9 +460,6 @@ pub mod macros {
         ($context:ident : < ($lhs:expr, $rhs:expr) $(neg = $neg:expr)?) => {
             $crate::script::builtins::macros::rule!($context, Lt, $lhs, $rhs, $($neg)?)
         };
-        ($context:ident : S = ($lhs:expr, $rhs:expr) $(neg = $neg:expr)?) => {
-            $crate::script::builtins::macros::rule!($context, ScalarEq, $lhs, $rhs, $($neg)?)
-        };
         ($context:ident : P  = ($lhs:expr, $rhs:expr) $(neg = $neg:expr)?) => {
             $crate::script::builtins::macros::rule!($context, PointEq, $lhs, $rhs, $($neg)?)
         };
@@ -501,7 +467,7 @@ pub mod macros {
 
     pub(crate) use {
         angle_expr, average, bisector, call, circle_center, circle_expr, circle_radius,
-        construct_bundle, distance, entity, field, index, intersection, line2, math, mneg, number,
+        construct_bundle, entity, field, index, line2, math, mneg, number,
         parallel_through, perpendicular_through, rule, set_unit, expr_with, root_node
     };
 }

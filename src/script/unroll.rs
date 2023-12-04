@@ -2072,7 +2072,7 @@ pub struct Expr<T: ?Sized + Displayed> {
     pub data: Rc<T>,
     pub span: Span,
     pub weight: FastFloat, // Assigned weight.
-    pub node: Option<T::Node>
+    pub node: Option<HierarchyNode<T::Node>>
 }
 
 impl<T: ?Sized + Displayed> CloneWithNode for Expr<T> {
@@ -2131,6 +2131,10 @@ impl<T: CloneWithNode + Displayed> Expr<T> {
     pub fn with_weight(mut self, weight: FastFloat) -> Self {
         self.weight = weight;
         self
+    }
+
+    pub fn take_node(&mut self) -> Option<HierarchyNode<T::Node>> {
+        self.node.take()
     }
 }
 

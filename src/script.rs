@@ -193,16 +193,11 @@ pub enum Error {
     LabelIndexInsideIndex {
         error_span: Span
     },
-    UnexpectedDisplayOptions {
-        errors: Vec<DisplayOptionError>
+    UnexpectedDisplayOption {
+        error_span: Span,
+        option: String,
+        suggested: Option<String>
     }
-}
-
-#[derive(Debug)]
-pub struct DisplayOptionError {
-    pub option: String,
-    pub span: Span,
-    pub suggested: Option<String>
 }
 
 impl Error {
@@ -483,8 +478,11 @@ impl Error {
                 DiagnosticData::new(&"lower index cannot be used inside another lower index.")
                     .add_span(error_span)
             }
-            Self::UnexpectedDisplayOptions { errors } => {
-                let diagnostic: 
+            Self::UnexpectedDisplayOption { error_span, option, suggested } => {
+                let message = suggested.map(|v| format!("Did you mean: `{v}`?"));
+                DiagnosticData::new(&format!("unexpected display option: `{option}`"))
+                    .add_span(error_span)
+                    .add_annotation_opt_msg(error_span, AnnotationKind::Help, message.as_ref())
             }
         }
     }

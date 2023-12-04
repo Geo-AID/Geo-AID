@@ -19,16 +19,20 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
 use geo_aid_derive::Definition;
+use std::cell::RefCell;
+use std::rc::Rc;
 use std::{collections::HashMap, fmt::Debug};
 
-use crate::script::Error;
+use crate::generator::fast_float::FastFloat;
+use crate::script::{Error, unit};
 use crate::script::builtins::macros::{intersection, number};
 use crate::script::unroll::{AnyExpr, Simplify, CloneWithNode};
 use crate::script::builtins::macros::{circle_center, circle_radius, distance, rule};
+use crate::span;
 
 use super::{
     Circle as UnrolledCircle, Expr, FlagSet, FlagSetConstructor, Line as UnrolledLine,
-    Point as UnrolledPoint, Scalar as UnrolledScalar, UnrolledRule, Displayed, HierarchyNode
+    Point as UnrolledPoint, Scalar as UnrolledScalar, UnrolledRule, Displayed, HierarchyNode, Node, Properties, CollectionNode, UnrolledRuleKind, ScalarData
 };
 
 /// For everything that can have an order (how modifiable the entity is).
@@ -174,7 +178,7 @@ pub struct CompileContext {
     /// Unrolled rules
     pub rules: Vec<UnrolledRule>,
     /// Errors collected.
-    errors: Vec<Error>
+    errors: RefCell<Vec<Error>>
 }
 
 impl Default for CompileContext {
@@ -197,12 +201,12 @@ impl CompileContext {
                 .finish(),
             entities: vec![],
             rules: Vec::new(),
-            errors: Vec::new()
+            errors: RefCell::new(Vec::new())
         }
     }
 
-    pub fn push_error(&mut self, err: Error) {
-        self.errors.push(err);
+    pub fn push_error(&self, err: Error) {
+        self.errors.borrow_mut().push(err);
     }
 
     /// Gets the entity of the given index.
@@ -303,10 +307,10 @@ impl CompileContext {
             }
         }
 
-        rule!(self:S=(
-            distance!(PP: lhs.clone_without_node(), circle_center!(rhs.clone_without_node())),
+        self.scalar_eq(
+            self.distance_pp(lhs.clone_without_node(), circle_center!(rhs.clone_without_node())),
             circle_radius!(rhs.clone_without_node())
-        ));
+        );
     }
 
     pub fn point_on_line(&mut self, lhs: &Expr<UnrolledPoint>, rhs: &Expr<UnrolledLine>) {
@@ -317,29 +321,63 @@ impl CompileContext {
                     return;
                 }
                 Point::OnLine(k) => {
-                    *point = Point::Bind(intersection!(k.clone_without_node(), rhs.clone_without_node()));
+                    *point = Point::Bind(self.intersection(k.clone_without_node(), rhs.clone_without_node()));
                     return;
                 }
                 Point::OnCircle(_) | Point::Bind(_) => (),
             }
         }
 
-        rule!(self:S=(
-            distance!(PL: lhs.clone_without_node(), rhs.clone_without_node()),
+        self.scalar_eq(
+            self.distance_pl(lhs.clone_without_node(), rhs.clone_without_node()),
             number!(=0.0)
-        ));
+        );
+    }
+}
+
+macro_rules! take_nodes {
+    ($($x:ident),* $(,)?) => {
+        {
+            let mut nodes = Vec::new();
+            take_nodes!{nodes << $($x),*}
+            nodes
+        }
+    };
+    ($nodes:ident << $v:ident, $($x:ident),*) => {
+        $nodes.extend($v.take_node().map(|node| Box::new(node) as Box<dyn Node>));
+        take_nodes!{$nodes << $($x),*}
+    };
+    ($nodes:ident << $v:ident) => {
+        $nodes.extend($v.take_node().map(|node| Box::new(node) as Box<dyn Node>));
+    }
+}
+
+macro_rules! generic_expr {
+    {$f:ident($($v:ident : $t:ident),* $(,)?) -> Scalar[$unit:expr] :: $k:ident} => {
+        pub fn $f(&mut self, $(mut $v: Expr<super::$t>),*) -> Expr<super::Scalar> {
+            let nodes = take_nodes!($($v),*);
+            self.expr_with(super::Scalar {
+                unit: Some($unit),
+                data: super::ScalarData::$k($($v),*)
+            }, nodes)
+        }
+    };
+    {$f:ident($($v:ident : $t:ident),* $(,)?) -> $r:ident :: $k:ident} => {
+        pub fn $f(&mut self, $(mut $v: Expr<super::$t>),*) -> Expr<super::$r> {
+            let nodes = take_nodes!($($v),*);
+            self.expr_with(super::$r::$k($($v),*), nodes)
+        }
     }
 }
 
 // Expression constructors
 impl CompileContext {
-    fn expr_with<T: Displayed>(&mut self, content: T, nodes: Vec<>) -> Expr<T> {
-        let mut node = HierarchyNode::new(T::Node::from(None));
+    fn expr_with<T: Displayed>(&mut self, content: T, nodes: Vec<Box<dyn Node>>) -> Expr<T> {
+        let mut node = HierarchyNode::new(
+            T::Node::from_props(self, Properties::from(None))
+        );
 
-        $(
-            let mut v = $crate::script::unroll::CloneWithNode::clone_without_node(&mut $arg2);
-            node.extend_children(v.node.take());
-        )*
+        node.extend_boxed(nodes);
 
         Expr {
             weight: FastFloat::One,
@@ -349,7 +387,41 @@ impl CompileContext {
         }
     }
 
-    pub fn intersection(&mut self, k: Expr<Line>, l: Expr<Line>) {
-
+    pub fn dst_literal(&mut self, v: f64) -> Expr<UnrolledScalar> {
+        self.expr_with(UnrolledScalar {
+            unit: Some(unit::DISTANCE),
+            data: ScalarData::DstLiteral(v)
+        }, Vec::new())
     }
+
+    generic_expr!{intersection(k: Line, l: Line) -> Point::LineLineIntersection}
+    generic_expr!{distance_pp(p: Point, q: Point) -> Scalar[unit::DISTANCE]::PointPointDistance}
+    generic_expr!{distance_pl(p: Point, k: Line) -> Scalar[unit::DISTANCE]::PointLineDistance}
+}
+
+macro_rules! generic_rule {
+    ($f:ident($a:ident, $b:ident) -> $r:ident) => {
+        pub fn $f(&mut self, mut a: Expr<super::$a>, mut b: Expr<super::$b>) {
+            let (lhs, rhs) = (a.take_node(), b.take_node());
+            self.rule_with(UnrolledRuleKind::$r(a, b), lhs, rhs, false);
+        }
+    }
+}
+
+// Rule constructors
+impl CompileContext {
+    fn rule_with<N: Node, M: Node>(&mut self, kind: UnrolledRuleKind, lhs: Option<N>, rhs: Option<M>, inverted: bool) {
+        let mut node = CollectionNode::new();
+
+        node.extend(lhs);
+        node.extend(rhs);
+
+        self.rules.push(UnrolledRule {
+            kind,
+            inverted,
+            node: Some(Box::new(node))
+        })
+    }
+
+    generic_rule!{scalar_eq(Scalar, Scalar) -> ScalarEq}
 }
