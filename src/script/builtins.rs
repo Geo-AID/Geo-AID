@@ -184,16 +184,6 @@ pub mod macros {
         };
     }
 
-    macro_rules! line2 {
-        ($a:expr, $b:expr) => {
-            $crate::script::builtins::macros::expr_with!(Line::LineFromPoints(
-                $a, $b
-            ) with (
-                $a, $b
-            ))
-        };
-    }
-
     macro_rules! average {
         (POINT : $x:expr) => {
             {

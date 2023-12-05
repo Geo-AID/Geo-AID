@@ -401,6 +401,7 @@ impl CompileContext {
     generic_expr!{distance_pl(p: Point, k: Line) -> Scalar[unit::DISTANCE]::PointLineDistance}
     generic_expr!{circle_center(c: Circle) -> Point::CircleCenter}
     generic_expr!{circle_radius(c: Circle) -> Scalar[unit::DISTANCE]::CircleRadius}
+    generic_expr!{line(a: Point, b: Point) -> Line::LineFromPoints}
 }
 
 macro_rules! generic_rule {

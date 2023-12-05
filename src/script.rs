@@ -44,6 +44,11 @@ pub mod figure;
 pub mod parser;
 pub mod token;
 pub mod unroll;
+
+/// Represents a compiler-specific error. The err type is unit-typed, because
+/// caught errors should be captured by the compile context.
+pub type ScriptResult<T> = Result<T, ()>;
+
 #[derive(Debug)]
 pub enum Error {
     InvalidToken {
@@ -188,7 +193,7 @@ pub enum Error {
     SpecialNotRecongised {
         error_span: Span,
         code: String,
-        suggested: Option<&'static str>
+        suggested: Option<String>
     },
     LabelIndexInsideIndex {
         error_span: Span

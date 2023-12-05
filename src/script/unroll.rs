@@ -34,7 +34,7 @@ use std::{
 use crate::span;
 
 use crate::generator::fast_float::FastFloat;
-use crate::script::builtins::macros::{distance, index, line2};
+use crate::script::builtins::macros::{index, line2};
 use crate::script::ty;
 pub use context::{
     Circle as EntCircle, CompileContext, Definition, Entity, Line as EntLine, Point as EntPoint,
@@ -45,7 +45,7 @@ use self::figure::MaybeUnset;
 
 use super::builtins::macros::rule;
 use super::figure::MathString;
-use super::parser;
+use super::{parser, ScriptResult};
 use super::token::{LSquare, RSquare};
 use super::{
     builtins,
@@ -788,13 +788,13 @@ pub enum UnrolledRuleKind {
 pub trait ConvertFrom<T>: Displayed {
     /// # Errors
     /// Returns an error if the conversion is invalid.
-    fn convert_from(value: T) -> Result<Expr<Self>, Error>;
+    fn convert_from(value: T, context: &CompileContext) -> ScriptResult<Expr<Self>>;
 
     fn can_convert_from(value: &T) -> bool; 
 }
 
 impl<T: Displayed> ConvertFrom<Expr<T>> for T {
-    fn convert_from(value: Expr<T>) -> Result<Expr<Self>, Error> {
+    fn convert_from(value: Expr<T>, context: &CompileContext) -> ScriptResult<Expr<Self>> {
         Ok(value)
     }
 
@@ -809,7 +809,7 @@ where
 {
     /// # Errors
     /// Returns an error if the conversion is invalid.
-    fn convert<T: ConvertFrom<Self>>(self) -> Result<Expr<T>, Error>;
+    fn convert<T: ConvertFrom<Self>>(self, context: &CompileContext) -> ScriptResult<Expr<T>>;
 
     /// # Errors
     /// Returns an error if the conversion is invalid.
@@ -817,8 +817,8 @@ where
 }
 
 impl<T> Convert for T {
-    fn convert<U: ConvertFrom<Self>>(self) -> Result<Expr<U>, Error> {
-        U::convert_from(self)
+    fn convert<U: ConvertFrom<Self>>(self, context: &CompileContext) -> ScriptResult<Expr<U>> {
+        U::convert_from(self, context)
     }
 
     fn can_convert<U: ConvertFrom<Self>>(&self) -> bool {
@@ -839,14 +839,14 @@ pub trait Simplify {
 macro_rules! impl_from_any {
     ($what:ident) => {
         impl ConvertFrom<AnyExpr> for $what {
-            fn convert_from(value: AnyExpr) -> Result<Expr<Self>, Error> {
+            fn convert_from(value: AnyExpr, context: &CompileContext) -> ScriptResult<Expr<Self>> {
                 match value {
-                    AnyExpr::Point(v) => v.convert(),
-                    AnyExpr::Line(v) => v.convert(),
-                    AnyExpr::Scalar(v) => v.convert(),
-                    AnyExpr::Circle(v) => v.convert(),
-                    AnyExpr::PointCollection(v) => v.convert(),
-                    AnyExpr::Bundle(v) => v.convert(),
+                    AnyExpr::Point(v) => v.convert(context),
+                    AnyExpr::Line(v) => v.convert(context),
+                    AnyExpr::Scalar(v) => v.convert(context),
+                    AnyExpr::Circle(v) => v.convert(context),
+                    AnyExpr::PointCollection(v) => v.convert(context),
+                    AnyExpr::Bundle(v) => v.convert(context),
                 }
             }
 
@@ -865,20 +865,22 @@ macro_rules! impl_from_any {
 }
 
 macro_rules! convert_err {
-    ($from:ident($v:expr) -> $to:ident) => {
-        Err(Error::ImplicitConversionDoesNotExist {
+    ($from:ident($v:expr) -> $to:ident with $context:ident) => {{
+        $context.push_error(Error::ImplicitConversionDoesNotExist {
             error_span: ($v).span,
             from: ($v).data.get_value_type(),
             to: Self::get_type(),
-        })
-    };
+        });
+
+        Err(())
+    }};
 }
 
 macro_rules! impl_convert_err {
     ($from:ident -> $to:ident) => {
         impl ConvertFrom<Expr<$from>> for $to {
-            fn convert_from(value: Expr<$from>) -> Result<Expr<Self>, Error> {
-                convert_err!($from(value) -> $to)
+            fn convert_from(value: Expr<$from>, context: &CompileContext) -> ScriptResult<Expr<Self>> {
+                convert_err!($from(value) -> $to with context)
             }
 
             fn can_convert_from(_value: &Expr<$from>) -> bool {
@@ -1056,11 +1058,11 @@ impl_convert_err! {Scalar -> Point}
 impl_make_variable! {Point}
 
 impl ConvertFrom<Expr<PointCollection>> for Point {
-    fn convert_from(mut value: Expr<PointCollection>) -> Result<Expr<Self>, Error> {
+    fn convert_from(mut value: Expr<PointCollection>, context: &CompileContext) -> ScriptResult<Expr<Self>> {
         if value.data.length == 1 {
             Ok(index!(node value, 0))
         } else {
-            convert_err!(PointCollection(value) -> Point)
+            convert_err!(PointCollection(value) -> Point with context)
         }
     }
 
@@ -1202,11 +1204,11 @@ impl_convert_err! {Scalar -> Line}
 impl_make_variable! {Line}
 
 impl ConvertFrom<Expr<PointCollection>> for Line {
-    fn convert_from(mut value: Expr<PointCollection>) -> Result<Expr<Self>, Error> {
+    fn convert_from(mut value: Expr<PointCollection>, context: &CompileContext) -> ScriptResult<Expr<Self>> {
         if value.data.length == 2 {
-            Ok(line2!(index!(node value, 0), index!(node value, 1)))
+            Ok(context.line(index!(node value, 0), index!(node value, 1)))
         } else {
-            convert_err!(PointCollection(value) -> Line)
+            convert_err!(PointCollection(value) -> Line with context)
         }
     }
 
@@ -1322,11 +1324,11 @@ impl Displayed for Scalar {
 }
 
 impl ConvertFrom<Expr<PointCollection>> for Scalar {
-    fn convert_from(mut value: Expr<PointCollection>) -> Result<Expr<Self>, Error> {
+    fn convert_from(mut value: Expr<PointCollection>, context: &CompileContext) -> ScriptResult<Expr<Self>> {
         if value.data.length == 2 {
-            Ok(distance!(PP: index!(node value, 0), index!(node value, 1)))
+            Ok(context.distance_pp(index!(node value, 0), index!(node value, 1)))
         } else {
-            convert_err!(PointCollection(value) -> Scalar)
+            convert_err!(PointCollection(value) -> Scalar with context)
         }
     }
 
@@ -2218,12 +2220,7 @@ fn fetch_variable(
         .get(name)
         .ok_or_else(|| {
             #[allow(clippy::cast_possible_truncation)]
-            let suggested = context
-                .variables
-                .iter()
-                .max_by_key(|v| (strsim::jaro(v.0, name) * 1000.0).floor() as i64)
-                .map(|x| x.0)
-                .cloned();
+            let suggested = most_similar(context.variables.keys(), name);
 
             Error::UndefinedVariable {
                 error_span: variable_span,
@@ -2321,20 +2318,7 @@ fn unroll_simple(
                 }
             } else {
                 #[allow(clippy::cast_possible_truncation)]
-                let suggested = library
-                    .functions
-                    .iter()
-                    .map(|v| {
-                        (
-                            v.0,
-                            v.1,
-                            (strsim::jaro(v.0, &e.name.ident) * 1000.0).floor() as i64,
-                        )
-                    })
-                    .filter(|v| v.2 > 600)
-                    .max_by_key(|v| v.2)
-                    .map(|x| x.0)
-                    .cloned();
+                let suggested = most_similar(library.functions.keys(), &e.name.ident);
 
                 return Err(Error::UndefinedFunction {
                     error_span: e.name.span,
@@ -2526,12 +2510,24 @@ fn unroll_expression<const ITER: bool>(
 //     }
 // }
 
-fn most_similar<'r, I: IntoIterator<Item = &'r str>>(expected: I, received: &str) -> Option<String> {
+pub fn most_similar<'r, I: IntoIterator<Item = T>, T: AsRef<str> + 'r>(expected: I, received: &str) -> Option<String> {
     expected
         .into_iter()
-        .max_by_key(|v| (strsim::jaro(v, received) * 1000.0).floor() as i64)
-        .map(|v| v.to_string())
+        .map(|v| (v.as_ref(), (strsim::jaro(v.as_ref(), received) * 1000.0).floor() as i64))
+        .filter(|v| v.1 > 600)
+        .max_by_key(|v| v.1)
+        .map(|v| v.0.to_string())
 }
+
+// pub fn most_similar_by_key<'r, T: 'r, F: Fn(&'r T) -> &'r str, I: IntoIterator<Item = &'r T>>(f: F, expected: I, received: &str) -> Option<String> {
+//     expected
+//         .into_iter()
+//         .map(|v| f(v))
+//         .map(|v| (v, (strsim::jaro(v, received) * 1000.0).floor() as i64))
+//         .filter(|v| v.1 > 600)
+//         .max_by_key(|v| v.1)
+//         .map(|v| v.0.to_string())
+// }
 
 #[derive(Debug)]
 pub struct Properties{
@@ -2555,7 +2551,7 @@ impl Properties {
             |(key, value)| Error::UnexpectedDisplayOption {
                 error_span: value.get_span(),
                 option: key,
-                suggested: ()
+                suggested: most_similar(expected_fields, &key)
             }
         ))
     }
@@ -3123,20 +3119,7 @@ fn unroll_rule(
                 }
             } else {
                 #[allow(clippy::cast_possible_truncation)]
-                let suggested = library
-                    .rule_ops
-                    .iter()
-                    .map(|v| {
-                        (
-                            v.0,
-                            v.1,
-                            (strsim::jaro(v.0, &op.ident.ident) * 1000.0).floor() as i64,
-                        )
-                    })
-                    .filter(|v| v.2 > 600)
-                    .max_by_key(|v| v.2)
-                    .map(|x| x.0)
-                    .cloned();
+                let suggested = most_similar(library.rule_ops.keys(), &op.ident.ident);
 
                 return Err(Error::UndefinedFunction {
                     error_span: op.ident.span,
@@ -3256,11 +3239,7 @@ fn set_flag(set: &mut FlagSet, flag: &FlagStatement) -> Result<(), Error> {
         let flag_name = flag.name.name.first.ident.clone();
 
         #[allow(clippy::cast_possible_truncation)]
-        let suggested = set
-            .iter()
-            .max_by_key(|v| (strsim::jaro(v.0, &flag_name) * 1000.0).floor() as i64)
-            .map(|x| x.0)
-            .cloned();
+        let suggested = most_similar(set.keys(), &flag_name);
 
         return Err(Error::FlagDoesNotExist {
             flag_name,
@@ -3282,7 +3261,6 @@ fn set_flag(set: &mut FlagSet, flag: &FlagStatement) -> Result<(), Error> {
         } else {
             let flag_name = part.ident.clone();
 
-            #[allow(clippy::cast_possible_truncation)]
             let suggested = most_similar(set.keys(), &flag_name);
 
             return Err(Error::FlagDoesNotExist {

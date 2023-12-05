@@ -26,7 +26,7 @@ use serde::Serialize;
 
 use crate::{generator::expression::{CircleExpr, Expression, LineExpr, PointExpr, ScalarExpr}, span};
 
-use super::{Error, token::{Span, PointCollectionItem}};
+use super::{Error, token::{Span, PointCollectionItem}, unroll::most_similar};
 
 type Point = Arc<Expression<PointExpr>>;
 
@@ -216,18 +216,7 @@ impl MathSpecial {
         .find(|x| *x.1 == charcode)
         .map(|x| MathSpecial::from_usize(x.0).unwrap())
         .ok_or_else(|| {
-            let best = SPECIAL_MATH
-                    .iter()
-                    .map(|v| {
-                        (
-                            v,
-                            (strsim::jaro(v, &charcode) * 1000.0).floor() as i64,
-                        )
-                    })
-                    .filter(|v| v.1 > 600)
-                    .max_by_key(|v| v.1)
-                    .map(|x| x.0)
-                    .copied();
+            let best = most_similar(SPECIAL_MATH, charcode);
 
                 Error::SpecialNotRecongised {
                     error_span: content_span,
