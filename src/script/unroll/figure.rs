@@ -38,10 +38,7 @@ pub trait Node: Debug {
 
     fn build(&self, compiler: &mut Compiler, figure: &mut Figure);
 
-    fn from_props(context: &mut CompileContext, props: Properties) -> Self where Self: Sized {
-        let view = props.view(context);
-        let display = view.get_bool("display");
-    };
+    fn from_props(context: &mut CompileContext, props: Properties) -> Self where Self: Sized;
 }
 
 #[derive(Debug, Clone)]
@@ -170,6 +167,10 @@ impl Node for CollectionNode {
                 child.build(compiler, figure);
             }
         }
+    }
+
+    fn from_props(context: &mut CompileContext, props: Properties) -> Self where Self: Sized {
+        let view = props.v
     }
 }
 

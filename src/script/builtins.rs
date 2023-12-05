@@ -344,26 +344,6 @@ pub mod macros {
         };
     }
 
-    macro_rules! circle_center {
-        ($circle:expr) => {
-            $crate::script::builtins::macros::expr_with!(Point::CircleCenter(
-                $circle
-            ) with (
-                $circle
-            ))
-        };
-    }
-
-    macro_rules! circle_radius {
-        ($circle:expr) => {
-            $crate::script::builtins::macros::expr_with!([Some($crate::script::unit::DISTANCE)]::CircleRadius(
-                $circle
-            ) with (
-                $circle
-            ))
-        };
-    }
-
     macro_rules! parallel_through {
         ($a:expr, $b:expr) => {
             $crate::script::builtins::macros::expr_with!(Line::ParallelThrough(
@@ -466,7 +446,7 @@ pub mod macros {
     }
 
     pub(crate) use {
-        angle_expr, average, bisector, call, circle_center, circle_expr, circle_radius,
+        angle_expr, average, bisector, call, circle_expr,
         construct_bundle, entity, field, index, line2, math, mneg, number,
         parallel_through, perpendicular_through, rule, set_unit, expr_with, root_node
     };

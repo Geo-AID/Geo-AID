@@ -25,9 +25,7 @@ use std::{collections::HashMap, fmt::Debug};
 
 use crate::generator::fast_float::FastFloat;
 use crate::script::{Error, unit};
-use crate::script::builtins::macros::{intersection, number};
 use crate::script::unroll::{AnyExpr, Simplify, CloneWithNode};
-use crate::script::builtins::macros::{circle_center, circle_radius, distance, rule};
 use crate::span;
 
 use super::{
@@ -176,7 +174,7 @@ pub struct CompileContext {
     /// Entities (primitives).
     pub entities: Vec<Entity>,
     /// Unrolled rules
-    pub rules: Vec<UnrolledRule>,
+    pub rules: RefCell<Vec<UnrolledRule>>,
     /// Errors collected.
     errors: RefCell<Vec<Error>>
 }
@@ -200,13 +198,17 @@ impl CompileContext {
                 .add_bool_def(&"point_bounds", false)
                 .finish(),
             entities: vec![],
-            rules: Vec::new(),
+            rules: RefCell::new(Vec::new()),
             errors: RefCell::new(Vec::new())
         }
     }
 
     pub fn push_error(&self, err: Error) {
         self.errors.borrow_mut().push(err);
+    }
+
+    pub fn push_rule(&self, rule: UnrolledRule) {
+        self.rules.borrow_mut().push(rule);
     }
 
     /// Gets the entity of the given index.
@@ -308,8 +310,8 @@ impl CompileContext {
         }
 
         self.scalar_eq(
-            self.distance_pp(lhs.clone_without_node(), circle_center!(rhs.clone_without_node())),
-            circle_radius!(rhs.clone_without_node())
+            self.distance_pp(lhs.clone_without_node(), self.circle_center(rhs.clone_without_node())),
+            self.circle_radius(rhs.clone_without_node())
         );
     }
 
@@ -330,7 +332,7 @@ impl CompileContext {
 
         self.scalar_eq(
             self.distance_pl(lhs.clone_without_node(), rhs.clone_without_node()),
-            number!(=0.0)
+            self.dst_literal(0.0)
         );
     }
 }
@@ -397,6 +399,8 @@ impl CompileContext {
     generic_expr!{intersection(k: Line, l: Line) -> Point::LineLineIntersection}
     generic_expr!{distance_pp(p: Point, q: Point) -> Scalar[unit::DISTANCE]::PointPointDistance}
     generic_expr!{distance_pl(p: Point, k: Line) -> Scalar[unit::DISTANCE]::PointLineDistance}
+    generic_expr!{circle_center(c: Circle) -> Point::CircleCenter}
+    generic_expr!{circle_radius(c: Circle) -> Scalar[unit::DISTANCE]::CircleRadius}
 }
 
 macro_rules! generic_rule {
@@ -416,7 +420,7 @@ impl CompileContext {
         node.extend(lhs);
         node.extend(rhs);
 
-        self.rules.push(UnrolledRule {
+        self.push_rule(UnrolledRule {
             kind,
             inverted,
             node: Some(Box::new(node))

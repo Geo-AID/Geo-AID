@@ -2526,10 +2526,18 @@ fn unroll_expression<const ITER: bool>(
 //     }
 // }
 
-#[derive(Debug, Clone)]
+fn most_similar<'r, I: IntoIterator<Item = &'r str>>(expected: I, received: &str) -> Option<String> {
+    expected
+        .into_iter()
+        .max_by_key(|v| (strsim::jaro(v, received) * 1000.0).floor() as i64)
+        .map(|v| v.to_string())
+}
+
+#[derive(Debug)]
 pub struct Properties{
     props: HashMap<String, PropertyValue>,
-    finished: bool
+    finished: bool,
+    errors: Vec<Error>
 }
 
 impl Properties {
@@ -2540,21 +2548,16 @@ impl Properties {
         }
     }
 
-    pub fn finish(self, expected_fields: Vec<&'static str>) -> Result<(), Error> {
+    pub fn finish(mut self, context: &CompileContext, expected_fields: Vec<&'static str>) {
         self.finished = true;
 
-        if self.props.is_empty() {
-            Ok(())
-        } else {
-            let mut errors = self.0.into_iter()
-                .map(|(name, value)| {
-                    (name, value.get_span())
-                });
-
-            Err(Error::UnexpectedDisplayOption {
-                errors: vec![]
-            })
-        }
+        self.errors.extend(self.props.into_iter().map(
+            |(key, value)| Error::UnexpectedDisplayOption {
+                error_span: value.get_span(),
+                option: key,
+                suggested: ()
+            }
+        ))
     }
 
     pub fn get_bool(&mut self, property: &str) -> Result<Property<bool>, Error> {
@@ -2611,7 +2614,16 @@ impl From<Option<DisplayProperties>> for Properties {
             )
                 .map(|v| (v.name.ident.clone(), v.value.clone()))
                 .collect(),
-            finished: false
+            finished: false,
+            errors: Vec::new()
+        }
+    }
+}
+
+impl Drop for Properties {
+    fn drop(&mut self) {
+        if !self.finished {
+            panic!("properties dropped before finishing parsing");
         }
     }
 }
@@ -3271,11 +3283,7 @@ fn set_flag(set: &mut FlagSet, flag: &FlagStatement) -> Result<(), Error> {
             let flag_name = part.ident.clone();
 
             #[allow(clippy::cast_possible_truncation)]
-            let suggested = set
-                .iter()
-                .max_by_key(|v| (strsim::jaro(v.0, &flag_name) * 1000.0).floor() as i64)
-                .map(|x| x.0)
-                .cloned();
+            let suggested = most_similar(set.keys(), &flag_name);
 
             return Err(Error::FlagDoesNotExist {
                 flag_name,
