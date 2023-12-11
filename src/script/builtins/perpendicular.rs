@@ -22,17 +22,17 @@ use crate::script::unroll::{CompileContext, Expr, Function, Library, Line, Point
 use geo_aid_derive::overload;
 
 #[allow(unused_imports)]
-use super::macros::{call, perpendicular_through};
+use super::macros::call;
 
 /// `perpendicular_through(line, point)` - returns a line perpendicular to the 1st argument going through point at 2nd argument.
 pub fn line_point(
-    mut line: Expr<Line>,
-    mut point: Expr<Point>,
-    _context: &mut CompileContext,
+    line: Expr<Line>,
+    point: Expr<Point>,
+    context: &CompileContext,
     display: Properties,
 ) -> Expr<Line> {
     drop(display);
-    let expr = perpendicular_through!(line, point);
+    let expr = context.perpendicular_through(line, point);
 
     expr
 }

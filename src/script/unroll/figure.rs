@@ -20,9 +20,9 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 use std::{ops::Deref, fmt::Debug, collections::HashMap};
 
-use crate::{script::{figure::{MathString, Figure, Mode}, token::{PointCollectionItem, NamedIdent}, compile::{Compiler, Compile}, Error}, span};
+use crate::{script::{figure::{MathString, Figure, Mode}, token::{PointCollectionItem, NamedIdent}, compile::{Compiler, Compile}}, span};
 
-use super::{Expr, Point, Circle, Displayed, Line, Scalar, PointCollection, Bundle, Properties, CompileContext};
+use super::{Expr, Point, Circle, Displayed, Line, Scalar, PointCollection, Bundle, Properties, CompileContext, CloneWithNode, Unknown};
 
 #[derive(Debug, Clone)]
 pub enum IdentOrItem {
@@ -37,8 +37,11 @@ pub trait Node: Debug {
     fn get_display(&self) -> bool;
 
     fn build(&self, compiler: &mut Compiler, figure: &mut Figure);
+}
 
-    fn from_props(context: &mut CompileContext, props: Properties) -> Self where Self: Sized;
+pub trait FromExpr<T: Displayed>: Node + Sized {
+    #[must_use]
+    fn from_expr(expr: &Expr<T>, display: Properties, context: &CompileContext) -> Self;
 }
 
 #[derive(Debug, Clone)]
@@ -86,10 +89,10 @@ impl<T> MaybeUnset<T> {
     }
 
     #[must_use]
-    pub fn map<U, P: FnOnce(T) -> U>(self, func: P) -> Self {
-        Self {
-            value: func(self.value),
-            ..self
+    pub fn map<U, P: FnOnce(T) -> U>(self, f: P) -> MaybeUnset<U> {
+        MaybeUnset {
+            value: f(self.value),
+            set: self.set
         }
     }
 }
@@ -147,6 +150,10 @@ impl CollectionNode {
         self.children.push(Box::new(node));
     }
 
+    pub fn push_boxed(&mut self, node: Box<dyn Node>) {
+        self.children.push(node);
+    }
+
     pub fn extend<T: Node + 'static, U: IntoIterator<Item = T>>(&mut self, nodes: U) {
         self.children.extend(nodes.into_iter().map(|x| Box::new(x) as Box::<dyn Node>));
     }
@@ -168,16 +175,12 @@ impl Node for CollectionNode {
             }
         }
     }
-
-    fn from_props(context: &mut CompileContext, props: Properties) -> Self where Self: Sized {
-        let view = props.v
-    }
 }
 
 /// Contains a root node, apart from its children. Simulates a hierarchy.
 #[derive(Debug)]
 pub struct HierarchyNode<T: Node> {
-    pub root: T,
+    pub root: Box<T>,
     pub children: Vec<Box<dyn Node>>
 }
 
@@ -201,10 +204,19 @@ impl<T: Node> Node for HierarchyNode<T> {
     }
 }
 
+impl<U: Displayed, T: FromExpr<U>> FromExpr<U> for HierarchyNode<T> {
+    fn from_expr(expr: &Expr<U>, props: Properties, context: &CompileContext) -> Self {
+        Self {
+            root: Box::new(T::from_expr(expr, props, context)),
+            children: Vec::new()
+        }
+    }
+}
+
 impl<T: Node> HierarchyNode<T> {
     pub fn new(root: T) -> Self {
         Self {
-            root,
+            root: Box::new(root),
             children: Vec::new()
         }
     }
@@ -225,7 +237,7 @@ impl<T: Node> HierarchyNode<T> {
 #[derive(Debug)]
 pub struct PCNode {
     pub display: MaybeUnset<bool>,
-    pub children: Vec<Option<<Point as Displayed>::Node>>
+    pub children: Vec<Option<HierarchyNode<<Point as Displayed>::Node>>>
 }
 
 impl PCNode {
@@ -236,11 +248,11 @@ impl PCNode {
         }
     }
 
-    pub fn push(&mut self, node: Option<<Point as Displayed>::Node>) {
+    pub fn push(&mut self, node: Option<HierarchyNode<<Point as Displayed>::Node>>) {
         self.children.push(node);
     }
 
-    pub fn extend<U: IntoIterator<Item = Option<<Point as Displayed>::Node>>>(&mut self, nodes: U) {
+    pub fn extend<U: IntoIterator<Item = Option<HierarchyNode<<Point as Displayed>::Node>>>>(&mut self, nodes: U) {
         self.children.extend(nodes);
     }
 }
@@ -265,8 +277,8 @@ impl Node for PCNode {
 
 macro_rules! impl_from_for_any {
     ($from:ident) => {
-        impl From<<$from as Displayed>::Node> for AnyExprNode {
-            fn from(value: <$from as Displayed>::Node) -> Self {
+        impl From<HierarchyNode<<$from as Displayed>::Node>> for AnyExprNode {
+            fn from(value: HierarchyNode<<$from as Displayed>::Node>) -> Self {
                 Self::$from(value)
             }
         }
@@ -275,12 +287,13 @@ macro_rules! impl_from_for_any {
 
 #[derive(Debug)]
 pub enum AnyExprNode {
-    Point(<Point as Displayed>::Node),
-    Line(<Line as Displayed>::Node),
-    Circle(<Circle as Displayed>::Node),
-    Scalar(<Scalar as Displayed>::Node),
-    PointCollection(<PointCollection as Displayed>::Node),
-    Bundle(<Bundle as Displayed>::Node),
+    Point(HierarchyNode<<Point as Displayed>::Node>),
+    Line(HierarchyNode<<Line as Displayed>::Node>),
+    Circle(HierarchyNode<<Circle as Displayed>::Node>),
+    Scalar(HierarchyNode<<Scalar as Displayed>::Node>),
+    PointCollection(HierarchyNode<<PointCollection as Displayed>::Node>),
+    Bundle(HierarchyNode<<Bundle as Displayed>::Node>),
+    Unknown(HierarchyNode<<Unknown as Displayed>::Node>)
 }
 
 impl_from_for_any! {Point}
@@ -291,10 +304,23 @@ impl_from_for_any! {PointCollection}
 impl_from_for_any! {Bundle}
 
 impl AnyExprNode {
+    #[must_use]
+    pub fn as_dyn(self) -> Box<dyn Node> {
+        match self {
+            Self::Point(v) => Box::new(v),
+            Self::Line(v) => Box::new(v),
+            Self::Circle(v) => Box::new(v),
+            Self::Scalar(v) => Box::new(v),
+            Self::PointCollection(v) => Box::new(v),
+            Self::Bundle(v) => Box::new(v),
+            Self::Unknown(v) => Box::new(v),
+        }
+    }
+
     /// # Panics
     /// If the node is not a point node.
     #[must_use]
-    pub fn as_point(self) -> <Point as Displayed>::Node {
+    pub fn as_point(self) -> HierarchyNode<<Point as Displayed>::Node> {
         if let Self::Point(v) = self {
             v
         } else {
@@ -305,7 +331,7 @@ impl AnyExprNode {
     /// # Panics
     /// If the node is not a line node.
     #[must_use]
-    pub fn as_line(self) -> <Line as Displayed>::Node {
+    pub fn as_line(self) -> HierarchyNode<<Line as Displayed>::Node> {
         if let Self::Line(v) = self {
             v
         } else {
@@ -316,7 +342,7 @@ impl AnyExprNode {
     /// # Panics
     /// If the node is not a circle node.
     #[must_use]
-    pub fn as_circle(self) -> <Circle as Displayed>::Node {
+    pub fn as_circle(self) -> HierarchyNode<<Circle as Displayed>::Node> {
         if let Self::Circle(v) = self {
             v
         } else {
@@ -327,7 +353,7 @@ impl AnyExprNode {
     /// # Panics
     /// If the node is not a scalar node.
     #[must_use]
-    pub fn as_scalar(self) -> <Scalar as Displayed>::Node {
+    pub fn as_scalar(self) -> HierarchyNode<<Scalar as Displayed>::Node> {
         if let Self::Scalar(v) = self {
             v
         } else {
@@ -338,7 +364,7 @@ impl AnyExprNode {
     /// # Panics
     /// If the node is not a point collection node.
     #[must_use]
-    pub fn as_point_collection(self) -> <PointCollection as Displayed>::Node {
+    pub fn as_point_collection(self) -> HierarchyNode<<PointCollection as Displayed>::Node> {
         if let Self::PointCollection(v) = self {
             v
         } else {
@@ -349,11 +375,22 @@ impl AnyExprNode {
     /// # Panics
     /// If the node is not a bundle node.
     #[must_use]
-    pub fn as_bundle(self) -> <Bundle as Displayed>::Node {
+    pub fn as_bundle(self) -> HierarchyNode<<Bundle as Displayed>::Node> {
         if let Self::Bundle(v) = self {
             v
         } else {
             panic!("not a bundle")
+        }
+    }
+
+    /// # Panics
+    /// If the node is not an unknown node.
+    #[must_use]
+    pub fn as_unknown(self) -> HierarchyNode<<Unknown as Displayed>::Node> {
+        if let Self::Unknown(v) = self {
+            v
+        } else {
+            panic!("not a unknown")
         }
     }
 }
@@ -367,6 +404,7 @@ impl Node for AnyExprNode {
             Self::Scalar(v) => v.set_display(display),
             Self::PointCollection(v) => v.set_display(display),
             Self::Bundle(v) => v.set_display(display),
+            Self::Unknown(v) => v.set_display(display)
         }
     }
 
@@ -378,6 +416,7 @@ impl Node for AnyExprNode {
             Self::Scalar(v) => v.get_display(),
             Self::PointCollection(v) => v.get_display(),
             Self::Bundle(v) => v.get_display(),
+            Self::Unknown(v) => v.get_display()
         }
     }
 
@@ -389,6 +428,7 @@ impl Node for AnyExprNode {
             Self::Scalar(v) => v.build(compiler, figure),
             Self::PointCollection(v) => v.build(compiler, figure),
             Self::Bundle(v) => v.build(compiler, figure),
+            Self::Unknown(v) => v.build(compiler, figure)
         }
     }
 }
@@ -489,21 +529,20 @@ impl Node for PointNode {
     }
 }
 
-impl PointNode {
-    #[must_use]
-    fn new(expr: Expr<Point>, mut props: Properties) -> Result<Self, Error> {
+impl FromExpr<Point> for PointNode {
+    fn from_expr(expr: &Expr<Point>, mut props: Properties, context: &CompileContext) -> Self {
         let node = Self {
-            display: props.get_bool("display")?.maybe_unset(true),
-            label: props.get_math_string("label")?.maybe_unset(MathString::new(span!(0, 0, 0, 0))),
-            display_label: props.get_bool("display_label")?.maybe_unset(true),
-            display_dot: props.get_bool("display_dot")?.maybe_unset(true),
-            default_label: props.get_math_string("default-label")?.get_or(MathString::new(span!(0, 0, 0, 0))),
-            expr
+            display: props.get("display").maybe_unset(true),
+            label: props.get("label").maybe_unset(MathString::new(span!(0, 0, 0, 0))),
+            display_label: props.get("display_label").maybe_unset(true),
+            display_dot: props.get("display_dot").maybe_unset(true),
+            default_label: props.get("default-label").get_or(MathString::new(span!(0, 0, 0, 0))),
+            expr: expr.clone_without_node()
         };
 
-        props.finish();
+        props.finish(&["display", "label", "display_label", "display_dot"], context);
 
-        Ok(node)
+        node
     }
 }
 
@@ -512,6 +551,7 @@ pub struct CircleNode {
     pub display: MaybeUnset<bool>,
     pub label: MaybeUnset<MathString>,
     pub display_label: MaybeUnset<bool>,
+    pub default_label: MathString,
     pub expr: Expr<Circle>
 }
 
@@ -542,5 +582,103 @@ impl Node for CircleNode {
                 // }
             ))
         }
+    }
+}
+
+impl FromExpr<Circle> for CircleNode {
+    fn from_expr(expr: &Expr<Circle>, mut props: Properties, context: &CompileContext) -> Self {
+        let node = Self {
+            display: props.get("display").maybe_unset(true),
+            label: props.get("label").maybe_unset(MathString::new(span!(0, 0, 0, 0))),
+            display_label: props.get("display_label").maybe_unset(false),
+            default_label: props.get("default-label").get_or(MathString::new(span!(0, 0, 0, 0))),
+            expr: expr.clone_without_node()
+        };
+
+        props.finish(&["display", "label", "display_label"], context);
+
+        node
+    }
+}
+
+#[derive(Debug)]
+pub struct LineNode {
+    pub display: MaybeUnset<bool>,
+    pub label: MaybeUnset<MathString>,
+    pub display_label: MaybeUnset<bool>,
+    pub expr: Expr<Line>
+}
+
+impl Node for LineNode {
+    fn get_display(&self) -> bool {
+        self.display.copied()
+    }
+
+    fn set_display(&mut self, display: bool) {
+        self.display.set(display)
+    }
+
+    fn build(&self, compiler: &mut Compiler, figure: &mut Figure) {
+        if self.display.copied() {
+            figure.lines.push((
+                compiler.compile(&self.expr),
+                Mode::Default
+                // if self.display_label.unwrap() {
+                //     let label = self.label.unwrap();
+
+                //     if label.is_empty() {
+                //         self.default_label
+                //     } else {
+                //         label
+                //     }
+                // } else {
+                //     MathString::new()
+                // }
+            ))
+        }
+    }
+}
+
+impl FromExpr<Line> for LineNode {
+    fn from_expr(expr: &Expr<Line>, mut props: Properties, context: &CompileContext) -> Self {
+        let node = Self {
+            display: props.get("display").maybe_unset(true),
+            label: props.get("label").maybe_unset(MathString::new(span!(0, 0, 0, 0))),
+            display_label: props.get("display_label").maybe_unset(false),
+            expr: expr.clone_without_node()
+        };
+
+        props.finish(&["display", "label", "display_label"], context);
+
+        node
+    }
+}
+
+#[derive(Debug)]
+pub struct ScalarNode {
+    pub display: MaybeUnset<bool>
+}
+
+impl Node for ScalarNode {
+    fn set_display(&mut self, display: bool) {
+        self.display.set(display);
+    }
+
+    fn get_display(&self) -> bool {
+        self.display.copied()
+    }
+
+    fn build(&self, _compiler: &mut Compiler, _figure: &mut Figure) {}
+}
+
+impl FromExpr<Scalar> for ScalarNode {
+    fn from_expr(_expr: &Expr<Scalar>, mut props: Properties, context: &CompileContext) -> Self {
+        let node = Self {
+            display: props.get("display").maybe_unset(true)
+        };
+
+        props.finish(&["display"], context);
+
+        node
     }
 }

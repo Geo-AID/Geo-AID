@@ -19,11 +19,8 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
 #[allow(unused_imports)]
-use crate::script::unroll::{CompileContext, Function, Library};
+use crate::script::unroll::{CompileContext, Function, Library, Point};
 use geo_aid_derive::overload;
-
-#[allow(unused_imports)]
-use super::macros::entity;
 
 pub fn register(library: &mut Library) {
     library.functions.insert(
@@ -31,9 +28,9 @@ pub fn register(library: &mut Library) {
         Function {
             name: String::from("Point"),
             overloads: vec![overload!(() -> POINT {
-                |context: &mut CompileContext, display| {
-                    println!("{display:#?}");
-                    entity!(POINT context.add_point())
+                |context: &mut CompileContext, props| {
+                    let pt = context.add_point();
+                    context.expr_with(Point::Entity(pt), props, Vec::new())
                 }
             })],
         },

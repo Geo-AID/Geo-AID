@@ -71,9 +71,9 @@ impl UnaryOperator {
                 Type::Point
                 | Type::Line
                 | Type::Circle
-                | Type::Undefined
+                | Type::Unknown
                 | Type::Bundle(_)
-                | Type::PointCollection(_) => Type::Undefined,
+                | Type::PointCollection(_) => Type::Unknown,
                 t @ Type::Scalar(_) => *t,
             },
         }
@@ -1258,8 +1258,8 @@ pub enum Type {
     Circle,
     /// A bundle type.
     Bundle(&'static str),
-    /// Undefinede type = bad
-    Undefined,
+    /// Marks unknown type. Unknown type pretends to be valid, but isn't really.
+    Unknown,
 }
 
 impl Type {
@@ -1291,7 +1291,7 @@ impl Display for Type {
             Self::PointCollection(l) => write!(f, "Point collection ({l})"),
             Self::Circle => write!(f, "Circle"),
             Self::Bundle(name) => write!(f, "{name}"),
-            Type::Undefined => write!(f, "undefined"),
+            Type::Unknown => write!(f, "undefined"),
         }
     }
 }
@@ -1337,7 +1337,7 @@ impl Type {
                     false
                 }
             }
-            Type::Undefined => false,
+            Type::Unknown => false,
         }
     }
 }
@@ -1377,10 +1377,14 @@ pub enum PropertyValue {
     MathString(MathString)
 }
 
-impl PropertyValue {
+pub trait PropGetValue<T> {
     /// # Errors
     /// Causes an error if the value is not properly convertible.
-    pub fn as_bool(&self) -> Result<bool, Error> {
+    fn get(self) -> Result<T, Error>;
+}
+
+impl PropGetValue<bool> for PropertyValue {
+    fn get(self) -> Result<bool, Error> {
         match self {
             PropertyValue::Ident(ident) => match ident {
                 Ident::Named(ident) => match ident.ident.as_str() {
@@ -1406,10 +1410,10 @@ impl PropertyValue {
             })
         }
     }
+}
 
-    /// # Errors
-    /// Causes an error if the value is not properly convertible
-    pub fn as_string(&self) -> Result<String, Error> {
+impl PropGetValue<String> for PropertyValue {
+    fn get(self) -> Result<String, Error> {
         match self {
             PropertyValue::Ident(ident) => Ok(ident.to_string()),
             PropertyValue::Number(num) => Err(Error::StringExpected {
@@ -1418,6 +1422,17 @@ impl PropertyValue {
             Self::MathString(s) => Err(Error::StringExpected {
                 error_span: s.get_span(),
             })
+        }
+    }
+}
+
+impl PropGetValue<MathString> for PropertyValue {
+    fn get(self) -> Result<MathString, Error> {
+        let self_span = self.get_span();
+
+        match self {
+            Self::MathString(v) => Ok(v),
+            _ => MathString::parse(&<PropertyValue as PropGetValue<String>>::get(self)?, self_span)
         }
     }
 }

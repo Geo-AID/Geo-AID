@@ -18,6 +18,7 @@ WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use crate::script::unroll::CloneWithNode;
 #[allow(unused_imports)]
 use crate::script::unroll::{
     CompileContext, Expr, Function, Library, Line, Point, PointCollection, Properties,
@@ -25,18 +26,17 @@ use crate::script::unroll::{
 use geo_aid_derive::overload;
 
 #[allow(unused_imports)]
-use super::macros::{bisector, call, index, intersection, line2};
+use super::macros::{call, index};
 
 /// bisector(point, point, point) - angle bisector.
 pub fn point_point_point(
-    mut a: Expr<Point>,
-    mut b: Expr<Point>,
-    mut c: Expr<Point>,
-    _context: &mut CompileContext,
+    a: Expr<Point>,
+    b: Expr<Point>,
+    c: Expr<Point>,
+    context: &CompileContext,
     display: Properties,
 ) -> Expr<Line> {
-    drop(display);
-    let expr = bisector!(a, b, c);
+    context.bisector_ppp_display(a, b, c, display)
 
     // Render the bisector.
     // context
@@ -47,22 +47,22 @@ pub fn point_point_point(
     // context.figure.segments.push((a.clone(), b.clone()));
 
     // context.figure.segments.push((c.clone(), b.clone()));
-
-    expr
 }
 
 /// bisector(point, point) - bisector of a segment.
 pub fn point_point(
-    mut a: Expr<Point>,
-    mut b: Expr<Point>,
-    context: &mut CompileContext,
+    a: Expr<Point>,
+    b: Expr<Point>,
+    context: &CompileContext,
     display: Properties,
 ) -> Expr<Line> {
     use super::mid::function_point;
     use super::perpendicular::line_point;
-    drop(display);
 
-    let expr = call!(context:line_point(line2!(a, b), call!(context:function_point(vec![a, b]))));
+    let expr = call!(context:line_point(
+        context.line(a.clone_without_node(), b.clone_without_node()),
+        call!(context:function_point(vec![a, b]))
+    ) with display);
 
     // context.figure.lines.push(expr.clone());
 
@@ -76,18 +76,18 @@ pub fn register(library: &mut Library) {
             name: String::from("bisector"),
             overloads: vec![
                 overload!((3-P) -> LINE {
-                    |mut col: Expr<PointCollection>, context, _| call!(context:point_point_point(
+                    |mut col: Expr<PointCollection>, context, display| call!(context:point_point_point(
                         index!(node col, 0),
                         index!(node col, 1),
                         index!(node col, 2)
-                    ))
+                    ) with display)
                 }),
                 overload!((POINT, POINT, POINT) -> LINE : point_point_point),
                 overload!((2-P) -> LINE {
-                    |mut col: Expr<PointCollection>, context, _| call!(context:point_point(
+                    |mut col: Expr<PointCollection>, context, display| call!(context:point_point(
                         index!(node col, 0),
                         index!(node col, 1)
-                    ))
+                    ) with display)
                 }),
                 overload!((POINT, POINT) -> LINE : point_point),
             ],

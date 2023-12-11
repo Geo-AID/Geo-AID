@@ -25,29 +25,29 @@ use crate::script::unroll::{
 use geo_aid_derive::overload;
 
 #[allow(unused_imports)]
-use super::macros::{angle_expr, call, index};
+use super::macros::{call, index};
 
 /// angle(point, point, point) - angle depicted by 3 points.
 fn angle_function_point_point_point(
-    mut a: Expr<Point>,
-    mut b: Expr<Point>,
-    mut c: Expr<Point>,
-    _context: &mut CompileContext,
+    a: Expr<Point>,
+    b: Expr<Point>,
+    c: Expr<Point>,
+    context: &CompileContext,
     display: Properties,
 ) -> Expr<Scalar> {
     drop(display);
-    angle_expr!(a, b, c)
+    context.angle_ppp(a, b, c)
 }
 
 /// angle(line, line) - distance between a point and a line.
 fn angle_function_line_line(
-    mut k: Expr<Line>,
-    mut l: Expr<Line>,
-    _context: &mut CompileContext,
+    k: Expr<Line>,
+    l: Expr<Line>,
+    context: &CompileContext,
     display: Properties,
 ) -> Expr<Scalar> {
     drop(display);
-    angle_expr!(k, l)
+    context.angle_ll(k, l)
 }
 
 pub fn register(library: &mut Library) {

@@ -34,19 +34,17 @@ use std::{
 use crate::span;
 
 use crate::generator::fast_float::FastFloat;
-use crate::script::builtins::macros::{index, line2};
+use crate::script::builtins::macros::index;
 use crate::script::ty;
 pub use context::{
     Circle as EntCircle, CompileContext, Definition, Entity, Line as EntLine, Point as EntPoint,
-    Scalar as EntScalar,
+    Scalar as EntScalar
 };
 
-use self::figure::MaybeUnset;
+use self::figure::{MaybeUnset, ScalarNode, LineNode, FromExpr};
 
-use super::builtins::macros::rule;
 use super::figure::MathString;
-use super::{parser, ScriptResult};
-use super::token::{LSquare, RSquare};
+use super::parser::PropGetValue;
 use super::{
     builtins,
     parser::{
@@ -442,7 +440,7 @@ impl Function {
     #[must_use]
     pub fn get_returned(&self, params: &Vec<Type>) -> Type {
         self.get_overload(params)
-            .map_or(Type::Undefined, |x| x.returned_type)
+            .map_or(Type::Unknown, |x| x.returned_type)
     }
 }
 
@@ -788,14 +786,14 @@ pub enum UnrolledRuleKind {
 pub trait ConvertFrom<T>: Displayed {
     /// # Errors
     /// Returns an error if the conversion is invalid.
-    fn convert_from(value: T, context: &CompileContext) -> ScriptResult<Expr<Self>>;
+    fn convert_from(value: T, context: &CompileContext) -> Expr<Self>;
 
     fn can_convert_from(value: &T) -> bool; 
 }
 
 impl<T: Displayed> ConvertFrom<Expr<T>> for T {
-    fn convert_from(value: Expr<T>, context: &CompileContext) -> ScriptResult<Expr<Self>> {
-        Ok(value)
+    fn convert_from(value: Expr<T>, _context: &CompileContext) -> Expr<Self> {
+        value
     }
 
     fn can_convert_from(_value: &Expr<T>) -> bool {
@@ -809,7 +807,7 @@ where
 {
     /// # Errors
     /// Returns an error if the conversion is invalid.
-    fn convert<T: ConvertFrom<Self>>(self, context: &CompileContext) -> ScriptResult<Expr<T>>;
+    fn convert<T: ConvertFrom<Self>>(self, context: &CompileContext) -> Expr<T>;
 
     /// # Errors
     /// Returns an error if the conversion is invalid.
@@ -817,7 +815,7 @@ where
 }
 
 impl<T> Convert for T {
-    fn convert<U: ConvertFrom<Self>>(self, context: &CompileContext) -> ScriptResult<Expr<U>> {
+    fn convert<U: ConvertFrom<Self>>(self, context: &CompileContext) -> Expr<U> {
         U::convert_from(self, context)
     }
 
@@ -839,7 +837,7 @@ pub trait Simplify {
 macro_rules! impl_from_any {
     ($what:ident) => {
         impl ConvertFrom<AnyExpr> for $what {
-            fn convert_from(value: AnyExpr, context: &CompileContext) -> ScriptResult<Expr<Self>> {
+            fn convert_from(value: AnyExpr, context: &CompileContext) -> Expr<Self> {
                 match value {
                     AnyExpr::Point(v) => v.convert(context),
                     AnyExpr::Line(v) => v.convert(context),
@@ -847,6 +845,7 @@ macro_rules! impl_from_any {
                     AnyExpr::Circle(v) => v.convert(context),
                     AnyExpr::PointCollection(v) => v.convert(context),
                     AnyExpr::Bundle(v) => v.convert(context),
+                    AnyExpr::Unknown(v) => v.convert(context)
                 }
             }
 
@@ -858,6 +857,7 @@ macro_rules! impl_from_any {
                     AnyExpr::Circle(v) => Self::can_convert_from(v),
                     AnyExpr::PointCollection(v) => Self::can_convert_from(v),
                     AnyExpr::Bundle(v) => Self::can_convert_from(v),
+                    AnyExpr::Unknown(v) => Self::can_convert_from(v)
                 } 
             }
         }
@@ -866,25 +866,51 @@ macro_rules! impl_from_any {
 
 macro_rules! convert_err {
     ($from:ident($v:expr) -> $to:ident with $context:ident) => {{
+        let v = $v;
+
         $context.push_error(Error::ImplicitConversionDoesNotExist {
-            error_span: ($v).span,
-            from: ($v).data.get_value_type(),
+            error_span: v.span,
+            from: v.data.get_value_type(),
             to: Self::get_type(),
         });
 
-        Err(())
+        Expr {
+            span: v.span,
+            weight: FastFloat::One,
+            data: Rc::new($to::dummy()),
+            node: None
+        }
     }};
 }
 
 macro_rules! impl_convert_err {
     ($from:ident -> $to:ident) => {
         impl ConvertFrom<Expr<$from>> for $to {
-            fn convert_from(value: Expr<$from>, context: &CompileContext) -> ScriptResult<Expr<Self>> {
+            fn convert_from(value: Expr<$from>, context: &CompileContext) -> Expr<Self> {
                 convert_err!($from(value) -> $to with context)
             }
 
             fn can_convert_from(_value: &Expr<$from>) -> bool {
                 false
+            }
+        }
+    }
+}
+
+macro_rules! impl_from_unknown {
+    {$what:ident} => {
+        impl ConvertFrom<Expr<Unknown>> for $what {
+            fn convert_from(value: Expr<Unknown>, _context: &CompileContext) -> Expr<Self> {
+                Expr {
+                    span: value.span,
+                    weight: FastFloat::One,
+                    data: Rc::new($what::dummy()),
+                    node: None
+                }
+            }
+
+            fn can_convert_from(_value: &Expr<Unknown>) -> bool {
+                true
             }
         }
     }
@@ -955,6 +981,9 @@ where
 {
     VariableAccess(#[def(variable)] Rc<RefCell<Variable<T>>>),
     Boxed(Expr<T>),
+    /// Dummy is a value specifically for continued unrolling after error occurence.
+    /// It should never show up in compilation step.
+    Dummy 
 }
 
 impl<T: Display + Definition + Displayed> Display for Generic<T> {
@@ -964,6 +993,7 @@ impl<T: Display + Definition + Displayed> Display for Generic<T> {
             Self::Boxed(expr) => {
                 write!(f, "{expr}")
             }
+            Self::Dummy => write!(f, "invalid (dummy)")
         }
     }
 }
@@ -982,10 +1012,15 @@ impl Point {
     pub fn get_type() -> Type {
         Type::Point
     }
+
+    #[must_use]
+    pub fn dummy() -> Self {
+        Self::Generic(Generic::Dummy)
+    }
 }
 
 impl Displayed for Point {
-    type Node = CollectionNode;
+    type Node = PointNode;
 }
 
 impl Simplify for Expr<Point> {
@@ -994,6 +1029,7 @@ impl Simplify for Expr<Point> {
             Point::Generic(generic) => match generic {
                 Generic::VariableAccess(var) => var.borrow().definition.simplify(context),
                 Generic::Boxed(expr) => expr.simplify(context),
+                Generic::Dummy => self.clone_without_node()
             },
             Point::Entity(index) => context.get_point_by_index(*index),
             Point::CircleCenter(circ) => match circ.simplify(context).data.as_ref() {
@@ -1050,6 +1086,7 @@ impl Display for Point {
 }
 
 impl_from_any! {Point}
+impl_from_unknown! {Point}
 impl_convert_err! {Circle -> Point}
 impl_convert_err! {Line -> Point}
 impl_convert_err! {Bundle -> Point}
@@ -1058,9 +1095,9 @@ impl_convert_err! {Scalar -> Point}
 impl_make_variable! {Point}
 
 impl ConvertFrom<Expr<PointCollection>> for Point {
-    fn convert_from(mut value: Expr<PointCollection>, context: &CompileContext) -> ScriptResult<Expr<Self>> {
+    fn convert_from(mut value: Expr<PointCollection>, context: &CompileContext) -> Expr<Self> {
         if value.data.length == 1 {
-            Ok(index!(node value, 0))
+            index!(node value, 0)
         } else {
             convert_err!(PointCollection(value) -> Point with context)
         }
@@ -1079,6 +1116,7 @@ pub enum Circle {
 }
 
 impl_from_any! {Circle}
+impl_from_unknown! {Circle}
 
 impl_convert_err! {Point -> Circle}
 impl_convert_err! {Line -> Circle}
@@ -1093,10 +1131,15 @@ impl Circle {
     pub fn get_type() -> Type {
         ty::CIRCLE
     }
+
+    #[must_use]
+    pub const fn dummy() -> Self {
+        Self::Generic(Generic::Dummy)
+    }
 }
 
 impl Displayed for Circle {
-    type Node = CollectionNode;
+    type Node = CircleNode;
 }
 
 impl Simplify for Expr<Circle> {
@@ -1105,6 +1148,7 @@ impl Simplify for Expr<Circle> {
             Circle::Generic(generic) => match generic {
                 Generic::VariableAccess(var) => var.borrow().definition.simplify(context),
                 Generic::Boxed(expr) => expr.simplify(context),
+                Generic::Dummy => self.clone_without_node()
             },
             Circle::Entity(index) => context.get_circle_by_index(*index),
             Circle::Circle(_, _) => self.clone_without_node(),
@@ -1159,10 +1203,15 @@ impl Line {
     pub fn get_type() -> Type {
         ty::LINE
     }
+
+    #[must_use]
+    pub const fn dummy() -> Self {
+        Self::Generic(Generic::Dummy)
+    }
 }
 
 impl Displayed for Line {
-    type Node = CollectionNode;
+    type Node = LineNode;
 }
 
 impl Simplify for Expr<Line> {
@@ -1171,6 +1220,7 @@ impl Simplify for Expr<Line> {
             Line::Generic(generic) => match generic {
                 Generic::VariableAccess(var) => var.borrow().definition.simplify(context),
                 Generic::Boxed(expr) => expr.simplify(context),
+                Generic::Dummy => self.clone_without_node()
             },
             Line::Entity(index) => context.get_line_by_index(*index),
             Line::LineFromPoints(_, _)
@@ -1196,6 +1246,7 @@ impl Expr<Line> {
 }
 
 impl_from_any! {Line}
+impl_from_unknown! {Line}
 impl_convert_err! {Bundle -> Line}
 impl_convert_err! {Circle -> Line}
 impl_convert_err! {Point -> Line}
@@ -1204,9 +1255,9 @@ impl_convert_err! {Scalar -> Line}
 impl_make_variable! {Line}
 
 impl ConvertFrom<Expr<PointCollection>> for Line {
-    fn convert_from(mut value: Expr<PointCollection>, context: &CompileContext) -> ScriptResult<Expr<Self>> {
+    fn convert_from(mut value: Expr<PointCollection>, context: &CompileContext) -> Expr<Self> {
         if value.data.length == 2 {
-            Ok(context.line(index!(node value, 0), index!(node value, 1)))
+            context.line(index!(node value, 0), index!(node value, 1))
         } else {
             convert_err!(PointCollection(value) -> Line with context)
         }
@@ -1311,6 +1362,7 @@ pub struct Scalar {
 }
 
 impl_from_any! {Scalar}
+impl_from_unknown! {Scalar}
 
 impl_convert_err! {Point -> Scalar}
 impl_convert_err! {Circle -> Scalar}
@@ -1320,13 +1372,13 @@ impl_convert_err! {Bundle -> Scalar}
 impl_make_variable! {Scalar {other: unit, data: ScalarData}}
 
 impl Displayed for Scalar {
-    type Node = CollectionNode;
+    type Node = ScalarNode;
 }
 
 impl ConvertFrom<Expr<PointCollection>> for Scalar {
-    fn convert_from(mut value: Expr<PointCollection>, context: &CompileContext) -> ScriptResult<Expr<Self>> {
+    fn convert_from(mut value: Expr<PointCollection>, context: &CompileContext) -> Expr<Self> {
         if value.data.length == 2 {
-            Ok(context.distance_pp(index!(node value, 0), index!(node value, 1)))
+            context.distance_pp(index!(node value, 0), index!(node value, 1))
         } else {
             convert_err!(PointCollection(value) -> Scalar with context)
         }
@@ -1341,6 +1393,14 @@ impl Scalar {
     #[must_use]
     pub fn get_type() -> Type {
         ty::SCALAR
+    }
+
+    #[must_use]
+    pub const fn dummy() -> Self {
+        Self {
+            unit: None,
+            data: ScalarData::Generic(Generic::Dummy)
+        }
     }
 }
 
@@ -1364,28 +1424,40 @@ impl Expr<Scalar> {
     /// Returns a conversion error if it is invalid.
     ///
     /// Only valid conversions are None to another unit or self to self
-    pub fn convert_unit(self, unit: Option<ComplexUnit>) -> Result<Self, Error> {
-        let err = Err(Error::ImplicitConversionDoesNotExist {
+    pub fn convert_unit(mut self, unit: Option<ComplexUnit>, context: &CompileContext) -> Self {
+        let err = Error::ImplicitConversionDoesNotExist {
             error_span: self.span,
             from: self.get_value_type(),
             to: Type::Scalar(unit),
-        });
+        };
 
         if self.data.unit == unit {
-            Ok(self)
+            self
         } else if unit.is_none() || self.data.unit.is_some() && self.data.unit != unit {
-            err
+            context.push_error(err);
+
+            // And pretend the conversion is valid.
+            Expr {
+                span: self.span,
+                weight: FastFloat::One,
+                data: Rc::new(Scalar {
+                    unit,
+                    data: self.data.data.clone_without_node(),
+                }),
+                node: self.node.take()
+            }
         } else {
             // `unit` is concrete and self.unit is not
-            Ok(Self {
+            Self {
                 data: Rc::new(Scalar {
                     unit,
                     data: match &self.data.data {
                         ScalarData::Generic(generic) => match generic {
                             Generic::VariableAccess(_) => unreachable!(), // Always concrete
                             Generic::Boxed(v) => {
-                                ScalarData::Generic(Generic::Boxed(v.clone_without_node().convert_unit(unit)?))
+                                ScalarData::Generic(Generic::Boxed(v.clone_without_node().convert_unit(unit, context)))
                             }
+                            Generic::Dummy => ScalarData::Generic(Generic::Dummy)
                         },
                         v @ (ScalarData::Entity(_) | ScalarData::Number(_)) => v.clone_without_node(),
                         ScalarData::DstLiteral(_)
@@ -1396,33 +1468,33 @@ impl Expr<Scalar> {
                         | ScalarData::TwoLineAngle(_, _)
                         | ScalarData::CircleRadius(_)
                         | ScalarData::SetUnit(_, _) => unreachable!(), // Always concrete
-                        ScalarData::Negate(v) => ScalarData::Negate(v.clone_without_node().convert_unit(unit)?),
+                        ScalarData::Negate(v) => ScalarData::Negate(v.clone_without_node().convert_unit(unit, context)),
                         ScalarData::Add(a, b) => {
                             // Both operands are guaranteed to be unit-less here.
                             ScalarData::Add(
-                                a.clone_without_node().convert_unit(unit)?,
-                                b.clone_without_node().convert_unit(unit)?,
+                                a.clone_without_node().convert_unit(unit, context),
+                                b.clone_without_node().convert_unit(unit, context),
                             )
                         }
                         ScalarData::Subtract(a, b) => {
                             // Both operands are guaranteed to be unit-less here.
                             ScalarData::Subtract(
-                                a.clone_without_node().convert_unit(unit)?,
-                                b.clone_without_node().convert_unit(unit)?,
+                                a.clone_without_node().convert_unit(unit, context),
+                                b.clone_without_node().convert_unit(unit, context),
                             )
                         }
                         ScalarData::Multiply(a, b) => {
                             // Both operands are guaranteed to be unit-less here.
                             ScalarData::Multiply(
-                                a.clone_without_node().convert_unit(unit)?,
-                                b.clone_without_node().convert_unit(Some(unit::SCALAR))?,
+                                a.clone_without_node().convert_unit(unit, context),
+                                b.clone_without_node().convert_unit(Some(unit::SCALAR), context),
                             )
                         }
                         ScalarData::Divide(a, b) => {
                             // Both operands are guaranteed to be unit-less here.
                             ScalarData::Divide(
-                                a.clone_without_node().convert_unit(unit)?,
-                                b.clone_without_node().convert_unit(Some(unit::SCALAR))?,
+                                a.clone_without_node().convert_unit(unit, context),
+                                b.clone_without_node().convert_unit(Some(unit::SCALAR), context),
                             )
                         }
                         ScalarData::Average(exprs) => {
@@ -1430,24 +1502,29 @@ impl Expr<Scalar> {
                             ScalarData::Average(
                                 exprs
                                     .iter()
-                                    .map(|v| v.clone_without_node().convert_unit(unit))
-                                    .collect::<Result<Vec<_>, Error>>()?
+                                    .map(|v| v.clone_without_node().convert_unit(unit, context))
+                                    .collect::<Vec<_>>()
                                     .into(),
                             )
                         }
                     },
                 }),
                 ..self
-            })
+            }
         }
+    }
+
+    /// Checks whether a unit conversion can be performed
+    pub fn can_convert_unit(&self, unit: Option<ComplexUnit>) -> bool {
+        !(unit.is_none() || self.data.unit.is_some() && self.data.unit != unit)
     }
 
     /// # Panics
     /// If bugged
     #[must_use]
-    pub fn specify_unit(self) -> Self {
+    pub fn specify_unit(self, context: &CompileContext) -> Self {
         if self.data.unit.is_none() {
-            self.convert_unit(Some(unit::SCALAR)).unwrap()
+            self.convert_unit(Some(unit::SCALAR), context)
         } else {
             self
         }
@@ -1497,8 +1574,12 @@ impl PointCollectionData {
             PointCollectionData::Generic(generic) => match generic {
                 Generic::VariableAccess(var) => var.borrow().definition.index_without_node(index),
                 Generic::Boxed(expr) => expr.index_without_node(index),
+                Generic::Dummy => Expr::new_spanless(Point::Generic(Generic::Dummy))
             },
-            PointCollectionData::PointCollection(col) => col.get(index).unwrap().clone_without_node(),
+            PointCollectionData::PointCollection(col) => col.get(index).map_or_else(
+                || Expr::new_spanless(Point::dummy()),
+                |x| x.clone_without_node()
+            ),
         }
     }
 }
@@ -1527,6 +1608,7 @@ pub struct PointCollection {
 }
 
 impl_from_any! {PointCollection}
+impl_from_unknown! {PointCollection}
 
 impl_convert_err! {Circle -> PointCollection}
 impl_convert_err! {Line -> PointCollection}
@@ -1540,19 +1622,19 @@ impl Displayed for PointCollection {
 }
 
 impl ConvertFrom<Expr<Point>> for PointCollection {
-    fn convert_from(mut value: Expr<Point>) -> Result<Expr<Self>, Error> {
+    fn convert_from(mut value: Expr<Point>, _context: &CompileContext) -> Expr<Self> {
         let mut node = PCNode::new();
         node.push(value.node.take());
 
-        Ok(Expr {
+        Expr {
             weight: FastFloat::One,
             span: value.span,
             data: Rc::new(PointCollection {
                 length: 1,
                 data: PointCollectionData::PointCollection(vec![value].into()),
             }),
-            node: Some(node)
-        })
+            node: Some(HierarchyNode::new(node))
+        }
     }
 
     fn can_convert_from(_value: &Expr<Point>) -> bool {
@@ -1564,6 +1646,14 @@ impl PointCollection {
     #[must_use]
     pub fn get_type() -> Type {
         ty::collection(0)
+    }
+
+    #[must_use]
+    pub const fn dummy() -> Self {
+        Self {
+            length: 0,
+            data: PointCollectionData::Generic(Generic::Dummy)
+        }
     }
 }
 
@@ -1585,15 +1675,22 @@ impl Expr<PointCollection> {
 
     /// # Errors
     /// Returns an error if lengths don't match up.
-    pub fn check_len(self, length: usize) -> Result<Self, Error> {
-        if self.data.length == length || length == 0 {
-            Ok(self)
+    pub fn check_len(self, length: usize, context: &CompileContext) -> Self {
+        if self.data.length == length || length == 0 || matches!(self.data.data, PointCollectionData::Generic(Generic::Dummy)) {
+            self
         } else {
-            Err(Error::ImplicitConversionDoesNotExist {
+            context.push_error(Error::ImplicitConversionDoesNotExist {
                 error_span: self.span,
                 from: self.get_value_type(),
                 to: ty::collection(length),
-            })
+            });
+            
+            Self {
+                weight: self.weight,
+                span: self.span,
+                data: Rc::new(PointCollection::dummy()),
+                node: self.node
+            }
         }
     }
 
@@ -1606,7 +1703,7 @@ impl Expr<PointCollection> {
     #[must_use]
     pub fn index_with_node(&mut self, index: usize) -> Expr<Point> {
         let mut point = self.data.data.index(index);
-        point.node = self.node.as_mut().and_then(|x| x.children[index].take());
+        point.node = self.node.as_mut().and_then(|x| x.root.children[index].take());
 
         point
     }
@@ -1657,6 +1754,7 @@ pub struct Bundle {
 }
 
 impl_from_any! {Bundle}
+impl_from_unknown! {Bundle}
 
 impl_convert_err! {Point -> Bundle}
 impl_convert_err! {Line -> Bundle}
@@ -1672,16 +1770,26 @@ impl Bundle {
         ty::bundle("{}")
     }
 
-    /// # Panics
-    /// Panics if the field doesn't exists
+    #[must_use]
+    pub const fn dummy() -> Self {
+        Self {
+            name: "dummy",
+            data: BundleData::Generic(Generic::Dummy)
+        }
+    }
+
     #[must_use]
     pub fn index(&self, field: &str) -> AnyExpr {
         match &self.data {
             BundleData::Generic(generic) => match &generic {
                 Generic::VariableAccess(var) => var.borrow().definition.index_without_node(field),
                 Generic::Boxed(expr) => expr.index_without_node(field),
+                Generic::Dummy => AnyExpr::Unknown(Expr::new_spanless(Unknown::dummy()))
             },
-            BundleData::ConstructBundle(map) => map.get(field).unwrap().clone_without_node(),
+            BundleData::ConstructBundle(map) => map.get(field).map_or_else(
+                || AnyExpr::Unknown(Expr::new_spanless(Unknown::dummy())),
+                |v| v.clone_without_node()
+            ),
         }
     }
 }
@@ -1714,22 +1822,29 @@ impl Expr<Bundle> {
     #[must_use]
     pub fn index_with_node(&mut self, field: &str) -> AnyExpr {
         let mut expr = self.data.index(field);
-        expr.replace_node(self.node.as_mut().and_then(|v| v.children.get_mut(field).unwrap().take()));
+        expr.replace_node(self.node.as_mut().and_then(|v| v.root.children.get_mut(field).unwrap().take()));
 
         expr
     }
 
     /// # Errors
     /// Returns an error if the bundle names don't match
-    pub fn check_name(self, name: &'static str) -> Result<Self, Error> {
-        if self.data.name == name {
-            Ok(self)
+    pub fn check_name(self, name: &'static str, context: &CompileContext) -> Self {
+        if self.data.name == name || matches!(self.data.data, BundleData::Generic(Generic::Dummy)) {
+            self
         } else {
-            Err(Error::ImplicitConversionDoesNotExist {
+            context.push_error(Error::ImplicitConversionDoesNotExist {
                 error_span: self.span,
                 from: self.get_value_type(),
                 to: ty::bundle(name),
-            })
+            });
+            
+            Self {
+                weight: self.weight,
+                span: self.span,
+                data: Rc::new(Bundle::dummy()),
+                node: self.node
+            }
         }
     }
 }
@@ -1747,6 +1862,52 @@ impl Display for Bundle {
 }
 
 #[derive(Debug, CloneWithNode, Definition)]
+pub enum Unknown {
+    #[def(no_entity)]
+    Generic(Generic<Unknown>)
+}
+
+impl_make_variable!{Unknown}
+
+impl Unknown {
+    #[must_use]
+    pub const fn dummy() -> Self {
+        Self::Generic(Generic::Dummy)
+    }
+}
+
+impl Display for Unknown {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Generic(v) => write!(f, "{v}")
+        }
+    }
+}
+
+impl Displayed for Unknown {
+    type Node = EmptyNode;
+}
+
+impl GetValueType for Unknown {
+    fn get_value_type(&self) -> Type {
+        Type::Unknown
+    }
+}
+
+impl Expr<Unknown> {
+    pub fn boxed(mut self, weight: FastFloat, span: Span) -> Self {
+        let node = self.take_node();
+
+        Self {
+            weight,
+            data: Rc::new(Unknown::Generic(Generic::Boxed(self))),
+            span,
+            node
+        }
+    }
+}
+
+#[derive(Debug, CloneWithNode, Definition)]
 pub enum AnyExpr {
     Point(Expr<Point>),
     Line(Expr<Line>),
@@ -1754,6 +1915,7 @@ pub enum AnyExpr {
     Circle(Expr<Circle>),
     PointCollection(Expr<PointCollection>),
     Bundle(Expr<Bundle>),
+    Unknown(Expr<Unknown>)
 }
 
 impl_any_from_x! {Point}
@@ -1762,6 +1924,7 @@ impl_any_from_x! {Scalar}
 impl_any_from_x! {Circle}
 impl_any_from_x! {PointCollection}
 impl_any_from_x! {Bundle}
+impl_any_from_x! {Unknown}
 
 impl AnyExpr {
     /// Clones the expression and sets its own span. This will be treated as a separate expression now.
@@ -1774,10 +1937,10 @@ impl AnyExpr {
             Self::Circle(v) => &mut v.span,
             Self::PointCollection(v) => &mut v.span,
             Self::Bundle(v) => &mut v.span,
+            Self::Unknown(v) => &mut v.span
         }
     }
 
-    /// Clones the expression and sets its own span. This will be treated as a separate expression now.
     #[must_use]
     pub fn get_span(&self) -> Span {
         match self {
@@ -1787,6 +1950,20 @@ impl AnyExpr {
             Self::Circle(v) => v.span,
             Self::PointCollection(v) => v.span,
             Self::Bundle(v) => v.span,
+            Self::Unknown(v) => v.span
+        }
+    }
+
+    #[must_use]
+    pub const fn get_weight(&self) -> FastFloat {
+        match self {
+            Self::Point(v) => v.weight,
+            Self::Line(v) => v.weight,
+            Self::Scalar(v) => v.weight,
+            Self::Circle(v) => v.weight,
+            Self::PointCollection(v) => v.weight,
+            Self::Bundle(v) => v.weight,
+            Self::Unknown(v) => v.weight
         }
     }
 
@@ -1828,6 +2005,12 @@ impl AnyExpr {
                         with.map(|x| x.as_bundle())
                     )
                 ?),
+            Self::Unknown(v) => AnyExprNode::Unknown(
+                    mem::replace(
+                        &mut v.node,
+                        with.map(|x| x.as_unknown())
+                    )
+                ?),
         })
     }
 
@@ -1848,21 +2031,22 @@ impl AnyExpr {
             AnyExpr::Circle(v) => v.get_value_type(),
             AnyExpr::PointCollection(v) => v.get_value_type(),
             AnyExpr::Bundle(v) => v.get_value_type(),
+            AnyExpr::Unknown(v) => v.get_value_type()
         }
     }
 
     /// # Errors
     /// Returns an error if the conversion is invalid.
-    pub fn convert_to(self, to: Type) -> Result<Self, Error> {
-        Ok(match to {
-            Type::Point => Self::Point(self.convert()?),
-            Type::Line => Self::Line(self.convert()?),
-            Type::Scalar(unit) => Self::Scalar(self.convert()?.convert_unit(unit)?),
-            Type::PointCollection(len) => Self::PointCollection(self.convert()?.check_len(len)?),
-            Type::Circle => Self::Circle(self.convert()?),
-            Type::Bundle(name) => Self::Bundle(self.convert()?.check_name(name)?),
-            Type::Undefined => unreachable!(),
-        })
+    pub fn convert_to(self, to: Type, context: &CompileContext) -> Self {
+        match to {
+            Type::Point => Self::Point(self.convert(context)),
+            Type::Line => Self::Line(self.convert(context)),
+            Type::Scalar(unit) => Self::Scalar(self.convert(context).convert_unit(unit, context)),
+            Type::PointCollection(len) => Self::PointCollection(self.convert(context).check_len(len, context)),
+            Type::Circle => Self::Circle(self.convert(context)),
+            Type::Bundle(name) => Self::Bundle(self.convert(context).check_name(name, context)),
+            Type::Unknown => unreachable!("This shouldn't be possible"),
+        }
     }
 
     pub fn can_convert_to(&self, to: Type) -> bool {
@@ -1873,15 +2057,16 @@ impl AnyExpr {
             Type::PointCollection(len) => self.can_convert_to_collection(len),
             Type::Circle => self.can_convert::<Circle>(),
             Type::Bundle(name) => self.can_convert_to_bundle(name),
-            Type::Undefined => unreachable!(),
+            Type::Unknown => unreachable!("This shouldn't be possible"),
         }
     }
 
     pub fn can_convert_to_scalar(&self, unit: Option<ComplexUnit>) -> bool {
         match self {
             Self::Line(_) | Self::Bundle(_) | Self::Circle(_) | Self::Point(_) => false,
-            Self::PointCollection(v) => v.data.length == 2 && unit == Some(unit::DISTANCE),
-            Self::Scalar(u) => u.data.unit == unit || unit.is_none()
+            Self::PointCollection(v) => v.data.length == 2 && (unit == Some(unit::DISTANCE) || unit.is_none()),
+            Self::Scalar(u) => u.data.unit == unit || unit.is_none(),
+            Self::Unknown(_) => true
         }
     }
 
@@ -1889,13 +2074,15 @@ impl AnyExpr {
         match self {
             Self::Line(_) | Self::Bundle(_) | Self::Circle(_) | Self::Scalar(_) => false,
             Self::PointCollection(v) => v.data.length == len,
-            Self::Point(_) => len == 1
+            Self::Point(_) => len == 1,
+            Self::Unknown(_) => true
         }
     }
 
     pub fn can_convert_to_bundle(&self, name: &str) -> bool {
         match self {
             Self::Bundle(bundle) => bundle.data.name == name,
+            Self::Unknown(_) => true,
             _ => false,
         }
     }
@@ -1909,6 +2096,7 @@ impl AnyExpr {
             Self::Circle(v) => Self::Circle(v.boxed(weight, span)),
             Self::PointCollection(v) => Self::PointCollection(v.boxed(weight, span)),
             Self::Bundle(v) => Self::Bundle(v.boxed(weight, span)),
+            Self::Unknown(v) => Self::Unknown(v.boxed(weight, span)),
         }
     }
 
@@ -1943,18 +2131,25 @@ impl AnyExpr {
                 BundleData::Generic(Generic::VariableAccess(var)) => var.borrow().definition_span,
                 _ => panic!("not a variable"),
             },
+            Self::Unknown(v) => match v.data.as_ref() {
+                Unknown::Generic(Generic::VariableAccess(var)) => {
+                    var.borrow().definition_span
+                },
+                _ => panic!("not a variable")
+            }
         }
     }
 
     #[must_use]
     pub fn make_variable(self, name: String) -> Self {
         match self {
-            AnyExpr::Point(v) => AnyExpr::Point(v.make_variable(name)),
-            AnyExpr::Line(v) => AnyExpr::Line(v.make_variable(name)),
-            AnyExpr::Scalar(v) => AnyExpr::Scalar(v.make_variable(name)),
-            AnyExpr::Circle(v) => AnyExpr::Circle(v.make_variable(name)),
-            AnyExpr::PointCollection(v) => AnyExpr::PointCollection(v.make_variable(name)),
-            AnyExpr::Bundle(v) => AnyExpr::Bundle(v.make_variable(name)),
+            Self::Point(v) => Self::Point(v.make_variable(name)),
+            Self::Line(v) => Self::Line(v.make_variable(name)),
+            Self::Scalar(v) => Self::Scalar(v.make_variable(name)),
+            Self::Circle(v) => Self::Circle(v.make_variable(name)),
+            Self::PointCollection(v) => Self::PointCollection(v.make_variable(name)),
+            Self::Bundle(v) => Self::Bundle(v.make_variable(name)),
+            Self::Unknown(v) => Self::Unknown(v.make_variable(name)),
         }
     }
 }
@@ -1962,12 +2157,13 @@ impl AnyExpr {
 impl Display for AnyExpr {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            AnyExpr::Point(v) => write!(f, "{v}"),
-            AnyExpr::Line(v) => write!(f, "{v}"),
-            AnyExpr::Scalar(v) => write!(f, "{v}"),
-            AnyExpr::Circle(v) => write!(f, "{v}"),
-            AnyExpr::PointCollection(v) => write!(f, "{v}"),
-            AnyExpr::Bundle(v) => write!(f, "{v}"),
+            Self::Point(v) => write!(f, "{v}"),
+            Self::Line(v) => write!(f, "{v}"),
+            Self::Scalar(v) => write!(f, "{v}"),
+            Self::Circle(v) => write!(f, "{v}"),
+            Self::PointCollection(v) => write!(f, "{v}"),
+            Self::Bundle(v) => write!(f, "{v}"),
+            Self::Unknown(v) => write!(f, "{v}")
         }
     }
 }
@@ -1979,7 +2175,7 @@ pub fn display_vec<T: Display>(v: &[T]) -> String {
         .join(", ")
 }
 
-pub trait Displayed {
+pub trait Displayed: Sized {
     type Node: Node;
 }
 
@@ -2214,24 +2410,23 @@ fn fetch_variable(
     context: &CompileContext,
     name: &str,
     variable_span: Span,
-) -> Result<AnyExpr, Error> {
-    let mut var = context
-        .variables
-        .get(name)
-        .ok_or_else(|| {
-            #[allow(clippy::cast_possible_truncation)]
-            let suggested = most_similar(context.variables.keys(), name);
+) -> AnyExpr {
+    let mut var = if let Some(var) = context.variables.get(name) {
+        var.clone_without_node()
+    } else {
+        let suggested = most_similar(context.variables.keys(), name);
 
-            Error::UndefinedVariable {
-                error_span: variable_span,
-                variable_name: name.to_string(),
-                suggested,
-            }
-        })?
-        .clone_without_node();
+        context.push_error(Error::UndefinedVariable {
+            error_span: variable_span,
+            variable_name: name.to_string(),
+            suggested,
+        });
+
+        Expr::new_spanless(Unknown::dummy()).make_variable(name.to_string()).into()
+    };
 
     *var.get_span_mut() = variable_span;
-    Ok(var)
+    var
 }
 
 /// Unrolls the given expression based on the given iterator index. The index is assumed valid and an out-of-bounds access leads to a panic!().
@@ -2241,35 +2436,44 @@ fn unroll_simple(
     context: &mut CompileContext,
     library: &Library,
     it_index: &HashMap<u8, usize>,
-    external_display: Option<&DisplayProperties>
-) -> Result<AnyExpr, Error> {
-    let display = Properties::from(DisplayProperties::merge(expr.display.clone(), external_display.cloned()));
+    external_display: Properties
+) -> AnyExpr {
+    let display = Properties::from(expr.display.clone()).merge_with(external_display);
 
-    Ok(match &expr.kind {
+    match &expr.kind {
         SimpleExpressionKind::Ident(i) => match i {
-            Ident::Named(named) => fetch_variable(context, &named.ident, named.span)?,
-            Ident::Collection(col) => AnyExpr::PointCollection(Expr {
-                weight: FastFloat::One, // TODO: UPDATE FOR WEIGHING SUPPORT IN GEOSCRIPT
-                data: Rc::new(PointCollection {
-                    length: col.collection.len(),
-                    data: PointCollectionData::PointCollection(
-                        col.collection
-                            .iter()
-                            .map(|item| {
-                                fetch_variable(
-                                    context,
-                                    &format!("{item}"),
-                                    col.span,
-                                )
-                                .and_then(|var| var.convert::<Point>())
-                            })
-                            .collect::<Result<Vec<Expr<Point>>, Error>>()?
-                            .into(),
-                    ),
-                }),
-                span: col.span,
-                node: None // Point collections always reference variables. The is no point generating a node.
-            }),
+            Ident::Named(named) => {
+                // No options are expected, as var refs don't generate nodes.
+                display.finish(&[], context);
+
+                fetch_variable(context, &named.ident, named.span)
+            },
+            Ident::Collection(col) => {
+                // No options are expected, as pcs don't generate nodes.
+                display.finish(&[], context);
+
+                AnyExpr::PointCollection(Expr {
+                    weight: FastFloat::One, // TODO: UPDATE FOR WEIGHING SUPPORT IN GEOSCRIPT
+                    data: Rc::new(PointCollection {
+                        length: col.collection.len(),
+                        data: PointCollectionData::PointCollection(
+                            col.collection
+                                .iter()
+                                .map(|item| {
+                                    fetch_variable(
+                                        context,
+                                        &format!("{item}"),
+                                        col.span,
+                                    ).convert::<Point>(context)
+                                })
+                                .collect::<Vec<_>>()
+                                .into(),
+                        ),
+                    }),
+                    span: col.span,
+                    node: None // Point collections always reference variables. The is no point generating a node.
+                })
+            }
         },
         SimpleExpressionKind::Number(num) => AnyExpr::Scalar(Expr {
             weight: FastFloat::Zero, // Always zero.
@@ -2284,8 +2488,8 @@ fn unroll_simple(
             let params = match &e.params {
                 Some(params) => params
                     .iter()
-                    .map(|p| unroll_expression(p, context, library, it_index, None))
-                    .collect::<Result<Vec<AnyExpr>, Error>>()?,
+                    .map(|p| unroll_expression(p, context, library, it_index, Properties::from(None)))
+                    .collect::<Vec<_>>(),
                 None => Vec::new(),
             };
 
@@ -2298,38 +2502,41 @@ fn unroll_simple(
                         .enumerate()
                         .map(|(i, param)| {
                             if i < overload.params.len() {
-                                param.convert_to(overload.params[i])
+                                param.convert_to(overload.params[i], context)
                             } else {
-                                param.convert_to(overload.param_group.unwrap())
+                                param.convert_to(overload.param_group.unwrap(), context)
                             }
                         })
-                        .collect::<Result<Vec<AnyExpr>, Error>>()?;
+                        .collect();
 
                     let ret = unroll_parameters(&overload.definition, params, display, context);
 
                     // TODO: UPDATE FOR WEIGHING SUPPORT
                     ret.boxed(FastFloat::One, e.get_span())
                 } else {
-                    return Err(Error::OverloadNotFound {
+                    context.push_error(Error::OverloadNotFound {
                         error_span: e.get_span(),
                         function_name: e.name.ident.clone(),
                         params: param_types,
                     });
+
+                    Expr::new_spanless(Unknown::dummy()).into()
                 }
             } else {
-                #[allow(clippy::cast_possible_truncation)]
                 let suggested = most_similar(library.functions.keys(), &e.name.ident);
 
-                return Err(Error::UndefinedFunction {
+                context.push_error(Error::UndefinedFunction {
                     error_span: e.name.span,
                     function_name: e.name.ident.clone(),
                     suggested,
                 });
+
+                Expr::new_spanless(Unknown::dummy()).into()
             }
         }
         SimpleExpressionKind::Unop(op) => {
             let mut unrolled: Expr<Scalar> =
-                unroll_simple(&op.rhs, context, library, it_index, external_display)?.convert()?;
+                unroll_simple(&op.rhs, context, library, it_index, display).convert(context);
 
             let node = unrolled.node.take();
 
@@ -2344,86 +2551,103 @@ fn unroll_simple(
             })
         }
         SimpleExpressionKind::Parenthised(expr) => {
-            unroll_expression(&expr.content, context, library, it_index, None)?
+            unroll_expression(&expr.content, context, library, it_index, display)
         }
         SimpleExpressionKind::ExplicitIterator(it) => unroll_expression(
             it.get(it_index[&it.id]).unwrap(),
             context,
             library,
             it_index,
-            None
-        )?,
+            display
+        ),
         SimpleExpressionKind::PointCollection(col) => AnyExpr::PointCollection(Expr {
             weight: FastFloat::One, // TODO: UPDATE FOR WEIGHING SUPPORT IN GEOSCRIPT
             span: col.get_span(),
             data: Rc::new(PointCollection {
                 length: col.points.len(),
-                data: PointCollectionData::PointCollection(
-                    col.points
-                        .iter()
-                        .map(|expr| {
-                            unroll_expression(expr, context, library, it_index, None)?
-                                .convert()
-                                .map_err(|v| {
-                                    let err = v.as_implicit_does_not_exist().unwrap();
-                                    Error::NonPointInPointCollection {
-                                        error_span: col.get_span(),
-                                        received: (*err.0, *err.1), // (span, from)
-                                    }
-                                })
-                        })
-                        .collect::<Result<Vec<Expr<Point>>, Error>>()?
-                        .into(),
-                ),
+                data: PointCollectionData::PointCollection({
+                    let mut points = Vec::new();
+
+                    for expr in col.points.iter() {
+                        let mut unrolled = unroll_expression(expr, context, library, it_index, Properties::default());
+
+                        if unrolled.can_convert_to(ty::POINT) {
+                            points.push(unrolled.convert(context));
+                        } else {
+                            context.push_error(Error::NonPointInPointCollection {
+                                error_span: col.get_span(),
+                                received: (expr.get_span(), unrolled.get_type()), // (span, from)
+                            });
+
+                            // Pretend the point is valid.
+                            points.push(Expr {
+                                weight: unrolled.get_weight(),
+                                span: unrolled.get_span(),
+                                data: Rc::new(Point::dummy()),
+                                node: unrolled.replace_node(None).map(AnyExprNode::as_point)
+                            });
+                        }
+                    }
+
+                    points.into()
+                }),
             }),
             node: None // Point collections always reference variables. No point in creating a node.
         }),
-    })
+    }
 }
 
-fn unroll_binop(mut lhs: AnyExpr, op: &BinaryOperator, mut rhs: AnyExpr) -> Result<AnyExpr, Error> {
+fn unroll_binop(lhs: AnyExpr, op: &BinaryOperator, rhs: AnyExpr, display: Properties, context: &CompileContext) -> AnyExpr {
     let full_span = lhs.get_span().join(rhs.get_span());
 
-    let mut lhs = lhs
-        .clone_with_node()
-        .convert::<Scalar>()
-        .map_err(|_| Error::InvalidOperandType {
+    let mut lhs = if lhs.can_convert_to(ty::SCALAR_UNKNOWN) {
+        lhs.convert::<Scalar>(context)
+    } else {
+        context.push_error(Error::InvalidOperandType {
             error_span: full_span,
             got: (lhs.get_type(), lhs.get_span()),
             op: op.to_string(),
-        })?;
+        });
 
-    let mut rhs = rhs
-        .clone_with_node()
-        .convert::<Scalar>()
-        .map_err(|_| Error::InvalidOperandType {
+        Expr {
+            weight: lhs.get_weight(),
+            span: lhs.get_span(),
+            data: Rc::new(Scalar::dummy()),
+            node: None
+        }
+    };
+
+    let mut rhs = if rhs.can_convert_to(ty::SCALAR_UNKNOWN) {
+        rhs.convert::<Scalar>(context)
+    } else {
+        context.push_error(Error::InvalidOperandType {
             error_span: full_span,
             got: (rhs.get_type(), rhs.get_span()),
             op: op.to_string(),
-        })?;
+        });
+
+        Expr {
+            weight: rhs.get_weight(),
+            span: rhs.get_span(),
+            data: Rc::new(Scalar::dummy()),
+            node: None
+        }
+    };
 
     // Binary operators generate collection nodes for the lhs and rhs nodes.
-    let mut node = CollectionNode::new();
-
-    if let Some(lhs_node) = lhs.node.take() {
-        node.children.push(Box::new(lhs_node));
-    }
-
-    if let Some(rhs_node) = rhs.node.take() {
-        node.children.push(Box::new(rhs_node));
-    }
+    let lhs_node = lhs.take_node();
+    let rhs_node = rhs.take_node();
 
     match op {
         BinaryOperator::Add(_) | BinaryOperator::Sub(_) => {
             let lhs = if lhs.data.unit.is_none() {
-                lhs.convert_unit(rhs.data.unit)?
+                lhs.convert_unit(rhs.data.unit, context)
             } else {
                 lhs
             };
 
-            let rhs = rhs.convert_unit(lhs.data.unit)?;
-
-            Ok(AnyExpr::Scalar(Expr {
+            let rhs = rhs.convert_unit(lhs.data.unit, context);
+            let mut expr = Expr {
                 weight: FastFloat::One, // Technically, the only way to assign weight to an arithmetic op is to put it in parentheses it.
                 span: full_span,
                 data: Rc::new(Scalar {
@@ -2434,15 +2658,22 @@ fn unroll_binop(mut lhs: AnyExpr, op: &BinaryOperator, mut rhs: AnyExpr) -> Resu
                         _ => unreachable!(),
                     },
                 }),
-                node: Some(node)
-            }))
+                node: None
+            };
+
+            let mut node = HierarchyNode::new(ScalarNode::from_expr(&expr, display, context));
+            node.extend_children(lhs_node);
+            node.extend_children(rhs_node);
+
+            expr.node = Some(node);
+
+            AnyExpr::Scalar(expr)
         }
         BinaryOperator::Mul(_) | BinaryOperator::Div(_) => {
-            let lhs = lhs.specify_unit();
+            let lhs = lhs.specify_unit(context);
 
-            let rhs = rhs.specify_unit();
-
-            Ok(AnyExpr::Scalar(Expr {
+            let rhs = rhs.specify_unit(context);
+            let mut expr = Expr {
                 weight: FastFloat::One, // Technically, the only way to assign weight to an arithmetic op is to put it in parentheses.
                 span: full_span,
                 data: Rc::new(Scalar {
@@ -2453,8 +2684,16 @@ fn unroll_binop(mut lhs: AnyExpr, op: &BinaryOperator, mut rhs: AnyExpr) -> Resu
                         _ => unreachable!(),
                     },
                 }),
-                node: Some(node)
-            }))
+                node: None
+            };
+
+            let mut node = HierarchyNode::new(ScalarNode::from_expr(&expr, display, context));
+            node.extend_children(lhs_node);
+            node.extend_children(rhs_node);
+
+            expr.node = Some(node);
+
+            AnyExpr::Scalar(expr)
         }
     }
 }
@@ -2465,8 +2704,8 @@ fn unroll_expression<const ITER: bool>(
     context: &mut CompileContext,
     library: &Library,
     it_index: &HashMap<u8, usize>,
-    external_display: Option<&DisplayProperties>
-) -> Result<AnyExpr, Error> {
+    external_display: Properties
+) -> AnyExpr {
     match expr {
         Expression::Single(simple) => {
             unroll_simple(simple.as_ref(), context, library, it_index, external_display)
@@ -2479,10 +2718,12 @@ fn unroll_expression<const ITER: bool>(
             external_display
         ),
         Expression::Binop(op) => {
-            let lhs = unroll_expression(&op.lhs, context, library, it_index, None)?;
-            let rhs = unroll_expression(&op.rhs, context, library, it_index, None)?;
+            let lhs = unroll_expression(&op.lhs, context, library, it_index, Properties::from(None));
+            let rhs = unroll_expression(&op.rhs, context, library, it_index, Properties::from(None));
 
-            unroll_binop(lhs, &op.operator, rhs)
+            let display = Properties::from(external_display);
+
+            unroll_binop(lhs, &op.operator, rhs, display, context)
         }
     }
 }
@@ -2510,7 +2751,7 @@ fn unroll_expression<const ITER: bool>(
 //     }
 // }
 
-pub fn most_similar<'r, I: IntoIterator<Item = T>, T: AsRef<str> + 'r>(expected: I, received: &str) -> Option<String> {
+pub fn most_similar<'r, I: IntoIterator<Item = &'r T>, T: AsRef<str> + ?Sized + 'r>(expected: I, received: &str) -> Option<String> {
     expected
         .into_iter()
         .map(|v| (v.as_ref(), (strsim::jaro(v.as_ref(), received) * 1000.0).floor() as i64))
@@ -2536,69 +2777,90 @@ pub struct Properties{
     errors: Vec<Error>
 }
 
+impl Clone for Properties {
+    fn clone(&self) -> Self {
+        Self {
+            props: self.props.clone(),
+            finished: false,
+            errors: Vec::new()
+        }
+    }
+}
+
+impl Default for Properties {
+    fn default() -> Self {
+        Self {
+            props: HashMap::new(),
+            finished: false,
+            errors: Vec::new()
+        }
+    }
+}
+
 impl Properties {
-    pub fn protected<'props>(&'props mut self, context: &'props mut CompileContext) -> ProtectedProps<'props> {
-        ProtectedProps {
-            context,
-            props: self
+    pub fn finish(mut self, expected_fields: &'static [&'static str], context: &CompileContext) {
+        self.finished = true;
+
+        let props = mem::take(&mut self.props);
+        self.errors.extend(props.into_iter().map(
+            |(key, value)| {
+                let suggested = most_similar(expected_fields, &key);
+
+                Error::UnexpectedDisplayOption {
+                    error_span: value.get_span(),
+                    option: key,
+                    suggested
+                }
+            }
+        ));
+
+        context.extend_errors(mem::take(&mut self.errors))
+    }
+
+    pub fn get<T>(&mut self, property: &str) -> Property<T>
+    where PropertyValue: PropGetValue<T> {
+        if let Some(prop) = self.props.remove(property) {
+            let prop_span = prop.get_span();
+
+            Property {
+                value: match prop.get() {
+                    Ok(v) => Some(v),
+                    Err(err) => {
+                        self.errors.push(err);
+                        None
+                    }
+                },
+                span: Some(prop_span)
+            }
+        } else {
+            Property {
+                value: None,
+                span: None
+            }
         }
     }
 
-    pub fn finish(mut self, context: &CompileContext, expected_fields: Vec<&'static str>) {
-        self.finished = true;
+    pub fn merge_with(mut self, mut other: Properties) -> Self {
+        self.errors.extend(mem::take(&mut other.errors));
 
-        self.errors.extend(self.props.into_iter().map(
-            |(key, value)| Error::UnexpectedDisplayOption {
-                error_span: value.get_span(),
-                option: key,
-                suggested: most_similar(expected_fields, &key)
+        for (k, v) in mem::take(&mut other.props) {
+            let error_span = v.get_span();
+            let option = k.clone();
+            let old = self.props.insert(k, v);
+
+            if let Some(old) = old {
+                self.errors.push(Error::RepeatedDisplayOption {
+                    error_span,
+                    first_span: old.get_span(),
+                    option
+                });
             }
-        ))
-    }
+        }
 
-    pub fn get_bool(&mut self, property: &str) -> Result<Property<bool>, Error> {
-        self.0
-            .remove(property)
-            .as_ref()
-            .map_or(
-                Ok(Property { value: None }),
-                |x| Ok(Property {
-                    value: Some(RealProperty {
-                        value: x.as_bool()?,
-                        span: x.get_span()
-                    })
-                })
-            )
-    }
+        // no finish(), because that would require CompileContext. Here, however, no errors would happen anyway.
+        other.finished = true;
 
-    pub fn get_string(&mut self, property: &str) -> Result<Property<String>, Error> {
-        self.0
-            .remove(property)
-            .as_ref()
-            .map_or(
-                Ok(Property { value: None }),
-                |x| Ok(Property {
-                    value: Some(RealProperty {
-                        value: x.as_string()?,
-                        span: x.get_span()
-                    })
-                })
-            )
-    }
-
-    pub fn get_math_string(&mut self, property: &str) -> Result<Property<MathString>, Error> {
-        self.0
-            .remove(property)
-            .as_ref()
-            .map_or(
-                Ok(Property { value: None }),
-                |x| Ok(Property {
-                    value: Some(RealProperty {
-                        value: MathString::parse(&x.as_string()?, x.get_span())?,
-                        span: x.get_span()
-                    })
-                })
-            )
+        self
     }
 }
 
@@ -2619,65 +2881,31 @@ impl From<Option<DisplayProperties>> for Properties {
 impl Drop for Properties {
     fn drop(&mut self) {
         if !self.finished {
-            panic!("properties dropped before finishing parsing");
+            eprintln!("Properties dropped before finishing parsing: {:#?}. Please report this error.", self.props);
         }
-    }
-}
-
-#[derive(Debug)]
-pub struct ProtectedProps<'props> {
-    props: &'props mut Properties,
-    context: &'props mut CompileContext,
-}
-
-impl<'props> ProtectedProps<'props> {
-    pub fn get_bool(&mut self, property: &str) -> Property<bool> {
-        self.0
-            .remove(property)
-            .as_ref()
-            .map_or(
-                Property { value: None },
-                |x| Ok(Property {
-                    value: match x.as_bool() {
-                        Ok(v) => Some(RealProperty {
-                            value: v,
-                            span: x.get_span()
-                        }),
-                        Err(err) => {
-                            self.context.push_error(err);
-    
-                            None
-                        }
-                    }
-                })
-            )
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct Property<T> {
-    value: Option<RealProperty<T>>
+    value: Option<T>,
+    span: Option<Span>
 }
 
 impl<T> Property<T> {
     #[must_use]
     pub fn get(self) -> Option<T> {
-        self.value.map(|x| x.value)
-    }
-
-    #[must_use]
-    pub fn get_or(self, default: T) -> T {
-        self.value.map(|x| x.value).unwrap_or(default)
-    }
-
-    #[must_use]
-    pub fn get_prop(self) -> Option<RealProperty<T>> {
         self.value
     }
 
     #[must_use]
+    pub fn get_or(self, default: T) -> T {
+        self.value.unwrap_or(default)
+    }
+
+    #[must_use]
     pub fn get_span(&self) -> Option<Span> {
-        self.value.as_ref().map(|x| x.span)
+        self.span
     }
 
     #[must_use]
@@ -2689,18 +2917,12 @@ impl<T> Property<T> {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct RealProperty<T> {
-    pub value: T,
-    pub span: Span
-}
-
 fn create_variable_named(
     stat: &LetStatement,
     context: &mut CompileContext,
     named: &NamedIdent,
-    rhs_unrolled: AnyExpr,
-    variables: &mut Vec<AnyExpr>
+    mut rhs_unrolled: AnyExpr,
+    variable_nodes: &mut Vec<Box<dyn Node>>
 ) -> Result<(), Error> {
     match context.variables.entry(named.ident.clone()) {
         // If the variable already exists, it's a redefinition error.
@@ -2711,9 +2933,9 @@ fn create_variable_named(
         }),
         // Otherwise, create a new variable
         Entry::Vacant(entry) => {
-            let var = rhs_unrolled.make_variable(entry.key().clone());
-            variables.push(var.clone_without_node());
+            variable_nodes.extend(rhs_unrolled.replace_node(None).map(|v| v.as_dyn()));
 
+            let var = rhs_unrolled.make_variable(entry.key().clone());
             entry.insert(var);
 
             Ok(())
@@ -2727,7 +2949,7 @@ fn create_variable_collection(
     context: &mut CompileContext,
     col: &PCToken,
     rhs_unrolled: AnyExpr,
-    variables: &mut Vec<AnyExpr>
+    variable_nodes: &mut Vec<Box<dyn Node>>
 ) -> Result<(), Error> {
     // let display = Properties::from(display);
 
@@ -2735,7 +2957,7 @@ fn create_variable_collection(
         error_span: rhs_unrolled.get_span(),
         ty: rhs_unrolled.get_type(),
     };
-    let rhs_unpacked = rhs_unrolled.convert::<PointCollection>()?;
+    let mut rhs_unpacked = rhs_unrolled.convert::<PointCollection>(context);
 
     if rhs_unpacked.data.length != col.len() {
         return Err(maybe_error);
@@ -2751,11 +2973,12 @@ fn create_variable_collection(
     //     None
     // };
 
+    let mut rhs_node = rhs_unpacked.take_node();
     let mut rhs_unpacked = rhs_unpacked.data.data.as_collection().unwrap()
         .iter()
         .map(|x| x.clone_without_node());
 
-    for pt in &col.collection {
+    for (i, pt) in col.collection.iter().enumerate() {
         let id = format!("{pt}");
 
         match context.variables.entry(id.clone()) {
@@ -2771,15 +2994,23 @@ fn create_variable_collection(
             Entry::Vacant(entry) => {
                 let var = rhs_unpacked
                     .next()
-                    .unwrap()
-                    .make_variable(entry.key().clone());
+                    .unwrap();
+
+                if let Some(rhs_node) = &mut rhs_node {
+                    let pt_node = rhs_node.root.children
+                        .get_mut(i)
+                        .and_then(|v| v.take());
+
+                    variable_nodes.extend(pt_node.map(|x| Box::new(x) as Box<dyn Node>));
+                }
+
+                let var = var.make_variable(entry.key().clone());
 
                 // if let Some(node) = pt_node {
                 //     todo!()
                 // }
 
                 let var = AnyExpr::Point(var);
-                variables.push(var.clone_without_node());
                 entry.insert(var);
             }
         }
@@ -2792,35 +3023,41 @@ fn create_variables(
     stat: LetStatement,
     context: &mut CompileContext,
     library: &Library
-) -> Result<Vec<AnyExpr>, Error> {
-    let mut variables = Vec::new();
+) -> Result<Vec<Box<dyn Node>>, Error> {
+    let mut variable_nodes = Vec::new();
 
     let tree = IterNode::from(&stat.expr);
 
     let ind = if let Some(iter) = tree.first() {
         if stat.ident.len() == 1 {
-            return Err(Error::LetStatUnexpectedIterator {
+            context.push_error(Error::LetStatUnexpectedIterator {
                 var_span: stat.ident.get_span(),
                 error_span: iter.span,
             });
+
+            // Ignore every but first entry in the iterator.
         }
 
         for it in tree.iter() {
             if iter.id != it.id {
-                return Err(Error::LetStatMoreThanOneIterator {
+                context.push_error(Error::LetStatMoreThanOneIterator {
                     error_span: stat.expr.get_span(),
                     first_span: iter.span,
                     second_span: it.span,
                 });
+
+                // Ignore every other iterator.
             }
 
             for variant in &it.variants {
                 if let Some(it2) = variant.first() {
-                    return Err(Error::LetStatMoreThanOneIterator {
+                    context.push_error(Error::LetStatMoreThanOneIterator {
                         error_span: stat.expr.get_span(),
                         first_span: iter.span,
                         second_span: it2.span,
                     });
+
+                    // Ignore every other iterator.
                 }
             }
         }
@@ -2857,25 +3094,13 @@ fn create_variables(
             },
         }.and_then(|x| x.displayed_by_default()).unwrap_or_else(|| MathString::new(span!(0, 0, 0, 0)));
 
-        let display = DisplayProperties::merge(
-            def.display_properties.clone(),
-            Some(DisplayProperties {
-                lsquare: LSquare { span: span!(0, 0, 0, 0) },
-                properties: Punctuated {
-                    first: Box::new(parser::Property {
-                        name: NamedIdent {
-                            span: span!(0, 0, 0, 0),
-                            ident: String::from("default-label"),
-                            collection_likeness: 0.0
-                        },
-                        eq: token::Eq { span: span!(0, 0, 0, 0) },
-                        value: PropertyValue::MathString(default_label)
-                    }),
-                    collection: Vec::new()
-                },
-                rsquare: RSquare { span: span!(0, 0, 0, 0) }
-            })
+        let mut external = Properties::default();
+        external.props.insert(
+            String::from("default-label"),
+            PropertyValue::MathString(default_label)
         );
+
+        let display = Properties::from(def.display_properties.clone()).merge_with(external);
 
         let rhs_unrolled = unroll_expression(
             &stat.expr,
@@ -2883,8 +3108,8 @@ fn create_variables(
             library,
             ind.as_ref()
                 .unwrap_or_else(|| it_index.get_currents().unwrap()),
-            display.as_ref()
-        )?;
+            display
+        );
         it_index.next();
 
         match &def.name {
@@ -2894,7 +3119,7 @@ fn create_variables(
                     context,
                     named,
                     rhs_unrolled,
-                    &mut variables
+                    &mut variable_nodes
                 )?;
             }
             Ident::Collection(col) => {
@@ -2903,20 +3128,20 @@ fn create_variables(
                     context,
                     col,
                     rhs_unrolled,
-                    &mut variables
+                    &mut variable_nodes
                 )?;
             }
         }
     }
 
-    Ok(variables)
+    Ok(variable_nodes)
 }
 
 fn unroll_let(
     mut stat: LetStatement,
     context: &mut CompileContext,
     library: &Library
-) -> Result<(), Error> {
+) -> Result<Vec<Box<dyn Node>>, Error> {
     // First, we construct an iterator out of lhs
     let lhs: Expression<true> = Expression::ImplicitIterator(ImplicitIterator {
         exprs: Punctuated {
@@ -2944,7 +3169,7 @@ fn unroll_let(
     let stat_span = stat.get_span();
     let rules = mem::take(&mut stat.rules);
     
-    create_variables(stat, context, library)?;
+    let nodes = create_variables(stat, context, library)?;
 
     // Then, we run each rule through a tree iterator.
     for (rule, expr) in rules {
@@ -2958,20 +3183,20 @@ fn unroll_let(
 
         while let Some(it_index) = index.get_currents() {
             unroll_rule(
-                unroll_expression(&lhs, context, library, it_index, None)?,
+                unroll_expression(&lhs, context, library, it_index, Properties::default()),
                 &rule,
-                unroll_expression(&expr, context, library, it_index, None)?,
+                unroll_expression(&expr, context, library, it_index, Properties::default()),
                 context,
                 library,
                 stat_span,
                 false
-            )?;
+            );
 
             index.next();
         }
     }
 
-    Ok(())
+    Ok(nodes)
 }
 
 fn unroll_eq(
@@ -2980,7 +3205,7 @@ fn unroll_eq(
     context: &mut CompileContext,
     full_span: Span,
     inverted: bool
-) -> Result<(), Error> {
+) {
     let lhs_type = lhs.get_type();
     let rhs_type = rhs.get_type();
 
@@ -2989,93 +3214,126 @@ fn unroll_eq(
         || (lhs_type == ty::SCALAR_UNKNOWN && rhs_type == ty::collection(2))
     {
         // AB = CD must have different logic as it's implied that this means "equality of distances".
-        rule!(context:>(lhs.convert()?.convert_unit(Some(unit::DISTANCE))?, rhs.convert()?.convert_unit(Some(unit::DISTANCE))?) neg = inverted);
-
-        Ok(())
+        let lhs = lhs.convert(context).convert_unit(Some(unit::DISTANCE), context);
+        let rhs = rhs.convert(context).convert_unit(Some(unit::DISTANCE), context);
+        context.gt(lhs, rhs, inverted);
     } else {
         // If any of the two types can be cast onto the other, cast and compare.
         let (lhs, rhs) = if rhs.can_convert_to(lhs_type) {
-            (lhs, rhs.convert_to(lhs_type).unwrap())
+            (lhs, rhs.convert_to(lhs_type, context))
         } else if lhs.can_convert_to(rhs_type) {
-            (lhs.convert_to(rhs_type).unwrap(), rhs)
+            (lhs.convert_to(rhs_type, context), rhs)
         } else {
-            return Err(Error::InconsistentTypes {
+            context.push_error(Error::InconsistentTypes {
                 expected: (lhs_type, Box::new(lhs.get_span())),
                 got: (rhs_type, Box::new(rhs.get_span())),
                 error_span: Box::new(full_span),
             });
+
+            // "Cast" rhs to lhs.
+            (lhs, AnyExpr::Point(Expr {
+                span: rhs.get_span(),
+                weight: rhs.get_weight(),
+                data: Rc::new(Point::dummy()),
+                node: None
+            }).convert_to(lhs_type, context))
         };
 
         match rhs_type {
-            Type::Point => rule!(context:P=(
-                lhs.convert::<Point>()?,
-                rhs.convert::<Point>()?
-            ) neg = inverted),
-            Type::Scalar(_) => rule!(context:S=(lhs.convert()?.specify_unit(), rhs.convert()?.specify_unit()) neg = inverted),
+            Type::Point => {
+                let lhs = lhs.convert(context);
+                let rhs = rhs.convert(context);
+
+                context.point_eq(lhs, rhs, inverted);
+            }
+            Type::Scalar(_) => {
+                let lhs = lhs.convert(context);
+                let rhs = rhs.convert(context);
+
+                context.scalar_eq(lhs, rhs, inverted);
+            }
             ty => {
-                return Err(Error::ComparisonDoesNotExist {
+                context.push_error(Error::ComparisonDoesNotExist {
                     error_span: full_span,
                     ty,
-                })
+                });
+
+                // Pretend there is no rule.
             }
         }
-
-        Ok(())
     }
 }
 
 fn unroll_gt(
     lhs: Expr<Scalar>,
-    mut rhs: Expr<Scalar>,
+    rhs: Expr<Scalar>,
     context: &mut CompileContext,
     full_span: Span,
     inverted: bool,
-) -> Result<(), Error> {
+) {
     if lhs.data.unit.is_some() {
-        let rhs =
-            rhs.clone_with_node()
-                .convert_unit(lhs.data.unit)
-                .map_err(|_| Error::InconsistentTypes {
-                    expected: (lhs.get_value_type(), Box::new(lhs.span)),
-                    got: (rhs.get_value_type(), Box::new(rhs.span)),
-                    error_span: Box::new(full_span),
-                })?;
+        let rhs = if rhs.can_convert_unit(lhs.data.unit) {
+            rhs.convert_unit(lhs.data.unit, context)
+        } else {
+            context.push_error(Error::InconsistentTypes {
+                expected: (lhs.get_value_type(), Box::new(lhs.span)),
+                got: (rhs.get_value_type(), Box::new(rhs.span)),
+                error_span: Box::new(full_span),
+            });
 
-        rule!(context:>(lhs, rhs) neg = inverted);
+            Expr {
+                span: rhs.span,
+                weight: rhs.weight,
+                node: rhs.node,
+                data: Rc::new(Scalar::dummy())
+            }.convert_unit(lhs.data.unit, context)
+        };
+
+        context.gt(lhs, rhs, inverted);
     } else if rhs.data.unit.is_some() {
-        rule!(context:>(lhs.convert_unit(rhs.data.unit)?, rhs) neg = inverted);
+        let lhs = lhs.convert_unit(rhs.data.unit, context);
+        context.gt(lhs, rhs, inverted);
     } else {
-        rule!(context:>(lhs.convert_unit(Some(unit::SCALAR))?, rhs.convert_unit(Some(unit::SCALAR))?) neg = inverted);
+        let lhs = lhs.convert_unit(Some(unit::SCALAR), context);
+        let rhs = rhs.convert_unit(Some(unit::SCALAR), context);
+        context.gt(lhs, rhs, inverted);
     }
-
-    Ok(())
 }
 
 fn unroll_lt(
     lhs: Expr<Scalar>,
-    mut rhs: Expr<Scalar>,
+    rhs: Expr<Scalar>,
     context: &mut CompileContext,
     full_span: Span,
     inverted: bool,
-) -> Result<(), Error> {
+) {
     if lhs.data.unit.is_some() {
-        let rhs =
-            rhs.clone_with_node()
-                .convert_unit(lhs.data.unit)
-                .map_err(|_| Error::InconsistentTypes {
-                    expected: (lhs.get_value_type(), Box::new(lhs.span)),
-                    got: (rhs.get_value_type(), Box::new(rhs.span)),
-                    error_span: Box::new(full_span),
-                })?;
+        let rhs = if rhs.can_convert_unit(lhs.data.unit) {
+            rhs.convert_unit(lhs.data.unit, context)
+        } else {
+            context.push_error(Error::InconsistentTypes {
+                expected: (lhs.get_value_type(), Box::new(lhs.span)),
+                got: (rhs.get_value_type(), Box::new(rhs.span)),
+                error_span: Box::new(full_span),
+            });
 
-            rule!(context:<(lhs, rhs) neg = inverted);
+            Expr {
+                span: rhs.span,
+                weight: rhs.weight,
+                node: rhs.node,
+                data: Rc::new(Scalar::dummy())
+            }.convert_unit(lhs.data.unit, context)
+        };
+
+        context.lt(lhs, rhs, inverted);
     } else if rhs.data.unit.is_some() {
-        rule!(context:<(lhs.convert_unit(rhs.data.unit)?, rhs) neg = inverted);
+        let lhs = lhs.convert_unit(rhs.data.unit, context);
+        context.lt(lhs, rhs, inverted);
     } else {
-        rule!(context:<(lhs.convert_unit(Some(unit::SCALAR))?, rhs.convert_unit(Some(unit::SCALAR))?) neg = inverted);
+        let lhs = lhs.convert_unit(Some(unit::SCALAR), context);
+        let rhs = rhs.convert_unit(Some(unit::SCALAR), context);
+        context.lt(lhs, rhs, inverted);
     }
-
-    Ok(())
 }
 
 fn unroll_rule(
@@ -3086,50 +3344,54 @@ fn unroll_rule(
     library: &Library,
     full_span: Span,
     invert: bool
-) -> Result<(), Error> {
+) {
     match op {
         RuleOperator::Predefined(pre) => match pre {
             PredefinedRuleOperator::Eq(_) => unroll_eq(lhs, rhs, context, full_span, invert),
             PredefinedRuleOperator::Lt(_) => {
-                unroll_lt(lhs.convert()?, rhs.convert()?, context, full_span, invert)
+                unroll_lt(lhs.convert(context), rhs.convert(context), context, full_span, invert)
             }
             PredefinedRuleOperator::Gt(_) => {
-                unroll_gt(lhs.convert()?, rhs.convert()?, context, full_span, invert)
+                unroll_gt(lhs.convert(context), rhs.convert(context), context, full_span, invert)
             }
             PredefinedRuleOperator::Lteq(_) => {
-                unroll_gt(lhs.convert()?, rhs.convert()?, context, full_span, !invert)
+                unroll_gt(lhs.convert(context), rhs.convert(context), context, full_span, !invert)
             }
             PredefinedRuleOperator::Gteq(_) => {
-                unroll_lt(lhs.convert()?, rhs.convert()?, context, full_span, !invert)
+                unroll_lt(lhs.convert(context), rhs.convert(context), context, full_span, !invert)
             }
         },
         RuleOperator::Defined(op) => {
             let (def, lhs, rhs) = if let Some(func) = library.rule_ops.get(&op.ident.ident) {
                 if let Some(overload) = func.get_overload((&lhs.get_type(), &rhs.get_type())) {
-                    let lhs = lhs.convert_to(overload.params.0)?;
-                    let rhs = rhs.convert_to(overload.params.1)?;
+                    let lhs = lhs.convert_to(overload.params.0, context);
+                    let rhs = rhs.convert_to(overload.params.1, context);
 
                     (&overload.definition, lhs, rhs)
                 } else {
-                    return Err(Error::OverloadNotFound {
+                    context.push_error(Error::OverloadNotFound {
                         error_span: op.ident.span,
                         function_name: op.ident.ident.clone(),
                         params: vec![lhs.get_type(), rhs.get_type()],
                     });
+
+                    // Pretend the rule doesn't exist.
+                    return;
                 }
             } else {
-                #[allow(clippy::cast_possible_truncation)]
                 let suggested = most_similar(library.rule_ops.keys(), &op.ident.ident);
 
-                return Err(Error::UndefinedFunction {
+                context.push_error(Error::UndefinedFunction {
                     error_span: op.ident.span,
                     function_name: op.ident.ident.clone(),
                     suggested,
                 });
+
+                    // Pretend the rule doesn't exist.
+                return;
             };
 
             def(lhs, rhs, context, Properties::from(None), invert);
-            Ok(())
         }
         RuleOperator::Inverted(op) => {
             unroll_rule(lhs, &op.operator, rhs, context, library, full_span, !invert)
@@ -3149,14 +3411,14 @@ fn unroll_rulestat(
 
     while let Some(index) = it_index.get_currents() {
         unroll_rule(
-            unroll_expression(&rule.lhs, context, library, index, None)?,
+            unroll_expression(&rule.lhs, context, library, index, Properties::default()),
             &rule.op,
-            unroll_expression(&rule.rhs, context, library, index, None)?,
+            unroll_expression(&rule.rhs, context, library, index, Properties::default()),
             context,
             library,
             rule.get_span(),
             false
-        )?;
+        );
 
         it_index.next();
     }
@@ -3234,125 +3496,233 @@ fn set_flag_bool(flag: &mut Flag, stmt: &FlagStatement) -> Result<(), Error> {
     Ok(())
 }
 
-fn set_flag(set: &mut FlagSet, flag: &FlagStatement) -> Result<(), Error> {
-    let Some(mut flag_ref) = set.get_mut(&flag.name.name.first.ident) else {
+fn set_flag(set: &mut FlagSet, flag: &FlagStatement, context: &CompileContext) {
+    set_flag_recursive(set, flag, context, 0)
+
+    // let Some(mut flag_ref) = set.get_mut(&flag.name.name.first.ident) else {
+    //     let flag_name = flag.name.name.first.ident.clone();
+
+    //     let suggested = most_similar(set.keys(), &flag_name);
+
+    //     context.push_error(Error::FlagDoesNotExist {
+    //         flag_name,
+    //         flag_span: flag.name.get_span(),
+    //         error_span: flag.get_span(),
+    //         suggested,
+    //     });
+
+    //     // Pretend the flag doesn't exist.
+    //     return;
+    // };
+
+    // let mut old_head = flag_ref;
+
+    // for part in flag.name.name.iter().skip(1) {
+    //     flag_ref = if let FlagKind::Set(set) = &mut flag_ref.kind {
+    //         if let Some(v) = set.get_mut(&part.ident) {
+    //             v
+    //         } else {
+    //             let flag_name = part.ident.clone();
+    
+    //             let suggested = most_similar(set.keys(), &flag_name);
+    
+    //             context.push_error(Error::FlagDoesNotExist {
+    //                 flag_name,
+    //                 flag_span: flag.name.get_span(),
+    //                 error_span: flag.get_span(),
+    //                 suggested,
+    //             });
+    
+    //             // And pretend it doesn't exist.
+    //             continue;
+    //         }
+    //     } else {
+    //         context.push_error(Error::FlagSetExpected {
+    //             error_span: flag.get_span(),
+    //         });
+
+    //         // Further parsing could cause ambiguous errors.
+    //         break;
+    //     };
+    // }
+
+    // match flag_ref.ty {
+    //     FlagType::Set => match &flag.value {
+    //         super::parser::FlagValue::Set(set) => match &mut flag_ref.kind {
+    //             FlagKind::Setting(_) => unreachable!(),
+    //             FlagKind::Set(s) => {
+    //                 for stat in &set.flags {
+    //                     set_flag(s, stat, context);
+    //                 }
+    //             }
+    //         },
+    //         super::parser::FlagValue::Ident(_) | super::parser::FlagValue::Number(_) => {
+    //             context.push_error(Error::FlagSetExpected {
+    //                 error_span: flag.get_span(),
+    //             });
+    //         }
+    //     },
+    //     FlagType::Boolean => {context.ok(set_flag_bool(flag_ref, flag));},
+    //     FlagType::String => match &flag.value {
+    //         super::parser::FlagValue::Number(_) | super::parser::FlagValue::Set(_) => {
+    //             context.push_error(Error::StringExpected {
+    //                 error_span: flag.get_span(),
+    //             });
+    //         }
+    //         super::parser::FlagValue::Ident(ident) => match &mut flag_ref.kind {
+    //             FlagKind::Setting(s) => match s {
+    //                 FlagSetting::Default(_) | FlagSetting::Unset => {
+    //                     *s = FlagSetting::Set(
+    //                         FlagValue::String(ident.ident.clone()),
+    //                         flag.get_span(),
+    //                     );
+    //                 }
+    //                 FlagSetting::Set(_, sp) => {
+    //                     context.push_error(Error::RedefinedFlag {
+    //                         error_span: flag.get_span(),
+    //                         first_defined: *sp,
+    //                         flag_name: flag_ref.name.clone(),
+    //                     });
+    //                 }
+    //             },
+    //             FlagKind::Set(_) => unreachable!(),
+    //         },
+    //     },
+    // }
+}
+
+fn set_flag_recursive(set: &mut FlagSet, flag: &FlagStatement, context: &CompileContext, depth: usize) {
+    let Some(flag_ref) = set.get_mut(&flag.name.name.first.ident) else {
         let flag_name = flag.name.name.first.ident.clone();
 
-        #[allow(clippy::cast_possible_truncation)]
         let suggested = most_similar(set.keys(), &flag_name);
 
-        return Err(Error::FlagDoesNotExist {
+        context.push_error(Error::FlagDoesNotExist {
             flag_name,
             flag_span: flag.name.get_span(),
             error_span: flag.get_span(),
             suggested,
         });
+
+        // Pretend the flag doesn't exist.
+        return;
     };
 
-    for part in flag.name.name.iter().skip(1) {
-        flag_ref = if let Some(v) = if let FlagKind::Set(set) = &mut flag_ref.kind {
-            set.get_mut(&part.ident)
-        } else {
-            return Err(Error::FlagSetExpected {
-                error_span: flag.get_span(),
-            });
-        } {
-            v
-        } else {
-            let flag_name = part.ident.clone();
-
-            let suggested = most_similar(set.keys(), &flag_name);
-
-            return Err(Error::FlagDoesNotExist {
-                flag_name,
-                flag_span: flag.name.get_span(),
-                error_span: flag.get_span(),
-                suggested,
-            });
-        };
-    }
-
-    match flag_ref.ty {
-        FlagType::Set => match &flag.value {
-            super::parser::FlagValue::Set(set) => match &mut flag_ref.kind {
-                FlagKind::Setting(_) => unreachable!(),
-                FlagKind::Set(s) => {
-                    for stat in &set.flags {
-                        set_flag(s, stat)?;
-                    }
-                }
-            },
-            super::parser::FlagValue::Ident(_) | super::parser::FlagValue::Number(_) => {
-                return Err(Error::FlagSetExpected {
-                    error_span: flag.get_span(),
-                })
-            }
-        },
-        FlagType::Boolean => set_flag_bool(flag_ref, flag)?,
-        FlagType::String => match &flag.value {
-            super::parser::FlagValue::Number(_) | super::parser::FlagValue::Set(_) => {
-                return Err(Error::StringExpected {
-                    error_span: flag.get_span(),
-                })
-            }
-            super::parser::FlagValue::Ident(ident) => match &mut flag_ref.kind {
-                FlagKind::Setting(s) => match s {
-                    FlagSetting::Default(_) | FlagSetting::Unset => {
-                        *s = FlagSetting::Set(
-                            FlagValue::String(ident.ident.clone()),
-                            flag.get_span(),
-                        );
-                    }
-                    FlagSetting::Set(_, sp) => {
-                        return Err(Error::RedefinedFlag {
-                            error_span: flag.get_span(),
-                            first_defined: *sp,
-                            flag_name: flag_ref.name.clone(),
-                        })
+    if flag.name.name.len() == depth {
+        match flag_ref.ty {
+            FlagType::Set => match &flag.value {
+                super::parser::FlagValue::Set(set) => match &mut flag_ref.kind {
+                    FlagKind::Setting(_) => unreachable!(),
+                    FlagKind::Set(s) => {
+                        for stat in &set.flags {
+                            set_flag(s, stat, context);
+                        }
                     }
                 },
-                FlagKind::Set(_) => unreachable!(),
+                super::parser::FlagValue::Ident(_) | super::parser::FlagValue::Number(_) => {
+                    context.push_error(Error::FlagSetExpected {
+                        error_span: flag.get_span(),
+                    });
+                }
             },
-        },
+            FlagType::Boolean => {context.ok(set_flag_bool(flag_ref, flag));},
+            FlagType::String => match &flag.value {
+                super::parser::FlagValue::Number(_) | super::parser::FlagValue::Set(_) => {
+                    context.push_error(Error::StringExpected {
+                        error_span: flag.get_span(),
+                    });
+                }
+                super::parser::FlagValue::Ident(ident) => match &mut flag_ref.kind {
+                    FlagKind::Setting(s) => match s {
+                        FlagSetting::Default(_) | FlagSetting::Unset => {
+                            *s = FlagSetting::Set(
+                                FlagValue::String(ident.ident.clone()),
+                                flag.get_span(),
+                            );
+                        }
+                        FlagSetting::Set(_, sp) => {
+                            context.push_error(Error::RedefinedFlag {
+                                error_span: flag.get_span(),
+                                first_defined: *sp,
+                                flag_name: flag_ref.name.clone(),
+                            });
+                        }
+                    },
+                    FlagKind::Set(_) => unreachable!(),
+                },
+            },
+        }
+    } else {
+        if let FlagKind::Set(set) = &mut flag_ref.kind {
+            set_flag_recursive(set, flag, context, depth+1);
+        } else {
+            context.push_error(Error::FlagSetExpected {
+                error_span: flag.get_span(),
+            });
+        }
     }
-
-    Ok(())
 }
 
 /// Unrolls the given script. All iterators are expanded and all conversions applied. The output can be immediately compiled.
 ///
 /// # Errors
 /// Specific error descriptions are in `ScriptError` documentation.
-pub fn unroll(input: &str) -> Result<(CompileContext, CollectionNode), Error> {
+pub fn unroll(input: &str) -> Result<(CompileContext, CollectionNode), Vec<Error>> {
     // Unfortunately, due to how context-dependent geoscript is, the code must be compiled immediately after parsing.
     let mut context = CompileContext::new();
     let mut library = Library::new();
 
+    let mut figure = CollectionNode::new();
+
     builtins::register(&mut library);
     let library = library; // Disable mutation
 
-    let tokens = token::tokenize(input)?;
+    let tokens = match token::tokenize(input) {
+        Ok(v) => v,
+        Err(err) => return Err(vec![err])
+    };
     let mut it = tokens.iter().peekable();
 
     let mut statements = Vec::new();
 
     while it.peek().is_some() {
-        statements.push(Statement::parse(&mut it)?);
+        statements.push(match Statement::parse(&mut it) {
+            Ok(v) => v,
+            Err(err) => return Err(vec![err])
+        });
     }
+
+    let mut flags = FlagSetConstructor::new()
+        .add_set(
+            &"optimizations",
+            FlagSetConstructor::new().add_bool_def(&"identical_expressions", true),
+        )
+        .add_bool_def(&"point_bounds", false)
+        .finish();
 
     for flag in statements.iter().filter_map(Statement::as_flag) {
-        set_flag(&mut context.flags, flag)?;
+        set_flag(&mut flags, flag, &context);
     }
 
-    let figure = CollectionNode::new();
+    context.flags = flags;
 
     for stat in statements {
         // Unroll the statement
-        match stat {
-            Statement::Noop(_) | Statement::Flag(_) => (),
-            Statement::Let(stat) => unroll_let(stat, &mut context, &library)?,
-            Statement::Rule(stat) => unroll_rulestat(&stat, &mut context, &library)?,
-        }
+        let res = match stat {
+            Statement::Noop(_) | Statement::Flag(_) => Ok(()),
+            Statement::Let(stat) => match unroll_let(stat, &mut context, &library) {
+                Ok(nodes) => {
+                    for node in nodes {
+                        figure.push_boxed(node);
+                    }
+
+                    Ok(())
+                },
+                Err(x) => Err(x)
+            },
+            Statement::Rule(stat) => unroll_rulestat(&stat, &mut context, &library),
+        };
+        context.ok(res);
     }
 
     // for v in context.variables.values() {
@@ -3363,5 +3733,9 @@ pub fn unroll(input: &str) -> Result<(CompileContext, CollectionNode), Error> {
     //     println!("{x}");
     // }
 
-    Ok((context, figure))
+    if context.valid() {
+        Ok((context, figure))
+    } else {
+        Err(context.take_errors())
+    }
 }

@@ -18,25 +18,27 @@ WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use crate::script::unroll::{
+use crate::{script::{unroll::{
     Circle, CompileContext, Expr, Function, Library, Point, Properties, Scalar
-};
+}, unit}, take_nodes};
 use geo_aid_derive::overload;
 
 #[allow(unused_imports)]
-use super::macros::{call, circle_expr, entity};
+use super::macros::call;
 
 /// Circle constructor. Creates a circle based off of its center and radius.
 fn circle_function(
     mut center: Expr<Point>,
     mut radius: Expr<Scalar>,
-    _context: &mut CompileContext,
+    context: &mut CompileContext,
     display: Properties
 ) -> Expr<Circle> {
-    drop(display);
-    let expr = circle_expr!(center, radius);
-
-    expr
+    let nodes = take_nodes!(center, radius);
+    context.expr_with(
+        Circle::Circle(center, radius),
+        display,
+        nodes
+    )
 }
 
 pub fn register(library: &mut Library) {
@@ -50,12 +52,17 @@ pub fn register(library: &mut Library) {
                     |radius: Expr<Scalar>, center: Expr<Point>, context, _| call!(context:circle_function(center, radius))
                 }),
                 overload!(() -> CIRCLE {
-                    |context: &mut CompileContext, _| call!(
-                        context:circle_function(
-                            entity!(POINT context.add_point()),
-                            entity!(DISTANCE context.add_scalar())
+                    |context: &mut CompileContext, _| {
+                        let pt = context.add_point();
+                        let sc = context.add_scalar();
+
+                        call!(
+                            context:circle_function(
+                                context.entity_p(pt),
+                                context.entity_s(sc, unit::DISTANCE)
+                            )
                         )
-                    )
+                    }
                 })
             ],
         },

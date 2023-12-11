@@ -18,7 +18,7 @@ WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use std::{cell::RefCell, collections::HashMap, mem, rc::Rc, sync::Arc, unreachable};
+use std::{cell::RefCell, collections::HashMap, rc::Rc, sync::Arc, unreachable};
 
 use crate::generator::expression::expr::PointOnLine;
 use crate::generator::fast_float::FastFloat;
@@ -255,6 +255,7 @@ impl Compiler {
         match generic {
             Generic::VariableAccess(var) => self.compile_variable(var),
             Generic::Boxed(expr) => self.compile(expr),
+            Generic::Dummy => unreachable!("dummy expression appeared in compile step")
         }
     }
 }
@@ -597,7 +598,7 @@ impl Compiler {
 
     #[must_use]
     fn compile_rules(&mut self) -> Vec<Criteria> {
-        let rules = mem::take(&mut self.context.rules);
+        let rules = self.context.take_rules();
 
         self.compile_rule_vec(&rules)
     }
@@ -758,6 +759,14 @@ fn read_flags(flags: &HashMap<String, Flag>) -> Flags {
     }
 }
 
+#[derive(Debug)]
+pub struct CompileResult {
+    pub criteria: Vec<Criteria>,
+    pub figure: Figure,
+    pub template: Vec<AdjustableTemplate>,
+    pub flags: generator::Flags
+}
+
 /// Compiles the given script.
 ///
 /// # Errors
@@ -769,13 +778,8 @@ pub fn compile(
     input: &str,
     canvas_size: (usize, usize),
 ) -> Result<
-    (
-        Vec<Criteria>,
-        Figure,
-        Vec<AdjustableTemplate>,
-        generator::Flags,
-    ),
-    Error,
+    CompileResult,
+    Vec<Error>
 > {
     // First, we have to unroll the script.
     let (context, figure) = unroll::unroll(input)?;
@@ -822,7 +826,12 @@ pub fn compile(
     // }
 
     let figure = compiler.build_figure(figure, canvas_size);
-    Ok((criteria, figure, compiler.template, flags))
+    Ok(CompileResult {
+        criteria,
+        figure,
+        template: compiler.template,
+        flags
+    })
 }
 
 /// Inequality principle and the point plane limit.

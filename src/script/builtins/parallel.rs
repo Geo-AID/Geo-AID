@@ -22,17 +22,17 @@ use crate::script::unroll::{CompileContext, Expr, Function, Library, Line, Point
 use geo_aid_derive::overload;
 
 #[allow(unused_imports)]
-use super::macros::{call, parallel_through};
+use super::macros::call;
 
 /// `parallel_through(line, point)` - returns a line parallel to the 1st argument going through point at 2nd argument.
 fn parallel_function_line_point(
-    mut line: Expr<Line>,
-    mut point: Expr<Point>,
-    _context: &mut CompileContext,
+    line: Expr<Line>,
+    point: Expr<Point>,
+    context: &CompileContext,
     display: Properties,
 ) -> Expr<Line> {
     drop(display);
-    let expr = parallel_through!(line, point);
+    let expr = context.parallel_through(line, point);
 
     expr
 }

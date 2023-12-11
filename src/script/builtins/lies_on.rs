@@ -21,12 +21,12 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 use geo_aid_derive::overload;
 use std::rc::Rc;
 
-use crate::script::builtins::macros::{distance, field, line2};
+use crate::script::builtins::macros::field;
 use crate::script::unroll::{
     Bundle, Circle, Line, Point, PointCollection, Simplify, UnrolledRule, UnrolledRuleKind, CollectionNode, CloneWithNode
 };
 use crate::script::{
-    builtins::macros::{angle_expr, circle_center, circle_radius, index, math, number, rule},
+    builtins::macros::{index, number, rule},
     unroll::{CompileContext, Expr, Library, Properties, Rule},
 };
 
@@ -35,7 +35,7 @@ fn pt_lies_on_circle(
     mut rhs: Expr<Circle>,
     context: &mut CompileContext,
     properties: Properties,
-    invert: bool,
+    inverted: bool,
 ) {
     drop(properties);
 
@@ -43,19 +43,20 @@ fn pt_lies_on_circle(
     node.extend(lhs.node.take());
     node.extend(rhs.node.take());
 
-    let mut point = lhs.simplify(context);
-    let mut circle = rhs.simplify(context);
+    let point = lhs.simplify(context);
+    let circle = rhs.simplify(context);
 
-    if invert {
-        rule!(context:S=(
-            circle_radius!(circle),
-            distance!(PP: point, circle_center!(circle))
-        ) neg=true);
+    if inverted {
+        context.scalar_eq(
+            context.circle_radius(circle.clone_without_node()),
+            context.distance_pp(point, context.circle_center(circle)),
+            true
+        );
     } else {
         context.point_on_circle(&point, &circle);
     }
 
-    rule!(context:display node);
+    context.display(node);
 }
 
 fn pt_lies_on_line(
@@ -63,7 +64,7 @@ fn pt_lies_on_line(
     mut rhs: Expr<Line>,
     context: &mut CompileContext,
     properties: Properties,
-    invert: bool,
+    inverted: bool,
 ) {
     drop(properties);
 
@@ -71,19 +72,20 @@ fn pt_lies_on_line(
     node.extend(lhs.node.take());
     node.extend(rhs.node.take());
 
-    let mut point = lhs.simplify(context);
-    let mut line = rhs.simplify(context);
+    let point = lhs.simplify(context);
+    let line = rhs.simplify(context);
 
-    if invert {
-        rule!(context:S=(
+    if inverted {
+        context.scalar_eq(
             number!(=0.0),
-            distance!(PL: point, line)
-        ) neg=true);
+            context.distance_pl(point, line),
+            true
+        );
     } else {
         context.point_on_line(&point, &line);
     }
 
-    rule!(context:display node);
+    context.display(node);
 }
 
 fn col_lies_on_circle(
@@ -91,13 +93,13 @@ fn col_lies_on_circle(
     mut rhs: Expr<Circle>,
     context: &mut CompileContext,
     properties: Properties,
-    invert: bool,
+    inverted: bool,
 ) {
     drop(properties);
     let len = lhs.data.length;
 
     for i in 0..len {
-        rule!(context:pt_lies_on_circle(index!(node lhs, i), rhs.clone_with_node()) neg=invert);
+        rule!(context:pt_lies_on_circle(index!(node lhs, i), rhs.clone_with_node()) neg=inverted);
     }
 
     /*
@@ -105,19 +107,19 @@ fn col_lies_on_circle(
      * (A_1, A_2, A_3), (A_2, A_3, A_4), ... (A_n-1, A_n, A_1)
      */
 
-    if !invert {
+    if !inverted {
         for i in 1..len {
             let i_plus_1 = (i + 1) % len;
             let i_plus_2 = (i + 2) % len;
 
-            rule!(context:>(
-                math!(
-                    *,
-                    angle_expr!(dir index!(no-node lhs, i), index!(no-node lhs, i-1), index!(no-node lhs, i_plus_1)),
-                    angle_expr!(dir index!(no-node lhs, i_plus_1), index!(no-node lhs, i), index!(no-node lhs, i_plus_2))
+            context.gt(
+                context.mult(
+                    context.angle_dir(index!(no-node lhs, i), index!(no-node lhs, i-1), index!(no-node lhs, i_plus_1)),
+                    context.angle_dir(index!(no-node lhs, i_plus_1), index!(no-node lhs, i), index!(no-node lhs, i_plus_2))
                 ),
-                number!(ANGLE 0.0)
-            ));
+                number!(ANGLE 0.0),
+                false
+            );
         }
     }
 }
@@ -127,7 +129,7 @@ fn pt_lies_on_segment(
     mut rhs: Expr<Bundle>,
     context: &mut CompileContext,
     properties: Properties,
-    invert: bool,
+    inverted: bool,
 ) {
     drop(properties);
 
@@ -135,25 +137,25 @@ fn pt_lies_on_segment(
     node.extend(lhs.node.take());
     node.extend(rhs.node.take());
 
-    let mut point = lhs.simplify(context);
-    let mut line = line2!(field!(node POINT rhs, A), field!(node POINT rhs, B)).simplify(context);
+    let point = lhs.simplify(context);
+    let line = context.line(field!(node POINT rhs, A with context), field!(node POINT rhs, B with context)).simplify(context);
 
-    if invert {
+    if inverted {
         // not on line or not between A, B
-        context.rules.push(UnrolledRule {
+        context.push_rule(UnrolledRule {
             kind: UnrolledRuleKind::Alternative(vec![
                 UnrolledRule {
-                    kind: UnrolledRuleKind::ScalarEq(number!(=0.0), distance!(PL: point, line)),
+                    kind: UnrolledRuleKind::ScalarEq(number!(=0.0), context.distance_pl(point, line)),
                     inverted: true,
                     node: None
                 },
                 UnrolledRule {
                     kind: UnrolledRuleKind::ScalarEq(
-                        math!(
-                            +, distance!(PP: field!(no-node POINT rhs, A), lhs),
-                            distance!(PP: field!(no-node POINT rhs, B), lhs)
+                        context.add(
+                            context.distance_pp(field!(no-node POINT rhs, A with context), lhs.clone_without_node()),
+                            context.distance_pp(field!(no-node POINT rhs, B with context), lhs)
                         ),
-                        distance!(PP: field!(no-node POINT rhs, A), field!(no-node POINT rhs, B)),
+                        context.distance_pp(field!(no-node POINT rhs, A with context), field!(no-node POINT rhs, B with context)),
                     ),
                     inverted: true,
                     node: None
@@ -165,16 +167,17 @@ fn pt_lies_on_segment(
     } else {
         context.point_on_line(&point, &line);
 
-        rule!(context:S=(
-            math!(
-                +, distance!(PP: field!(no-node POINT rhs, A), lhs),
-                distance!(PP: field!(no-node POINT rhs, B), lhs)
+        context.scalar_eq(
+            context.add(
+                context.distance_pp(field!(no-node POINT rhs, A with context), lhs.clone_without_node()),
+                context.distance_pp(field!(no-node POINT rhs, B with context), lhs)
             ),
-            distance!(PP: field!(no-node POINT rhs, A), field!(no-node POINT rhs, B))
-        ));
+            context.distance_pp(field!(no-node POINT rhs, A with context), field!(no-node POINT rhs, B with context)),
+            false
+        );
     }
 
-    rule!(context:display node);
+    context.display(node);
 }
 
 pub fn register(library: &mut Library) {

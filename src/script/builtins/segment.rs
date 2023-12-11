@@ -30,7 +30,7 @@ use crate::script::unroll::{
 fn segment_function_point_point(
     mut a: Expr<Point>,
     mut b: Expr<Point>,
-    _context: &mut CompileContext,
+    _context: &CompileContext,
     display: Properties,
 ) -> Expr<Bundle> {
     drop(display);

@@ -202,6 +202,11 @@ pub enum Error {
         error_span: Span,
         option: String,
         suggested: Option<String>
+    },
+    RepeatedDisplayOption {
+        error_span: Span,
+        first_span: Span,
+        option: String
     }
 }
 
@@ -488,6 +493,11 @@ impl Error {
                 DiagnosticData::new(&format!("unexpected display option: `{option}`"))
                     .add_span(error_span)
                     .add_annotation_opt_msg(error_span, AnnotationKind::Help, message.as_ref())
+            }
+            Self::RepeatedDisplayOption { error_span, first_span, option } => {
+                DiagnosticData::new(&format!("repeated display option: `{option}`."))
+                    .add_span(error_span)
+                    .add_annotation(first_span, AnnotationKind::Help, &"first defined here.")
             }
         }
     }
