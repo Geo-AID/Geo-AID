@@ -1377,15 +1377,15 @@ pub enum PropertyValue {
     MathString(MathString)
 }
 
-pub trait PropGetValue<T> {
+pub trait FromProperty: Sized {
     /// # Errors
     /// Causes an error if the value is not properly convertible.
-    fn get(self) -> Result<T, Error>;
+    fn from_property(property: PropertyValue) -> Result<Self, Error>;
 }
 
-impl PropGetValue<bool> for PropertyValue {
-    fn get(self) -> Result<bool, Error> {
-        match self {
+impl FromProperty for bool {
+    fn from_property(property: PropertyValue) -> Result<Self, Error> {
+        match property {
             PropertyValue::Ident(ident) => match ident {
                 Ident::Named(ident) => match ident.ident.as_str() {
                     "enabled" | "on" | "true" => Ok(true),
@@ -1405,34 +1405,23 @@ impl PropGetValue<bool> for PropertyValue {
                     error_span: num.get_span(),
                 }),
             },
-            Self::MathString(s) => Err(Error::BooleanExpected {
+            PropertyValue::MathString(s) => Err(Error::BooleanExpected {
                 error_span: s.get_span(),
             })
         }
     }
 }
 
-impl PropGetValue<String> for PropertyValue {
-    fn get(self) -> Result<String, Error> {
-        match self {
+impl FromProperty for String {
+    fn from_property(property: PropertyValue) -> Result<String, Error> {
+        match property {
             PropertyValue::Ident(ident) => Ok(ident.to_string()),
             PropertyValue::Number(num) => Err(Error::StringExpected {
                 error_span: num.get_span(),
             }),
-            Self::MathString(s) => Err(Error::StringExpected {
+            PropertyValue::MathString(s) => Err(Error::StringExpected {
                 error_span: s.get_span(),
             })
-        }
-    }
-}
-
-impl PropGetValue<MathString> for PropertyValue {
-    fn get(self) -> Result<MathString, Error> {
-        let self_span = self.get_span();
-
-        match self {
-            Self::MathString(v) => Ok(v),
-            _ => MathString::parse(&<PropertyValue as PropGetValue<String>>::get(self)?, self_span)
         }
     }
 }

@@ -26,7 +26,7 @@ use serde::Serialize;
 
 use crate::{generator::expression::{CircleExpr, Expression, LineExpr, PointExpr, ScalarExpr}, span};
 
-use super::{Error, token::{Span, PointCollectionItem}, unroll::most_similar};
+use super::{Error, token::{Span, PointCollectionItem}, unroll::most_similar, parser::{FromProperty, PropertyValue, Parse}};
 
 type Point = Arc<Expression<PointExpr>>;
 
@@ -374,6 +374,17 @@ impl MathString {
     #[must_use]
     pub fn get_span(&self) -> Span {
         self.span
+    }
+}
+
+impl FromProperty for MathString {
+    fn from_property(property: PropertyValue) -> Result<MathString, Error> {
+        let prop_span = property.get_span();
+
+        match property {
+            PropertyValue::MathString(v) => Ok(v),
+            prop => MathString::parse(&String::from_property(prop)?, prop_span)
+        }
     }
 }
 

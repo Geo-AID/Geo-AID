@@ -576,6 +576,15 @@ impl Ident {
             None
         }
     }
+    
+    #[must_use]
+    pub fn as_ident(&self) -> Option<&NamedIdent> {
+        if let Self::Named(v) = self {
+            Some(v)
+        } else {
+            None
+        }
+    }
 }
 
 impl Display for Ident {

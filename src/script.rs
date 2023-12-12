@@ -160,6 +160,9 @@ pub enum Error {
     StringExpected {
         error_span: Span,
     },
+    StringOrIdentExpected {
+        error_span: Span,
+    },
     BooleanExpected {
         error_span: Span,
     },
@@ -399,7 +402,11 @@ impl Error {
                     .add_span(error_span)
             }
             Self::StringExpected { error_span } => {
-                DiagnosticData::new(&"expected a string (identifier).")
+                DiagnosticData::new(&"expected a string.")
+                    .add_span(error_span)
+            }
+            Self::StringOrIdentExpected { error_span } => {
+                DiagnosticData::new(&"expected a string or an identifier.")
                     .add_span(error_span)
             }
             Self::BooleanExpected { error_span } => {

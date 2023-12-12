@@ -44,7 +44,7 @@ pub use context::{
 use self::figure::FromExpr;
 
 use super::figure::MathString;
-use super::parser::PropGetValue;
+use super::parser::FromProperty;
 use super::{
     builtins,
     parser::{
@@ -61,7 +61,7 @@ mod figure;
 
 pub use figure::{
     Node, PointNode, CircleNode, CollectionNode, EmptyNode, PCNode, BundleNode, AnyExprNode, HierarchyNode,
-    AssociatedData, BuildAssociated, LineNode, MaybeUnset, ScalarNode
+    AssociatedData, BuildAssociated, LineNode, MaybeUnset, ScalarNode, LineType
 };
 
 /// A definition for a user-defined rule operator.
@@ -2818,13 +2818,12 @@ impl Properties {
         context.extend_errors(mem::take(&mut self.errors))
     }
 
-    pub fn get<T>(&mut self, property: &str) -> Property<T>
-    where PropertyValue: PropGetValue<T> {
+    pub fn get<T: FromProperty>(&mut self, property: &str) -> Property<T> {
         if let Some(prop) = self.props.remove(property) {
             let prop_span = prop.get_span();
 
             Property {
-                value: match prop.get() {
+                value: match T::from_property(prop) {
                     Ok(v) => Some(v),
                     Err(err) => {
                         self.errors.push(err);

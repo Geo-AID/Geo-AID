@@ -20,7 +20,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 use std::{ops::Deref, fmt::Debug, collections::HashMap};
 
-use crate::{script::{figure::{MathString, Figure, Mode}, token::{PointCollectionItem, NamedIdent}, compile::{Compiler, Compile}}, span};
+use crate::{script::{figure::{MathString, Figure, Mode}, token::{PointCollectionItem, NamedIdent}, compile::{Compiler, Compile}, parser::{FromProperty, PropertyValue, Parse}, Error}, span};
 
 use super::{Expr, Point, Circle, Displayed, Line, Scalar, PointCollection, Bundle, Properties, CompileContext, CloneWithNode, Unknown};
 
@@ -186,6 +186,15 @@ pub enum AssociatedData {
     Bool(MaybeUnset<bool>)
 }
 
+impl AssociatedData {
+    #[must_use]
+    pub fn as_bool(&self) -> MaybeUnset<bool> {
+        match self {
+            Self::Bool(v) => v,
+        }
+    }
+}
+
 /// Contains a root node, apart from its children. Simulates a hierarchy.
 #[derive(Debug)]
 pub struct HierarchyNode<T: Node> {
@@ -258,6 +267,10 @@ impl<T: Node> HierarchyNode<T> {
 
     pub fn insert_data(&mut self, key: &'static str, data: AssociatedData) {
         self.associated_data.insert(key, data);
+    }
+
+    pub fn get_data(&self, key: &'static str) -> Option<&AssociatedData> {
+        self.associated_data.get(key)
     }
 }
 
@@ -628,12 +641,38 @@ impl FromExpr<Circle> for CircleNode {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+pub enum LineType {
+    Line,
+    Ray,
+    Segment
+}
+
+impl FromProperty for LineType {
+    fn from_property(property: PropertyValue) -> Result<Self, Error> {
+        match property {
+            PropertyValue::Number(n) => Err(Error::StringOrIdentExpected {
+                error_span: n.get_span(),
+            }),
+            PropertyValue::Ident(i) => match i.to_string().to_lowercase().as_str() {
+                "line" => Ok(Self::Line),
+                "ray" => Ok(Self::Ray),
+                "segment" => Ok(Self::Segment),
+                &_ => Err(Error::StringOrIdentExpected {
+                    error_span: i.get_span(),
+                })
+            },
+            PropertyValue::MathString(_) => unreachable!(),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct LineNode {
     pub display: MaybeUnset<bool>,
     pub label: MaybeUnset<MathString>,
     pub display_label: MaybeUnset<bool>,
-    pub is_ray: MaybeUnset<bool>,
+    pub line_type: MaybeUnset<LineType>,
     pub expr: Expr<Line>
 }
 
@@ -673,11 +712,11 @@ impl FromExpr<Line> for LineNode {
             display: props.get("display").maybe_unset(true),
             label: props.get("label").maybe_unset(MathString::new(span!(0, 0, 0, 0))),
             display_label: props.get("display_label").maybe_unset(false),
-            is_ray: props.get("is_ray").maybe_unset(false),
+            line_type: props.get("line_type").maybe_unset(LineType::Line),
             expr: expr.clone_without_node()
         };
 
-        props.finish(&["display", "label", "display_label", "is_ray"], context);
+        props.finish(&["display", "label", "display_label", "line_type"], context);
 
         node
     }
