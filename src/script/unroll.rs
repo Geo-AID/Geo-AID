@@ -41,7 +41,7 @@ pub use context::{
     Scalar as EntScalar
 };
 
-use self::figure::{MaybeUnset, ScalarNode, LineNode, FromExpr};
+use self::figure::FromExpr;
 
 use super::figure::MathString;
 use super::parser::PropGetValue;
@@ -60,7 +60,8 @@ mod context;
 mod figure;
 
 pub use figure::{
-    Node, PointNode, CircleNode, CollectionNode, EmptyNode, PCNode, BundleNode, AnyExprNode, HierarchyNode
+    Node, PointNode, CircleNode, CollectionNode, EmptyNode, PCNode, BundleNode, AnyExprNode, HierarchyNode,
+    AssociatedData, BuildAssociated, LineNode, MaybeUnset, ScalarNode
 };
 
 /// A definition for a user-defined rule operator.

@@ -18,7 +18,9 @@ WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use crate::script::unroll::CloneWithNode;
+use std::rc::Rc;
+
+use crate::{script::{unroll::{CloneWithNode, AssociatedData, HierarchyNode, LineNode}, figure::MathString}, generator::fast_float::FastFloat, span};
 #[allow(unused_imports)]
 use crate::script::unroll::{
     CompileContext, Expr, Function, Library, Line, Point, PointCollection, Properties,
@@ -34,26 +36,39 @@ pub fn point_point_point(
     b: Expr<Point>,
     c: Expr<Point>,
     context: &CompileContext,
-    display: Properties,
+    mut display: Properties,
 ) -> Expr<Line> {
-    context.bisector_ppp_display(a, b, c, display)
+    // We're highjacking the node creation, so util functions.
+    let mut expr = Expr {
+        weight: FastFloat::One,
+        span: span!(0, 0, 0, 0),
+        data: Rc::new(Line::AngleBisector(a, b, c)),
+        node: None
+    };
 
-    // Render the bisector.
-    // context
-    //     .figure
-    //     .rays
-    //     .push((b.clone(), intersection!(expr, line2!(a, c))));
+    // Line node.
+    let mut node = HierarchyNode::new(LineNode {
+        display: display.get("display").maybe_unset(true),
+        label: display.get("label").maybe_unset(MathString::new(span!(0, 0, 0, 0))),
+        display_label: display.get("display_label").maybe_unset(false),
+        is_ray: display.get("is_ray").maybe_unset(true), // The change. Bisectors are to be treated as rays.
+        expr: expr.clone_without_node()
+    });
 
-    // context.figure.segments.push((a.clone(), b.clone()));
+    let display_arms = display.get("display_arms").maybe_unset(true);
 
-    // context.figure.segments.push((c.clone(), b.clone()));
+    display.finish(&["display", "label", "display_label", "is_ray"], context);
+
+    node.insert_data("display_arms", AssociatedData::Bool(display_arms));
+
+    expr
 }
 
 /// bisector(point, point) - bisector of a segment.
 pub fn point_point(
     a: Expr<Point>,
     b: Expr<Point>,
-    context: &CompileContext,
+    context: &mut CompileContext,
     display: Properties,
 ) -> Expr<Line> {
     use super::mid::function_point;

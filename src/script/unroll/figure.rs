@@ -177,11 +177,22 @@ impl Node for CollectionNode {
     }
 }
 
+pub trait BuildAssociated<T: Node>: Debug {
+    fn build_associated(&self, compiler: &mut Compiler, figure: &mut Figure, associated: &HierarchyNode<T>);
+}
+
+#[derive(Debug)]
+pub enum AssociatedData {
+    Bool(MaybeUnset<bool>)
+}
+
 /// Contains a root node, apart from its children. Simulates a hierarchy.
 #[derive(Debug)]
 pub struct HierarchyNode<T: Node> {
     pub root: Box<T>,
-    pub children: Vec<Box<dyn Node>>
+    pub children: Vec<Box<dyn Node>>,
+    pub associated: Option<Box<dyn BuildAssociated<T>>>,
+    pub associated_data: HashMap<&'static str, AssociatedData>
 }
 
 impl<T: Node> Node for HierarchyNode<T> {
@@ -197,6 +208,10 @@ impl<T: Node> Node for HierarchyNode<T> {
         if self.root.get_display() {
             self.root.build(compiler, figure);
 
+            if let Some(associated) = &self.associated {
+                associated.build_associated(compiler, figure, self);
+            }
+
             for child in &self.children {
                 child.build(compiler, figure);
             }
@@ -208,7 +223,9 @@ impl<U: Displayed, T: FromExpr<U>> FromExpr<U> for HierarchyNode<T> {
     fn from_expr(expr: &Expr<U>, props: Properties, context: &CompileContext) -> Self {
         Self {
             root: Box::new(T::from_expr(expr, props, context)),
-            children: Vec::new()
+            children: Vec::new(),
+            associated: None,
+            associated_data: HashMap::new()
         }
     }
 }
@@ -217,7 +234,9 @@ impl<T: Node> HierarchyNode<T> {
     pub fn new(root: T) -> Self {
         Self {
             root: Box::new(root),
-            children: Vec::new()
+            children: Vec::new(),
+            associated: None,
+            associated_data: HashMap::new()
         }
     }
 
@@ -231,6 +250,14 @@ impl<T: Node> HierarchyNode<T> {
 
     pub fn extend_children<U: Node + 'static, Iter: IntoIterator<Item = U>>(&mut self, nodes: Iter) {
         self.children.extend(nodes.into_iter().map(|x| Box::new(x) as Box::<dyn Node>));
+    }
+
+    pub fn set_associated(&mut self, associated: Box<dyn BuildAssociated<T>>) {
+        self.associated = Some(associated);
+    }
+
+    pub fn insert_data(&mut self, key: &'static str, data: AssociatedData) {
+        self.associated_data.insert(key, data);
     }
 }
 
@@ -606,6 +633,7 @@ pub struct LineNode {
     pub display: MaybeUnset<bool>,
     pub label: MaybeUnset<MathString>,
     pub display_label: MaybeUnset<bool>,
+    pub is_ray: MaybeUnset<bool>,
     pub expr: Expr<Line>
 }
 
@@ -645,10 +673,11 @@ impl FromExpr<Line> for LineNode {
             display: props.get("display").maybe_unset(true),
             label: props.get("label").maybe_unset(MathString::new(span!(0, 0, 0, 0))),
             display_label: props.get("display_label").maybe_unset(false),
+            is_ray: props.get("is_ray").maybe_unset(false),
             expr: expr.clone_without_node()
         };
 
-        props.finish(&["display", "label", "display_label"], context);
+        props.finish(&["display", "label", "display_label", "is_ray"], context);
 
         node
     }
