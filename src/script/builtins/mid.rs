@@ -21,24 +21,22 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 use crate::script::unroll::{CompileContext, Expr, Function, Library, Point, Properties, Scalar};
 use geo_aid_derive::overload;
 
-use super::macros::average;
-
 pub fn function_point(
-    args: &[Expr<Point>],
-    _context: &mut CompileContext,
-    display: Option<Properties>,
+    args: Vec<Expr<Point>>,
+    context: &CompileContext,
+    display: Properties,
 ) -> Expr<Point> {
     drop(display);
-    average!(POINT : args)
+    context.average_p(args)
 }
 
 fn function_scalar(
-    args: &[Expr<Scalar>],
-    _context: &mut CompileContext,
-    display: Option<Properties>,
+    args: Vec<Expr<Scalar>>,
+    context: &CompileContext,
+    display: Properties,
 ) -> Expr<Scalar> {
     drop(display);
-    average!(SCALAR : args)
+    context.average_s(args)
 }
 
 pub fn register(library: &mut Library) {

@@ -30,7 +30,7 @@ use super::{
     token::{
         Ampersant, Asterisk, At, Colon, Comma, Dollar, Dot, Eq, Exclamation, Gt, Gteq, Ident,
         LBrace, LParen, LSquare, Let, Lt, Lteq, Minus, NamedIdent, Number, Plus, RBrace, RParen,
-        RSquare, Semi, Slash, Span, Token, Vertical,
+        RSquare, Semi, Slash, Span, StrLit, Token, Vertical,
     },
     unit, ComplexUnit, Error,
 };
@@ -71,9 +71,9 @@ impl UnaryOperator {
                 Type::Point
                 | Type::Line
                 | Type::Circle
-                | Type::Undefined
+                | Type::Unknown
                 | Type::Bundle(_)
-                | Type::PointCollection(_) => Type::Undefined,
+                | Type::PointCollection(_) => Type::Unknown,
                 t @ Type::Scalar(_) => *t,
             },
         }
@@ -669,6 +669,13 @@ impl<T, P> Punctuated<T, P> {
             .chain(self.collection.iter().map(|x| &x.1))
     }
 
+    /// Turns the punctuated into an iterator on the items.
+    pub fn into_iter(self) -> impl Iterator<Item = T> {
+        vec![*self.first]
+            .into_iter()
+            .chain(self.collection.into_iter().map(|x| x.1))
+    }
+
     /// Gets the item count.
     #[must_use]
     pub fn len(&self) -> usize {
@@ -1189,6 +1196,22 @@ impl_token_parse! {Exclamation}
 impl_token_parse! {Number}
 impl_token_parse! {Dot}
 
+impl Parse for StrLit {
+    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
+        it: &mut Peekable<I>,
+    ) -> Result<Self, Error> {
+        match it.next() {
+            Some(Token::String(s)) => Ok(s.clone()),
+            Some(t) => Err(Error::InvalidToken { token: t.clone() }),
+            None => Err(Error::EndOfInput),
+        }
+    }
+
+    fn get_span(&self) -> Span {
+        self.span
+    }
+}
+
 impl Parse for NamedIdent {
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
         it: &mut Peekable<I>,
@@ -1251,8 +1274,8 @@ pub enum Type {
     Circle,
     /// A bundle type.
     Bundle(&'static str),
-    /// Undefinede type = bad
-    Undefined,
+    /// Marks unknown type. Unknown type pretends to be valid, but isn't really.
+    Unknown,
 }
 
 impl Type {
@@ -1284,7 +1307,7 @@ impl Display for Type {
             Self::PointCollection(l) => write!(f, "Point collection ({l})"),
             Self::Circle => write!(f, "Circle"),
             Self::Bundle(name) => write!(f, "{name}"),
-            Type::Undefined => write!(f, "undefined"),
+            Type::Unknown => write!(f, "undefined"),
         }
     }
 }
@@ -1309,7 +1332,7 @@ impl Type {
             // A scalar with no defined unit can be cast into any other scalar, except angle.
             Type::Scalar(None) => match into {
                 Type::Scalar(unit) => match unit {
-                    Some(unit) => unit.0[3] == 0, // no angle
+                    Some(unit) => unit.0[1] == 0, // no angle
                     None => true,
                 },
                 _ => false,
@@ -1330,7 +1353,7 @@ impl Type {
                     false
                 }
             }
-            Type::Undefined => false,
+            Type::Unknown => false,
         }
     }
 }
@@ -1367,13 +1390,40 @@ impl Parse for Property {
 pub enum PropertyValue {
     Number(ExprNumber),
     Ident(Ident),
+    RawString(RawString),
+    String(StrLit),
 }
 
-impl PropertyValue {
+#[derive(Debug, Clone)]
+pub struct RawString {
+    pub excl: Exclamation,
+    pub lit: StrLit,
+}
+
+impl Parse for RawString {
+    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
+        it: &mut Peekable<I>,
+    ) -> Result<Self, Error> {
+        Ok(Self {
+            excl: Exclamation::parse(it)?,
+            lit: StrLit::parse(it)?,
+        })
+    }
+
+    fn get_span(&self) -> Span {
+        self.excl.span.join(self.lit.span)
+    }
+}
+
+pub trait FromProperty: Sized {
     /// # Errors
     /// Causes an error if the value is not properly convertible.
-    pub fn as_bool(&self) -> Result<bool, Error> {
-        match self {
+    fn from_property(property: PropertyValue) -> Result<Self, Error>;
+}
+
+impl FromProperty for bool {
+    fn from_property(property: PropertyValue) -> Result<Self, Error> {
+        match property {
             PropertyValue::Ident(ident) => match ident {
                 Ident::Named(ident) => match ident.ident.as_str() {
                     "enabled" | "on" | "true" => Ok(true),
@@ -1393,17 +1443,29 @@ impl PropertyValue {
                     error_span: num.get_span(),
                 }),
             },
+            PropertyValue::String(s) => match s.content.as_str() {
+                "enabled" | "on" | "true" => Ok(true),
+                "disabled" | "off" | "false" => Ok(false),
+                _ => Err(Error::BooleanExpected {
+                    error_span: s.get_span(),
+                }),
+            },
+            PropertyValue::RawString(s) => Err(Error::BooleanExpected {
+                error_span: s.get_span(),
+            }),
         }
     }
+}
 
-    /// # Errors
-    /// Causes an error if the value is not properly convertible
-    pub fn as_string(&self) -> Result<String, Error> {
-        match self {
+impl FromProperty for String {
+    fn from_property(property: PropertyValue) -> Result<String, Error> {
+        match property {
             PropertyValue::Ident(ident) => Ok(ident.to_string()),
             PropertyValue::Number(num) => Err(Error::StringExpected {
                 error_span: num.get_span(),
             }),
+            PropertyValue::RawString(s) => Ok(s.lit.content),
+            PropertyValue::String(s) => Ok(s.content),
         }
     }
 }
@@ -1413,6 +1475,8 @@ impl Parse for PropertyValue {
         match self {
             Self::Number(n) => n.get_span(),
             Self::Ident(i) => i.get_span(),
+            Self::String(s) => s.get_span(),
+            Self::RawString(s) => s.get_span(),
         }
     }
 
@@ -1424,6 +1488,8 @@ impl Parse for PropertyValue {
         match peeked {
             Some(Token::Ident(_)) => Ok(Self::Ident(Ident::parse(it)?)),
             Some(Token::Number(_)) => Ok(Self::Number(ExprNumber::parse(it)?)),
+            Some(Token::Exclamation(_)) => Ok(Self::RawString(RawString::parse(it)?)),
+            Some(Token::String(_)) => Ok(Self::String(StrLit::parse(it)?)),
             Some(t) => Err(Error::InvalidToken { token: t.clone() }),
             None => Err(Error::EndOfInput),
         }
@@ -1439,6 +1505,23 @@ pub struct DisplayProperties {
     pub properties: Punctuated<Property, Semi>,
     /// ']'
     pub rsquare: RSquare,
+}
+
+impl DisplayProperties {
+    pub fn merge(this: Option<Self>, other: Option<Self>) -> Option<Self> {
+        match this {
+            Some(mut this) => {
+                if let Some(other) = other {
+                    for pair in other.properties.collection {
+                        this.properties.collection.push(pair);
+                    }
+                }
+
+                Some(this)
+            }
+            None => other,
+        }
+    }
 }
 
 impl Parse for DisplayProperties {

@@ -104,13 +104,15 @@ fn main() {
 
     let result = compile::compile(&script, canvas_size);
 
-    let (criteria, figure, template, flags) = match result {
+    let compiled = match result {
         Ok(v) => v,
-        Err(err) => {
-            let data = err.diagnostic();
-            let diagnostic = Diagnostic::new(DiagnosticKind::Error, data, &args.input, &script);
+        Err(errors) => {
+            for err in errors {
+                let data = err.diagnostic();
+                let diagnostic = Diagnostic::new(DiagnosticKind::Error, data, &args.input, &script);
 
-            println!("{diagnostic}");
+                println!("{diagnostic}");
+            }
 
             if let Some(path) = &args.log {
                 let mut log = File::create(path)
@@ -124,13 +126,13 @@ fn main() {
         }
     };
 
-    let flags = Arc::new(flags);
+    let flags = Arc::new(compiled.flags);
     let mut gen = Generator::new(
-        &template,
+        &compiled.template,
         args.count_of_workers,
         &GenerationArgs {
-            criteria: Arc::new(criteria),
-            point_count: template.len(),
+            criteria: Arc::new(compiled.criteria),
+            point_count: compiled.template.len(),
         },
         &flags,
     );
@@ -159,7 +161,7 @@ fn main() {
 
     stdout.execute(cursor::Show).unwrap();
 
-    let rendered = projector::project(&figure, gen.get_state(), &flags);
+    let rendered = projector::project(&compiled.figure, gen.get_state(), &flags);
 
     match args.renderer {
         Renderer::Latex => latex::draw(&args.output, canvas_size, &rendered),

@@ -18,53 +18,115 @@ WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use std::rc::Rc;
+
 #[allow(unused_imports)]
 use crate::script::unroll::{
     CompileContext, Expr, Function, Library, Line, Point, PointCollection, Properties,
 };
+use crate::{
+    generator::fast_float::FastFloat,
+    script::{
+        compile::{Compile, Compiler},
+        figure::{Figure, MathString, Mode},
+        unroll::{
+            AssociatedData, BuildAssociated, CloneWithNode, HierarchyNode, LineNode, LineType,
+        },
+    },
+    span,
+};
 use geo_aid_derive::overload;
 
 #[allow(unused_imports)]
-use super::macros::{bisector, call, index, intersection, line2};
+use super::macros::{call, index};
 
 /// bisector(point, point, point) - angle bisector.
 pub fn point_point_point(
-    a: &Expr<Point>,
-    b: &Expr<Point>,
-    c: &Expr<Point>,
-    context: &mut CompileContext,
-    display: Option<Properties>,
+    a: Expr<Point>,
+    b: Expr<Point>,
+    c: Expr<Point>,
+    context: &CompileContext,
+    mut display: Properties,
 ) -> Expr<Line> {
-    drop(display);
-    let expr = bisector!(a, b, c);
+    // We're highjacking the node creation, so util functions.
+    let mut expr = Expr {
+        weight: FastFloat::One,
+        span: span!(0, 0, 0, 0),
+        data: Rc::new(Line::AngleBisector(a, b, c)),
+        node: None,
+    };
 
-    // Render the bisector.
-    context
-        .figure
-        .rays
-        .push((b.clone(), intersection!(expr, line2!(a, c))));
+    // Line node.
+    let mut node = HierarchyNode::new(LineNode {
+        display: display.get("display").maybe_unset(true),
+        label: display
+            .get("label")
+            .maybe_unset(MathString::new(span!(0, 0, 0, 0))),
+        display_label: display.get("display_label").maybe_unset(false),
+        line_type: display.get("line_type").maybe_unset(LineType::Ray), // The change. Bisectors are to be treated as rays.
+        expr: expr.clone_without_node(),
+    });
 
-    context.figure.segments.push((a.clone(), b.clone()));
+    let display_arms = display.get("display_arms").maybe_unset(true);
 
-    context.figure.segments.push((c.clone(), b.clone()));
+    display.finish(&["display", "label", "display_label", "line_type"], context);
 
+    node.insert_data("display_arms", AssociatedData::Bool(display_arms));
+
+    node.set_associated(BisectorNode);
+
+    expr.node = Some(node);
     expr
+}
+
+#[derive(Debug)]
+pub struct BisectorNode;
+
+impl BuildAssociated<LineNode> for BisectorNode {
+    fn build_associated(
+        &self,
+        compiler: &mut Compiler,
+        figure: &mut Figure,
+        associated: &HierarchyNode<LineNode>,
+    ) {
+        let display_arms = associated
+            .get_data("display_arms")
+            .unwrap()
+            .as_bool()
+            .unwrap();
+
+        if display_arms {
+            match associated.root.expr.data.as_ref() {
+                Line::AngleBisector(a, b, c) => {
+                    let a = compiler.compile(a);
+                    let b = compiler.compile(b);
+                    let c = compiler.compile(c);
+
+                    figure.segments.push((b.clone(), a, Mode::Default));
+                    figure.segments.push((b, c, Mode::Default));
+                }
+                _ => unreachable!(),
+            }
+        }
+    }
 }
 
 /// bisector(point, point) - bisector of a segment.
 pub fn point_point(
-    a: &Expr<Point>,
-    b: &Expr<Point>,
+    a: Expr<Point>,
+    b: Expr<Point>,
     context: &mut CompileContext,
-    display: Option<Properties>,
+    display: Properties,
 ) -> Expr<Line> {
     use super::mid::function_point;
     use super::perpendicular::line_point;
-    drop(display);
 
-    let expr = call!(context:line_point(line2!(a, b), call!(context:function_point(&[a.clone(), b.clone()]))));
+    let expr = call!(context:line_point(
+        context.line(a.clone_without_node(), b.clone_without_node()),
+        call!(context:function_point(vec![a, b]))
+    ) with display);
 
-    context.figure.lines.push(expr.clone());
+    // context.figure.lines.push(expr.clone());
 
     expr
 }
@@ -76,18 +138,18 @@ pub fn register(library: &mut Library) {
             name: String::from("bisector"),
             overloads: vec![
                 overload!((3-P) -> LINE {
-                    |col: &Expr<PointCollection>, context, _| call!(context:point_point_point(
-                        index!(col, 0),
-                        index!(col, 1),
-                        index!(col, 2)
-                    ))
+                    |mut col: Expr<PointCollection>, context, display| call!(context:point_point_point(
+                        index!(node col, 0),
+                        index!(node col, 1),
+                        index!(node col, 2)
+                    ) with display)
                 }),
                 overload!((POINT, POINT, POINT) -> LINE : point_point_point),
                 overload!((2-P) -> LINE {
-                    |col: &Expr<PointCollection>, context, _| call!(context:point_point(
-                        index!(col, 0),
-                        index!(col, 1)
-                    ))
+                    |mut col: Expr<PointCollection>, context, display| call!(context:point_point(
+                        index!(node col, 0),
+                        index!(node col, 1)
+                    ) with display)
                 }),
                 overload!((POINT, POINT) -> LINE : point_point),
             ],

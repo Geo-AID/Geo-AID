@@ -18,7 +18,7 @@ WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use std::{cell::RefCell, collections::HashMap, mem, rc::Rc, sync::Arc, unreachable};
+use std::{cell::RefCell, collections::HashMap, rc::Rc, sync::Arc, unreachable};
 
 use crate::generator::expression::expr::PointOnLine;
 use crate::generator::fast_float::FastFloat;
@@ -45,12 +45,12 @@ use crate::{
     span,
 };
 
-use super::unroll::UnrolledRule;
+use super::unroll::{CloneWithNode, CollectionNode, Displayed, Node, UnrolledRule};
 use super::{
-    figure::{Figure, Mode},
+    figure::Figure,
     unroll::{
         self, CompileContext, EntCircle, EntLine, EntPoint, EntScalar, Entity, Expr, Flag,
-        LabelMeta, UnrolledRuleKind, Variable,
+        UnrolledRuleKind, Variable,
     },
     Criteria, CriteriaKind, Error, HashableRc, SimpleUnit, Weighed,
 };
@@ -206,7 +206,7 @@ impl CompiledEntity {
     }
 }
 
-struct Compiler {
+pub struct Compiler {
     variables: VariableRecord,
     expressions: ExpressionRecord,
     entities: Vec<CompiledEntity>,
@@ -229,6 +229,7 @@ impl Compiler {
                 data: ScalarData::Entity(dst_var),
             }),
             span: span!(0, 0, 0, 0),
+            node: None,
         };
 
         let mut entities = Vec::new();
@@ -254,11 +255,12 @@ impl Compiler {
         match generic {
             Generic::VariableAccess(var) => self.compile_variable(var),
             Generic::Boxed(expr) => self.compile(expr),
+            Generic::Dummy => unreachable!("dummy expression appeared in compile step"),
         }
     }
 }
 
-trait Compile<T, U> {
+pub trait Compile<T: Displayed, U> {
     fn compile(&mut self, expr: &Expr<T>) -> Arc<Expression<U>>;
 }
 
@@ -395,10 +397,11 @@ impl Compiler {
                     unit: u,
                     data: ScalarData::Divide(
                         self.fix_distance(expr, power + 1),
-                        self.dst_var.clone(),
+                        self.dst_var.clone_without_node(),
                     ),
                 }),
                 span: sp,
+                node: None,
             },
             std::cmp::Ordering::Equal => expr,
             std::cmp::Ordering::Greater => Expr {
@@ -407,10 +410,11 @@ impl Compiler {
                     unit: u,
                     data: ScalarData::Multiply(
                         self.fix_distance(expr, power - 1),
-                        self.dst_var.clone(),
+                        self.dst_var.clone_without_node(),
                     ),
                 }),
                 span: sp,
+                node: None,
             },
         }
     }
@@ -435,18 +439,23 @@ impl Compiler {
                             span: expr.span,
                             data: Rc::new(Scalar {
                                 unit: Some(unit::SCALAR),
-                                data: expr.data.data.clone(),
+                                data: expr.data.data.clone_without_node(),
                             }),
+                            node: None,
                         },
                         expr.data.unit.unwrap(),
                     ),
                 }),
+                node: None,
             })
         }
     }
 
     /// Attempts to compile the variable. If the variable is a `PointCollection`, leaves it unrolled. Otherwise everything is compiled properly.
-    fn compile_variable<T, U>(&mut self, var: &Rc<RefCell<Variable<T>>>) -> Arc<Expression<U>>
+    fn compile_variable<T: Displayed, U>(
+        &mut self,
+        var: &Rc<RefCell<Variable<T>>>,
+    ) -> Arc<Expression<U>>
     where
         VariableRecord: Mapping<RefCell<Variable<T>>, U>,
         Self: Compile<T, U>,
@@ -474,7 +483,7 @@ impl Compiler {
         // If the expression is compiled, there's no problem
         match self.entities[entity].clone() {
             CompiledEntity::None => {
-                let ent = self.context.entities[entity].clone();
+                let ent = self.context.entities[entity].clone_without_node();
 
                 self.entities[entity] = match &ent {
                     Entity::Scalar(v) => CompiledEntity::Scalar(match v {
@@ -543,10 +552,13 @@ impl Compiler {
     }
 
     fn compile_rule_vec(&mut self, rules: &[UnrolledRule]) -> Vec<Criteria> {
-        rules.iter().map(|rule| self.compile_rule(rule)).collect()
+        rules
+            .iter()
+            .flat_map(|rule| self.compile_rule(rule))
+            .collect()
     }
 
-    fn compile_rule(&mut self, rule: &UnrolledRule) -> Criteria {
+    fn compile_rule(&mut self, rule: &UnrolledRule) -> Option<Criteria> {
         let crit = match &rule.kind {
             UnrolledRuleKind::PointEq(lhs, rhs) => {
                 let lhs = self.compile(lhs);
@@ -575,58 +587,36 @@ impl Compiler {
             UnrolledRuleKind::Alternative(rules) => {
                 Weighed::one(CriteriaKind::Alternative(self.compile_rule_vec(rules)))
             }
+            UnrolledRuleKind::Display => return None,
         };
 
-        if rule.inverted {
+        Some(if rule.inverted {
             Weighed {
                 object: CriteriaKind::Inverse(Box::new(crit.object)),
                 weight: crit.weight,
             }
         } else {
             crit
-        }
+        })
     }
 
     #[must_use]
     fn compile_rules(&mut self) -> Vec<Criteria> {
-        let rules = mem::take(&mut self.context.rules);
+        let rules = self.context.take_rules();
 
         self.compile_rule_vec(&rules)
     }
 
     /// Builds an actual figure.
-    fn build_figure(&mut self, canvas_size: (usize, usize)) -> Figure {
-        let figure = mem::take(&mut self.context.figure);
-
-        Figure {
+    fn build_figure(&mut self, figure: CollectionNode, canvas_size: (usize, usize)) -> Figure {
+        let mut compiled = Figure {
             canvas_size,
-            points: figure
-                .points
-                .into_iter()
-                .map(|(expr, meta)| (self.compile(&expr), meta))
-                .collect(),
-            lines: figure
-                .lines
-                .into_iter()
-                .map(|expr| (self.compile(&expr), Mode::Default))
-                .collect(),
-            segments: figure
-                .segments
-                .into_iter()
-                .map(|(a, b)| (self.compile(&a), self.compile(&b), Mode::Default))
-                .collect(),
-            rays: figure
-                .rays
-                .into_iter()
-                .map(|(a, b)| (self.compile(&a), self.compile(&b), Mode::Default))
-                .collect(),
-            circles: figure
-                .circles
-                .into_iter()
-                .map(|expr| (self.compile(&expr), Mode::Default))
-                .collect(),
             ..Default::default()
-        }
+        };
+
+        figure.build(self, &mut compiled);
+
+        compiled
     }
 }
 
@@ -659,7 +649,7 @@ impl Compile<Scalar, ScalarExpr> for Compiler {
             ScalarData::SetUnit(expr, unit) => Arc::new(Expression::new(
                 ScalarExpr::SetUnit(SetUnit {
                     value: self.compile(&self.fix_distance(
-                        expr.clone(),
+                        expr.clone_without_node(),
                         unit[SimpleUnit::Distance as usize]
                             - match expr.data.unit {
                                 Some(unit) => unit[SimpleUnit::Distance as usize],
@@ -773,19 +763,12 @@ fn read_flags(flags: &HashMap<String, Flag>) -> Flags {
     }
 }
 
-/// A figure before expression compilation.
-#[derive(Debug, Clone, Default)]
-pub struct PreFigure {
-    /// Points of the figure.
-    pub points: Vec<(Expr<Point>, LabelMeta)>,
-    /// Lines in the figure.
-    pub lines: Vec<Expr<Line>>,
-    /// Segments in the figure.
-    pub segments: Vec<(Expr<Point>, Expr<Point>)>,
-    /// Rays in the figure
-    pub rays: Vec<(Expr<Point>, Expr<Point>)>,
-    /// Circles in the figure
-    pub circles: Vec<Expr<Circle>>,
+#[derive(Debug)]
+pub struct CompileResult {
+    pub criteria: Vec<Criteria>,
+    pub figure: Figure,
+    pub template: Vec<AdjustableTemplate>,
+    pub flags: generator::Flags,
 }
 
 /// Compiles the given script.
@@ -795,27 +778,16 @@ pub struct PreFigure {
 ///
 /// # Panics
 /// Never
-pub fn compile(
-    input: &str,
-    canvas_size: (usize, usize),
-) -> Result<
-    (
-        Vec<Criteria>,
-        Figure,
-        Vec<AdjustableTemplate>,
-        generator::Flags,
-    ),
-    Error,
-> {
+pub fn compile(input: &str, canvas_size: (usize, usize)) -> Result<CompileResult, Vec<Error>> {
     // First, we have to unroll the script.
-    let context = unroll::unroll(input)?;
+    let (context, figure) = unroll::unroll(input)?;
 
     let flags = read_flags(&context.flags);
 
     // Print rules (debugging)
-    for rule in &context.rules {
-        println!("{}: {rule}", rule.inverted);
-    }
+    // for rule in &context.rules {
+    //     println!("{}: {rule}", rule.inverted);
+    // }
 
     let mut compiler = Compiler::new(context);
 
@@ -851,8 +823,13 @@ pub fn compile(
     //     println!("{rule:?}");
     // }
 
-    let figure = compiler.build_figure(canvas_size);
-    Ok((criteria, figure, compiler.template, flags))
+    let figure = compiler.build_figure(figure, canvas_size);
+    Ok(CompileResult {
+        criteria,
+        figure,
+        template: compiler.template,
+        flags,
+    })
 }
 
 /// Inequality principle and the point plane limit.

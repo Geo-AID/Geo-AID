@@ -19,11 +19,11 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
 #[allow(unused_imports)]
-use crate::script::unroll::{Expr, Function, Library, Line};
+use crate::{
+    script::unroll::{CompileContext, Expr, Function, Library, Line, Point},
+    take_nodes,
+};
 use geo_aid_derive::overload;
-
-#[allow(unused_imports)]
-use super::macros::intersection;
 
 pub fn register(library: &mut Library) {
     library.functions.insert(
@@ -31,7 +31,10 @@ pub fn register(library: &mut Library) {
         Function {
             name: String::from("intersection"),
             overloads: vec![overload!((LINE, LINE) -> POINT {
-                |k: &Expr<Line>, l: &Expr<Line>, _, _| intersection!(k, l)
+                |mut k: Expr<Line>, mut l: Expr<Line>, context: &CompileContext, display| {
+                    let nodes = take_nodes!(k, l);
+                    context.expr_with(Point::LineLineIntersection(k, l), display, nodes)
+                }
             })],
         },
     );

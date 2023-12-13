@@ -34,14 +34,16 @@ use crate::{
         critic::EvaluationArgs, expression::Expression, expression::Line, geometry, Adjustable,
         Complex, Flags,
     },
-    script::{figure::Figure, unroll, HashableArc},
+    script::{figure::Figure, HashableArc},
 };
 
 #[cfg(test)]
 mod tests {
+    use std::str::FromStr;
     use std::{path::PathBuf, sync::Arc};
 
     use crate::generator::fast_float::FastFloat;
+    use crate::script::figure::MathString;
     use crate::{
         drawer,
         generator::{
@@ -51,10 +53,7 @@ mod tests {
             },
             Adjustable, Complex,
         },
-        script::{
-            figure::{Figure, Mode},
-            unroll::LabelMeta,
-        },
+        script::figure::{Figure, Mode},
     };
 
     use super::project;
@@ -65,15 +64,6 @@ mod tests {
             PointExpr::Free(FreePoint { index }),
             FastFloat::One,
         ))
-    }
-
-    /// Utility function used in fn `test_project()`, creates point meta, makes the code below more bearable.
-    fn create_point_meta(character: char, primes: u8, index: Option<u16>) -> LabelMeta {
-        LabelMeta {
-            letter: character,
-            primes,
-            index,
-        }
     }
 
     /// Function that tests the performance of the projector and drawers.
@@ -106,9 +96,9 @@ mod tests {
 
         let fig = Figure {
             points: vec![
-                (create_point_expr(0), create_point_meta('A', 0, None)),
-                (create_point_expr(1), create_point_meta('B', 0, None)),
-                (create_point_expr(2), create_point_meta('C', 0, None)),
+                (create_point_expr(0), MathString::from_str("A").unwrap()),
+                (create_point_expr(1), MathString::from_str("B").unwrap()),
+                (create_point_expr(2), MathString::from_str("C").unwrap()),
             ],
             lines: vec![
                 (
@@ -607,8 +597,7 @@ pub fn project(
     let mut blueprint_points = Vec::new();
 
     for (i, pt) in points.iter().enumerate() {
-        let pt_label =
-            unroll::construct_point_name(figure.points[i].1.letter, figure.points[i].1.primes);
+        let pt_label = figure.points[i].1.to_string();
         let id = Uuid::new_v4();
         blueprint_points.push(Rc::new(RenderedPoint {
             label: pt_label,

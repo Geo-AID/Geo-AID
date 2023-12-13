@@ -75,186 +75,34 @@ pub fn register(library: &mut Library) {
 pub mod macros {
     macro_rules! call {
         ($fig:ident : $func:ident($($arg:expr),*)) => {
-            $func($(&$arg.clone()),*, $fig, None)
+            $func($($arg),*, $fig, $crate::script::unroll::Properties::from(None))
+        };
+        ($fig:ident : $func:ident($($arg:expr),*) with $props:expr) => {
+            $func($($arg),*, $fig, $props)
         };
     }
 
     macro_rules! index {
-        ($col:expr, $at:expr) => {
-            ($col).index($at)
+        (no-node $col:expr, $at:expr) => {
+            ($col).index_without_node($at)
+        };
+        (node $col:expr, $at:expr) => {
+            ($col).index_with_node($at)
         };
     }
 
     macro_rules! field {
-        (POINT $bundle:expr, $at:ident) => {
-            $crate::script::unroll::Convert::convert(($bundle).index(stringify!($at))).unwrap()
+        (node POINT $bundle:expr, $at:ident with $context:ident) => {
+            $crate::script::unroll::Convert::convert::<$crate::script::unroll::Point>(
+                ($bundle).index_with_node(stringify!($at)),
+                $context,
+            )
         };
-    }
-
-    macro_rules! bisector {
-        ($a:expr, $b:expr, $c:expr) => {
-            $crate::script::unroll::Expr {
-                weight: $crate::generator::fast_float::FastFloat::One,
-                span: $crate::span!(0, 0, 0, 0),
-                data: std::rc::Rc::new($crate::script::unroll::Line::AngleBisector(
-                    $a.clone(),
-                    $b.clone(),
-                    $c.clone(),
-                )),
-            }
-        };
-    }
-
-    macro_rules! line2 {
-        ($a:expr, $b:expr) => {
-            $crate::script::unroll::Expr {
-                weight: $crate::generator::fast_float::FastFloat::One,
-                span: $crate::span!(0, 0, 0, 0),
-                data: std::rc::Rc::new($crate::script::unroll::Line::LineFromPoints(
-                    $a.clone(),
-                    $b.clone(),
-                )),
-            }
-        };
-    }
-
-    macro_rules! intersection {
-        ($a:expr, $b:expr) => {
-            $crate::script::unroll::Expr {
-                weight: $crate::generator::fast_float::FastFloat::One,
-                span: $crate::span!(0, 0, 0, 0),
-                data: std::rc::Rc::new($crate::script::unroll::Point::LineLineIntersection(
-                    $a.clone(),
-                    $b.clone(),
-                )),
-            }
-        };
-    }
-
-    macro_rules! average {
-        (POINT : $x:expr) => {
-            $crate::script::unroll::Expr {
-                weight: $crate::generator::fast_float::FastFloat::One,
-                span: $crate::span!(0, 0, 0, 0),
-                data: std::rc::Rc::new($crate::script::unroll::Point::Average(
-                    $x.iter().cloned().collect(),
-                )),
-            }
-        };
-        (SCALAR : $x:expr) => {
-            $crate::script::unroll::Expr {
-                weight: $crate::generator::fast_float::FastFloat::One,
-                span: $crate::span!(0, 0, 0, 0),
-                data: std::rc::Rc::new($crate::script::unroll::Scalar {
-                    unit: $x[0].data.unit,
-                    data: $crate::script::unroll::ScalarData::Average($x.iter().cloned().collect()),
-                }),
-            }
-        };
-    }
-
-    macro_rules! angle_expr {
-        ($a:expr, $b:expr, $c:expr) => {
-            $crate::script::unroll::Expr {
-                weight: $crate::generator::fast_float::FastFloat::One,
-                span: $crate::span!(0, 0, 0, 0),
-                data: std::rc::Rc::new($crate::script::unroll::Scalar {
-                    unit: Some($crate::script::unit::ANGLE),
-                    data: $crate::script::unroll::ScalarData::ThreePointAngle(
-                        $a.clone(),
-                        $b.clone(),
-                        $c.clone(),
-                    ),
-                }),
-            }
-        };
-        (dir $a:expr, $b:expr, $c:expr) => {
-            $crate::script::unroll::Expr {
-                weight: $crate::generator::fast_float::FastFloat::One,
-                span: $crate::span!(0, 0, 0, 0),
-                data: std::rc::Rc::new($crate::script::unroll::Scalar {
-                    unit: Some($crate::script::unit::ANGLE),
-                    data: $crate::script::unroll::ScalarData::ThreePointAngleDir(
-                        $a.clone(),
-                        $b.clone(),
-                        $c.clone(),
-                    ),
-                }),
-            }
-        };
-        ($a:expr, $b:expr) => {
-            $crate::script::unroll::Expr {
-                weight: $crate::generator::fast_float::FastFloat::One,
-                span: $crate::span!(0, 0, 0, 0),
-                data: std::rc::Rc::new($crate::script::unroll::Scalar {
-                    unit: Some($crate::script::unit::ANGLE),
-                    data: $crate::script::unroll::ScalarData::TwoLineAngle($a.clone(), $b.clone()),
-                }),
-            }
-        };
-    }
-
-    macro_rules! circle_expr {
-        ($a:expr, $b:expr) => {
-            $crate::script::unroll::Expr {
-                weight: $crate::generator::fast_float::FastFloat::One,
-                span: $crate::span!(0, 0, 0, 0),
-                data: std::rc::Rc::new($crate::script::unroll::Circle::Circle(
-                    $a.clone(),
-                    $b.clone(),
-                )),
-            }
-        };
-    }
-
-    macro_rules! set_unit {
-        ($a:expr, %$unit:ident) => {
-            $crate::script::builtins::macros::set_unit!($a, $crate::script::unit::$unit)
-        };
-        ($a:expr, $unit:expr) => {
-            $crate::script::unroll::Expr {
-                weight: $crate::generator::fast_float::FastFloat::One,
-                span: $crate::span!(0, 0, 0, 0),
-                data: std::rc::Rc::new($crate::script::unroll::Scalar {
-                    unit: Some($unit),
-                    data: $crate::script::unroll::ScalarData::SetUnit($a.clone(), $unit),
-                }),
-            }
-        };
-    }
-
-    macro_rules! math {
-        (*, $a:expr, $b:expr) => {
-            $crate::script::unroll::Expr {
-                weight: $crate::generator::fast_float::FastFloat::One,
-                span: $crate::span!(0, 0, 0, 0),
-                data: std::rc::Rc::new($crate::script::unroll::Scalar {
-                    unit: Some($a.data.unit.unwrap() * &$b.data.unit.unwrap()),
-                    data: $crate::script::unroll::ScalarData::Multiply($a.clone(), $b.clone()),
-                }),
-            }
-        };
-        (/, $a:expr, $b:expr) => {
-            $crate::script::unroll::Expr {
-                weight: $crate::generator::fast_float::FastFloat::One,
-                span: $crate::span!(0, 0, 0, 0),
-                data: std::rc::Rc::new($crate::script::unroll::Scalar {
-                    unit: Some(
-                        $a.ty.as_scalar().unwrap().unwrap() / &$b.ty.as_scalar().unwrap().unwrap(),
-                    ),
-                    data: $crate::script::unroll::ScalarData::Divide($a.clone(), $b.clone()),
-                }),
-            }
-        };
-        (+, $a:expr, $b:expr) => {
-            $crate::script::unroll::Expr {
-                weight: $crate::generator::fast_float::FastFloat::One,
-                span: $crate::span!(0, 0, 0, 0),
-                data: std::rc::Rc::new($crate::script::unroll::Scalar {
-                    unit: $a.data.unit,
-                    data: $crate::script::unroll::ScalarData::Add($a.clone(), $b.clone()),
-                }),
-            }
+        (no-node POINT $bundle:expr, $at:ident with $context:ident) => {
+            $crate::script::unroll::Convert::convert::<$crate::script::unroll::Point>(
+                ($bundle).index_without_node(stringify!($at)),
+                $context,
+            )
         };
     }
 
@@ -271,7 +119,8 @@ pub mod macros {
                     data: $crate::script::unroll::ScalarData::DstLiteral(
                         $v.clone()
                     )
-                })
+                }),
+                node: None
             }
         };
         ($t:ident $v:expr) => {
@@ -282,77 +131,7 @@ pub mod macros {
                     unit: Some($crate::script::unit::$t),
                     data: $crate::script::unroll::ScalarData::Number($v)
                 }),
-            }
-        };
-    }
-
-    macro_rules! entity {
-        (POINT $index:expr) => {
-            $crate::script::unroll::Expr {
-                weight: $crate::generator::fast_float::FastFloat::One,
-                span: $crate::span!(0, 0, 0, 0),
-                data: std::rc::Rc::new($crate::script::unroll::Point::Entity($index)),
-            }
-        };
-        ($unit:ident $index:expr) => {
-            $crate::script::unroll::Expr {
-                weight: $crate::generator::fast_float::FastFloat::One,
-                span: $crate::span!(0, 0, 0, 0),
-                data: std::rc::Rc::new($crate::script::unroll::Scalar {
-                    unit: Some($crate::script::unit::$unit),
-                    data: $crate::script::unroll::ScalarData::Entity($index),
-                }),
-            }
-        };
-    }
-
-    macro_rules! circle_center {
-        ($circle:expr) => {
-            $crate::script::unroll::Expr {
-                weight: $crate::generator::fast_float::FastFloat::One,
-                span: $crate::span!(0, 0, 0, 0),
-                data: std::rc::Rc::new($crate::script::unroll::Point::CircleCenter(
-                    $circle.clone(),
-                )),
-            }
-        };
-    }
-
-    macro_rules! circle_radius {
-        ($circle:expr) => {
-            $crate::script::unroll::Expr {
-                weight: $crate::generator::fast_float::FastFloat::One,
-                span: $crate::span!(0, 0, 0, 0),
-                data: std::rc::Rc::new($crate::script::unroll::Scalar {
-                    unit: Some($crate::script::unit::DISTANCE),
-                    data: $crate::script::unroll::ScalarData::CircleRadius($circle.clone()),
-                }),
-            }
-        };
-    }
-
-    macro_rules! parallel_through {
-        ($a:expr, $b:expr) => {
-            $crate::script::unroll::Expr {
-                weight: $crate::generator::fast_float::FastFloat::One,
-                span: $crate::span!(0, 0, 0, 0),
-                data: std::rc::Rc::new($crate::script::unroll::Line::ParallelThrough(
-                    $a.clone(),
-                    $b.clone(),
-                )),
-            }
-        };
-    }
-
-    macro_rules! perpendicular_through {
-        ($a:expr, $b:expr) => {
-            $crate::script::unroll::Expr {
-                weight: $crate::generator::fast_float::FastFloat::One,
-                span: $crate::span!(0, 0, 0, 0),
-                data: std::rc::Rc::new($crate::script::unroll::Line::PerpendicularThrough(
-                    $a.clone(),
-                    $b.clone(),
-                )),
+                node: None
             }
         };
     }
@@ -360,47 +139,24 @@ pub mod macros {
     macro_rules! construct_bundle {
         ($t:ident { $($field:ident : $value:expr),* $(,)? }) => {{
             let mut fields = std::collections::HashMap::new();
+            let mut node = $crate::script::unroll::BundleNode::new();
 
-            $(fields.insert(stringify!($field).to_string(), $crate::script::unroll::AnyExpr::from($value.clone()));)*
+            $(
+                let mut v = $crate::script::unroll::CloneWithNode::clone_with_node(&mut $value);
+                node.insert(stringify!($field).to_string(), v.node.take());
+                fields.insert(stringify!($field).to_string(), $crate::script::unroll::AnyExpr::from(v));
+            )*
 
             $crate::script::unroll::Expr {
                 weight: $crate::generator::fast_float::FastFloat::One,
                 span: $crate::span!(0, 0, 0, 0),
                 data: std::rc::Rc::new($crate::script::unroll::Bundle {
                     name: stringify!($t),
-                    data: $crate::script::unroll::BundleData::ConstructBundle(fields)
-                })
+                    data: $crate::script::unroll::BundleData::ConstructBundle(fields.into())
+                }),
+                node: Some($crate::script::unroll::HierarchyNode::new(node))
             }
         }};
-    }
-
-    macro_rules! distance {
-        (PP: $a:expr, $b:expr) => {
-            $crate::script::unroll::Expr {
-                weight: $crate::generator::fast_float::FastFloat::One,
-                span: $crate::span!(0, 0, 0, 0),
-                data: std::rc::Rc::new($crate::script::unroll::Scalar {
-                    unit: Some($crate::script::unit::DISTANCE),
-                    data: $crate::script::unroll::ScalarData::PointPointDistance(
-                        $a.clone(),
-                        $b.clone(),
-                    ),
-                }),
-            }
-        };
-        (PL: $a:expr, $b:expr) => {
-            $crate::script::unroll::Expr {
-                weight: $crate::generator::fast_float::FastFloat::One,
-                span: $crate::span!(0, 0, 0, 0),
-                data: std::rc::Rc::new($crate::script::unroll::Scalar {
-                    unit: Some($crate::script::unit::DISTANCE),
-                    data: $crate::script::unroll::ScalarData::PointLineDistance(
-                        $a.clone(),
-                        $b.clone(),
-                    ),
-                }),
-            }
-        };
     }
 
     macro_rules! mneg {
@@ -414,37 +170,12 @@ pub mod macros {
 
     macro_rules! rule {
         ($context:ident : $rule_op:ident($lhs:expr, $rhs:expr) $(neg = $neg:expr)?) => {
-            $rule_op(&$lhs, &$rhs, $context, None, $crate::script::builtins::macros::mneg!($(neg = $neg)?))
+            $rule_op($lhs, $rhs, $context, $crate::script::unroll::Properties::from(None), $crate::script::builtins::macros::mneg!($(neg = $neg)?))
         };
         ($context:ident : $rule_op:ident($lhs:expr, $rhs:expr); $props:expr; $(neg = $neg:expr)?) => {
-            $rule_op(&$lhs, &$rhs, $context, $props, $crate::script::builtins::macros::mneg!($(neg = $neg)?))
-        };
-        ($context:ident : > ($lhs:expr, $rhs:expr) $(neg = $neg:expr)?) => {
-            $context.rules.push($crate::script::unroll::UnrolledRule {
-                kind: $crate::script::unroll::UnrolledRuleKind::Gt($lhs.clone(), $rhs.clone()),
-                inverted: $crate::script::builtins::macros::mneg!($(neg = $neg)?),
-            })
-        };
-        ($context:ident : S = ($lhs:expr, $rhs:expr) $(neg = $neg:expr)?) => {
-            $context.rules.push($crate::script::unroll::UnrolledRule {
-                kind: $crate::script::unroll::UnrolledRuleKind::ScalarEq(
-                    $lhs.clone(),
-                    $rhs.clone(),
-                ),
-                inverted: $crate::script::builtins::macros::mneg!($(neg = $neg)?),
-            })
-        };
-        ($context:ident : P  = ($lhs:expr, $rhs:expr) $(neg = $neg:expr)?) => {
-            $context.rules.push($crate::script::unroll::UnrolledRule {
-                kind: $crate::script::unroll::UnrolledRuleKind::PointEq($lhs.clone(), $rhs.clone()),
-                inverted: $crate::script::builtins::macros::mneg!($(neg = $neg)?),
-            })
+            $rule_op($lhs, $rhs, $context, $props, $crate::script::builtins::macros::mneg!($(neg = $neg)?))
         };
     }
 
-    pub(crate) use {
-        angle_expr, average, bisector, call, circle_center, circle_expr, circle_radius,
-        construct_bundle, distance, entity, field, index, intersection, line2, math, mneg, number,
-        parallel_through, perpendicular_through, rule, set_unit,
-    };
+    pub(crate) use {call, construct_bundle, field, index, mneg, number, rule};
 }
