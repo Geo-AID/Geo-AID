@@ -49,10 +49,10 @@ pub fn register(library: &mut Library) {
             overloads: vec![
                 overload!((POINT, DISTANCE) -> CIRCLE : circle_function),
                 overload!((DISTANCE, POINT) -> CIRCLE {
-                    |radius: Expr<Scalar>, center: Expr<Point>, context, _| call!(context:circle_function(center, radius))
+                    |radius: Expr<Scalar>, center: Expr<Point>, context, display| call!(context:circle_function(center, radius) with display)
                 }),
                 overload!(() -> CIRCLE {
-                    |context: &mut CompileContext, _| {
+                    |context: &mut CompileContext, display| {
                         let pt = context.add_point();
                         let sc = context.add_scalar();
 
@@ -60,7 +60,7 @@ pub fn register(library: &mut Library) {
                             context:circle_function(
                                 context.entity_p(pt),
                                 context.entity_s(sc, unit::DISTANCE)
-                            )
+                            ) with display
                         )
                     }
                 })

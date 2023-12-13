@@ -20,7 +20,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 use std::rc::Rc;
 
-use crate::{script::{unroll::{CloneWithNode, AssociatedData, HierarchyNode, LineNode, LineType, BuildAssociated}, figure::{MathString, Figure}, compile::Compiler}, generator::fast_float::FastFloat, span};
+use crate::{script::{unroll::{CloneWithNode, AssociatedData, HierarchyNode, LineNode, LineType, BuildAssociated}, figure::{MathString, Figure, Mode}, compile::{Compiler, Compile}}, generator::fast_float::FastFloat, span};
 #[allow(unused_imports)]
 use crate::script::unroll::{
     CompileContext, Expr, Function, Library, Line, Point, PointCollection, Properties,
@@ -51,7 +51,7 @@ pub fn point_point_point(
         display: display.get("display").maybe_unset(true),
         label: display.get("label").maybe_unset(MathString::new(span!(0, 0, 0, 0))),
         display_label: display.get("display_label").maybe_unset(false),
-        line_type: display.get("is_ray").maybe_unset(LineType::Ray), // The change. Bisectors are to be treated as rays.
+        line_type: display.get("line_type").maybe_unset(LineType::Ray), // The change. Bisectors are to be treated as rays.
         expr: expr.clone_without_node()
     });
 
@@ -60,6 +60,8 @@ pub fn point_point_point(
     display.finish(&["display", "label", "display_label", "line_type"], context);
 
     node.insert_data("display_arms", AssociatedData::Bool(display_arms));
+
+    node.set_associated(BisectorNode);
 
     expr.node = Some(node);
     expr
@@ -70,7 +72,21 @@ pub struct BisectorNode;
 
 impl BuildAssociated<LineNode> for BisectorNode {
     fn build_associated(&self, compiler: &mut Compiler, figure: &mut Figure, associated: &HierarchyNode<LineNode>) {
-        let display_arms = associated.get_data("display_arms").unwrap().as_bool();
+        let display_arms = associated.get_data("display_arms").unwrap().as_bool().unwrap();
+
+        if display_arms {
+            match associated.root.expr.data.as_ref() {
+                Line::AngleBisector(a, b, c) => {
+                    let a = compiler.compile(a);
+                    let b = compiler.compile(b);
+                    let c = compiler.compile(c);
+
+                    figure.segments.push((b.clone(), a, Mode::Default));
+                    figure.segments.push((b, c, Mode::Default));
+                },
+                _ => unreachable!()
+            }
+        }
     }
 }
 

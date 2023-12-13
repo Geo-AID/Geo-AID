@@ -4,4 +4,4 @@ let A, B, C = Point();
 # I will be the centre as an intersection of bisectors.
 let I = intersection(bisector(ABC), bisector(BAC));
 
-let omega = Circle(I, dst(I, AB));
+let omega = Circle(I, dst(I, AB [display = false]));

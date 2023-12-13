@@ -58,6 +58,9 @@ pub enum Error {
         character: char,
         error_span: Span,
     },
+    NewLineInString {
+        error_span: Span
+    },
     IteratorIdMustBeAnInteger {
         error_span: Span,
     },
@@ -163,7 +166,13 @@ pub enum Error {
     StringOrIdentExpected {
         error_span: Span,
     },
+    NonRawStringOrIdentExpected {
+        error_span: Span,
+    },
     BooleanExpected {
+        error_span: Span,
+    },
+    InvalidIdentMathString {
         error_span: Span,
     },
     RedefinedFlag {
@@ -171,7 +180,7 @@ pub enum Error {
         first_defined: Span,
         flag_name: String,
     },
-    FlagEnumInvalidValue {
+    EnumInvalidValue {
         error_span: Span,
         available_values: &'static [&'static str],
         received_value: String,
@@ -189,7 +198,7 @@ pub enum Error {
     EmptyLabel {
         error_span: Span
     },
-    UnclosedBrace {
+    UnclosedSpecial {
         error_span: Span,
         parsed_special: String
     },
@@ -197,6 +206,9 @@ pub enum Error {
         error_span: Span,
         code: String,
         suggested: Option<String>
+    },
+    UnclosedString {
+        error_span: Span
     },
     LabelIndexInsideIndex {
         error_span: Span
@@ -237,6 +249,10 @@ impl Error {
                 character,
                 error_span,
             } => DiagnosticData::new(&format!("invalid character: `{character}`"))
+                .add_span(error_span),
+            Self::NewLineInString {
+                error_span,
+            } => DiagnosticData::new(&format!("newline in string"))
                 .add_span(error_span),
             Self::EndOfInput => DiagnosticData::new("unexpected end of input"),
             Self::UndefinedRuleOperator { operator } => {
@@ -392,25 +408,33 @@ impl Error {
             }
             Self::FlagDoesNotExist { flag_name, flag_span, error_span, suggested } => {
                 let message = suggested.map(|v| format!("Did you mean: `{v}`?"));
-                DiagnosticData::new(&format!("compiler flag `{flag_name}` does not exist."))
+                DiagnosticData::new(&format!("compiler flag `{flag_name}` does not exist"))
                     .add_span(error_span)
                     .add_annotation(flag_span, AnnotationKind::Note, &"This does not exist.")
                     .add_annotation_opt_msg(flag_span, AnnotationKind::Help, message.as_ref())
             }
             Self::FlagSetExpected { error_span } => {
-                DiagnosticData::new(&"expected a flag set ({...}).")
+                DiagnosticData::new(&"expected a flag set ({...})")
                     .add_span(error_span)
             }
             Self::StringExpected { error_span } => {
-                DiagnosticData::new(&"expected a string.")
+                DiagnosticData::new(&"expected a string")
                     .add_span(error_span)
             }
             Self::StringOrIdentExpected { error_span } => {
-                DiagnosticData::new(&"expected a string or an identifier.")
+                DiagnosticData::new(&"expected a string or an identifier")
+                    .add_span(error_span)
+            }
+            Self::NonRawStringOrIdentExpected { error_span } => {
+                DiagnosticData::new(&"expected a non-raw string or an identifier")
                     .add_span(error_span)
             }
             Self::BooleanExpected { error_span } => {
-                DiagnosticData::new(&"expected a boolean value (enabled, disabled, on, off, true, false, 1 or 0).")
+                DiagnosticData::new(&"expected a boolean value (enabled, disabled, on, off, true, false, 1 or 0)")
+                    .add_span(error_span)
+            }
+            Self::InvalidIdentMathString { error_span } => {
+                DiagnosticData::new(&"invalid ident for a math string")
                     .add_span(error_span)
             }
             Self::RedefinedFlag {
@@ -419,11 +443,11 @@ impl Error {
                 flag_name,
             } => DiagnosticData::new(&format!("redefined flag: `{flag_name}`"))
                 .add_span(error_span)
-                .add_annotation(first_defined, AnnotationKind::Note, "First defined here."),
-            Self::FlagEnumInvalidValue { error_span, available_values, received_value } => {
-                DiagnosticData::new(&format!("invalid value for an enum flag: `{received_value}`"))
+                .add_annotation(first_defined, AnnotationKind::Note, "first defined here"),
+            Self::EnumInvalidValue { error_span, available_values, received_value } => {
+                DiagnosticData::new(&format!("invalid value for an enum flag or property: `{received_value}`"))
                     .add_span(error_span)
-                    .add_annotation(error_span, AnnotationKind::Help, &format!("Supported values: {}", available_values.iter().map(
+                    .add_annotation(error_span, AnnotationKind::Help, &format!("supported values: {}", available_values.iter().map(
                         |v| format!("`{v}`")
                     ).collect::<Vec<String>>().join(", ")))
             }
@@ -455,7 +479,7 @@ impl Error {
                 DiagnosticData::new(&"labels cannot be empty.")
                     .add_span(error_span)
             }
-            Self::UnclosedBrace { error_span, parsed_special } => {
+            Self::UnclosedSpecial { error_span, parsed_special } => {
                 // Try to figure out if any of the chars could show up here.
                 let found = SPECIAL_MATH.iter().find(|x| parsed_special.starts_with(*x));
 
@@ -491,8 +515,12 @@ impl Error {
                     .add_span(error_span)
                     .add_annotation_opt_msg(error_span, AnnotationKind::Help, message.as_ref())
             }
+            Self::UnclosedString { error_span } => {
+                DiagnosticData::new(&"unclosed special tag")
+                    .add_span(error_span)
+            }
             Self::LabelIndexInsideIndex { error_span } => {
-                DiagnosticData::new(&"lower index cannot be used inside another lower index.")
+                DiagnosticData::new(&"lower index cannot be used inside another lower index")
                     .add_span(error_span)
             }
             Self::UnexpectedDisplayOption { error_span, option, suggested } => {

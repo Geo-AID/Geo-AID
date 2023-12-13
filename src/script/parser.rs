@@ -30,9 +30,9 @@ use super::{
     token::{
         Ampersant, Asterisk, At, Colon, Comma, Dollar, Dot, Eq, Exclamation, Gt, Gteq, Ident,
         LBrace, LParen, LSquare, Let, Lt, Lteq, Minus, NamedIdent, Number, Plus, RBrace, RParen,
-        RSquare, Semi, Slash, Span, Token, Vertical,
+        RSquare, Semi, Slash, Span, Token, Vertical, StrLit,
     },
-    unit, ComplexUnit, Error, figure::MathString
+    unit, ComplexUnit, Error
 };
 
 macro_rules! impl_token_parse {
@@ -1196,6 +1196,22 @@ impl_token_parse! {Exclamation}
 impl_token_parse! {Number}
 impl_token_parse! {Dot}
 
+impl Parse for StrLit {
+    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
+            it: &mut Peekable<I>,
+        ) -> Result<Self, Error> {
+        match it.next() {
+            Some(Token::String(s)) => Ok(s.clone()),
+            Some(t) => Err(Error::InvalidToken { token: t.clone() }),
+            None => Err(Error::EndOfInput),
+        }
+    }
+
+    fn get_span(&self) -> Span {
+        self.span
+    }
+}
+
 impl Parse for NamedIdent {
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
         it: &mut Peekable<I>,
@@ -1316,7 +1332,7 @@ impl Type {
             // A scalar with no defined unit can be cast into any other scalar, except angle.
             Type::Scalar(None) => match into {
                 Type::Scalar(unit) => match unit {
-                    Some(unit) => unit.0[3] == 0, // no angle
+                    Some(unit) => unit.0[1] == 0, // no angle
                     None => true,
                 },
                 _ => false,
@@ -1374,7 +1390,29 @@ impl Parse for Property {
 pub enum PropertyValue {
     Number(ExprNumber),
     Ident(Ident),
-    MathString(MathString)
+    RawString(RawString),
+    String(StrLit)
+}
+
+#[derive(Debug, Clone)]
+pub struct RawString {
+    pub excl: Exclamation,
+    pub lit: StrLit
+}
+
+impl Parse for RawString {
+    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
+            it: &mut Peekable<I>,
+        ) -> Result<Self, Error> {
+        Ok(Self {
+            excl: Exclamation::parse(it)?,
+            lit: StrLit::parse(it)?
+        })
+    }
+
+    fn get_span(&self) -> Span {
+        self.excl.span.join(self.lit.span)
+    }
 }
 
 pub trait FromProperty: Sized {
@@ -1405,7 +1443,14 @@ impl FromProperty for bool {
                     error_span: num.get_span(),
                 }),
             },
-            PropertyValue::MathString(s) => Err(Error::BooleanExpected {
+            PropertyValue::String(s) => match s.content.as_str() {
+                "enabled" | "on" | "true" => Ok(true),
+                "disabled" | "off" | "false" => Ok(false),
+                _ => Err(Error::BooleanExpected {
+                    error_span: s.get_span(),
+                }),
+            },
+            PropertyValue::RawString(s) => Err(Error::BooleanExpected {
                 error_span: s.get_span(),
             })
         }
@@ -1419,9 +1464,8 @@ impl FromProperty for String {
             PropertyValue::Number(num) => Err(Error::StringExpected {
                 error_span: num.get_span(),
             }),
-            PropertyValue::MathString(s) => Err(Error::StringExpected {
-                error_span: s.get_span(),
-            })
+            PropertyValue::RawString(s) => Ok(s.lit.content),
+            PropertyValue::String(s) => Ok(s.content)
         }
     }
 }
@@ -1431,7 +1475,8 @@ impl Parse for PropertyValue {
         match self {
             Self::Number(n) => n.get_span(),
             Self::Ident(i) => i.get_span(),
-            Self::MathString(s) => s.get_span(),
+            Self::String(s) => s.get_span(),
+            Self::RawString(s) => s.get_span(),
         }
     }
 
@@ -1443,6 +1488,8 @@ impl Parse for PropertyValue {
         match peeked {
             Some(Token::Ident(_)) => Ok(Self::Ident(Ident::parse(it)?)),
             Some(Token::Number(_)) => Ok(Self::Number(ExprNumber::parse(it)?)),
+            Some(Token::Exclamation(_)) => Ok(Self::RawString(RawString::parse(it)?)),
+            Some(Token::String(_)) => Ok(Self::String(StrLit::parse(it)?)),
             Some(t) => Err(Error::InvalidToken { token: t.clone() }),
             None => Err(Error::EndOfInput),
         }

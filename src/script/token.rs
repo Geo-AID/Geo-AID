@@ -365,6 +365,13 @@ pub struct Exclamation {
     pub span: Span,
 }
 
+/// A string, delimited by quotation marks.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StrLit {
+    pub span: Span,
+    pub content: String
+}
+
 /// A '&' token.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Ampersant {
@@ -400,6 +407,7 @@ pub enum Token {
     At(At),
     Colon(Colon),
     Dot(Dot),
+    String(StrLit)
 }
 
 impl Display for Token {
@@ -430,6 +438,7 @@ impl Display for Token {
             Self::LSquare(_) => write!(f, "["),
             Self::RSquare(_) => write!(f, "]"),
             Self::Colon(_) => write!(f, ":"),
+            Self::String(s) => write!(f, "\"{}\"", s.content),
             Self::Ident(ident) => write!(
                 f,
                 "{}",
@@ -483,6 +492,7 @@ impl Token {
             Self::Ampersant(v) => v.span,
             Self::Colon(v) => v.span,
             Self::Dot(v) => v.span,
+            Self::String(s) => s.span
         }
     }
 }
@@ -607,7 +617,7 @@ pub struct Number {
 }
 
 fn is_identifier_character(c: char) -> bool {
-    c.is_alphabetic() || c == '_' || c == '\''
+    c.is_alphabetic() || c.is_ascii_digit() || c == '_' || c == '\''
 }
 
 fn read_identifier<I: Iterator<Item = char>>(
@@ -636,6 +646,85 @@ fn read_identifier<I: Iterator<Item = char>>(
         ),
         str,
     )
+}
+
+fn read_string<I: Iterator<Item = char>>(
+    it: &mut Peekable<I>,
+    position: &mut Position
+) -> Result<StrLit, Error> {
+    let mut content = String::new();
+    let begin_pos = *position;
+    let mut closed = false;
+
+    // Assume first char to be correct.
+    it.next();
+    position.column += 1;
+
+    while let Some(c) = it.next() {
+        position.column += 1;
+
+        // Guard for non-ASCII
+        if !c.is_ascii() {
+            return Err(Error::InvalidCharacter {
+                character: c,
+                error_span: span!(
+                    position.line,
+                    position.column - 1,
+                    position.line,
+                    position.column
+                )
+            });
+        }
+
+        if c == '\n' {
+            return Err(Error::NewLineInString {
+                error_span: span!(
+                    begin_pos.line,
+                    begin_pos.column,
+                    position.line,
+                    position.column
+                )
+            });
+        } else if c == '"' {
+            closed = true;
+            break;
+        } else if c.is_ascii_whitespace() {
+            content.push(' ');
+        } else if c.is_ascii_control() {
+            return Err(Error::InvalidCharacter {
+                character: c,
+                error_span: span!(
+                    position.line,
+                    position.column - 1,
+                    position.line,
+                    position.column
+                )
+            });
+        } else {
+            content.push(c);
+        }
+    }
+
+    if !closed {
+        return Err(Error::UnclosedString {
+            error_span: span!(
+                begin_pos.line,
+                begin_pos.column,
+                position.line,
+                position.column
+            )
+        })
+    }
+
+    Ok(StrLit {
+        span: span!(
+            begin_pos.line,
+            begin_pos.column,
+            position.line,
+            position.column
+        ),
+        content
+    })
 }
 
 fn read_number<I: Iterator<Item = char>>(it: &mut Peekable<I>, position: &mut Position) -> Number {
@@ -909,6 +998,10 @@ pub fn tokenize(input: &str) -> Result<Vec<Token>, Error> {
                             break;
                         }
                     }
+                } else if c == '"' {
+                    let s = read_string(&mut it, &mut position)?;
+
+                    tokens.push(Token::String(s));
                 } else {
                     tokenize_special(&mut position, &mut tokens, c, &mut it)?;
                 }

@@ -26,11 +26,11 @@ use serde::Serialize;
 
 use crate::{generator::expression::{CircleExpr, Expression, LineExpr, PointExpr, ScalarExpr}, span};
 
-use super::{Error, token::{Span, PointCollectionItem}, unroll::most_similar, parser::{FromProperty, PropertyValue, Parse}};
+use super::{Error, token::{Span, PointCollectionItem, Ident}, unroll::most_similar, parser::{FromProperty, PropertyValue, Parse}};
 
 type Point = Arc<Expression<PointExpr>>;
 
-pub const SPECIAL_MATH: [&'static str; 48] = [
+pub const SPECIAL_MATH: [&'static str; 49] = [
     "alpha",
     "Alpha",
     "beta",
@@ -78,7 +78,8 @@ pub const SPECIAL_MATH: [&'static str; 48] = [
     "psi",
     "Psi",
     "omega",
-    "Omega"
+    "Omega",
+    "quote"
 ];
 
 /// The display mode of the expression.
@@ -200,6 +201,7 @@ pub enum MathSpecial {
     PsiUpper,
     Omega,
     OmegaUpper,
+    Quote
 }
 
 impl MathSpecial {
@@ -218,11 +220,11 @@ impl MathSpecial {
         .ok_or_else(|| {
             let best = most_similar(SPECIAL_MATH, charcode);
 
-                Error::SpecialNotRecongised {
-                    error_span: content_span,
-                    code: charcode.to_string(),
-                    suggested: best
-                }
+            Error::SpecialNotRecongised {
+                error_span: content_span,
+                code: charcode.to_string(),
+                suggested: best
+            }
         })
     }
 }
@@ -305,13 +307,22 @@ impl MathString {
         let mut special = String::new();
         let mut index_delimited = false;
 
+        let mut special_start = 0;
+
+        let mut char_count = 0;
+
         for c in content.chars() {
             if collect_special {
-                if ignore_next || c != ']' || c != '\\' {
+                if ignore_next || (c != ']' && c != '\\') {
                     special.push(c);
                     ignore_next = false;
                 } else if c == ']' {
-                    math_string.push(MathChar::Special(MathSpecial::parse(&special, content_span)?));
+                    math_string.push(MathChar::Special(MathSpecial::parse(&special, span!(
+                        content_span.start.line,
+                        content_span.start.column + special_start + 1,
+                        content_span.start.line,
+                        content_span.start.column + char_count
+                    ))?));
 
                     special.clear();
                     collect_special = false;
@@ -334,6 +345,7 @@ impl MathString {
                         indexed = true;
                     }
                 } else if c == '[' {
+                    special_start = char_count;
                     collect_special = true;
                 } else if c == ' ' {
                     if indexed && !index_delimited {
@@ -354,10 +366,25 @@ impl MathString {
                     math_string.push(MathChar::Ascii(c));
                 }
             }
+
+            char_count += 1;
         }
 
         if indexed {
             math_string.push(MathChar::SetIndex(MathIndex::Normal));
+        }
+
+        if collect_special {
+            // Special tag was not closed
+            return Err(Error::UnclosedSpecial {
+                error_span: span!(
+                    content_span.start.line,
+                    content_span.start.column + special_start,
+                    content_span.start.line,
+                    content_span.end.column
+                ),
+                parsed_special: special
+            })
         }
 
         Ok(Self {
@@ -379,11 +406,32 @@ impl MathString {
 
 impl FromProperty for MathString {
     fn from_property(property: PropertyValue) -> Result<MathString, Error> {
-        let prop_span = property.get_span();
-
         match property {
-            PropertyValue::MathString(v) => Ok(v),
-            prop => MathString::parse(&String::from_property(prop)?, prop_span)
+            PropertyValue::Number(n) => Err(Error::StringOrIdentExpected { error_span: n.get_span() }),
+            PropertyValue::Ident(i) => match i {
+                Ident::Collection(mut c) => if c.len() == 1 {
+                    Ok(MathString::from(c.collection.swap_remove(0)))
+                } else {
+                    Err(Error::InvalidIdentMathString { error_span: c.span })
+                },
+                Ident::Named(n) => {
+                    MathString::parse(&n.ident, n.span)?
+                        .displayed_by_default()
+                        .ok_or(Error::InvalidIdentMathString { error_span: n.span })
+                }
+            },
+            PropertyValue::String(s) => MathString::parse(&s.content, span!(
+                s.span.start.line,
+                s.span.start.column + 1,
+                s.span.end.line,
+                s.span.end.column - 1
+            )),
+            PropertyValue::RawString(s) => {
+                Ok(MathString {
+                    chars: s.lit.content.chars().map(|c| MathChar::Ascii(c)).collect(),
+                    span: s.get_span()
+                })
+            }
         }
     }
 }

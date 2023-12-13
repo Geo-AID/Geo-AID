@@ -792,16 +792,6 @@ pub trait ConvertFrom<T>: Displayed {
     fn can_convert_from(value: &T) -> bool; 
 }
 
-impl<T: Displayed> ConvertFrom<Expr<T>> for T {
-    fn convert_from(value: Expr<T>, _context: &CompileContext) -> Expr<Self> {
-        value
-    }
-
-    fn can_convert_from(_value: &Expr<T>) -> bool {
-        true
-    }
-}
-
 pub trait Convert
 where
     Self: Sized,
@@ -833,6 +823,20 @@ pub trait Simplify {
     /// Simlpifies the expression. WARNING: DOES NOT PRESERVE NODE.
     #[must_use]
     fn simplify(&self, context: &CompileContext) -> Self;
+}
+
+macro_rules! impl_x_from_x {
+    ($what:ident) => {
+        impl ConvertFrom<Expr<$what>> for $what {
+            fn convert_from(value: Expr<$what>, _context: &CompileContext) -> Expr<Self> {
+                value
+            }
+        
+            fn can_convert_from(_value: &Expr<$what>) -> bool {
+                true
+            }
+        }
+    }
 }
 
 macro_rules! impl_from_any {
@@ -1086,6 +1090,7 @@ impl Display for Point {
     }
 }
 
+impl_x_from_x!{Point}
 impl_from_any! {Point}
 impl_from_unknown! {Point}
 impl_convert_err! {Circle -> Point}
@@ -1098,7 +1103,25 @@ impl_make_variable! {Point}
 impl ConvertFrom<Expr<PointCollection>> for Point {
     fn convert_from(mut value: Expr<PointCollection>, context: &CompileContext) -> Expr<Self> {
         if value.data.length == 1 {
-            index!(node value, 0)
+            let mut expr = index!(node value, 0);
+
+            if let Some(pc_node) = value.node {
+                if let Some(mut props) = pc_node.root.props {
+                    if let Some(pt_node) = &mut expr.node {
+                        pt_node.children = pc_node.children;
+                        pt_node.root.display = pc_node.root.display;
+
+                        pt_node.root.display_label = props.get("display_label").maybe_unset(true);
+                        pt_node.root.label = props.get("label").maybe_unset(MathString::new(span!(0, 0, 0, 0)));
+                        pt_node.root.display_dot = props.get("display_dot").maybe_unset(true);
+                        props.finish(&["display", "display_label", "label", "display_dot"], context);
+                    } else {
+                        props.finish(&[], context);
+                    }
+                }
+            }
+
+            expr
         } else {
             convert_err!(PointCollection(value) -> Point with context)
         }
@@ -1116,6 +1139,7 @@ pub enum Circle {
     Circle(Expr<Point>, Expr<Scalar>), // Center, radius
 }
 
+impl_x_from_x!{Circle}
 impl_from_any! {Circle}
 impl_from_unknown! {Circle}
 
@@ -1246,6 +1270,7 @@ impl Expr<Line> {
     }
 }
 
+impl_x_from_x!{Line}
 impl_from_any! {Line}
 impl_from_unknown! {Line}
 impl_convert_err! {Bundle -> Line}
@@ -1258,7 +1283,24 @@ impl_make_variable! {Line}
 impl ConvertFrom<Expr<PointCollection>> for Line {
     fn convert_from(mut value: Expr<PointCollection>, context: &CompileContext) -> Expr<Self> {
         if value.data.length == 2 {
-            context.line(index!(node value, 0), index!(node value, 1))
+            let mut expr = context.line(index!(node value, 0), index!(node value, 1));
+            if let Some(pc_node) = value.node {
+                if let Some(mut props) = pc_node.root.props {
+                    if let Some(ln_node) = &mut expr.node {
+                        ln_node.children = pc_node.children;
+                        ln_node.root.display = pc_node.root.display;
+                        
+                        ln_node.root.display_label = props.get("display_label").maybe_unset(true);
+                        ln_node.root.label = props.get("label").maybe_unset(MathString::new(span!(0, 0, 0, 0)));
+                        ln_node.root.line_type = props.get("line_type").maybe_unset(LineType::Line);
+                        props.finish(&["display", "display_label", "label", "line_type"], context);
+                    } else {
+                        props.finish(&[], context);
+                    }
+                }
+            }
+
+            expr
         } else {
             convert_err!(PointCollection(value) -> Line with context)
         }
@@ -1362,6 +1404,7 @@ pub struct Scalar {
     pub data: ScalarData,
 }
 
+impl_x_from_x!{Scalar}
 impl_from_any! {Scalar}
 impl_from_unknown! {Scalar}
 
@@ -1605,7 +1648,7 @@ impl Display for PointCollectionData {
 pub struct PointCollection {
     pub length: usize,
     #[def(entity)]
-    pub data: PointCollectionData,
+    pub data: PointCollectionData
 }
 
 impl_from_any! {PointCollection}
@@ -1640,6 +1683,22 @@ impl ConvertFrom<Expr<Point>> for PointCollection {
 
     fn can_convert_from(_value: &Expr<Point>) -> bool {
         true
+    }
+}
+
+impl ConvertFrom<Expr<PointCollection>> for PointCollection {
+    fn can_convert_from(_value: &Expr<PointCollection>) -> bool {
+        true
+    }
+
+    fn convert_from(mut value: Expr<PointCollection>, context: &CompileContext) -> Expr<Self> {
+        if let Some(node) = &mut value.node {
+            if let Some(props) = node.root.props.take() {
+                props.finish(&[], context);
+            }
+        }
+
+        value
     }
 }
 
@@ -1754,6 +1813,7 @@ pub struct Bundle {
     pub data: BundleData,
 }
 
+impl_x_from_x!{Bundle}
 impl_from_any! {Bundle}
 impl_from_unknown! {Bundle}
 
@@ -2450,9 +2510,13 @@ fn unroll_simple(
                 fetch_variable(context, &named.ident, named.span)
             },
             Ident::Collection(col) => {
-                // No options are expected, as pcs don't generate nodes.
-                display.finish(&[], context);
+                let mut display = display;
+                let display_pc = display.get("display").maybe_unset(true);
 
+                let mut pc_children = Vec::new();
+                pc_children.resize_with(col.collection.len(), || None);
+
+                // No options are expected, as pcs don't generate nodes.
                 AnyExpr::PointCollection(Expr {
                     weight: FastFloat::One, // TODO: UPDATE FOR WEIGHING SUPPORT IN GEOSCRIPT
                     data: Rc::new(PointCollection {
@@ -2472,7 +2536,11 @@ fn unroll_simple(
                         ),
                     }),
                     span: col.span,
-                    node: None // Point collections always reference variables. The is no point generating a node.
+                    node: Some(HierarchyNode::new(PCNode {
+                        display: display_pc,
+                        children: pc_children,
+                        props: Some(display)
+                    }))
                 })
             }
         },
@@ -2772,7 +2840,7 @@ pub fn most_similar<'r, I: IntoIterator<Item = &'r T>, T: AsRef<str> + ?Sized + 
 // }
 
 #[derive(Debug)]
-pub struct Properties{
+pub struct Properties {
     props: HashMap<String, PropertyValue>,
     finished: bool,
     errors: Vec<Error>
@@ -2838,6 +2906,24 @@ impl Properties {
                 span: None
             }
         }
+    }
+
+    /// # Errors
+    /// Returns an error if the value exists, but is invalid for the desired type.
+    pub fn try_get<T: FromProperty>(&mut self, property: &str) -> Result<Property<T>, Error> {
+        Ok(if let Some(prop) = self.props.remove(property) {
+            let prop_span = prop.get_span();
+
+            Property {
+                value: Some(T::from_property(prop)?),
+                span: Some(prop_span)
+            }
+        } else {
+            Property {
+                value: None,
+                span: None
+            }
+        })
     }
 
     pub fn merge_with(mut self, mut other: Properties) -> Self {
@@ -3085,19 +3171,10 @@ fn create_variables(
 
     // Iterate over each identifier.
     for def in stat.ident.iter() {
-        let default_label = match &def.name {
-            Ident::Named(named) => MathString::parse(&named.ident, named.span).ok(),
-            Ident::Collection(col) => if col.len() == 1 {
-                Some(MathString::from(col.collection[0].clone()))
-            } else {
-                None
-            },
-        }.and_then(|x| x.displayed_by_default()).unwrap_or_else(|| MathString::new(span!(0, 0, 0, 0)));
-
         let mut external = Properties::default();
         external.props.insert(
             String::from("default-label"),
-            PropertyValue::MathString(default_label)
+            PropertyValue::Ident(def.name.clone())
         );
 
         let display = Properties::from(def.display_properties.clone()).merge_with(external);

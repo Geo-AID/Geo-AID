@@ -20,15 +20,9 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 use std::{ops::Deref, fmt::Debug, collections::HashMap};
 
-use crate::{script::{figure::{MathString, Figure, Mode}, token::{PointCollectionItem, NamedIdent}, compile::{Compiler, Compile}, parser::{FromProperty, PropertyValue, Parse}, Error}, span};
+use crate::{script::{figure::{MathString, Figure, Mode}, compile::{Compiler, Compile}, parser::{FromProperty, PropertyValue, Parse}, Error}, span};
 
 use super::{Expr, Point, Circle, Displayed, Line, Scalar, PointCollection, Bundle, Properties, CompileContext, CloneWithNode, Unknown};
-
-#[derive(Debug, Clone)]
-pub enum IdentOrItem {
-    Ident(NamedIdent),
-    PointCollectionItem(PointCollectionItem)
-}
 
 /// A node is a trait characterising objects meant to be parts of the figure's display tree.
 pub trait Node: Debug {
@@ -44,7 +38,7 @@ pub trait FromExpr<T: Displayed>: Node + Sized {
     fn from_expr(expr: &Expr<T>, display: Properties, context: &CompileContext) -> Self;
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub struct MaybeUnset<T> {
     value: T,
     set: bool
@@ -104,14 +98,22 @@ impl<T> AsRef<T> for MaybeUnset<T> {
 }
 
 impl<T: Clone> MaybeUnset<T> {
-    pub fn cloned(&self) -> T {
+    pub fn get_cloned(&self) -> T {
         self.value.clone()
+    }
+
+    pub fn cloned(&self) -> Self {
+        self.clone()
     }
 }
 
 impl<T: Copy> MaybeUnset<T> {
-    pub fn copied(&self) -> T {
+    pub fn get_copied(&self) -> T {
         self.value
+    }
+
+    pub fn copied(&self) -> Self {
+        *self
     }
 }
 
@@ -165,11 +167,11 @@ impl Node for CollectionNode {
     }
 
     fn get_display(&self) -> bool {
-        self.display.copied()
+        self.display.get_copied()
     }
 
     fn build(&self, compiler: &mut Compiler, figure: &mut Figure) {
-        if self.display.copied() {
+        if self.display.get_copied() {
             for child in &self.children {
                 child.build(compiler, figure);
             }
@@ -190,7 +192,7 @@ impl AssociatedData {
     #[must_use]
     pub fn as_bool(&self) -> MaybeUnset<bool> {
         match self {
-            Self::Bool(v) => v,
+            Self::Bool(v) => v.copied(),
         }
     }
 }
@@ -261,8 +263,8 @@ impl<T: Node> HierarchyNode<T> {
         self.children.extend(nodes.into_iter().map(|x| Box::new(x) as Box::<dyn Node>));
     }
 
-    pub fn set_associated(&mut self, associated: Box<dyn BuildAssociated<T>>) {
-        self.associated = Some(associated);
+    pub fn set_associated<U: BuildAssociated<T> + 'static>(&mut self, associated: U) {
+        self.associated = Some(Box::new(associated));
     }
 
     pub fn insert_data(&mut self, key: &'static str, data: AssociatedData) {
@@ -277,14 +279,16 @@ impl<T: Node> HierarchyNode<T> {
 #[derive(Debug)]
 pub struct PCNode {
     pub display: MaybeUnset<bool>,
-    pub children: Vec<Option<HierarchyNode<<Point as Displayed>::Node>>>
+    pub children: Vec<Option<HierarchyNode<<Point as Displayed>::Node>>>,
+    pub props: Option<Properties>
 }
 
 impl PCNode {
     pub fn new() -> Self {
         Self {
             display: MaybeUnset::new(true),
-            children: Vec::new()
+            children: Vec::new(),
+            props: None
         }
     }
 
@@ -303,11 +307,11 @@ impl Node for PCNode {
     }
 
     fn get_display(&self) -> bool {
-        self.display.copied()
+        self.display.get_copied()
     }
 
     fn build(&self, compiler: &mut Compiler, figure: &mut Figure) {
-        if self.display.copied() {
+        if self.display.get_copied() {
             for child in self.children.iter().flatten() {
                 child.build(compiler, figure);
             }
@@ -505,11 +509,11 @@ impl Node for BundleNode {
     }
 
     fn get_display(&self) -> bool {
-        self.display.copied()
+        self.display.get_copied()
     }
 
     fn build(&self, compiler: &mut Compiler, figure: &mut Figure) {
-        if self.display.copied() {
+        if self.display.get_copied() {
             for child in self.children.values().flatten() {
                 child.build(compiler, figure);
             }
@@ -542,7 +546,7 @@ pub struct PointNode {
 
 impl Node for PointNode {
     fn get_display(&self) -> bool {
-        self.display.copied()
+        self.display.get_copied()
     }
 
     fn set_display(&mut self, display: bool) {
@@ -550,10 +554,10 @@ impl Node for PointNode {
     }
 
     fn build(&self, compiler: &mut Compiler, figure: &mut Figure) {
-        if self.display.copied() {
+        if self.display.get_copied() {
             figure.points.push((
                 compiler.compile(&self.expr),
-                if self.display_label.copied() {
+                if self.display_label.get_copied() {
                     let label = self.label.as_ref();
 
                     if label.is_empty() {
@@ -597,7 +601,7 @@ pub struct CircleNode {
 
 impl Node for CircleNode {
     fn get_display(&self) -> bool {
-        self.display.copied()
+        self.display.get_copied()
     }
 
     fn set_display(&mut self, display: bool) {
@@ -605,7 +609,7 @@ impl Node for CircleNode {
     }
 
     fn build(&self, compiler: &mut Compiler, figure: &mut Figure) {
-        if self.display.copied() {
+        if self.display.get_copied() {
             figure.circles.push((
                 compiler.compile(&self.expr),
                 Mode::Default
@@ -658,11 +662,25 @@ impl FromProperty for LineType {
                 "line" => Ok(Self::Line),
                 "ray" => Ok(Self::Ray),
                 "segment" => Ok(Self::Segment),
-                &_ => Err(Error::StringOrIdentExpected {
+                &_ => Err(Error::EnumInvalidValue {
                     error_span: i.get_span(),
+                    available_values: &["line", "ray", "segment"],
+                    received_value: i.to_string()
                 })
             },
-            PropertyValue::MathString(_) => unreachable!(),
+            PropertyValue::String(s) => match s.content.to_lowercase().as_str() {
+                "line" => Ok(Self::Line),
+                "ray" => Ok(Self::Ray),
+                "segment" => Ok(Self::Segment),
+                &_ => Err(Error::EnumInvalidValue {
+                    error_span: s.get_span(),
+                    available_values: &["line", "ray", "segment"],
+                    received_value: s.content
+                })
+            },
+            PropertyValue::RawString(s) => Err(Error::NonRawStringOrIdentExpected {
+                error_span: s.get_span(),
+            })
         }
     }
 }
@@ -678,7 +696,7 @@ pub struct LineNode {
 
 impl Node for LineNode {
     fn get_display(&self) -> bool {
-        self.display.copied()
+        self.display.get_copied()
     }
 
     fn set_display(&mut self, display: bool) {
@@ -686,22 +704,63 @@ impl Node for LineNode {
     }
 
     fn build(&self, compiler: &mut Compiler, figure: &mut Figure) {
-        if self.display.copied() {
-            figure.lines.push((
-                compiler.compile(&self.expr),
-                Mode::Default
-                // if self.display_label.unwrap() {
-                //     let label = self.label.unwrap();
+        if self.display.get_copied() {
+            // if self.display_label.unwrap() {
+            //     let label = self.label.unwrap();
 
-                //     if label.is_empty() {
-                //         self.default_label
-                //     } else {
-                //         label
-                //     }
-                // } else {
-                //     MathString::new()
-                // }
-            ))
+            //     if label.is_empty() {
+            //         self.default_label
+            //     } else {
+            //         label
+            //     }
+            // } else {
+            //     MathString::new()
+            // }
+
+            match self.line_type.unwrap() {
+                LineType::Line => {
+                    figure.lines.push((
+                        compiler.compile(&self.expr),
+                        Mode::Default
+                    ))
+                }
+                LineType::Ray => {
+                    match &self.expr.data.as_ref() {
+                        Line::LineFromPoints(a, b) => {
+                            figure.rays.push((
+                                compiler.compile(a),
+                                compiler.compile(b),
+                                Mode::Default
+                            ))
+                        }
+                        Line::AngleBisector(a, b, c) => {
+                            let x = Expr::new_spanless(Point::LineLineIntersection(
+                                Expr::new_spanless(Line::LineFromPoints(a.clone_without_node(), c.clone_without_node())),
+                                self.expr.clone_without_node()
+                            ));
+
+                            figure.rays.push((
+                                compiler.compile(b),
+                                compiler.compile(&x),
+                                Mode::Default
+                            ))
+                        }
+                        _ => unreachable!()
+                    }
+                }
+                LineType::Segment => {
+                    match &self.expr.data.as_ref() {
+                        Line::LineFromPoints(a, b) => {
+                            figure.segments.push((
+                                compiler.compile(a),
+                                compiler.compile(b),
+                                Mode::Default
+                            ))
+                        }
+                        _ => unreachable!()
+                    }
+                }
+            };
         }
     }
 }
@@ -733,7 +792,7 @@ impl Node for ScalarNode {
     }
 
     fn get_display(&self) -> bool {
-        self.display.copied()
+        self.display.get_copied()
     }
 
     fn build(&self, _compiler: &mut Compiler, _figure: &mut Figure) {}
