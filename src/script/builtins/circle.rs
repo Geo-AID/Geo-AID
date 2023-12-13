@@ -18,9 +18,13 @@ WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use crate::{script::{unroll::{
-    Circle, CompileContext, Expr, Function, Library, Point, Properties, Scalar
-}, unit}, take_nodes};
+use crate::{
+    script::{
+        unit,
+        unroll::{Circle, CompileContext, Expr, Function, Library, Point, Properties, Scalar},
+    },
+    take_nodes,
+};
 use geo_aid_derive::overload;
 
 #[allow(unused_imports)]
@@ -31,14 +35,10 @@ fn circle_function(
     mut center: Expr<Point>,
     mut radius: Expr<Scalar>,
     context: &mut CompileContext,
-    display: Properties
+    display: Properties,
 ) -> Expr<Circle> {
     let nodes = take_nodes!(center, radius);
-    context.expr_with(
-        Circle::Circle(center, radius),
-        display,
-        nodes
-    )
+    context.expr_with(Circle::Circle(center, radius), display, nodes)
 }
 
 pub fn register(library: &mut Library) {

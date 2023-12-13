@@ -597,8 +597,7 @@ pub fn project(
     let mut blueprint_points = Vec::new();
 
     for (i, pt) in points.iter().enumerate() {
-        let pt_label =
-            figure.points[i].1.to_string();
+        let pt_label = figure.points[i].1.to_string();
         let id = Uuid::new_v4();
         blueprint_points.push(Rc::new(RenderedPoint {
             label: pt_label,

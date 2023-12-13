@@ -18,11 +18,22 @@ WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use std::{ops::Deref, fmt::Debug, collections::HashMap};
+use std::{collections::HashMap, fmt::Debug, ops::Deref};
 
-use crate::{script::{figure::{MathString, Figure, Mode}, compile::{Compiler, Compile}, parser::{FromProperty, PropertyValue, Parse}, Error}, span};
+use crate::{
+    script::{
+        compile::{Compile, Compiler},
+        figure::{Figure, MathString, Mode},
+        parser::{FromProperty, Parse, PropertyValue},
+        Error,
+    },
+    span,
+};
 
-use super::{Expr, Point, Circle, Displayed, Line, Scalar, PointCollection, Bundle, Properties, CompileContext, CloneWithNode, Unknown};
+use super::{
+    Bundle, Circle, CloneWithNode, CompileContext, Displayed, Expr, Line, Point, PointCollection,
+    Properties, Scalar, Unknown,
+};
 
 /// A node is a trait characterising objects meant to be parts of the figure's display tree.
 pub trait Node: Debug {
@@ -41,14 +52,14 @@ pub trait FromExpr<T: Displayed>: Node + Sized {
 #[derive(Debug, Clone, Copy)]
 pub struct MaybeUnset<T> {
     value: T,
-    set: bool
+    set: bool,
 }
 
 impl<T> MaybeUnset<T> {
     pub fn new(default: T) -> Self {
         Self {
             value: default,
-            set: false
+            set: false,
         }
     }
 
@@ -57,7 +68,7 @@ impl<T> MaybeUnset<T> {
 
         Self {
             value: value.unwrap_or(default),
-            set
+            set,
         }
     }
 
@@ -86,7 +97,7 @@ impl<T> MaybeUnset<T> {
     pub fn map<U, P: FnOnce(T) -> U>(self, f: P) -> MaybeUnset<U> {
         MaybeUnset {
             value: f(self.value),
-            set: self.set
+            set: self.set,
         }
     }
 }
@@ -129,7 +140,7 @@ impl<T: Default> Default for MaybeUnset<T> {
     fn default() -> Self {
         Self {
             value: T::default(),
-            set: false
+            set: false,
         }
     }
 }
@@ -137,14 +148,14 @@ impl<T: Default> Default for MaybeUnset<T> {
 #[derive(Debug)]
 pub struct CollectionNode {
     pub display: MaybeUnset<bool>,
-    pub children: Vec<Box<dyn Node>>
+    pub children: Vec<Box<dyn Node>>,
 }
 
 impl CollectionNode {
     pub fn new() -> Self {
         Self {
             display: MaybeUnset::new(true),
-            children: Vec::new()
+            children: Vec::new(),
         }
     }
 
@@ -157,7 +168,8 @@ impl CollectionNode {
     }
 
     pub fn extend<T: Node + 'static, U: IntoIterator<Item = T>>(&mut self, nodes: U) {
-        self.children.extend(nodes.into_iter().map(|x| Box::new(x) as Box::<dyn Node>));
+        self.children
+            .extend(nodes.into_iter().map(|x| Box::new(x) as Box<dyn Node>));
     }
 }
 
@@ -180,12 +192,17 @@ impl Node for CollectionNode {
 }
 
 pub trait BuildAssociated<T: Node>: Debug {
-    fn build_associated(&self, compiler: &mut Compiler, figure: &mut Figure, associated: &HierarchyNode<T>);
+    fn build_associated(
+        &self,
+        compiler: &mut Compiler,
+        figure: &mut Figure,
+        associated: &HierarchyNode<T>,
+    );
 }
 
 #[derive(Debug)]
 pub enum AssociatedData {
-    Bool(MaybeUnset<bool>)
+    Bool(MaybeUnset<bool>),
 }
 
 impl AssociatedData {
@@ -203,7 +220,7 @@ pub struct HierarchyNode<T: Node> {
     pub root: Box<T>,
     pub children: Vec<Box<dyn Node>>,
     pub associated: Option<Box<dyn BuildAssociated<T>>>,
-    pub associated_data: HashMap<&'static str, AssociatedData>
+    pub associated_data: HashMap<&'static str, AssociatedData>,
 }
 
 impl<T: Node> Node for HierarchyNode<T> {
@@ -236,7 +253,7 @@ impl<U: Displayed, T: FromExpr<U>> FromExpr<U> for HierarchyNode<T> {
             root: Box::new(T::from_expr(expr, props, context)),
             children: Vec::new(),
             associated: None,
-            associated_data: HashMap::new()
+            associated_data: HashMap::new(),
         }
     }
 }
@@ -247,7 +264,7 @@ impl<T: Node> HierarchyNode<T> {
             root: Box::new(root),
             children: Vec::new(),
             associated: None,
-            associated_data: HashMap::new()
+            associated_data: HashMap::new(),
         }
     }
 
@@ -259,8 +276,12 @@ impl<T: Node> HierarchyNode<T> {
         self.children.extend(nodes.into_iter());
     }
 
-    pub fn extend_children<U: Node + 'static, Iter: IntoIterator<Item = U>>(&mut self, nodes: Iter) {
-        self.children.extend(nodes.into_iter().map(|x| Box::new(x) as Box::<dyn Node>));
+    pub fn extend_children<U: Node + 'static, Iter: IntoIterator<Item = U>>(
+        &mut self,
+        nodes: Iter,
+    ) {
+        self.children
+            .extend(nodes.into_iter().map(|x| Box::new(x) as Box<dyn Node>));
     }
 
     pub fn set_associated<U: BuildAssociated<T> + 'static>(&mut self, associated: U) {
@@ -280,7 +301,7 @@ impl<T: Node> HierarchyNode<T> {
 pub struct PCNode {
     pub display: MaybeUnset<bool>,
     pub children: Vec<Option<HierarchyNode<<Point as Displayed>::Node>>>,
-    pub props: Option<Properties>
+    pub props: Option<Properties>,
 }
 
 impl PCNode {
@@ -288,7 +309,7 @@ impl PCNode {
         Self {
             display: MaybeUnset::new(true),
             children: Vec::new(),
-            props: None
+            props: None,
         }
     }
 
@@ -296,7 +317,10 @@ impl PCNode {
         self.children.push(node);
     }
 
-    pub fn extend<U: IntoIterator<Item = Option<HierarchyNode<<Point as Displayed>::Node>>>>(&mut self, nodes: U) {
+    pub fn extend<U: IntoIterator<Item = Option<HierarchyNode<<Point as Displayed>::Node>>>>(
+        &mut self,
+        nodes: U,
+    ) {
         self.children.extend(nodes);
     }
 }
@@ -326,7 +350,7 @@ macro_rules! impl_from_for_any {
                 Self::$from(value)
             }
         }
-    }
+    };
 }
 
 #[derive(Debug)]
@@ -337,7 +361,7 @@ pub enum AnyExprNode {
     Scalar(HierarchyNode<<Scalar as Displayed>::Node>),
     PointCollection(HierarchyNode<<PointCollection as Displayed>::Node>),
     Bundle(HierarchyNode<<Bundle as Displayed>::Node>),
-    Unknown(HierarchyNode<<Unknown as Displayed>::Node>)
+    Unknown(HierarchyNode<<Unknown as Displayed>::Node>),
 }
 
 impl_from_for_any! {Point}
@@ -448,7 +472,7 @@ impl Node for AnyExprNode {
             Self::Scalar(v) => v.set_display(display),
             Self::PointCollection(v) => v.set_display(display),
             Self::Bundle(v) => v.set_display(display),
-            Self::Unknown(v) => v.set_display(display)
+            Self::Unknown(v) => v.set_display(display),
         }
     }
 
@@ -460,7 +484,7 @@ impl Node for AnyExprNode {
             Self::Scalar(v) => v.get_display(),
             Self::PointCollection(v) => v.get_display(),
             Self::Bundle(v) => v.get_display(),
-            Self::Unknown(v) => v.get_display()
+            Self::Unknown(v) => v.get_display(),
         }
     }
 
@@ -472,7 +496,7 @@ impl Node for AnyExprNode {
             Self::Scalar(v) => v.build(compiler, figure),
             Self::PointCollection(v) => v.build(compiler, figure),
             Self::Bundle(v) => v.build(compiler, figure),
-            Self::Unknown(v) => v.build(compiler, figure)
+            Self::Unknown(v) => v.build(compiler, figure),
         }
     }
 }
@@ -482,19 +506,21 @@ type BundleNodeItem = Option<AnyExprNode>;
 #[derive(Debug)]
 pub struct BundleNode {
     pub display: MaybeUnset<bool>,
-    pub children: HashMap<String, BundleNodeItem>
+    pub children: HashMap<String, BundleNodeItem>,
 }
 
 impl BundleNode {
     pub fn new() -> Self {
         Self {
             display: MaybeUnset::new(true),
-            children: HashMap::new()
+            children: HashMap::new(),
         }
     }
 
     pub fn insert<T>(&mut self, key: String, node: Option<T>)
-        where AnyExprNode: From<T> {
+    where
+        AnyExprNode: From<T>,
+    {
         self.children.insert(key, node.map(AnyExprNode::from));
     }
 
@@ -541,7 +567,7 @@ pub struct PointNode {
     pub display_label: MaybeUnset<bool>,
     pub display_dot: MaybeUnset<bool>,
     pub default_label: MathString,
-    pub expr: Expr<Point>
+    pub expr: Expr<Point>,
 }
 
 impl Node for PointNode {
@@ -567,7 +593,7 @@ impl Node for PointNode {
                     }
                 } else {
                     MathString::new(span!(0, 0, 0, 0))
-                }
+                },
             ))
         }
     }
@@ -577,14 +603,21 @@ impl FromExpr<Point> for PointNode {
     fn from_expr(expr: &Expr<Point>, mut props: Properties, context: &CompileContext) -> Self {
         let node = Self {
             display: props.get("display").maybe_unset(true),
-            label: props.get("label").maybe_unset(MathString::new(span!(0, 0, 0, 0))),
+            label: props
+                .get("label")
+                .maybe_unset(MathString::new(span!(0, 0, 0, 0))),
             display_label: props.get("display_label").maybe_unset(true),
             display_dot: props.get("display_dot").maybe_unset(true),
-            default_label: props.get("default-label").get_or(MathString::new(span!(0, 0, 0, 0))),
-            expr: expr.clone_without_node()
+            default_label: props
+                .get("default-label")
+                .get_or(MathString::new(span!(0, 0, 0, 0))),
+            expr: expr.clone_without_node(),
         };
 
-        props.finish(&["display", "label", "display_label", "display_dot"], context);
+        props.finish(
+            &["display", "label", "display_label", "display_dot"],
+            context,
+        );
 
         node
     }
@@ -596,7 +629,7 @@ pub struct CircleNode {
     pub label: MaybeUnset<MathString>,
     pub display_label: MaybeUnset<bool>,
     pub default_label: MathString,
-    pub expr: Expr<Circle>
+    pub expr: Expr<Circle>,
 }
 
 impl Node for CircleNode {
@@ -612,18 +645,17 @@ impl Node for CircleNode {
         if self.display.get_copied() {
             figure.circles.push((
                 compiler.compile(&self.expr),
-                Mode::Default
-                // if self.display_label.unwrap() {
-                //     let label = self.label.unwrap();
+                Mode::Default, // if self.display_label.unwrap() {
+                               //     let label = self.label.unwrap();
 
-                //     if label.is_empty() {
-                //         self.default_label
-                //     } else {
-                //         label
-                //     }
-                // } else {
-                //     MathString::new()
-                // }
+                               //     if label.is_empty() {
+                               //         self.default_label
+                               //     } else {
+                               //         label
+                               //     }
+                               // } else {
+                               //     MathString::new()
+                               // }
             ))
         }
     }
@@ -633,10 +665,14 @@ impl FromExpr<Circle> for CircleNode {
     fn from_expr(expr: &Expr<Circle>, mut props: Properties, context: &CompileContext) -> Self {
         let node = Self {
             display: props.get("display").maybe_unset(true),
-            label: props.get("label").maybe_unset(MathString::new(span!(0, 0, 0, 0))),
+            label: props
+                .get("label")
+                .maybe_unset(MathString::new(span!(0, 0, 0, 0))),
             display_label: props.get("display_label").maybe_unset(false),
-            default_label: props.get("default-label").get_or(MathString::new(span!(0, 0, 0, 0))),
-            expr: expr.clone_without_node()
+            default_label: props
+                .get("default-label")
+                .get_or(MathString::new(span!(0, 0, 0, 0))),
+            expr: expr.clone_without_node(),
         };
 
         props.finish(&["display", "label", "display_label"], context);
@@ -649,7 +685,7 @@ impl FromExpr<Circle> for CircleNode {
 pub enum LineType {
     Line,
     Ray,
-    Segment
+    Segment,
 }
 
 impl FromProperty for LineType {
@@ -665,8 +701,8 @@ impl FromProperty for LineType {
                 &_ => Err(Error::EnumInvalidValue {
                     error_span: i.get_span(),
                     available_values: &["line", "ray", "segment"],
-                    received_value: i.to_string()
-                })
+                    received_value: i.to_string(),
+                }),
             },
             PropertyValue::String(s) => match s.content.to_lowercase().as_str() {
                 "line" => Ok(Self::Line),
@@ -675,12 +711,12 @@ impl FromProperty for LineType {
                 &_ => Err(Error::EnumInvalidValue {
                     error_span: s.get_span(),
                     available_values: &["line", "ray", "segment"],
-                    received_value: s.content
-                })
+                    received_value: s.content,
+                }),
             },
             PropertyValue::RawString(s) => Err(Error::NonRawStringOrIdentExpected {
                 error_span: s.get_span(),
-            })
+            }),
         }
     }
 }
@@ -691,7 +727,7 @@ pub struct LineNode {
     pub label: MaybeUnset<MathString>,
     pub display_label: MaybeUnset<bool>,
     pub line_type: MaybeUnset<LineType>,
-    pub expr: Expr<Line>
+    pub expr: Expr<Line>,
 }
 
 impl Node for LineNode {
@@ -718,48 +754,38 @@ impl Node for LineNode {
             // }
 
             match self.line_type.unwrap() {
-                LineType::Line => {
-                    figure.lines.push((
-                        compiler.compile(&self.expr),
-                        Mode::Default
-                    ))
-                }
-                LineType::Ray => {
-                    match &self.expr.data.as_ref() {
-                        Line::LineFromPoints(a, b) => {
-                            figure.rays.push((
-                                compiler.compile(a),
-                                compiler.compile(b),
-                                Mode::Default
-                            ))
-                        }
-                        Line::AngleBisector(a, b, c) => {
-                            let x = Expr::new_spanless(Point::LineLineIntersection(
-                                Expr::new_spanless(Line::LineFromPoints(a.clone_without_node(), c.clone_without_node())),
-                                self.expr.clone_without_node()
-                            ));
+                LineType::Line => figure
+                    .lines
+                    .push((compiler.compile(&self.expr), Mode::Default)),
+                LineType::Ray => match &self.expr.data.as_ref() {
+                    Line::LineFromPoints(a, b) => {
+                        figure
+                            .rays
+                            .push((compiler.compile(a), compiler.compile(b), Mode::Default))
+                    }
+                    Line::AngleBisector(a, b, c) => {
+                        let x = Expr::new_spanless(Point::LineLineIntersection(
+                            Expr::new_spanless(Line::LineFromPoints(
+                                a.clone_without_node(),
+                                c.clone_without_node(),
+                            )),
+                            self.expr.clone_without_node(),
+                        ));
 
-                            figure.rays.push((
-                                compiler.compile(b),
-                                compiler.compile(&x),
-                                Mode::Default
-                            ))
-                        }
-                        _ => unreachable!()
+                        figure
+                            .rays
+                            .push((compiler.compile(b), compiler.compile(&x), Mode::Default))
                     }
-                }
-                LineType::Segment => {
-                    match &self.expr.data.as_ref() {
-                        Line::LineFromPoints(a, b) => {
-                            figure.segments.push((
-                                compiler.compile(a),
-                                compiler.compile(b),
-                                Mode::Default
-                            ))
-                        }
-                        _ => unreachable!()
-                    }
-                }
+                    _ => unreachable!(),
+                },
+                LineType::Segment => match &self.expr.data.as_ref() {
+                    Line::LineFromPoints(a, b) => figure.segments.push((
+                        compiler.compile(a),
+                        compiler.compile(b),
+                        Mode::Default,
+                    )),
+                    _ => unreachable!(),
+                },
             };
         }
     }
@@ -769,10 +795,12 @@ impl FromExpr<Line> for LineNode {
     fn from_expr(expr: &Expr<Line>, mut props: Properties, context: &CompileContext) -> Self {
         let node = Self {
             display: props.get("display").maybe_unset(true),
-            label: props.get("label").maybe_unset(MathString::new(span!(0, 0, 0, 0))),
+            label: props
+                .get("label")
+                .maybe_unset(MathString::new(span!(0, 0, 0, 0))),
             display_label: props.get("display_label").maybe_unset(false),
             line_type: props.get("line_type").maybe_unset(LineType::Line),
-            expr: expr.clone_without_node()
+            expr: expr.clone_without_node(),
         };
 
         props.finish(&["display", "label", "display_label", "line_type"], context);
@@ -783,7 +811,7 @@ impl FromExpr<Line> for LineNode {
 
 #[derive(Debug)]
 pub struct ScalarNode {
-    pub display: MaybeUnset<bool>
+    pub display: MaybeUnset<bool>,
 }
 
 impl Node for ScalarNode {
@@ -801,7 +829,7 @@ impl Node for ScalarNode {
 impl FromExpr<Scalar> for ScalarNode {
     fn from_expr(_expr: &Expr<Scalar>, mut props: Properties, context: &CompileContext) -> Self {
         let node = Self {
-            display: props.get("display").maybe_unset(true)
+            display: props.get("display").maybe_unset(true),
         };
 
         props.finish(&["display"], context);

@@ -23,7 +23,8 @@ use std::rc::Rc;
 
 use crate::script::builtins::macros::field;
 use crate::script::unroll::{
-    Bundle, Circle, Line, Point, PointCollection, Simplify, UnrolledRule, UnrolledRuleKind, CollectionNode, CloneWithNode
+    Bundle, Circle, CloneWithNode, CollectionNode, Line, Point, PointCollection, Simplify,
+    UnrolledRule, UnrolledRuleKind,
 };
 use crate::script::{
     builtins::macros::{index, number, rule},
@@ -50,7 +51,7 @@ fn pt_lies_on_circle(
         context.scalar_eq(
             context.circle_radius(circle.clone_without_node()),
             context.distance_pp(point, context.circle_center(circle)),
-            true
+            true,
         );
     } else {
         context.point_on_circle(&point, &circle);
@@ -76,11 +77,7 @@ fn pt_lies_on_line(
     let line = rhs.simplify(context);
 
     if inverted {
-        context.scalar_eq(
-            number!(=0.0),
-            context.distance_pl(point, line),
-            true
-        );
+        context.scalar_eq(number!(=0.0), context.distance_pl(point, line), true);
     } else {
         context.point_on_line(&point, &line);
     }
@@ -114,11 +111,19 @@ fn col_lies_on_circle(
 
             context.gt(
                 context.mult(
-                    context.angle_dir(index!(no-node lhs, i), index!(no-node lhs, i-1), index!(no-node lhs, i_plus_1)),
-                    context.angle_dir(index!(no-node lhs, i_plus_1), index!(no-node lhs, i), index!(no-node lhs, i_plus_2))
+                    context.angle_dir(
+                        index!(no-node lhs, i),
+                        index!(no-node lhs, i-1),
+                        index!(no-node lhs, i_plus_1),
+                    ),
+                    context.angle_dir(
+                        index!(no-node lhs, i_plus_1),
+                        index!(no-node lhs, i),
+                        index!(no-node lhs, i_plus_2),
+                    ),
                 ),
                 number!(ANGLE 0.0),
-                false
+                false,
             );
         }
     }
@@ -138,42 +143,62 @@ fn pt_lies_on_segment(
     node.extend(rhs.node.take());
 
     let point = lhs.simplify(context);
-    let line = context.line(field!(node POINT rhs, A with context), field!(node POINT rhs, B with context)).simplify(context);
+    let line = context
+        .line(
+            field!(node POINT rhs, A with context),
+            field!(node POINT rhs, B with context),
+        )
+        .simplify(context);
 
     if inverted {
         // not on line or not between A, B
         context.push_rule(UnrolledRule {
             kind: UnrolledRuleKind::Alternative(vec![
                 UnrolledRule {
-                    kind: UnrolledRuleKind::ScalarEq(number!(=0.0), context.distance_pl(point, line)),
+                    kind: UnrolledRuleKind::ScalarEq(
+                        number!(=0.0),
+                        context.distance_pl(point, line),
+                    ),
                     inverted: true,
-                    node: None
+                    node: None,
                 },
                 UnrolledRule {
                     kind: UnrolledRuleKind::ScalarEq(
                         context.add(
-                            context.distance_pp(field!(no-node POINT rhs, A with context), lhs.clone_without_node()),
-                            context.distance_pp(field!(no-node POINT rhs, B with context), lhs)
+                            context.distance_pp(
+                                field!(no-node POINT rhs, A with context),
+                                lhs.clone_without_node(),
+                            ),
+                            context.distance_pp(field!(no-node POINT rhs, B with context), lhs),
                         ),
-                        context.distance_pp(field!(no-node POINT rhs, A with context), field!(no-node POINT rhs, B with context)),
+                        context.distance_pp(
+                            field!(no-node POINT rhs, A with context),
+                            field!(no-node POINT rhs, B with context),
+                        ),
                     ),
                     inverted: true,
-                    node: None
+                    node: None,
                 },
             ]),
             inverted: false,
-            node: None
+            node: None,
         });
     } else {
         context.point_on_line(&point, &line);
 
         context.scalar_eq(
             context.add(
-                context.distance_pp(field!(no-node POINT rhs, A with context), lhs.clone_without_node()),
-                context.distance_pp(field!(no-node POINT rhs, B with context), lhs)
+                context.distance_pp(
+                    field!(no-node POINT rhs, A with context),
+                    lhs.clone_without_node(),
+                ),
+                context.distance_pp(field!(no-node POINT rhs, B with context), lhs),
             ),
-            context.distance_pp(field!(no-node POINT rhs, A with context), field!(no-node POINT rhs, B with context)),
-            false
+            context.distance_pp(
+                field!(no-node POINT rhs, A with context),
+                field!(no-node POINT rhs, B with context),
+            ),
+            false,
         );
     }
 

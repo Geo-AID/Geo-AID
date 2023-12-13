@@ -45,12 +45,12 @@ use crate::{
     span,
 };
 
-use super::unroll::{UnrolledRule, CollectionNode, Node, Displayed, CloneWithNode};
+use super::unroll::{CloneWithNode, CollectionNode, Displayed, Node, UnrolledRule};
 use super::{
     figure::Figure,
     unroll::{
         self, CompileContext, EntCircle, EntLine, EntPoint, EntScalar, Entity, Expr, Flag,
-        UnrolledRuleKind, Variable
+        UnrolledRuleKind, Variable,
     },
     Criteria, CriteriaKind, Error, HashableRc, SimpleUnit, Weighed,
 };
@@ -229,7 +229,7 @@ impl Compiler {
                 data: ScalarData::Entity(dst_var),
             }),
             span: span!(0, 0, 0, 0),
-            node: None
+            node: None,
         };
 
         let mut entities = Vec::new();
@@ -255,7 +255,7 @@ impl Compiler {
         match generic {
             Generic::VariableAccess(var) => self.compile_variable(var),
             Generic::Boxed(expr) => self.compile(expr),
-            Generic::Dummy => unreachable!("dummy expression appeared in compile step")
+            Generic::Dummy => unreachable!("dummy expression appeared in compile step"),
         }
     }
 }
@@ -391,33 +391,31 @@ impl Compiler {
         let u = expr.data.unit;
 
         match power.cmp(&0) {
-            std::cmp::Ordering::Less =>
-                Expr {
-                    weight: FastFloat::One,
-                    data: Rc::new(Scalar {
-                        unit: u,
-                        data: ScalarData::Divide(
-                            self.fix_distance(expr, power + 1),
-                            self.dst_var.clone_without_node(),
-                        ),
-                    }),
-                    span: sp,
-                    node: None
-                },
+            std::cmp::Ordering::Less => Expr {
+                weight: FastFloat::One,
+                data: Rc::new(Scalar {
+                    unit: u,
+                    data: ScalarData::Divide(
+                        self.fix_distance(expr, power + 1),
+                        self.dst_var.clone_without_node(),
+                    ),
+                }),
+                span: sp,
+                node: None,
+            },
             std::cmp::Ordering::Equal => expr,
-            std::cmp::Ordering::Greater => 
-                Expr {
-                    weight: FastFloat::One,
-                    data: Rc::new(Scalar {
-                        unit: u,
-                        data: ScalarData::Multiply(
-                            self.fix_distance(expr, power - 1),
-                            self.dst_var.clone_without_node(),
-                        ),
-                    }),
-                    span: sp,
-                    node: None
-                },
+            std::cmp::Ordering::Greater => Expr {
+                weight: FastFloat::One,
+                data: Rc::new(Scalar {
+                    unit: u,
+                    data: ScalarData::Multiply(
+                        self.fix_distance(expr, power - 1),
+                        self.dst_var.clone_without_node(),
+                    ),
+                }),
+                span: sp,
+                node: None,
+            },
         }
     }
 
@@ -443,18 +441,21 @@ impl Compiler {
                                 unit: Some(unit::SCALAR),
                                 data: expr.data.data.clone_without_node(),
                             }),
-                            node: None
+                            node: None,
                         },
                         expr.data.unit.unwrap(),
                     ),
                 }),
-                node: None
+                node: None,
             })
         }
     }
 
     /// Attempts to compile the variable. If the variable is a `PointCollection`, leaves it unrolled. Otherwise everything is compiled properly.
-    fn compile_variable<T: Displayed, U>(&mut self, var: &Rc<RefCell<Variable<T>>>) -> Arc<Expression<U>>
+    fn compile_variable<T: Displayed, U>(
+        &mut self,
+        var: &Rc<RefCell<Variable<T>>>,
+    ) -> Arc<Expression<U>>
     where
         VariableRecord: Mapping<RefCell<Variable<T>>, U>,
         Self: Compile<T, U>,
@@ -551,7 +552,10 @@ impl Compiler {
     }
 
     fn compile_rule_vec(&mut self, rules: &[UnrolledRule]) -> Vec<Criteria> {
-        rules.iter().flat_map(|rule| self.compile_rule(rule)).collect()
+        rules
+            .iter()
+            .flat_map(|rule| self.compile_rule(rule))
+            .collect()
     }
 
     fn compile_rule(&mut self, rule: &UnrolledRule) -> Option<Criteria> {
@@ -583,7 +587,7 @@ impl Compiler {
             UnrolledRuleKind::Alternative(rules) => {
                 Weighed::one(CriteriaKind::Alternative(self.compile_rule_vec(rules)))
             }
-            UnrolledRuleKind::Display => return None
+            UnrolledRuleKind::Display => return None,
         };
 
         Some(if rule.inverted {
@@ -764,7 +768,7 @@ pub struct CompileResult {
     pub criteria: Vec<Criteria>,
     pub figure: Figure,
     pub template: Vec<AdjustableTemplate>,
-    pub flags: generator::Flags
+    pub flags: generator::Flags,
 }
 
 /// Compiles the given script.
@@ -774,13 +778,7 @@ pub struct CompileResult {
 ///
 /// # Panics
 /// Never
-pub fn compile(
-    input: &str,
-    canvas_size: (usize, usize),
-) -> Result<
-    CompileResult,
-    Vec<Error>
-> {
+pub fn compile(input: &str, canvas_size: (usize, usize)) -> Result<CompileResult, Vec<Error>> {
     // First, we have to unroll the script.
     let (context, figure) = unroll::unroll(input)?;
 
@@ -830,7 +828,7 @@ pub fn compile(
         criteria,
         figure,
         template: compiler.template,
-        flags
+        flags,
     })
 }
 

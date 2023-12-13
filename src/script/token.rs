@@ -25,7 +25,9 @@ use super::{parser::Parse, Error};
 #[cfg(test)]
 mod tests {
     use crate::{
-        script::token::{Dot, Eq, Ident, Let, NamedIdent, Number, PointCollection, Semi, PointCollectionItem},
+        script::token::{
+            Dot, Eq, Ident, Let, NamedIdent, Number, PointCollection, PointCollectionItem, Semi,
+        },
         span,
     };
 
@@ -369,7 +371,7 @@ pub struct Exclamation {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StrLit {
     pub span: Span,
-    pub content: String
+    pub content: String,
 }
 
 /// A '&' token.
@@ -407,7 +409,7 @@ pub enum Token {
     At(At),
     Colon(Colon),
     Dot(Dot),
-    String(StrLit)
+    String(StrLit),
 }
 
 impl Display for Token {
@@ -444,7 +446,7 @@ impl Display for Token {
                 "{}",
                 match ident {
                     Ident::Named(named) => named.ident.clone(),
-                    Ident::Collection(col) => format!("{col}")
+                    Ident::Collection(col) => format!("{col}"),
                 }
             ),
             Self::Number(num) => match num.dot {
@@ -492,7 +494,7 @@ impl Token {
             Self::Ampersant(v) => v.span,
             Self::Colon(v) => v.span,
             Self::Dot(v) => v.span,
-            Self::String(s) => s.span
+            Self::String(s) => s.span,
         }
     }
 }
@@ -502,7 +504,7 @@ impl Token {
 pub struct NamedIdent {
     pub span: Span,
     pub ident: String,
-    pub collection_likeness: f64
+    pub collection_likeness: f64,
 }
 
 impl PartialEq for NamedIdent {
@@ -523,7 +525,7 @@ pub struct PointCollectionItem {
     /// The prime count.
     pub primes: u8,
     /// The span of the point
-    pub span: Span
+    pub span: Span,
 }
 
 impl Display for PointCollectionItem {
@@ -533,7 +535,9 @@ impl Display for PointCollectionItem {
             "{}{}{}",
             self.letter,
             "'".repeat(self.primes as usize),
-            self.index.as_ref().map_or(String::new(), |x| format!("_{x}"))
+            self.index
+                .as_ref()
+                .map_or(String::new(), |x| format!("_{x}"))
         )
     }
 }
@@ -586,7 +590,7 @@ impl Ident {
             None
         }
     }
-    
+
     #[must_use]
     pub fn as_ident(&self) -> Option<&NamedIdent> {
         if let Self::Named(v) = self {
@@ -650,7 +654,7 @@ fn read_identifier<I: Iterator<Item = char>>(
 
 fn read_string<I: Iterator<Item = char>>(
     it: &mut Peekable<I>,
-    position: &mut Position
+    position: &mut Position,
 ) -> Result<StrLit, Error> {
     let mut content = String::new();
     let begin_pos = *position;
@@ -672,7 +676,7 @@ fn read_string<I: Iterator<Item = char>>(
                     position.column - 1,
                     position.line,
                     position.column
-                )
+                ),
             });
         }
 
@@ -683,7 +687,7 @@ fn read_string<I: Iterator<Item = char>>(
                     begin_pos.column,
                     position.line,
                     position.column
-                )
+                ),
             });
         } else if c == '"' {
             closed = true;
@@ -698,7 +702,7 @@ fn read_string<I: Iterator<Item = char>>(
                     position.column - 1,
                     position.line,
                     position.column
-                )
+                ),
             });
         } else {
             content.push(c);
@@ -712,8 +716,8 @@ fn read_string<I: Iterator<Item = char>>(
                 begin_pos.column,
                 position.line,
                 position.column
-            )
-        })
+            ),
+        });
     }
 
     Ok(StrLit {
@@ -723,7 +727,7 @@ fn read_string<I: Iterator<Item = char>>(
             position.line,
             position.column
         ),
-        content
+        content,
     })
 }
 
@@ -846,7 +850,12 @@ fn dispatch_ident(sp: Span, ident: String) -> Ident {
             letter,
             index,
             primes,
-            span: span!(sp.start.line, sp.start.column + offset, sp.start.line, sp.start.column + offset + len)
+            span: span!(
+                sp.start.line,
+                sp.start.column + offset,
+                sp.start.line,
+                sp.start.column + offset + len
+            ),
         });
 
         offset += len;
@@ -858,7 +867,7 @@ fn dispatch_ident(sp: Span, ident: String) -> Ident {
         return Ident::Named(NamedIdent {
             span: sp,
             ident,
-            collection_likeness: (offset - invalid) as f64 / (offset as f64)
+            collection_likeness: (offset - invalid) as f64 / (offset as f64),
         });
     }
 

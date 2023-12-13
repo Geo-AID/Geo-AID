@@ -19,7 +19,10 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
 #[allow(unused_imports)]
-use crate::script::{unroll::{Expr, Function, Library, Line, Point, Scalar, CompileContext, Properties}, unit};
+use crate::script::{
+    unit,
+    unroll::{CompileContext, Expr, Function, Library, Line, Point, Properties, Scalar},
+};
 use geo_aid_derive::overload;
 
 pub fn register(library: &mut Library) {

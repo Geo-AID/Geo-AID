@@ -23,7 +23,10 @@ use geo_aid_derive::overload;
 use std::f64::consts::PI;
 
 #[allow(unused_imports)]
-use crate::script::{unroll::{Expr, Function, Library, Scalar, CompileContext}, unit};
+use crate::script::{
+    unit,
+    unroll::{CompileContext, Expr, Function, Library, Scalar},
+};
 
 #[allow(unused_imports)]
 use super::macros::number;

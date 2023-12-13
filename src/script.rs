@@ -35,8 +35,8 @@ use crate::{
     span,
 };
 
-use self::{parser::Type, figure::SPECIAL_MATH};
 use self::token::{NamedIdent, Span, Token};
+use self::{figure::SPECIAL_MATH, parser::Type};
 
 mod builtins;
 pub mod compile;
@@ -59,7 +59,7 @@ pub enum Error {
         error_span: Span,
     },
     NewLineInString {
-        error_span: Span
+        error_span: Span,
     },
     IteratorIdMustBeAnInteger {
         error_span: Span,
@@ -196,33 +196,33 @@ pub enum Error {
         ty: Type,
     },
     EmptyLabel {
-        error_span: Span
+        error_span: Span,
     },
     UnclosedSpecial {
         error_span: Span,
-        parsed_special: String
+        parsed_special: String,
     },
     SpecialNotRecongised {
         error_span: Span,
         code: String,
-        suggested: Option<String>
+        suggested: Option<String>,
     },
     UnclosedString {
-        error_span: Span
+        error_span: Span,
     },
     LabelIndexInsideIndex {
-        error_span: Span
+        error_span: Span,
     },
     UnexpectedDisplayOption {
         error_span: Span,
         option: String,
-        suggested: Option<String>
+        suggested: Option<String>,
     },
     RepeatedDisplayOption {
         error_span: Span,
         first_span: Span,
-        option: String
-    }
+        option: String,
+    },
 }
 
 impl Error {

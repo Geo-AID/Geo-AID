@@ -20,10 +20,20 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 use std::rc::Rc;
 
-use crate::{script::{unroll::{CloneWithNode, AssociatedData, HierarchyNode, LineNode, LineType, BuildAssociated}, figure::{MathString, Figure, Mode}, compile::{Compiler, Compile}}, generator::fast_float::FastFloat, span};
 #[allow(unused_imports)]
 use crate::script::unroll::{
     CompileContext, Expr, Function, Library, Line, Point, PointCollection, Properties,
+};
+use crate::{
+    generator::fast_float::FastFloat,
+    script::{
+        compile::{Compile, Compiler},
+        figure::{Figure, MathString, Mode},
+        unroll::{
+            AssociatedData, BuildAssociated, CloneWithNode, HierarchyNode, LineNode, LineType,
+        },
+    },
+    span,
 };
 use geo_aid_derive::overload;
 
@@ -43,16 +53,18 @@ pub fn point_point_point(
         weight: FastFloat::One,
         span: span!(0, 0, 0, 0),
         data: Rc::new(Line::AngleBisector(a, b, c)),
-        node: None
+        node: None,
     };
 
     // Line node.
     let mut node = HierarchyNode::new(LineNode {
         display: display.get("display").maybe_unset(true),
-        label: display.get("label").maybe_unset(MathString::new(span!(0, 0, 0, 0))),
+        label: display
+            .get("label")
+            .maybe_unset(MathString::new(span!(0, 0, 0, 0))),
         display_label: display.get("display_label").maybe_unset(false),
         line_type: display.get("line_type").maybe_unset(LineType::Ray), // The change. Bisectors are to be treated as rays.
-        expr: expr.clone_without_node()
+        expr: expr.clone_without_node(),
     });
 
     let display_arms = display.get("display_arms").maybe_unset(true);
@@ -71,8 +83,17 @@ pub fn point_point_point(
 pub struct BisectorNode;
 
 impl BuildAssociated<LineNode> for BisectorNode {
-    fn build_associated(&self, compiler: &mut Compiler, figure: &mut Figure, associated: &HierarchyNode<LineNode>) {
-        let display_arms = associated.get_data("display_arms").unwrap().as_bool().unwrap();
+    fn build_associated(
+        &self,
+        compiler: &mut Compiler,
+        figure: &mut Figure,
+        associated: &HierarchyNode<LineNode>,
+    ) {
+        let display_arms = associated
+            .get_data("display_arms")
+            .unwrap()
+            .as_bool()
+            .unwrap();
 
         if display_arms {
             match associated.root.expr.data.as_ref() {
@@ -83,8 +104,8 @@ impl BuildAssociated<LineNode> for BisectorNode {
 
                     figure.segments.push((b.clone(), a, Mode::Default));
                     figure.segments.push((b, c, Mode::Default));
-                },
-                _ => unreachable!()
+                }
+                _ => unreachable!(),
             }
         }
     }

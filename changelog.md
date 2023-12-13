@@ -59,3 +59,6 @@
 - Fixed that negating `lies_on` would not actually negate it (no effect would be achieved).
 - The `SVG` drawing option is now default.
 - Updated README to contain information about the book.
+
+## Version 0.3.0
+- Rewrote the entire display system (deciding what is displayed and what is not, based on the script)

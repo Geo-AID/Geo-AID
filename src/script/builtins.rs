@@ -93,10 +93,16 @@ pub mod macros {
 
     macro_rules! field {
         (node POINT $bundle:expr, $at:ident with $context:ident) => {
-            $crate::script::unroll::Convert::convert::<$crate::script::unroll::Point>(($bundle).index_with_node(stringify!($at)), $context)
+            $crate::script::unroll::Convert::convert::<$crate::script::unroll::Point>(
+                ($bundle).index_with_node(stringify!($at)),
+                $context,
+            )
         };
         (no-node POINT $bundle:expr, $at:ident with $context:ident) => {
-            $crate::script::unroll::Convert::convert::<$crate::script::unroll::Point>(($bundle).index_without_node(stringify!($at)), $context)
+            $crate::script::unroll::Convert::convert::<$crate::script::unroll::Point>(
+                ($bundle).index_without_node(stringify!($at)),
+                $context,
+            )
         };
     }
 
@@ -171,8 +177,5 @@ pub mod macros {
         };
     }
 
-    pub(crate) use {
-        call,
-        construct_bundle, index, mneg, number, rule, field
-    };
+    pub(crate) use {call, construct_bundle, field, index, mneg, number, rule};
 }

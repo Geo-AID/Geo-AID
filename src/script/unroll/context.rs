@@ -18,8 +18,8 @@ WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use paste::paste;
 use geo_aid_derive::Definition;
+use paste::paste;
 use std::cell::RefCell;
 use std::mem;
 use std::rc::Rc;
@@ -27,14 +27,15 @@ use std::{collections::HashMap, fmt::Debug};
 
 use crate::generator::fast_float::FastFloat;
 use crate::script::builtins::macros::number;
-use crate::script::{Error, unit, ComplexUnit};
-use crate::script::unroll::{AnyExpr, Simplify, CloneWithNode};
+use crate::script::unroll::{AnyExpr, CloneWithNode, Simplify};
+use crate::script::{unit, ComplexUnit, Error};
 use crate::span;
 
 use super::figure::FromExpr;
 use super::{
-    Circle as UnrolledCircle, Expr, FlagSet, Line as UnrolledLine,
-    Point as UnrolledPoint, Scalar as UnrolledScalar, UnrolledRule, Displayed, HierarchyNode, Node, Properties, CollectionNode, UnrolledRuleKind, ScalarData
+    Circle as UnrolledCircle, CollectionNode, Displayed, Expr, FlagSet, HierarchyNode,
+    Line as UnrolledLine, Node, Point as UnrolledPoint, Properties, Scalar as UnrolledScalar,
+    ScalarData, UnrolledRule, UnrolledRuleKind,
 };
 
 /// For everything that can have an order (how modifiable the entity is).
@@ -180,7 +181,7 @@ pub struct CompileContext {
     /// Unrolled rules
     pub rules: RefCell<Vec<UnrolledRule>>,
     /// Errors collected.
-    errors: RefCell<Vec<Error>>
+    errors: RefCell<Vec<Error>>,
 }
 
 impl Default for CompileContext {
@@ -197,7 +198,7 @@ impl CompileContext {
             flags: FlagSet::default(),
             entities: vec![],
             rules: RefCell::new(Vec::new()),
-            errors: RefCell::new(Vec::new())
+            errors: RefCell::new(Vec::new()),
         }
     }
 
@@ -230,7 +231,7 @@ impl CompileContext {
     pub fn push_rule(&self, rule: UnrolledRule) {
         self.rules.borrow_mut().push(rule);
     }
-    
+
     pub fn take_rules(&mut self) -> Vec<UnrolledRule> {
         mem::take(&mut self.rules.borrow_mut())
     }
@@ -334,9 +335,12 @@ impl CompileContext {
         }
 
         self.scalar_eq(
-            self.distance_pp(lhs.clone_without_node(), self.circle_center(rhs.clone_without_node())),
+            self.distance_pp(
+                lhs.clone_without_node(),
+                self.circle_center(rhs.clone_without_node()),
+            ),
             self.circle_radius(rhs.clone_without_node()),
-            false
+            false,
         );
     }
 
@@ -352,7 +356,10 @@ impl CompileContext {
                         span: span!(0, 0, 0, 0),
                         weight: FastFloat::One,
                         node: None,
-                        data: Rc::new(UnrolledPoint::LineLineIntersection(k.clone_without_node(), rhs.clone_without_node()))
+                        data: Rc::new(UnrolledPoint::LineLineIntersection(
+                            k.clone_without_node(),
+                            rhs.clone_without_node(),
+                        )),
                     });
                     return;
                 }
@@ -363,7 +370,7 @@ impl CompileContext {
         self.scalar_eq(
             self.distance_pl(lhs.clone_without_node(), rhs.clone_without_node()),
             number!(=0.0),
-            false
+            false,
         );
     }
 }
@@ -433,18 +440,23 @@ macro_rules! generic_expr {
 
 // Expression constructors
 impl CompileContext {
-    pub fn expr_with<T: Displayed>(&self, content: T, display: Properties, nodes: Vec<Box<dyn Node>>) -> Expr<T>
-    where T::Node: FromExpr<T> {
+    pub fn expr_with<T: Displayed>(
+        &self,
+        content: T,
+        display: Properties,
+        nodes: Vec<Box<dyn Node>>,
+    ) -> Expr<T>
+    where
+        T::Node: FromExpr<T>,
+    {
         let mut expr = Expr {
             weight: FastFloat::One,
             span: span!(0, 0, 0, 0),
             data: Rc::new(content),
-            node: None
+            node: None,
         };
 
-        let mut node = HierarchyNode::new(
-            T::Node::from_expr(&expr, display, self)
-        );
+        let mut node = HierarchyNode::new(T::Node::from_expr(&expr, display, self));
 
         node.extend_boxed(nodes);
 
@@ -458,7 +470,11 @@ impl CompileContext {
             .flat_map(|v| v.take_node().map(|v| Box::new(v) as Box<dyn Node>))
             .collect();
 
-        self.expr_with(UnrolledPoint::Average(points.into()), Properties::from(None), nodes)
+        self.expr_with(
+            UnrolledPoint::Average(points.into()),
+            Properties::from(None),
+            nodes,
+        )
     }
 
     pub fn average_s(&self, mut values: Vec<Expr<UnrolledScalar>>) -> Expr<UnrolledScalar> {
@@ -467,21 +483,33 @@ impl CompileContext {
             .flat_map(|v| v.take_node().map(|v| Box::new(v) as Box<dyn Node>))
             .collect();
 
-        self.expr_with(UnrolledScalar {
-            unit: values[0].data.unit,
-            data: ScalarData::Average(values.into())
-        }, Properties::from(None), nodes)
+        self.expr_with(
+            UnrolledScalar {
+                unit: values[0].data.unit,
+                data: ScalarData::Average(values.into()),
+            },
+            Properties::from(None),
+            nodes,
+        )
     }
 
     pub fn entity_p(&self, index: usize) -> Expr<UnrolledPoint> {
-        self.expr_with(UnrolledPoint::Entity(index), Properties::from(None), Vec::new())
+        self.expr_with(
+            UnrolledPoint::Entity(index),
+            Properties::from(None),
+            Vec::new(),
+        )
     }
 
     pub fn entity_s(&self, index: usize, unit: ComplexUnit) -> Expr<UnrolledScalar> {
-        self.expr_with(UnrolledScalar {
-            unit: Some(unit),
-            data: ScalarData::Entity(index)
-        }, Properties::from(None), Vec::new())
+        self.expr_with(
+            UnrolledScalar {
+                unit: Some(unit),
+                data: ScalarData::Entity(index),
+            },
+            Properties::from(None),
+            Vec::new(),
+        )
     }
 
     pub fn set_unit(&self, mut v: Expr<UnrolledScalar>, unit: ComplexUnit) -> Expr<UnrolledScalar> {
@@ -489,44 +517,57 @@ impl CompileContext {
         self.expr_with(
             UnrolledScalar {
                 unit: Some(unit),
-                data: ScalarData::SetUnit(v, unit)
+                data: ScalarData::SetUnit(v, unit),
             },
             Properties::from(None),
-            node.into_iter().map(|x| Box::new(x) as Box<dyn Node>).collect()
+            node.into_iter()
+                .map(|x| Box::new(x) as Box<dyn Node>)
+                .collect(),
         )
     }
 
-    generic_expr!{intersection(k: Line, l: Line) -> Point::LineLineIntersection}
-    generic_expr!{distance_pp(p: Point, q: Point) -> Scalar[unit::DISTANCE]::PointPointDistance}
-    generic_expr!{distance_pl(p: Point, k: Line) -> Scalar[unit::DISTANCE]::PointLineDistance}
-    generic_expr!{circle_center(c: Circle) -> Point::CircleCenter}
-    generic_expr!{circle_radius(c: Circle) -> Scalar[unit::DISTANCE]::CircleRadius}
-    generic_expr!{line(a: Point, b: Point) -> Line::LineFromPoints}
-    generic_expr!{angle_ppp(a: Point, b: Point, c: Point) -> Scalar[unit::ANGLE]::ThreePointAngle}
-    generic_expr!{angle_dir(a: Point, b: Point, c: Point) -> Scalar[unit::ANGLE]::ThreePointAngleDir}
-    generic_expr!{angle_ll(k: Line, l: Line) -> Scalar[unit::ANGLE]::TwoLineAngle}
-    generic_expr!{bisector_ppp(a: Point, b: Point, c: Point) -> Line::AngleBisector}
-    generic_expr!{perpendicular_through(line: Line, point: Point) -> Line::PerpendicularThrough}
-    generic_expr!{parallel_through(line: Line, point: Point) -> Line::ParallelThrough}
-    generic_expr!{circle(center: Point, radius: Scalar) -> Circle::Circle}
-    generic_expr!{add(a: Scalar, b: Scalar) -> Scalar[inferred]::Add}
-    generic_expr!{sub(a: Scalar, b: Scalar) -> Scalar[inferred]::Subtract}
-    generic_expr!{mult(a: Scalar, b: Scalar) -> Scalar[inferred]::Multiply}
-    generic_expr!{div(a: Scalar, b: Scalar) -> Scalar[inferred]::Divide}
+    generic_expr! {intersection(k: Line, l: Line) -> Point::LineLineIntersection}
+    generic_expr! {distance_pp(p: Point, q: Point) -> Scalar[unit::DISTANCE]::PointPointDistance}
+    generic_expr! {distance_pl(p: Point, k: Line) -> Scalar[unit::DISTANCE]::PointLineDistance}
+    generic_expr! {circle_center(c: Circle) -> Point::CircleCenter}
+    generic_expr! {circle_radius(c: Circle) -> Scalar[unit::DISTANCE]::CircleRadius}
+    generic_expr! {line(a: Point, b: Point) -> Line::LineFromPoints}
+    generic_expr! {angle_ppp(a: Point, b: Point, c: Point) -> Scalar[unit::ANGLE]::ThreePointAngle}
+    generic_expr! {angle_dir(a: Point, b: Point, c: Point) -> Scalar[unit::ANGLE]::ThreePointAngleDir}
+    generic_expr! {angle_ll(k: Line, l: Line) -> Scalar[unit::ANGLE]::TwoLineAngle}
+    generic_expr! {bisector_ppp(a: Point, b: Point, c: Point) -> Line::AngleBisector}
+    generic_expr! {perpendicular_through(line: Line, point: Point) -> Line::PerpendicularThrough}
+    generic_expr! {parallel_through(line: Line, point: Point) -> Line::ParallelThrough}
+    generic_expr! {circle(center: Point, radius: Scalar) -> Circle::Circle}
+    generic_expr! {add(a: Scalar, b: Scalar) -> Scalar[inferred]::Add}
+    generic_expr! {sub(a: Scalar, b: Scalar) -> Scalar[inferred]::Subtract}
+    generic_expr! {mult(a: Scalar, b: Scalar) -> Scalar[inferred]::Multiply}
+    generic_expr! {div(a: Scalar, b: Scalar) -> Scalar[inferred]::Divide}
 }
 
 macro_rules! generic_rule {
     ($f:ident($lhs:ident, $rhs:ident) -> $r:ident) => {
-        pub fn $f(&mut self, mut lhs: Expr<super::$lhs>, mut rhs: Expr<super::$rhs>, inverted: bool) {
+        pub fn $f(
+            &mut self,
+            mut lhs: Expr<super::$lhs>,
+            mut rhs: Expr<super::$rhs>,
+            inverted: bool,
+        ) {
             let (lhs_node, rhs_node) = (lhs.take_node(), rhs.take_node());
             self.rule_with(UnrolledRuleKind::$r(lhs, rhs), lhs_node, rhs_node, inverted);
         }
-    }
+    };
 }
 
 // Rule constructors
 impl CompileContext {
-    fn rule_with<N: Node + 'static, M: Node + 'static>(&mut self, kind: UnrolledRuleKind, lhs: Option<N>, rhs: Option<M>, inverted: bool) {
+    fn rule_with<N: Node + 'static, M: Node + 'static>(
+        &mut self,
+        kind: UnrolledRuleKind,
+        lhs: Option<N>,
+        rhs: Option<M>,
+        inverted: bool,
+    ) {
         let mut node = CollectionNode::new();
 
         node.extend(lhs);
@@ -535,7 +576,7 @@ impl CompileContext {
         self.push_rule(UnrolledRule {
             kind,
             inverted,
-            node: Some(Box::new(node))
+            node: Some(Box::new(node)),
         })
     }
 
@@ -543,12 +584,12 @@ impl CompileContext {
         self.push_rule(UnrolledRule {
             kind: UnrolledRuleKind::Display,
             inverted: false,
-            node: Some(Box::new(node))
+            node: Some(Box::new(node)),
         })
     }
 
-    generic_rule!{scalar_eq(Scalar, Scalar) -> ScalarEq}
-    generic_rule!{point_eq(Point, Point) -> PointEq}
-    generic_rule!{gt(Scalar, Scalar) -> Gt}
-    generic_rule!{lt(Scalar, Scalar) -> Lt}
+    generic_rule! {scalar_eq(Scalar, Scalar) -> ScalarEq}
+    generic_rule! {point_eq(Point, Point) -> PointEq}
+    generic_rule! {gt(Scalar, Scalar) -> Gt}
+    generic_rule! {lt(Scalar, Scalar) -> Lt}
 }

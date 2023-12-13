@@ -18,68 +18,32 @@ WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use std::{sync::Arc, str::FromStr, fmt::Display};
+use std::{fmt::Display, str::FromStr, sync::Arc};
 
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 use serde::Serialize;
 
-use crate::{generator::expression::{CircleExpr, Expression, LineExpr, PointExpr, ScalarExpr}, span};
+use crate::{
+    generator::expression::{CircleExpr, Expression, LineExpr, PointExpr, ScalarExpr},
+    span,
+};
 
-use super::{Error, token::{Span, PointCollectionItem, Ident}, unroll::most_similar, parser::{FromProperty, PropertyValue, Parse}};
+use super::{
+    parser::{FromProperty, Parse, PropertyValue},
+    token::{Ident, PointCollectionItem, Span},
+    unroll::most_similar,
+    Error,
+};
 
 type Point = Arc<Expression<PointExpr>>;
 
 pub const SPECIAL_MATH: [&'static str; 49] = [
-    "alpha",
-    "Alpha",
-    "beta",
-    "Beta",
-    "gamma",
-    "Gamma",
-    "delta",
-    "Delta",
-    "epsilon",
-    "Epsilon",
-    "zeta",
-    "Zeta",
-    "eta",
-    "Eta",
-    "theta",
-    "Theta",
-    "iota",
-    "Iota",
-    "kappa",
-    "Kappa",
-    "lambda",
-    "Lambda",
-    "mu",
-    "Mu",
-    "nu",
-    "Nu",
-    "xi",
-    "Xi",
-    "omicron",
-    "Omicorn",
-    "phi",
-    "Phi",
-    "rho",
-    "Rho",
-    "sigma",
-    "Sigma",
-    "tau",
-    "Tau",
-    "upsilon",
-    "Upsilon",
-    "phi",
-    "Phi",
-    "chi",
-    "Chi",
-    "psi",
-    "Psi",
-    "omega",
-    "Omega",
-    "quote"
+    "alpha", "Alpha", "beta", "Beta", "gamma", "Gamma", "delta", "Delta", "epsilon", "Epsilon",
+    "zeta", "Zeta", "eta", "Eta", "theta", "Theta", "iota", "Iota", "kappa", "Kappa", "lambda",
+    "Lambda", "mu", "Mu", "nu", "Nu", "xi", "Xi", "omicron", "Omicorn", "phi", "Phi", "rho", "Rho",
+    "sigma", "Sigma", "tau", "Tau", "upsilon", "Upsilon", "phi", "Phi", "chi", "Chi", "psi", "Psi",
+    "omega", "Omega", "quote",
 ];
 
 /// The display mode of the expression.
@@ -114,14 +78,14 @@ pub struct Figure {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MathIndex {
     Normal,
-    Lower
+    Lower,
 }
 
 impl Display for MathIndex {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Normal => write!(f, "}}"),
-            Self::Lower => write!(f, "_{{")
+            Self::Lower => write!(f, "_{{"),
         }
     }
 }
@@ -136,7 +100,7 @@ pub enum MathChar {
     /// Starts lower index.
     SetIndex(MathIndex),
     /// Prime (a tick)
-    Prime
+    Prime,
 }
 
 impl Display for MathChar {
@@ -201,7 +165,7 @@ pub enum MathSpecial {
     PsiUpper,
     Omega,
     OmegaUpper,
-    Quote
+    Quote,
 }
 
 impl MathSpecial {
@@ -213,19 +177,19 @@ impl MathSpecial {
     #[must_use]
     pub fn parse(charcode: &str, content_span: Span) -> Result<Self, Error> {
         SPECIAL_MATH
-        .iter()
-        .enumerate()
-        .find(|x| *x.1 == charcode)
-        .map(|x| MathSpecial::from_usize(x.0).unwrap())
-        .ok_or_else(|| {
-            let best = most_similar(SPECIAL_MATH, charcode);
+            .iter()
+            .enumerate()
+            .find(|x| *x.1 == charcode)
+            .map(|x| MathSpecial::from_usize(x.0).unwrap())
+            .ok_or_else(|| {
+                let best = most_similar(SPECIAL_MATH, charcode);
 
-            Error::SpecialNotRecongised {
-                error_span: content_span,
-                code: charcode.to_string(),
-                suggested: best
-            }
-        })
+                Error::SpecialNotRecongised {
+                    error_span: content_span,
+                    code: charcode.to_string(),
+                    suggested: best,
+                }
+            })
     }
 }
 
@@ -239,7 +203,7 @@ impl Display for MathSpecial {
 #[derive(Debug, Clone)]
 pub struct MathString {
     chars: Vec<MathChar>,
-    span: Span
+    span: Span,
 }
 
 impl MathString {
@@ -247,7 +211,7 @@ impl MathString {
     pub fn new(span: Span) -> Self {
         Self {
             chars: Vec::new(),
-            span
+            span,
         }
     }
 
@@ -264,7 +228,7 @@ impl MathString {
             letter.push(c);
         }
 
-        if let Some(special) = MathSpecial::parse(&letter, span!(0,0,0,0)).ok() {
+        if let Some(special) = MathSpecial::parse(&letter, span!(0, 0, 0, 0)).ok() {
             result.push(MathChar::Special(special));
         } else if letter.len() == 1 {
             result.push(MathChar::Ascii(letter.chars().next().unwrap()));
@@ -292,7 +256,7 @@ impl MathString {
         if chars.next().is_none() {
             Some(Self {
                 chars: result,
-                span: self.span
+                span: self.span,
             })
         } else {
             None
@@ -317,12 +281,15 @@ impl MathString {
                     special.push(c);
                     ignore_next = false;
                 } else if c == ']' {
-                    math_string.push(MathChar::Special(MathSpecial::parse(&special, span!(
-                        content_span.start.line,
-                        content_span.start.column + special_start + 1,
-                        content_span.start.line,
-                        content_span.start.column + char_count
-                    ))?));
+                    math_string.push(MathChar::Special(MathSpecial::parse(
+                        &special,
+                        span!(
+                            content_span.start.line,
+                            content_span.start.column + special_start + 1,
+                            content_span.start.line,
+                            content_span.start.column + char_count
+                        ),
+                    )?));
 
                     special.clear();
                     collect_special = false;
@@ -338,7 +305,7 @@ impl MathString {
                 } else if c == '_' {
                     if indexed {
                         return Err(Error::LabelIndexInsideIndex {
-                            error_span: content_span
+                            error_span: content_span,
                         });
                     } else {
                         math_string.push(MathChar::SetIndex(MathIndex::Lower));
@@ -354,7 +321,9 @@ impl MathString {
                     }
 
                     math_string.push(MathChar::Ascii(c));
-                } else if c == '{' && math_string.last().copied() == Some(MathChar::SetIndex(MathIndex::Lower)) {
+                } else if c == '{'
+                    && math_string.last().copied() == Some(MathChar::SetIndex(MathIndex::Lower))
+                {
                     index_delimited = true;
                 } else if c == '}' && index_delimited {
                     indexed = false;
@@ -383,13 +352,13 @@ impl MathString {
                     content_span.start.line,
                     content_span.end.column
                 ),
-                parsed_special: special
-            })
+                parsed_special: special,
+            });
         }
 
         Ok(Self {
             chars: math_string,
-            span: content_span
+            span: content_span,
         })
     }
 
@@ -407,31 +376,34 @@ impl MathString {
 impl FromProperty for MathString {
     fn from_property(property: PropertyValue) -> Result<MathString, Error> {
         match property {
-            PropertyValue::Number(n) => Err(Error::StringOrIdentExpected { error_span: n.get_span() }),
+            PropertyValue::Number(n) => Err(Error::StringOrIdentExpected {
+                error_span: n.get_span(),
+            }),
             PropertyValue::Ident(i) => match i {
-                Ident::Collection(mut c) => if c.len() == 1 {
-                    Ok(MathString::from(c.collection.swap_remove(0)))
-                } else {
-                    Err(Error::InvalidIdentMathString { error_span: c.span })
-                },
-                Ident::Named(n) => {
-                    MathString::parse(&n.ident, n.span)?
-                        .displayed_by_default()
-                        .ok_or(Error::InvalidIdentMathString { error_span: n.span })
+                Ident::Collection(mut c) => {
+                    if c.len() == 1 {
+                        Ok(MathString::from(c.collection.swap_remove(0)))
+                    } else {
+                        Err(Error::InvalidIdentMathString { error_span: c.span })
+                    }
                 }
+                Ident::Named(n) => MathString::parse(&n.ident, n.span)?
+                    .displayed_by_default()
+                    .ok_or(Error::InvalidIdentMathString { error_span: n.span }),
             },
-            PropertyValue::String(s) => MathString::parse(&s.content, span!(
-                s.span.start.line,
-                s.span.start.column + 1,
-                s.span.end.line,
-                s.span.end.column - 1
-            )),
-            PropertyValue::RawString(s) => {
-                Ok(MathString {
-                    chars: s.lit.content.chars().map(|c| MathChar::Ascii(c)).collect(),
-                    span: s.get_span()
-                })
-            }
+            PropertyValue::String(s) => MathString::parse(
+                &s.content,
+                span!(
+                    s.span.start.line,
+                    s.span.start.column + 1,
+                    s.span.end.line,
+                    s.span.end.column - 1
+                ),
+            ),
+            PropertyValue::RawString(s) => Ok(MathString {
+                chars: s.lit.content.chars().map(|c| MathChar::Ascii(c)).collect(),
+                span: s.get_span(),
+            }),
         }
     }
 }
@@ -441,16 +413,17 @@ impl From<PointCollectionItem> for MathString {
         let mut math_string = vec![MathChar::Ascii(value.letter)];
 
         math_string.extend(
-            value.index
+            value
+                .index
                 .iter()
-                .flat_map(|v| v.chars().map(|c| MathChar::Ascii(c)))
+                .flat_map(|v| v.chars().map(|c| MathChar::Ascii(c))),
         );
 
         math_string.extend(vec![MathChar::Prime].repeat(value.primes.into()));
 
         Self {
             chars: math_string,
-            span: value.span
+            span: value.span,
         }
     }
 }
@@ -469,6 +442,6 @@ impl FromStr for MathString {
     type Err = Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Self::parse(s, span!(0,0,0,0))
+        Self::parse(s, span!(0, 0, 0, 0))
     }
 }

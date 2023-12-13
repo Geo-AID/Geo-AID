@@ -30,9 +30,9 @@ use super::{
     token::{
         Ampersant, Asterisk, At, Colon, Comma, Dollar, Dot, Eq, Exclamation, Gt, Gteq, Ident,
         LBrace, LParen, LSquare, Let, Lt, Lteq, Minus, NamedIdent, Number, Plus, RBrace, RParen,
-        RSquare, Semi, Slash, Span, Token, Vertical, StrLit,
+        RSquare, Semi, Slash, Span, StrLit, Token, Vertical,
     },
-    unit, ComplexUnit, Error
+    unit, ComplexUnit, Error,
 };
 
 macro_rules! impl_token_parse {
@@ -1198,8 +1198,8 @@ impl_token_parse! {Dot}
 
 impl Parse for StrLit {
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-            it: &mut Peekable<I>,
-        ) -> Result<Self, Error> {
+        it: &mut Peekable<I>,
+    ) -> Result<Self, Error> {
         match it.next() {
             Some(Token::String(s)) => Ok(s.clone()),
             Some(t) => Err(Error::InvalidToken { token: t.clone() }),
@@ -1391,22 +1391,22 @@ pub enum PropertyValue {
     Number(ExprNumber),
     Ident(Ident),
     RawString(RawString),
-    String(StrLit)
+    String(StrLit),
 }
 
 #[derive(Debug, Clone)]
 pub struct RawString {
     pub excl: Exclamation,
-    pub lit: StrLit
+    pub lit: StrLit,
 }
 
 impl Parse for RawString {
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-            it: &mut Peekable<I>,
-        ) -> Result<Self, Error> {
+        it: &mut Peekable<I>,
+    ) -> Result<Self, Error> {
         Ok(Self {
             excl: Exclamation::parse(it)?,
-            lit: StrLit::parse(it)?
+            lit: StrLit::parse(it)?,
         })
     }
 
@@ -1452,7 +1452,7 @@ impl FromProperty for bool {
             },
             PropertyValue::RawString(s) => Err(Error::BooleanExpected {
                 error_span: s.get_span(),
-            })
+            }),
         }
     }
 }
@@ -1465,7 +1465,7 @@ impl FromProperty for String {
                 error_span: num.get_span(),
             }),
             PropertyValue::RawString(s) => Ok(s.lit.content),
-            PropertyValue::String(s) => Ok(s.content)
+            PropertyValue::String(s) => Ok(s.content),
         }
     }
 }
@@ -1516,10 +1516,10 @@ impl DisplayProperties {
                         this.properties.collection.push(pair);
                     }
                 }
-                
+
                 Some(this)
-            },
-            None => other
+            }
+            None => other,
         }
     }
 }
