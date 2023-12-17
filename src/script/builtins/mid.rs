@@ -26,8 +26,7 @@ pub fn function_point(
     context: &CompileContext,
     display: Properties,
 ) -> Expr<Point> {
-    drop(display);
-    context.average_p(args)
+    context.average_p_display(args, display)
 }
 
 fn function_scalar(
@@ -35,8 +34,7 @@ fn function_scalar(
     context: &CompileContext,
     display: Properties,
 ) -> Expr<Scalar> {
-    drop(display);
-    context.average_s(args)
+    context.average_s_display(args, display)
 }
 
 pub fn register(library: &mut Library) {

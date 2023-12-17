@@ -609,6 +609,8 @@ pub struct LetStatement {
 /// Defines a rule.
 #[derive(Debug)]
 pub struct RuleStatement {
+    /// Display properties.
+    pub display: Option<DisplayProperties>,
     /// Left hand side
     pub lhs: Expression<true>,
     /// Rule operator
@@ -670,7 +672,7 @@ impl<T, P> Punctuated<T, P> {
     }
 
     /// Turns the punctuated into an iterator on the items.
-    pub fn into_iter(self) -> impl Iterator<Item = T> {
+    pub fn into_parsed_iter(self) -> impl Iterator<Item = T> {
         vec![*self.first]
             .into_iter()
             .chain(self.collection.into_iter().map(|x| x.1))
@@ -766,6 +768,7 @@ impl Parse for RuleStatement {
         it: &mut Peekable<I>,
     ) -> Result<Self, Error> {
         Ok(RuleStatement {
+            display: Option::parse(it)?,
             lhs: Expression::parse(it)?,
             op: RuleOperator::parse(it)?,
             rhs: Expression::parse(it)?,
@@ -1505,23 +1508,6 @@ pub struct DisplayProperties {
     pub properties: Punctuated<Property, Semi>,
     /// ']'
     pub rsquare: RSquare,
-}
-
-impl DisplayProperties {
-    pub fn merge(this: Option<Self>, other: Option<Self>) -> Option<Self> {
-        match this {
-            Some(mut this) => {
-                if let Some(other) = other {
-                    for pair in other.properties.collection {
-                        this.properties.collection.push(pair);
-                    }
-                }
-
-                Some(this)
-            }
-            None => other,
-        }
-    }
 }
 
 impl Parse for DisplayProperties {

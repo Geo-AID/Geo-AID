@@ -143,7 +143,7 @@ pub mod macros {
 
             $(
                 let mut v = $crate::script::unroll::CloneWithNode::clone_with_node(&mut $value);
-                node.insert(stringify!($field).to_string(), v.node.take());
+                node.insert(stringify!($field).to_string(), $crate::script::unroll::CloneWithNode::clone_with_node(&mut v));
                 fields.insert(stringify!($field).to_string(), $crate::script::unroll::AnyExpr::from(v));
             )*
 

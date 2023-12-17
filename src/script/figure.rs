@@ -38,7 +38,7 @@ use super::{
 
 type Point = Arc<Expression<PointExpr>>;
 
-pub const SPECIAL_MATH: [&'static str; 49] = [
+pub const SPECIAL_MATH: [&str; 49] = [
     "alpha", "Alpha", "beta", "Beta", "gamma", "Gamma", "delta", "Delta", "epsilon", "Epsilon",
     "zeta", "Zeta", "eta", "Eta", "theta", "Theta", "iota", "Iota", "kappa", "Kappa", "lambda",
     "Lambda", "mu", "Mu", "nu", "Nu", "xi", "Xi", "omicron", "Omicorn", "phi", "Phi", "rho", "Rho",
@@ -174,7 +174,11 @@ impl MathSpecial {
         true
     }
 
-    #[must_use]
+    /// # Errors
+    /// Returns an error on parsing error.
+    /// 
+    /// # Panics
+    /// Panics in this function are a bug.
     pub fn parse(charcode: &str, content_span: Span) -> Result<Self, Error> {
         SPECIAL_MATH
             .iter()
@@ -215,7 +219,11 @@ impl MathString {
         }
     }
 
-    pub fn displayed_by_default(&self) -> Option<MathString> {
+    
+    /// # Panics
+    /// Any panic here is a bug.
+    #[must_use]
+    pub fn displayed_by_default(&self) -> Option<Self> {
         let mut result = Vec::new();
 
         // The first set of characters must be either a single character or a special code.
@@ -228,7 +236,7 @@ impl MathString {
             letter.push(c);
         }
 
-        if let Some(special) = MathSpecial::parse(&letter, span!(0, 0, 0, 0)).ok() {
+        if let Ok(special) = MathSpecial::parse(&letter, span!(0, 0, 0, 0)) {
             result.push(MathChar::Special(special));
         } else if letter.len() == 1 {
             result.push(MathChar::Ascii(letter.chars().next().unwrap()));
@@ -243,12 +251,12 @@ impl MathString {
 
         if chars.next() == Some(MathChar::SetIndex(MathIndex::Lower)) {
             result.push(MathChar::SetIndex(MathIndex::Lower));
-            while let Some(c) = chars.next() {
+            for c in chars.by_ref() {
                 if c == MathChar::SetIndex(MathIndex::Normal) {
                     break;
-                } else {
-                    result.push(c);
                 }
+
+                result.push(c);
             }
             result.push(MathChar::SetIndex(MathIndex::Normal));
         }
@@ -263,6 +271,8 @@ impl MathString {
         }
     }
 
+    /// # Errors
+    /// Returns an error on parsing errors.
     pub fn parse(content: &str, content_span: Span) -> Result<Self, Error> {
         let mut ignore_next = false;
         let mut math_string = Vec::new();
@@ -273,9 +283,7 @@ impl MathString {
 
         let mut special_start = 0;
 
-        let mut char_count = 0;
-
-        for c in content.chars() {
+        for (char_count, c) in content.chars().enumerate() {
             if collect_special {
                 if ignore_next || (c != ']' && c != '\\') {
                     special.push(c);
@@ -296,47 +304,43 @@ impl MathString {
                 } else {
                     ignore_next = true;
                 }
-            } else {
-                if ignore_next {
-                    math_string.push(MathChar::Ascii(c));
-                    ignore_next = false;
-                } else if c == '\\' {
-                    ignore_next = true;
-                } else if c == '_' {
-                    if indexed {
-                        return Err(Error::LabelIndexInsideIndex {
-                            error_span: content_span,
-                        });
-                    } else {
-                        math_string.push(MathChar::SetIndex(MathIndex::Lower));
-                        indexed = true;
-                    }
-                } else if c == '[' {
-                    special_start = char_count;
-                    collect_special = true;
-                } else if c == ' ' {
-                    if indexed && !index_delimited {
-                        indexed = false;
-                        math_string.push(MathChar::SetIndex(MathIndex::Normal));
-                    }
-
-                    math_string.push(MathChar::Ascii(c));
-                } else if c == '{'
-                    && math_string.last().copied() == Some(MathChar::SetIndex(MathIndex::Lower))
-                {
-                    index_delimited = true;
-                } else if c == '}' && index_delimited {
-                    indexed = false;
-                    index_delimited = false;
-                    math_string.push(MathChar::SetIndex(MathIndex::Normal));
-                } else if c == '\'' {
-                    math_string.push(MathChar::Prime);
-                } else {
-                    math_string.push(MathChar::Ascii(c));
+            } else if ignore_next {
+                math_string.push(MathChar::Ascii(c));
+                ignore_next = false;
+            } else if c == '\\' {
+                ignore_next = true;
+            } else if c == '_' {
+                if indexed {
+                    return Err(Error::LabelIndexInsideIndex {
+                        error_span: content_span,
+                    });
                 }
-            }
+                
+                math_string.push(MathChar::SetIndex(MathIndex::Lower));
+                indexed = true;
+            } else if c == '[' {
+                special_start = char_count;
+                collect_special = true;
+            } else if c == ' ' {
+                if indexed && !index_delimited {
+                    indexed = false;
+                    math_string.push(MathChar::SetIndex(MathIndex::Normal));
+                }
 
-            char_count += 1;
+                math_string.push(MathChar::Ascii(c));
+            } else if c == '{'
+                && math_string.last().copied() == Some(MathChar::SetIndex(MathIndex::Lower))
+            {
+                index_delimited = true;
+            } else if c == '}' && index_delimited {
+                indexed = false;
+                index_delimited = false;
+                math_string.push(MathChar::SetIndex(MathIndex::Normal));
+            } else if c == '\'' {
+                math_string.push(MathChar::Prime);
+            } else {
+                math_string.push(MathChar::Ascii(c));
+            }
         }
 
         if indexed {
@@ -401,7 +405,7 @@ impl FromProperty for MathString {
                 ),
             ),
             PropertyValue::RawString(s) => Ok(MathString {
-                chars: s.lit.content.chars().map(|c| MathChar::Ascii(c)).collect(),
+                chars: s.lit.content.chars().map(MathChar::Ascii).collect(),
                 span: s.get_span(),
             }),
         }
@@ -416,10 +420,10 @@ impl From<PointCollectionItem> for MathString {
             value
                 .index
                 .iter()
-                .flat_map(|v| v.chars().map(|c| MathChar::Ascii(c))),
+                .flat_map(|v| v.chars().map(MathChar::Ascii)),
         );
 
-        math_string.extend(vec![MathChar::Prime].repeat(value.primes.into()));
+        math_string.extend([MathChar::Prime].repeat(value.primes.into()));
 
         Self {
             chars: math_string,
@@ -431,7 +435,7 @@ impl From<PointCollectionItem> for MathString {
 impl Display for MathString {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for c in &self.chars {
-            write!(f, "{c}")?
+            write!(f, "{c}")?;
         }
 
         Ok(())

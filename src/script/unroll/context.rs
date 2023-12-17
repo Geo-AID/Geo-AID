@@ -464,23 +464,27 @@ impl CompileContext {
         expr
     }
 
-    pub fn average_p(&self, mut points: Vec<Expr<UnrolledPoint>>) -> Expr<UnrolledPoint> {
+    pub fn average_p_display(&self, mut points: Vec<Expr<UnrolledPoint>>, display: Properties) -> Expr<UnrolledPoint> {
         let nodes = points
             .iter_mut()
-            .flat_map(|v| v.take_node().map(|v| Box::new(v) as Box<dyn Node>))
+            .filter_map(|v| v.take_node().map(|v| Box::new(v) as Box<dyn Node>))
             .collect();
 
         self.expr_with(
             UnrolledPoint::Average(points.into()),
-            Properties::from(None),
+            display,
             nodes,
         )
     }
 
-    pub fn average_s(&self, mut values: Vec<Expr<UnrolledScalar>>) -> Expr<UnrolledScalar> {
+    pub fn average_p(&self, points: Vec<Expr<UnrolledPoint>>) -> Expr<UnrolledPoint> {
+        self.average_p_display(points, Properties::from(None))
+    }
+
+    pub fn average_s_display(&self, mut values: Vec<Expr<UnrolledScalar>>, display: Properties) -> Expr<UnrolledScalar> {
         let nodes = values
             .iter_mut()
-            .flat_map(|v| v.take_node().map(|v| Box::new(v) as Box<dyn Node>))
+            .filter_map(|v| v.take_node().map(|v| Box::new(v) as Box<dyn Node>))
             .collect();
 
         self.expr_with(
@@ -488,15 +492,19 @@ impl CompileContext {
                 unit: values[0].data.unit,
                 data: ScalarData::Average(values.into()),
             },
-            Properties::from(None),
+            display,
             nodes,
         )
+    }
+
+    pub fn average_s(&self, points: Vec<Expr<UnrolledScalar>>) -> Expr<UnrolledScalar> {
+        self.average_s_display(points, Properties::from(None))
     }
 
     pub fn entity_p(&self, index: usize) -> Expr<UnrolledPoint> {
         self.expr_with(
             UnrolledPoint::Entity(index),
-            Properties::from(None),
+            Properties::default(),
             Vec::new(),
         )
     }
@@ -507,23 +515,27 @@ impl CompileContext {
                 unit: Some(unit),
                 data: ScalarData::Entity(index),
             },
-            Properties::from(None),
+            Properties::default(),
             Vec::new(),
         )
     }
 
-    pub fn set_unit(&self, mut v: Expr<UnrolledScalar>, unit: ComplexUnit) -> Expr<UnrolledScalar> {
+    pub fn set_unit_display(&self, mut v: Expr<UnrolledScalar>, unit: ComplexUnit, display: Properties) -> Expr<UnrolledScalar> {
         let node = v.take_node();
         self.expr_with(
             UnrolledScalar {
                 unit: Some(unit),
                 data: ScalarData::SetUnit(v, unit),
             },
-            Properties::from(None),
+            display,
             node.into_iter()
                 .map(|x| Box::new(x) as Box<dyn Node>)
                 .collect(),
         )
+    }
+
+    pub fn set_unit(&self, v: Expr<UnrolledScalar>, unit: ComplexUnit) -> Expr<UnrolledScalar> {
+        self.set_unit_display(v, unit, Properties::default())
     }
 
     generic_expr! {intersection(k: Line, l: Line) -> Point::LineLineIntersection}
@@ -547,15 +559,28 @@ impl CompileContext {
 
 macro_rules! generic_rule {
     ($f:ident($lhs:ident, $rhs:ident) -> $r:ident) => {
-        pub fn $f(
-            &mut self,
-            mut lhs: Expr<super::$lhs>,
-            mut rhs: Expr<super::$rhs>,
-            inverted: bool,
-        ) {
-            let (lhs_node, rhs_node) = (lhs.take_node(), rhs.take_node());
-            self.rule_with(UnrolledRuleKind::$r(lhs, rhs), lhs_node, rhs_node, inverted);
+        paste! {
+            pub fn [<$f _display>](
+                &mut self,
+                mut lhs: Expr<super::$lhs>,
+                mut rhs: Expr<super::$rhs>,
+                inverted: bool,
+                display: Properties
+            ) -> Box<dyn Node> {
+                let (lhs_node, rhs_node) = (lhs.take_node(), rhs.take_node());
+                self.rule_with(UnrolledRuleKind::$r(lhs, rhs), lhs_node, rhs_node, inverted, display)
+            }
+
+            pub fn $f(
+                &mut self,
+                lhs: Expr<super::$lhs>,
+                rhs: Expr<super::$rhs>,
+                inverted: bool
+            ) -> Box<dyn Node> {
+                self.[<$f _display>](lhs, rhs, inverted, Properties::default())
+            }
         }
+        
     };
 }
 
@@ -567,25 +592,19 @@ impl CompileContext {
         lhs: Option<N>,
         rhs: Option<M>,
         inverted: bool,
-    ) {
-        let mut node = CollectionNode::new();
+        display: Properties
+    ) -> Box<dyn Node> {
+        let mut node = CollectionNode::from_display(display, self);
 
         node.extend(lhs);
         node.extend(rhs);
 
         self.push_rule(UnrolledRule {
             kind,
-            inverted,
-            node: Some(Box::new(node)),
-        })
-    }
+            inverted
+        });
 
-    pub fn display<N: Node + 'static>(&mut self, node: N) {
-        self.push_rule(UnrolledRule {
-            kind: UnrolledRuleKind::Display,
-            inverted: false,
-            node: Some(Box::new(node)),
-        })
+        Box::new(node)
     }
 
     generic_rule! {scalar_eq(Scalar, Scalar) -> ScalarEq}

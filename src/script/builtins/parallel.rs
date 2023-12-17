@@ -31,10 +31,7 @@ fn parallel_function_line_point(
     context: &CompileContext,
     display: Properties,
 ) -> Expr<Line> {
-    drop(display);
-    let expr = context.parallel_through(line, point);
-
-    expr
+    context.parallel_through_display(line, point, display)
 }
 
 pub fn register(library: &mut Library) {

@@ -29,7 +29,7 @@ pub fn register(library: &mut Library) {
         Function {
             name: String::from("radians"),
             overloads: vec![overload!((SCALAR) -> ANGLE {
-                |v: Expr<Scalar>, context: &CompileContext, _| context.set_unit(v, unit::ANGLE)
+                |v: Expr<Scalar>, context: &CompileContext, display| context.set_unit_display(v, unit::ANGLE, display)
             })],
         },
     );

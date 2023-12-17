@@ -214,7 +214,7 @@ pub struct Compiler {
     context: CompileContext,
     template: Vec<AdjustableTemplate>,
     // Specifically for bounds.
-    adjustable_points: Vec<Arc<Expression<PointExpr>>>,
+    adjustable_points: Vec<(Arc<Expression<PointExpr>>, usize)>,
 }
 
 impl Compiler {
@@ -507,7 +507,7 @@ impl Compiler {
                                 }),
                                 FastFloat::One,
                             ));
-                            self.adjustable_points.push(Arc::clone(&expr));
+                            self.adjustable_points.push((Arc::clone(&expr), self.template.len() - 1));
                             expr
                         }
                         EntPoint::OnCircle(circle) => {
@@ -519,7 +519,7 @@ impl Compiler {
                                 }),
                                 FastFloat::One,
                             ));
-                            self.adjustable_points.push(Arc::clone(&expr));
+                            self.adjustable_points.push((Arc::clone(&expr), self.template.len() - 1));
                             expr
                         }
                         EntPoint::OnLine(line) => {
@@ -531,7 +531,7 @@ impl Compiler {
                                 }),
                                 FastFloat::One,
                             ));
-                            self.adjustable_points.push(Arc::clone(&expr));
+                            self.adjustable_points.push((Arc::clone(&expr), self.template.len() - 1));
                             expr
                         }
                         EntPoint::Bind(expr) => self.compile(expr),
@@ -554,11 +554,13 @@ impl Compiler {
     fn compile_rule_vec(&mut self, rules: &[UnrolledRule]) -> Vec<Criteria> {
         rules
             .iter()
-            .flat_map(|rule| self.compile_rule(rule))
+            .filter_map(|rule| self.compile_rule(rule))
             .collect()
     }
 
     fn compile_rule(&mut self, rule: &UnrolledRule) -> Option<Criteria> {
+        // println!("{rule}");
+
         let crit = match &rule.kind {
             UnrolledRuleKind::PointEq(lhs, rhs) => {
                 let lhs = self.compile(lhs);
@@ -614,7 +616,7 @@ impl Compiler {
             ..Default::default()
         };
 
-        figure.build(self, &mut compiled);
+        figure.build_unboxed(self, &mut compiled);
 
         compiled
     }
@@ -764,7 +766,7 @@ fn read_flags(flags: &HashMap<String, Flag>) -> Flags {
 }
 
 #[derive(Debug)]
-pub struct CompileResult {
+pub struct Compiled {
     pub criteria: Vec<Criteria>,
     pub figure: Figure,
     pub template: Vec<AdjustableTemplate>,
@@ -778,7 +780,7 @@ pub struct CompileResult {
 ///
 /// # Panics
 /// Never
-pub fn compile(input: &str, canvas_size: (usize, usize)) -> Result<CompileResult, Vec<Error>> {
+pub fn compile(input: &str, canvas_size: (usize, usize)) -> Result<Compiled, Vec<Error>> {
     // First, we have to unroll the script.
     let (context, figure) = unroll::unroll(input)?;
 
@@ -812,7 +814,6 @@ pub fn compile(input: &str, canvas_size: (usize, usize)) -> Result<CompileResult
 
     // Add standard bounds
     add_bounds(
-        &compiler.template,
         &compiler.adjustable_points,
         &mut criteria,
         &flags,
@@ -820,11 +821,11 @@ pub fn compile(input: &str, canvas_size: (usize, usize)) -> Result<CompileResult
 
     // Print the compiled (debugging)
     // for rule in &criteria {
-    //     println!("{rule:?}");
+    //     println!("{rule}");
     // }
 
     let figure = compiler.build_figure(figure, canvas_size);
-    Ok(CompileResult {
+    Ok(Compiled {
         criteria,
         figure,
         template: compiler.template,
@@ -834,27 +835,21 @@ pub fn compile(input: &str, canvas_size: (usize, usize)) -> Result<CompileResult
 
 /// Inequality principle and the point plane limit.
 fn add_bounds(
-    template: &[AdjustableTemplate],
-    points: &[Arc<Expression<PointExpr>>],
+    points: &[(Arc<Expression<PointExpr>>, usize)],
     criteria: &mut Vec<Weighed<CriteriaKind>>,
     flags: &Flags,
 ) {
     // Point inequality principle.
-    for (i, _) in template.iter().enumerate().filter(|v: _| v.1.is_point()) {
-        let point = Arc::clone(&points[i]);
-
+    for (i, (pt_i, adj)) in points.iter().enumerate() {
         // For each of the next points, add an inequality rule.
-        for (j, _) in template
+        for (pt_j, _) in points
             .iter()
-            .enumerate()
             .skip(i + 1)
-            .filter(|v: _| v.1.is_point())
         {
-            // println!("{i} != {j}");
             criteria.push(Weighed {
                 object: CriteriaKind::Inverse(Box::new(CriteriaKind::EqualPoint(
-                    Arc::clone(&point),
-                    Arc::clone(&points[j]),
+                    Arc::clone(pt_i),
+                    Arc::clone(pt_j),
                 ))),
                 weight: FastFloat::One,
             });
@@ -865,9 +860,9 @@ fn add_bounds(
             criteria.push(Weighed {
                 object: CriteriaKind::Greater(
                     Arc::new(Expression {
-                        weights: Weights::one_at(i),
+                        weights: Weights::one_at(*adj),
                         kind: ScalarExpr::PointX(PointX {
-                            point: Arc::clone(&point),
+                            point: Arc::clone(pt_i),
                         }),
                     }),
                     Arc::new(Expression {
@@ -881,9 +876,9 @@ fn add_bounds(
             criteria.push(Weighed {
                 object: CriteriaKind::Greater(
                     Arc::new(Expression {
-                        weights: Weights::one_at(i),
+                        weights: Weights::one_at(*adj),
                         kind: ScalarExpr::PointY(PointY {
-                            point: Arc::clone(&point),
+                            point: Arc::clone(pt_i),
                         }),
                     }),
                     Arc::new(Expression {
@@ -897,9 +892,9 @@ fn add_bounds(
             criteria.push(Weighed {
                 object: CriteriaKind::Less(
                     Arc::new(Expression {
-                        weights: Weights::one_at(i),
+                        weights: Weights::one_at(*adj),
                         kind: ScalarExpr::PointX(PointX {
-                            point: Arc::clone(&point),
+                            point: Arc::clone(pt_i),
                         }),
                     }),
                     Arc::new(Expression {
@@ -913,9 +908,9 @@ fn add_bounds(
             criteria.push(Weighed {
                 object: CriteriaKind::Less(
                     Arc::new(Expression {
-                        weights: Weights::one_at(i),
+                        weights: Weights::one_at(*adj),
                         kind: ScalarExpr::PointY(PointY {
-                            point: Arc::clone(&point),
+                            point: Arc::clone(pt_i),
                         }),
                     }),
                     Arc::new(Expression {

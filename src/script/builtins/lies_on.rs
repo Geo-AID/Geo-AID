@@ -35,12 +35,10 @@ fn pt_lies_on_circle(
     mut lhs: Expr<Point>,
     mut rhs: Expr<Circle>,
     context: &mut CompileContext,
-    properties: Properties,
+    display: Properties,
     inverted: bool,
-) {
-    drop(properties);
-
-    let mut node = CollectionNode::new();
+) -> CollectionNode {
+    let mut node = CollectionNode::from_display(display, context);
     node.extend(lhs.node.take());
     node.extend(rhs.node.take());
 
@@ -57,19 +55,17 @@ fn pt_lies_on_circle(
         context.point_on_circle(&point, &circle);
     }
 
-    context.display(node);
+    node
 }
 
 fn pt_lies_on_line(
     mut lhs: Expr<Point>,
     mut rhs: Expr<Line>,
     context: &mut CompileContext,
-    properties: Properties,
+    display: Properties,
     inverted: bool,
-) {
-    drop(properties);
-
-    let mut node = CollectionNode::new();
+) -> CollectionNode {
+    let mut node = CollectionNode::from_display(display, context);
     node.extend(lhs.node.take());
     node.extend(rhs.node.take());
 
@@ -82,21 +78,22 @@ fn pt_lies_on_line(
         context.point_on_line(&point, &line);
     }
 
-    context.display(node);
+    node
 }
 
 fn col_lies_on_circle(
     mut lhs: Expr<PointCollection>,
     mut rhs: Expr<Circle>,
     context: &mut CompileContext,
-    properties: Properties,
+    display: Properties,
     inverted: bool,
-) {
-    drop(properties);
+) -> CollectionNode {
     let len = lhs.data.length;
 
+    let mut node = CollectionNode::from_display(display, context);
+
     for i in 0..len {
-        rule!(context:pt_lies_on_circle(index!(node lhs, i), rhs.clone_with_node()) neg=inverted);
+        node.push(rule!(context:pt_lies_on_circle(index!(node lhs, i), rhs.clone_with_node()) neg=inverted));
     }
 
     /*
@@ -127,18 +124,18 @@ fn col_lies_on_circle(
             );
         }
     }
+
+    node
 }
 
 fn pt_lies_on_segment(
     mut lhs: Expr<Point>,
     mut rhs: Expr<Bundle>,
     context: &mut CompileContext,
-    properties: Properties,
+    display: Properties,
     inverted: bool,
-) {
-    drop(properties);
-
-    let mut node = CollectionNode::new();
+) -> CollectionNode {
+    let mut node = CollectionNode::from_display(display, context);
     node.extend(lhs.node.take());
     node.extend(rhs.node.take());
 
@@ -160,7 +157,6 @@ fn pt_lies_on_segment(
                         context.distance_pl(point, line),
                     ),
                     inverted: true,
-                    node: None,
                 },
                 UnrolledRule {
                     kind: UnrolledRuleKind::ScalarEq(
@@ -176,12 +172,10 @@ fn pt_lies_on_segment(
                             field!(no-node POINT rhs, B with context),
                         ),
                     ),
-                    inverted: true,
-                    node: None,
+                    inverted: true
                 },
             ]),
-            inverted: false,
-            node: None,
+            inverted: false
         });
     } else {
         context.point_on_line(&point, &line);
@@ -202,7 +196,7 @@ fn pt_lies_on_segment(
         );
     }
 
-    context.display(node);
+    node
 }
 
 pub fn register(library: &mut Library) {

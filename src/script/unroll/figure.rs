@@ -32,7 +32,7 @@ use crate::{
 
 use super::{
     Bundle, Circle, CloneWithNode, CompileContext, Displayed, Expr, Line, Point, PointCollection,
-    Properties, Scalar, Unknown,
+    Properties, Scalar, Unknown, AnyExpr,
 };
 
 /// A node is a trait characterising objects meant to be parts of the figure's display tree.
@@ -41,7 +41,11 @@ pub trait Node: Debug {
 
     fn get_display(&self) -> bool;
 
-    fn build(&self, compiler: &mut Compiler, figure: &mut Figure);
+    fn build(self: Box<Self>, compiler: &mut Compiler, figure: &mut Figure);
+
+    fn build_unboxed(self, compiler: &mut Compiler, figure: &mut Figure) where Self: Sized {
+        Box::new(self).build(compiler, figure);
+    }
 }
 
 pub trait FromExpr<T: Displayed>: Node + Sized {
@@ -89,6 +93,18 @@ impl<T> MaybeUnset<T> {
         }
     }
 
+    /// Only sets the value if the `set` flag is false.
+    /// Returns whether a new value was set.
+    pub fn set_if_unset(&mut self, value: T) -> bool {
+        let set = !self.set;
+
+        if set {
+            self.set(value);
+        }
+
+        set
+    }
+
     pub fn unwrap(self) -> T {
         self.value
     }
@@ -109,20 +125,24 @@ impl<T> AsRef<T> for MaybeUnset<T> {
 }
 
 impl<T: Clone> MaybeUnset<T> {
+    #[must_use]
     pub fn get_cloned(&self) -> T {
         self.value.clone()
     }
 
+    #[must_use]
     pub fn cloned(&self) -> Self {
         self.clone()
     }
 }
 
 impl<T: Copy> MaybeUnset<T> {
+    #[must_use]
     pub fn get_copied(&self) -> T {
         self.value
     }
 
+    #[must_use]
     pub fn copied(&self) -> Self {
         *self
     }
@@ -151,12 +171,31 @@ pub struct CollectionNode {
     pub children: Vec<Box<dyn Node>>,
 }
 
+impl Default for CollectionNode {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl CollectionNode {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             display: MaybeUnset::new(true),
             children: Vec::new(),
         }
+    }
+
+    #[must_use]
+    pub fn from_display(mut display: Properties, context: &CompileContext) -> Self {
+        let node = Self {
+            display: display.get("display").maybe_unset(true),
+            children: Vec::new()
+        };
+
+        display.finish(context);
+
+        node
     }
 
     pub fn push<T: Node + 'static>(&mut self, node: T) {
@@ -182,9 +221,9 @@ impl Node for CollectionNode {
         self.display.get_copied()
     }
 
-    fn build(&self, compiler: &mut Compiler, figure: &mut Figure) {
-        if self.display.get_copied() {
-            for child in &self.children {
+    fn build(self: Box<Self>, compiler: &mut Compiler, figure: &mut Figure) {
+        if self.display.unwrap() {
+            for child in self.children {
                 child.build(compiler, figure);
             }
         }
@@ -193,24 +232,46 @@ impl Node for CollectionNode {
 
 pub trait BuildAssociated<T: Node>: Debug {
     fn build_associated(
-        &self,
+        self: Box<Self>,
         compiler: &mut Compiler,
         figure: &mut Figure,
-        associated: &HierarchyNode<T>,
+        associated: &mut HierarchyNode<T>,
     );
 }
 
 #[derive(Debug)]
 pub enum AssociatedData {
     Bool(MaybeUnset<bool>),
+    Style(MaybeUnset<Mode>)
 }
 
 impl AssociatedData {
     #[must_use]
-    pub fn as_bool(&self) -> MaybeUnset<bool> {
+    pub fn as_bool(&self) -> Option<MaybeUnset<bool>> {
         match self {
-            Self::Bool(v) => v.copied(),
+            Self::Bool(v) => Some(v.copied()),
+            _ => None
         }
+    }
+
+    #[must_use]
+    pub fn as_style(&self) -> Option<MaybeUnset<Mode>> {
+        match self {
+            Self::Style(v) => Some(v.copied()),
+            _ => None
+        }
+    }
+}
+
+impl From<MaybeUnset<bool>> for AssociatedData {
+    fn from(value: MaybeUnset<bool>) -> Self {
+        Self::Bool(value)
+    }
+}
+
+impl From<MaybeUnset<Mode>> for AssociatedData {
+    fn from(value: MaybeUnset<Mode>) -> Self {
+        Self::Style(value)
     }
 }
 
@@ -232,15 +293,15 @@ impl<T: Node> Node for HierarchyNode<T> {
         self.root.set_display(display);
     }
 
-    fn build(&self, compiler: &mut Compiler, figure: &mut Figure) {
+    fn build(mut self: Box<Self>, compiler: &mut Compiler, figure: &mut Figure) {
         if self.root.get_display() {
-            self.root.build(compiler, figure);
-
-            if let Some(associated) = &self.associated {
-                associated.build_associated(compiler, figure, self);
+            if let Some(associated) = self.associated.take() {
+                associated.build_associated(compiler, figure, &mut self);
             }
 
-            for child in &self.children {
+            self.root.build(compiler, figure);
+
+            for child in self.children {
                 child.build(compiler, figure);
             }
         }
@@ -273,7 +334,7 @@ impl<T: Node> HierarchyNode<T> {
     }
 
     pub fn extend_boxed<Iter: IntoIterator<Item = Box<dyn Node>>>(&mut self, nodes: Iter) {
-        self.children.extend(nodes.into_iter());
+        self.children.extend(nodes);
     }
 
     pub fn extend_children<U: Node + 'static, Iter: IntoIterator<Item = U>>(
@@ -288,10 +349,11 @@ impl<T: Node> HierarchyNode<T> {
         self.associated = Some(Box::new(associated));
     }
 
-    pub fn insert_data(&mut self, key: &'static str, data: AssociatedData) {
-        self.associated_data.insert(key, data);
+    pub fn insert_data<U: Into<AssociatedData>>(&mut self, key: &'static str, data: U) {
+        self.associated_data.insert(key, data.into());
     }
 
+    #[must_use]
     pub fn get_data(&self, key: &'static str) -> Option<&AssociatedData> {
         self.associated_data.get(key)
     }
@@ -304,7 +366,14 @@ pub struct PCNode {
     pub props: Option<Properties>,
 }
 
+impl Default for PCNode {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl PCNode {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             display: MaybeUnset::new(true),
@@ -334,10 +403,10 @@ impl Node for PCNode {
         self.display.get_copied()
     }
 
-    fn build(&self, compiler: &mut Compiler, figure: &mut Figure) {
-        if self.display.get_copied() {
-            for child in self.children.iter().flatten() {
-                child.build(compiler, figure);
+    fn build(self: Box<Self>, compiler: &mut Compiler, figure: &mut Figure) {
+        if self.display.unwrap() {
+            for child in self.children.into_iter().flatten() {
+                child.build_unboxed(compiler, figure);
             }
         }
     }
@@ -488,28 +557,33 @@ impl Node for AnyExprNode {
         }
     }
 
-    fn build(&self, compiler: &mut Compiler, figure: &mut Figure) {
-        match self {
-            Self::Point(v) => v.build(compiler, figure),
-            Self::Line(v) => v.build(compiler, figure),
-            Self::Circle(v) => v.build(compiler, figure),
-            Self::Scalar(v) => v.build(compiler, figure),
-            Self::PointCollection(v) => v.build(compiler, figure),
-            Self::Bundle(v) => v.build(compiler, figure),
-            Self::Unknown(v) => v.build(compiler, figure),
+    fn build(self: Box<Self>, compiler: &mut Compiler, figure: &mut Figure) {
+        match *self {
+            Self::Point(v) => v.build_unboxed(compiler, figure),
+            Self::Line(v) => v.build_unboxed(compiler, figure),
+            Self::Circle(v) => v.build_unboxed(compiler, figure),
+            Self::Scalar(v) => v.build_unboxed(compiler, figure),
+            Self::PointCollection(v) => v.build_unboxed(compiler, figure),
+            Self::Bundle(v) => v.build_unboxed(compiler, figure),
+            Self::Unknown(v) => v.build_unboxed(compiler, figure),
         }
     }
 }
 
-type BundleNodeItem = Option<AnyExprNode>;
-
 #[derive(Debug)]
 pub struct BundleNode {
     pub display: MaybeUnset<bool>,
-    pub children: HashMap<String, BundleNodeItem>,
+    pub children: HashMap<String, AnyExpr>,
+}
+
+impl Default for BundleNode {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl BundleNode {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             display: MaybeUnset::new(true),
@@ -517,14 +591,12 @@ impl BundleNode {
         }
     }
 
-    pub fn insert<T>(&mut self, key: String, node: Option<T>)
-    where
-        AnyExprNode: From<T>,
-    {
-        self.children.insert(key, node.map(AnyExprNode::from));
+    pub fn insert<T: Displayed>(&mut self, key: String, expr: Expr<T>)
+    where AnyExpr: From<Expr<T>> {
+        self.children.insert(key, AnyExpr::from(expr));
     }
 
-    pub fn extend<U: IntoIterator<Item = (String, BundleNodeItem)>>(&mut self, nodes: U) {
+    pub fn extend<U: IntoIterator<Item = (String, AnyExpr)>>(&mut self, nodes: U) {
         self.children.extend(nodes);
     }
 }
@@ -538,10 +610,12 @@ impl Node for BundleNode {
         self.display.get_copied()
     }
 
-    fn build(&self, compiler: &mut Compiler, figure: &mut Figure) {
+    fn build(self: Box<Self>, compiler: &mut Compiler, figure: &mut Figure) {
         if self.display.get_copied() {
-            for child in self.children.values().flatten() {
-                child.build(compiler, figure);
+            for mut child in self.children.into_values() {
+                if let Some(node) = child.replace_node(None) {
+                    node.build_unboxed(compiler, figure);
+                }
             }
         }
     }
@@ -557,7 +631,7 @@ impl Node for EmptyNode {
 
     fn set_display(&mut self, _display: bool) {}
 
-    fn build(&self, _compiler: &mut Compiler, _figure: &mut Figure) {}
+    fn build(self: Box<Self>, _compiler: &mut Compiler, _figure: &mut Figure) {}
 }
 
 #[derive(Debug)]
@@ -576,25 +650,23 @@ impl Node for PointNode {
     }
 
     fn set_display(&mut self, display: bool) {
-        self.display.set(display)
+        self.display.set(display);
     }
 
-    fn build(&self, compiler: &mut Compiler, figure: &mut Figure) {
-        if self.display.get_copied() {
+    fn build(self: Box<Self>, compiler: &mut Compiler, figure: &mut Figure) {
+        if self.display.unwrap() {
             figure.points.push((
                 compiler.compile(&self.expr),
-                if self.display_label.get_copied() {
-                    let label = self.label.as_ref();
-
-                    if label.is_empty() {
-                        self.default_label.clone()
+                if self.display_label.unwrap() {
+                    if self.label.as_ref().is_empty() {
+                        self.default_label
                     } else {
-                        label.clone()
+                        self.label.unwrap()
                     }
                 } else {
                     MathString::new(span!(0, 0, 0, 0))
                 },
-            ))
+            ));
         }
     }
 }
@@ -614,10 +686,7 @@ impl FromExpr<Point> for PointNode {
             expr: expr.clone_without_node(),
         };
 
-        props.finish(
-            &["display", "label", "display_label", "display_dot"],
-            context,
-        );
+        props.finish(context);
 
         node
     }
@@ -629,6 +698,7 @@ pub struct CircleNode {
     pub label: MaybeUnset<MathString>,
     pub display_label: MaybeUnset<bool>,
     pub default_label: MathString,
+    pub style: MaybeUnset<Mode>,
     pub expr: Expr<Circle>,
 }
 
@@ -638,14 +708,14 @@ impl Node for CircleNode {
     }
 
     fn set_display(&mut self, display: bool) {
-        self.display.set(display)
+        self.display.set(display);
     }
 
-    fn build(&self, compiler: &mut Compiler, figure: &mut Figure) {
-        if self.display.get_copied() {
+    fn build(self: Box<Self>, compiler: &mut Compiler, figure: &mut Figure) {
+        if self.display.unwrap() {
             figure.circles.push((
                 compiler.compile(&self.expr),
-                Mode::Default, // if self.display_label.unwrap() {
+                self.style.unwrap(), // if self.display_label.unwrap() {
                                //     let label = self.label.unwrap();
 
                                //     if label.is_empty() {
@@ -656,13 +726,15 @@ impl Node for CircleNode {
                                // } else {
                                //     MathString::new()
                                // }
-            ))
+            ));
         }
     }
 }
 
 impl FromExpr<Circle> for CircleNode {
     fn from_expr(expr: &Expr<Circle>, mut props: Properties, context: &CompileContext) -> Self {
+        let _ = props.get::<MathString>("default-label");
+        
         let node = Self {
             display: props.get("display").maybe_unset(true),
             label: props
@@ -672,52 +744,74 @@ impl FromExpr<Circle> for CircleNode {
             default_label: props
                 .get("default-label")
                 .get_or(MathString::new(span!(0, 0, 0, 0))),
+            style: props.get("style").maybe_unset(Mode::Default),
             expr: expr.clone_without_node(),
         };
 
-        props.finish(&["display", "label", "display_label"], context);
+        props.finish(context);
 
         node
     }
 }
 
-#[derive(Debug, Clone, Copy)]
-pub enum LineType {
-    Line,
-    Ray,
-    Segment,
+macro_rules! property_enum_impl {
+    ($name:ident { $($variant:ident: $key:literal),* $(,)? }) => {
+        impl FromProperty for $name {
+            fn from_property(property: PropertyValue) -> Result<Self, Error> {
+                match property {
+                    PropertyValue::Number(n) => Err(Error::StringOrIdentExpected {
+                        error_span: n.get_span(),
+                    }),
+                    PropertyValue::Ident(i) => match i.to_string().to_lowercase().as_str() {
+                        $($key => Ok(Self::$variant),)*
+                        &_ => Err(Error::EnumInvalidValue {
+                            error_span: i.get_span(),
+                            available_values: &[$($key),*],
+                            received_value: i.to_string(),
+                        }),
+                    },
+                    PropertyValue::String(s) => match s.content.to_lowercase().as_str() {
+                        $($key => Ok(Self::$variant),)*
+                        &_ => Err(Error::EnumInvalidValue {
+                            error_span: s.get_span(),
+                            available_values: &[$($key),*],
+                            received_value: s.content,
+                        }),
+                    },
+                    PropertyValue::RawString(s) => Err(Error::NonRawStringOrIdentExpected {
+                        error_span: s.get_span(),
+                    }),
+                }
+            }
+        }
+    };
 }
 
-impl FromProperty for LineType {
-    fn from_property(property: PropertyValue) -> Result<Self, Error> {
-        match property {
-            PropertyValue::Number(n) => Err(Error::StringOrIdentExpected {
-                error_span: n.get_span(),
-            }),
-            PropertyValue::Ident(i) => match i.to_string().to_lowercase().as_str() {
-                "line" => Ok(Self::Line),
-                "ray" => Ok(Self::Ray),
-                "segment" => Ok(Self::Segment),
-                &_ => Err(Error::EnumInvalidValue {
-                    error_span: i.get_span(),
-                    available_values: &["line", "ray", "segment"],
-                    received_value: i.to_string(),
-                }),
-            },
-            PropertyValue::String(s) => match s.content.to_lowercase().as_str() {
-                "line" => Ok(Self::Line),
-                "ray" => Ok(Self::Ray),
-                "segment" => Ok(Self::Segment),
-                &_ => Err(Error::EnumInvalidValue {
-                    error_span: s.get_span(),
-                    available_values: &["line", "ray", "segment"],
-                    received_value: s.content,
-                }),
-            },
-            PropertyValue::RawString(s) => Err(Error::NonRawStringOrIdentExpected {
-                error_span: s.get_span(),
-            }),
+macro_rules! property_enum {
+    ($name:ident { $($variant:ident: $key:literal),* $(,)? }) => {
+        #[derive(Debug, Clone, Copy)]
+        pub enum $name {
+            $($variant),*
         }
+
+        property_enum_impl! {$name { $($variant: $key),* }}
+    };
+}
+
+property_enum! {
+    LineType {
+        Line: "line",
+        Ray: "ray",
+        Segment: "segment"
+    }
+}
+
+property_enum_impl! {
+    Mode {
+        Default: "solid",
+        Dashed: "dashed",
+        Dotted: "dotted",
+        Bolded: "bold"
     }
 }
 
@@ -727,6 +821,7 @@ pub struct LineNode {
     pub label: MaybeUnset<MathString>,
     pub display_label: MaybeUnset<bool>,
     pub line_type: MaybeUnset<LineType>,
+    pub style: MaybeUnset<Mode>,
     pub expr: Expr<Line>,
 }
 
@@ -736,11 +831,11 @@ impl Node for LineNode {
     }
 
     fn set_display(&mut self, display: bool) {
-        self.display.set(display)
+        self.display.set(display);
     }
 
-    fn build(&self, compiler: &mut Compiler, figure: &mut Figure) {
-        if self.display.get_copied() {
+    fn build(self: Box<Self>, compiler: &mut Compiler, figure: &mut Figure) {
+        if self.display.unwrap() {
             // if self.display_label.unwrap() {
             //     let label = self.label.unwrap();
 
@@ -756,12 +851,12 @@ impl Node for LineNode {
             match self.line_type.unwrap() {
                 LineType::Line => figure
                     .lines
-                    .push((compiler.compile(&self.expr), Mode::Default)),
+                    .push((compiler.compile(&self.expr), self.style.unwrap())),
                 LineType::Ray => match &self.expr.data.as_ref() {
                     Line::LineFromPoints(a, b) => {
                         figure
                             .rays
-                            .push((compiler.compile(a), compiler.compile(b), Mode::Default))
+                            .push((compiler.compile(a), compiler.compile(b), self.style.unwrap()));
                     }
                     Line::AngleBisector(a, b, c) => {
                         let x = Expr::new_spanless(Point::LineLineIntersection(
@@ -774,7 +869,7 @@ impl Node for LineNode {
 
                         figure
                             .rays
-                            .push((compiler.compile(b), compiler.compile(&x), Mode::Default))
+                            .push((compiler.compile(b), compiler.compile(&x), self.style.unwrap()));
                     }
                     _ => unreachable!(),
                 },
@@ -782,17 +877,19 @@ impl Node for LineNode {
                     Line::LineFromPoints(a, b) => figure.segments.push((
                         compiler.compile(a),
                         compiler.compile(b),
-                        Mode::Default,
+                        self.style.unwrap(),
                     )),
                     _ => unreachable!(),
                 },
-            };
+            }
         }
     }
 }
 
 impl FromExpr<Line> for LineNode {
     fn from_expr(expr: &Expr<Line>, mut props: Properties, context: &CompileContext) -> Self {
+        let _ = props.get::<MathString>("default-label");
+
         let node = Self {
             display: props.get("display").maybe_unset(true),
             label: props
@@ -800,10 +897,11 @@ impl FromExpr<Line> for LineNode {
                 .maybe_unset(MathString::new(span!(0, 0, 0, 0))),
             display_label: props.get("display_label").maybe_unset(false),
             line_type: props.get("line_type").maybe_unset(LineType::Line),
+            style: props.get("style").maybe_unset(Mode::Default),
             expr: expr.clone_without_node(),
         };
 
-        props.finish(&["display", "label", "display_label", "line_type"], context);
+        props.finish(context);
 
         node
     }
@@ -812,6 +910,7 @@ impl FromExpr<Line> for LineNode {
 #[derive(Debug)]
 pub struct ScalarNode {
     pub display: MaybeUnset<bool>,
+    pub expr: Expr<Scalar>
 }
 
 impl Node for ScalarNode {
@@ -823,16 +922,21 @@ impl Node for ScalarNode {
         self.display.get_copied()
     }
 
-    fn build(&self, _compiler: &mut Compiler, _figure: &mut Figure) {}
+    fn build(self: Box<Self>, _compiler: &mut Compiler, _figure: &mut Figure) {}
 }
 
 impl FromExpr<Scalar> for ScalarNode {
-    fn from_expr(_expr: &Expr<Scalar>, mut props: Properties, context: &CompileContext) -> Self {
+    fn from_expr(expr: &Expr<Scalar>, mut props: Properties, context: &CompileContext) -> Self {
+        let _ = props.get::<MathString>("label");
+        let _ = props.get::<bool>("display_label");
+        let _ = props.get::<MathString>("default-label");
+
         let node = Self {
             display: props.get("display").maybe_unset(true),
+            expr: expr.clone_without_node()
         };
 
-        props.finish(&["display"], context);
+        props.finish(context);
 
         node
     }

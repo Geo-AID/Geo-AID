@@ -25,7 +25,7 @@ use std::f64::consts::PI;
 #[allow(unused_imports)]
 use crate::script::{
     unit,
-    unroll::{CompileContext, Expr, Function, Library, Scalar},
+    unroll::{CompileContext, Expr, Function, Library, Scalar, Properties},
 };
 
 #[allow(unused_imports)]
@@ -37,7 +37,9 @@ pub fn register(library: &mut Library) {
         Function {
             name: String::from("degrees"),
             overloads: vec![overload!((SCALAR) -> ANGLE {
-                |v: Expr<Scalar>, context: &mut CompileContext, _| context.set_unit(context.mult(v, number!(PI / 180.0)), unit::ANGLE)
+                |v: Expr<Scalar>, context: &mut CompileContext, display| {
+                    context.set_unit_display(context.mult(v, number!(PI / 180.0)), unit::ANGLE, display)
+                }
             })],
         },
     );

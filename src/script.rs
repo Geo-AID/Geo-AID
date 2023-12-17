@@ -45,10 +45,6 @@ pub mod parser;
 pub mod token;
 pub mod unroll;
 
-/// Represents a compiler-specific error. The err type is unit-typed, because
-/// caught errors should be captured by the compile context.
-pub type ScriptResult<T> = Result<T, ()>;
-
 #[derive(Debug)]
 pub enum Error {
     InvalidToken {
@@ -252,7 +248,7 @@ impl Error {
                 .add_span(error_span),
             Self::NewLineInString {
                 error_span,
-            } => DiagnosticData::new(&format!("newline in string"))
+            } => DiagnosticData::new(&"newline in string")
                 .add_span(error_span),
             Self::EndOfInput => DiagnosticData::new("unexpected end of input"),
             Self::UndefinedRuleOperator { operator } => {
