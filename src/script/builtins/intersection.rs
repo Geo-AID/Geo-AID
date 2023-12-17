@@ -18,24 +18,47 @@ WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-#[allow(unused_imports)]
+use crate::script::unroll::{Properties, BuildAssociated, PointNode, Point};
 use crate::{
-    script::unroll::{CompileContext, Expr, Function, Library, Line, Point},
-    take_nodes,
+    script::unroll::{CompileContext, Expr, Function, Library, Line}
 };
 use geo_aid_derive::overload;
+
+fn intersection_function_line_line(
+    k: Expr<Line>,
+    l: Expr<Line>,
+    context: &CompileContext,
+    display: Properties,
+) -> Expr<Point> {
+    let mut expr = context.intersection_display(k, l, display);
+
+    if let Some(node) = &mut expr.node {
+        node.set_associated(Associated);
+    }
+
+    expr
+}
+
+#[derive(Debug)]
+pub struct Associated;
+
+impl BuildAssociated<PointNode> for Associated {
+    fn build_associated(
+            self: Box<Self>,
+            _compiler: &mut crate::script::compile::Compiler,
+            _figure: &mut crate::script::figure::Figure,
+            associated: &mut crate::script::unroll::HierarchyNode<PointNode>,
+        ) {
+        associated.root.display_dot.set_if_unset(false);
+    }
+}
 
 pub fn register(library: &mut Library) {
     library.functions.insert(
         String::from("intersection"),
         Function {
             name: String::from("intersection"),
-            overloads: vec![overload!((LINE, LINE) -> POINT {
-                |mut k: Expr<Line>, mut l: Expr<Line>, context: &CompileContext, display| {
-                    let nodes = take_nodes!(k, l);
-                    context.expr_with(Point::LineLineIntersection(k, l), display, nodes)
-                }
-            })],
+            overloads: vec![overload!((LINE, LINE) -> POINT : intersection_function_line_line)],
         },
     );
 }

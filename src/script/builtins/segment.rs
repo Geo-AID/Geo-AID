@@ -20,6 +20,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #[allow(unused_imports)]
 use crate::script::builtins::macros::{call, construct_bundle, index};
+use crate::script::{unroll::{BuildAssociated, HierarchyNode, BundleNode}, figure::{Figure, Mode}, compile::{Compiler, Compile}};
 use geo_aid_derive::overload;
 
 #[allow(unused_imports)]
@@ -30,12 +31,54 @@ use crate::script::unroll::{
 fn segment_function_point_point(
     mut a: Expr<Point>,
     mut b: Expr<Point>,
-    _context: &CompileContext,
-    display: Properties,
+    context: &CompileContext,
+    mut display: Properties,
 ) -> Expr<Bundle> {
-    drop(display);
+    let mut expr = construct_bundle!(Segment { A: a, B: b });
 
-    construct_bundle!(Segment { A: a, B: b })
+    if let Some(node)  = &mut expr.node {
+        node.root.display = display.get("display").maybe_unset(true);
+
+        let display_line = display.get("display_line").maybe_unset(true);
+        let style = display.get("style").maybe_unset(Mode::Default);
+        
+        node.insert_data("display_line", display_line);
+        node.insert_data("style", style);
+        node.set_associated(Associated);
+    }
+
+    display.finish(context);
+
+    expr
+}
+
+/// ```
+/// struct Associated {
+///     display_line: bool,
+///     style: Mode
+/// }
+/// ```
+#[derive(Debug)]
+pub struct Associated;
+
+impl BuildAssociated<BundleNode> for Associated {
+    fn build_associated(
+            self: Box<Self>,
+            compiler: &mut Compiler,
+            figure: &mut Figure,
+            associated: &mut HierarchyNode<BundleNode>,
+        ) {
+        let display_line = associated.get_data("display_line").unwrap().as_bool().unwrap();
+        let style = associated.get_data("style").unwrap().as_style().unwrap();
+
+        if display_line.unwrap() {
+            figure.segments.push((
+                compiler.compile(associated.root.children["A"].as_point().unwrap()),
+                compiler.compile(associated.root.children["B"].as_point().unwrap()),
+                style.unwrap()
+            ))
+        }
+    }
 }
 
 pub fn register(library: &mut Library) {
@@ -45,10 +88,10 @@ pub fn register(library: &mut Library) {
             name: String::from("Segment"),
             overloads: vec![
                 overload!((2-P) -> Segment {
-                    |mut col: Expr<PointCollection>, context, _| call!(context:segment_function_point_point(
+                    |mut col: Expr<PointCollection>, context, display| call!(context:segment_function_point_point(
                         index!(node col, 0),
                         index!(node col, 1)
-                    ))
+                    ) with display)
                 }),
                 overload!((POINT, POINT) -> Segment : segment_function_point_point),
             ],

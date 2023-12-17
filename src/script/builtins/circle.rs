@@ -56,9 +56,12 @@ pub fn register(library: &mut Library) {
                         let pt = context.add_point();
                         let sc = context.add_scalar();
 
+                        let mut pt_expr = context.entity_p(pt);
+                        pt_expr.take_node();
+
                         call!(
                             context:circle_function(
-                                context.entity_p(pt),
+                                pt_expr,
                                 context.entity_s(sc, unit::DISTANCE)
                             ) with display
                         )

@@ -18,6 +18,7 @@ WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use crate::script::{unroll::{BuildAssociated, ScalarNode, HierarchyNode, ScalarData}, compile::{Compiler, Compile}, figure::{Figure, Mode}};
 #[allow(unused_imports)]
 use crate::script::unroll::{
     CompileContext, Expr, Function, Library, Line, Point, PointCollection, Properties, Scalar,
@@ -33,10 +34,67 @@ fn angle_function_point_point_point(
     b: Expr<Point>,
     c: Expr<Point>,
     context: &CompileContext,
-    display: Properties,
+    mut display: Properties,
 ) -> Expr<Scalar> {
-    drop(display);
-    context.angle_ppp(a, b, c)
+    let display_arms = display.get("display_arms").maybe_unset(true);
+    let arms_style = display.get("arms_style").maybe_unset(Mode::Default);
+
+    let mut expr = context.angle_ppp_display(a, b, c, display);
+
+    if let Some(node) = &mut expr.node {
+        node.insert_data("display_arms", display_arms);
+        node.insert_data("arms_style", arms_style);
+
+        node.set_associated(Associated);
+    }
+    expr
+}
+
+/// ```
+/// struct Associated {
+///     display_arms: bool,
+///     amrs_style: Style
+/// }
+/// ```
+#[derive(Debug)]
+pub struct Associated;
+
+impl BuildAssociated<ScalarNode> for Associated {
+    fn build_associated(
+        self: Box<Self>,
+        compiler: &mut Compiler,
+        figure: &mut Figure,
+        associated: &mut HierarchyNode<ScalarNode>,
+    ) {
+        let display_arms = associated
+            .get_data("display_arms")
+            .unwrap()
+            .as_bool()
+            .unwrap()
+            .unwrap();
+
+        let arms_style = associated
+            .get_data("arms_style")
+            .unwrap()
+            .as_style()
+            .unwrap()
+            .unwrap();
+
+        if display_arms {
+            match &associated.root.expr.data.data {
+                ScalarData::ThreePointAngle(a, b, c)
+                | ScalarData::ThreePointAngleDir(a, b, c) => {
+                    let a = compiler.compile(a);
+                    let b = compiler.compile(b);
+                    let c = compiler.compile(c);
+
+                    figure.segments.push((b.clone(), a, arms_style));
+                    figure.segments.push((b, c, arms_style));
+                }
+                _ => unreachable!(),
+            }
+        }
+    }
 }
 
 /// angle(line, line) - distance between a point and a line.
@@ -46,8 +104,7 @@ fn angle_function_line_line(
     context: &CompileContext,
     display: Properties,
 ) -> Expr<Scalar> {
-    drop(display);
-    context.angle_ll(k, l)
+    context.angle_ll_display(k, l, display)
 }
 
 pub fn register(library: &mut Library) {
@@ -57,11 +114,11 @@ pub fn register(library: &mut Library) {
             name: String::from("angle"),
             overloads: vec![
                 overload!((3-P) -> ANGLE {
-                    |mut col: Expr<PointCollection>, context, _| call!(context:angle_function_point_point_point(
+                    |mut col: Expr<PointCollection>, context, display| call!(context:angle_function_point_point_point(
                         index!(node col, 0),
                         index!(node col, 1),
                         index!(node col, 2)
-                    ))
+                    ) with display)
                 }),
                 overload!((POINT, POINT, POINT) -> ANGLE : angle_function_point_point_point),
                 overload!((LINE, LINE) -> ANGLE : angle_function_line_line),

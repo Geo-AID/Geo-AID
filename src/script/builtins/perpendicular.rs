@@ -31,10 +31,7 @@ pub fn line_point(
     context: &CompileContext,
     display: Properties,
 ) -> Expr<Line> {
-    drop(display);
-    let expr = context.perpendicular_through(line, point);
-
-    expr
+    context.perpendicular_through_display(line, point, display)
 }
 
 pub fn register(library: &mut Library) {

@@ -18,22 +18,18 @@ WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use std::rc::Rc;
-
 #[allow(unused_imports)]
 use crate::script::unroll::{
     CompileContext, Expr, Function, Library, Line, Point, PointCollection, Properties,
 };
 use crate::{
-    generator::fast_float::FastFloat,
     script::{
         compile::{Compile, Compiler},
-        figure::{Figure, MathString, Mode},
+        figure::{Figure, Mode},
         unroll::{
-            AssociatedData, BuildAssociated, CloneWithNode, HierarchyNode, LineNode, LineType,
+            BuildAssociated, CloneWithNode, HierarchyNode, LineNode, LineType,
         },
-    },
-    span,
+    }
 };
 use geo_aid_derive::overload;
 
@@ -48,52 +44,51 @@ pub fn point_point_point(
     context: &CompileContext,
     mut display: Properties,
 ) -> Expr<Line> {
-    // We're highjacking the node creation, so util functions.
-    let mut expr = Expr {
-        weight: FastFloat::One,
-        span: span!(0, 0, 0, 0),
-        data: Rc::new(Line::AngleBisector(a, b, c)),
-        node: None,
-    };
-
-    // Line node.
-    let mut node = HierarchyNode::new(LineNode {
-        display: display.get("display").maybe_unset(true),
-        label: display
-            .get("label")
-            .maybe_unset(MathString::new(span!(0, 0, 0, 0))),
-        display_label: display.get("display_label").maybe_unset(false),
-        line_type: display.get("line_type").maybe_unset(LineType::Ray), // The change. Bisectors are to be treated as rays.
-        expr: expr.clone_without_node(),
-    });
-
     let display_arms = display.get("display_arms").maybe_unset(true);
+    let arms_style = display.get("arms_style").maybe_unset(Mode::Default);
 
-    display.finish(&["display", "label", "display_label", "line_type"], context);
+    let mut expr = context.bisector_ppp_display(a, b, c, display);
 
-    node.insert_data("display_arms", AssociatedData::Bool(display_arms));
+    if let Some(node) = &mut expr.node {
+        node.insert_data("display_arms", display_arms);
+        node.insert_data("arms_style", arms_style);
 
-    node.set_associated(BisectorNode);
-
-    expr.node = Some(node);
+        node.set_associated(Associated);
+    }
     expr
 }
 
+/// ```
+/// struct Associated {
+///     display_arms: bool,
+///     amrs_style: Style
+/// }
+/// ```
 #[derive(Debug)]
-pub struct BisectorNode;
+pub struct Associated;
 
-impl BuildAssociated<LineNode> for BisectorNode {
+impl BuildAssociated<LineNode> for Associated {
     fn build_associated(
-        &self,
+        self: Box<Self>,
         compiler: &mut Compiler,
         figure: &mut Figure,
-        associated: &HierarchyNode<LineNode>,
+        associated: &mut HierarchyNode<LineNode>,
     ) {
         let display_arms = associated
             .get_data("display_arms")
             .unwrap()
             .as_bool()
+            .unwrap()
             .unwrap();
+
+        let arms_style = associated
+            .get_data("arms_style")
+            .unwrap()
+            .as_style()
+            .unwrap()
+            .unwrap();
+
+        associated.root.line_type.set_if_unset(LineType::Ray);
 
         if display_arms {
             match associated.root.expr.data.as_ref() {
@@ -102,8 +97,8 @@ impl BuildAssociated<LineNode> for BisectorNode {
                     let b = compiler.compile(b);
                     let c = compiler.compile(c);
 
-                    figure.segments.push((b.clone(), a, Mode::Default));
-                    figure.segments.push((b, c, Mode::Default));
+                    figure.segments.push((b.clone(), a, arms_style));
+                    figure.segments.push((b, c, arms_style));
                 }
                 _ => unreachable!(),
             }
@@ -121,14 +116,10 @@ pub fn point_point(
     use super::mid::function_point;
     use super::perpendicular::line_point;
 
-    let expr = call!(context:line_point(
+    call!(context:line_point(
         context.line(a.clone_without_node(), b.clone_without_node()),
         call!(context:function_point(vec![a, b]))
-    ) with display);
-
-    // context.figure.lines.push(expr.clone());
-
-    expr
+    ) with display)
 }
 
 pub fn register(library: &mut Library) {

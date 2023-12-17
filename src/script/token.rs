@@ -194,16 +194,16 @@ impl Span {
 
 impl PartialOrd for Span {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        match self.start.cmp(&other.start) {
-            std::cmp::Ordering::Equal => Some(self.end.cmp(&other.end)),
-            v => Some(v),
-        }
+        Some(self.cmp(other))
     }
 }
 
 impl Ord for Span {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.partial_cmp(other).unwrap()
+        match self.start.cmp(&other.start) {
+            std::cmp::Ordering::Equal => self.end.cmp(&other.end),
+            v => v,
+        }
     }
 }
 
@@ -568,8 +568,7 @@ impl Display for PointCollection {
             "{}",
             self.collection
                 .iter()
-                .map(|item| format!("{item}"))
-                .collect::<String>()
+                .fold(String::new(), |b, x| b + &x.to_string())
         )
     }
 }
@@ -664,7 +663,7 @@ fn read_string<I: Iterator<Item = char>>(
     it.next();
     position.column += 1;
 
-    while let Some(c) = it.next() {
+    for c in it.by_ref() {
         position.column += 1;
 
         // Guard for non-ASCII
@@ -864,6 +863,7 @@ fn dispatch_ident(sp: Span, ident: String) -> Ident {
     invalid += chars.count();
 
     if invalid > 0 {
+        #[allow(clippy::cast_precision_loss)]
         return Ident::Named(NamedIdent {
             span: sp,
             ident,
