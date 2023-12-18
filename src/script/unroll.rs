@@ -43,7 +43,7 @@ pub use context::{
 
 use self::figure::FromExpr;
 
-use super::figure::{MathString, Mode};
+use super::figure::{MathString, Style};
 use super::parser::FromProperty;
 use super::{
     builtins,
@@ -1298,7 +1298,7 @@ impl ConvertFrom<Expr<PointCollection>> for Line {
                             .get("label")
                             .maybe_unset(MathString::new(span!(0, 0, 0, 0)));
                         ln_node.root.line_type = props.get("line_type").maybe_unset(LineType::Line);
-                        ln_node.root.style = props.get("style").maybe_unset(Mode::Default);
+                        ln_node.root.style = props.get("style").maybe_unset(Style::default());
                     }
 
                     props.finish(context);

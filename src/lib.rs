@@ -25,6 +25,7 @@ pub mod drawer;
 pub mod generator;
 pub mod projector;
 pub mod script;
+pub mod labels;
 
 #[derive(Debug)]
 pub enum Error {

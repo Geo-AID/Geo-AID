@@ -18,7 +18,7 @@ WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use crate::script::{figure::Mode, unroll::{BuildAssociated, ScalarNode, ScalarData, CloneWithNode}, compile::Compile};
+use crate::script::{figure::Style, unroll::{BuildAssociated, ScalarNode, ScalarData, CloneWithNode}, compile::Compile};
 #[allow(unused_imports)]
 use crate::script::{
     unit,
@@ -35,7 +35,7 @@ pub fn distance_function_pp(
     mut display: Properties
 ) -> Expr<Scalar> {
     let display_segment = display.get("display_segment").maybe_unset(true);
-    let style = display.get("style").maybe_unset(Mode::Default);
+    let style = display.get("style").maybe_unset(Style::default());
 
     let mut expr = context.distance_pp_display(a, b, display);
 
@@ -55,7 +55,7 @@ fn distance_function_pl(
     mut display: Properties
 ) -> Expr<Scalar> {
     let display_segment = display.get("display_segment").maybe_unset(true);
-    let style = display.get("style").maybe_unset(Mode::Dashed);
+    let style = display.get("style").maybe_unset(Style::Dashed);
 
     let mut expr = context.distance_pl_display(a, k, display);
 

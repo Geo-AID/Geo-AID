@@ -20,7 +20,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #[allow(unused_imports)]
 use crate::script::builtins::macros::{call, construct_bundle, index};
-use crate::script::{unroll::{BuildAssociated, HierarchyNode, BundleNode}, figure::{Figure, Mode}, compile::{Compiler, Compile}};
+use crate::script::{unroll::{BuildAssociated, HierarchyNode, BundleNode}, figure::{Figure, Style}, compile::{Compiler, Compile}};
 use geo_aid_derive::overload;
 
 #[allow(unused_imports)]
@@ -40,7 +40,7 @@ fn segment_function_point_point(
         node.root.display = display.get("display").maybe_unset(true);
 
         let display_line = display.get("display_line").maybe_unset(true);
-        let style = display.get("style").maybe_unset(Mode::Default);
+        let style = display.get("style").maybe_unset(Style::default());
         
         node.insert_data("display_line", display_line);
         node.insert_data("style", style);

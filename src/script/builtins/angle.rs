@@ -18,7 +18,7 @@ WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use crate::script::{unroll::{BuildAssociated, ScalarNode, HierarchyNode, ScalarData}, compile::{Compiler, Compile}, figure::{Figure, Mode}};
+use crate::script::{unroll::{BuildAssociated, ScalarNode, HierarchyNode, ScalarData}, compile::{Compiler, Compile}, figure::{Figure, Style}};
 #[allow(unused_imports)]
 use crate::script::unroll::{
     CompileContext, Expr, Function, Library, Line, Point, PointCollection, Properties, Scalar,
@@ -37,7 +37,7 @@ fn angle_function_point_point_point(
     mut display: Properties,
 ) -> Expr<Scalar> {
     let display_arms = display.get("display_arms").maybe_unset(true);
-    let arms_style = display.get("arms_style").maybe_unset(Mode::Default);
+    let arms_style = display.get("arms_style").maybe_unset(Style::default());
 
     let mut expr = context.angle_ppp_display(a, b, c, display);
 

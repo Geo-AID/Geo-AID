@@ -30,7 +30,7 @@ use crate::{
         RenderedSegment,
     },
     script::{
-        figure::Mode::{self, Bolded, Dashed, Default, Dotted},
+        figure::Style::{self, Bolded, Dashed, Solid, Dotted},
         HashableArc,
     },
 };
@@ -46,24 +46,26 @@ fn get_point_name(expr: &Arc<Expression<PointExpr>>, output: &Output, point: Com
 }
 
 /// Function that assigns drawing modes to the rendered variants.
-fn assign_mode(rendered: &Rendered, mode: Mode) -> String {
+fn assign_mode(rendered: &Rendered, mode: Style) -> String {
     match rendered {
         Rendered::Point(_) => unreachable!(),
         _ => match mode {
             Dotted => "dotted".to_string(),
             Dashed => "dashed".to_string(),
             Bolded => "bolded".to_string(),
-            Default => "default".to_string(),
+            Solid => "default".to_string(),
         },
     }
 }
 
 /// Function that handles the points.
 fn points(mut file: &File, point: &Rc<RenderedPoint>) {
-    file.write_all((format!("\npoint: label of the point - \"{}\", x and y coordinates of the point - ({:.3}, {:.3})", 
+    file.write_all((format!("\npoint: label of the point - \"{}\", coordinates: point - ({:.3}, {:.3}), label - ({:.3}, {:.3})", 
         point.label,
         point.position.real,
-        point.position.imaginary))
+        point.position.imaginary,
+        point.label_position.real,
+        point.label_position.imaginary))
             .as_bytes())
             .unwrap();
 }

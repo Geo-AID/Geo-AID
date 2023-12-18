@@ -23,7 +23,7 @@ use std::{collections::HashMap, fmt::Debug, ops::Deref};
 use crate::{
     script::{
         compile::{Compile, Compiler},
-        figure::{Figure, MathString, Mode},
+        figure::{Figure, MathString, Style},
         parser::{FromProperty, Parse, PropertyValue},
         Error,
     },
@@ -242,7 +242,7 @@ pub trait BuildAssociated<T: Node>: Debug {
 #[derive(Debug)]
 pub enum AssociatedData {
     Bool(MaybeUnset<bool>),
-    Style(MaybeUnset<Mode>)
+    Style(MaybeUnset<Style>)
 }
 
 impl AssociatedData {
@@ -255,7 +255,7 @@ impl AssociatedData {
     }
 
     #[must_use]
-    pub fn as_style(&self) -> Option<MaybeUnset<Mode>> {
+    pub fn as_style(&self) -> Option<MaybeUnset<Style>> {
         match self {
             Self::Style(v) => Some(v.copied()),
             _ => None
@@ -269,8 +269,8 @@ impl From<MaybeUnset<bool>> for AssociatedData {
     }
 }
 
-impl From<MaybeUnset<Mode>> for AssociatedData {
-    fn from(value: MaybeUnset<Mode>) -> Self {
+impl From<MaybeUnset<Style>> for AssociatedData {
+    fn from(value: MaybeUnset<Style>) -> Self {
         Self::Style(value)
     }
 }
@@ -698,7 +698,7 @@ pub struct CircleNode {
     pub label: MaybeUnset<MathString>,
     pub display_label: MaybeUnset<bool>,
     pub default_label: MathString,
-    pub style: MaybeUnset<Mode>,
+    pub style: MaybeUnset<Style>,
     pub expr: Expr<Circle>,
 }
 
@@ -715,7 +715,7 @@ impl Node for CircleNode {
         if self.display.unwrap() {
             figure.circles.push((
                 compiler.compile(&self.expr),
-                self.style.unwrap(), // if self.display_label.unwrap() {
+                Style::Solid, // if self.display_label.unwrap() {
                                //     let label = self.label.unwrap();
 
                                //     if label.is_empty() {
@@ -744,7 +744,7 @@ impl FromExpr<Circle> for CircleNode {
             default_label: props
                 .get("default-label")
                 .get_or(MathString::new(span!(0, 0, 0, 0))),
-            style: props.get("style").maybe_unset(Mode::Default),
+            style: props.get("style").maybe_unset(Style::default()),
             expr: expr.clone_without_node(),
         };
 
@@ -807,8 +807,8 @@ property_enum! {
 }
 
 property_enum_impl! {
-    Mode {
-        Default: "solid",
+    Style {
+        Solid: "solid",
         Dashed: "dashed",
         Dotted: "dotted",
         Bolded: "bold"
@@ -821,7 +821,7 @@ pub struct LineNode {
     pub label: MaybeUnset<MathString>,
     pub display_label: MaybeUnset<bool>,
     pub line_type: MaybeUnset<LineType>,
-    pub style: MaybeUnset<Mode>,
+    pub style: MaybeUnset<Style>,
     pub expr: Expr<Line>,
 }
 
@@ -851,12 +851,12 @@ impl Node for LineNode {
             match self.line_type.unwrap() {
                 LineType::Line => figure
                     .lines
-                    .push((compiler.compile(&self.expr), self.style.unwrap())),
+                    .push((compiler.compile(&self.expr), Style::Solid)),
                 LineType::Ray => match &self.expr.data.as_ref() {
                     Line::LineFromPoints(a, b) => {
                         figure
                             .rays
-                            .push((compiler.compile(a), compiler.compile(b), self.style.unwrap()));
+                            .push((compiler.compile(a), compiler.compile(b), Style::Solid))
                     }
                     Line::AngleBisector(a, b, c) => {
                         let x = Expr::new_spanless(Point::LineLineIntersection(
@@ -869,7 +869,7 @@ impl Node for LineNode {
 
                         figure
                             .rays
-                            .push((compiler.compile(b), compiler.compile(&x), self.style.unwrap()));
+                            .push((compiler.compile(b), compiler.compile(&x), Style::Solid))
                     }
                     _ => unreachable!(),
                 },
@@ -877,7 +877,7 @@ impl Node for LineNode {
                     Line::LineFromPoints(a, b) => figure.segments.push((
                         compiler.compile(a),
                         compiler.compile(b),
-                        self.style.unwrap(),
+                        Style::Solid,
                     )),
                     _ => unreachable!(),
                 },
@@ -897,7 +897,7 @@ impl FromExpr<Line> for LineNode {
                 .maybe_unset(MathString::new(span!(0, 0, 0, 0))),
             display_label: props.get("display_label").maybe_unset(false),
             line_type: props.get("line_type").maybe_unset(LineType::Line),
-            style: props.get("style").maybe_unset(Mode::Default),
+            style: props.get("style").maybe_unset(Style::default()),
             expr: expr.clone_without_node(),
         };
 
