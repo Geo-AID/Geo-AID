@@ -45,7 +45,7 @@ pub fn point_point_point(
     mut display: Properties,
 ) -> Expr<Line> {
     let display_arms = display.get("display_arms").maybe_unset(true);
-    let arms_style = display.get("arms_style").maybe_unset(Mode::Default);
+    let arms_style = display.get("arms_style").maybe_unset(Style::default());
 
     let mut expr = context.bisector_ppp_display(a, b, c, display);
 
