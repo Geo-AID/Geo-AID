@@ -18,7 +18,7 @@ WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use std::{fs::File, io::Write, path::Path, rc::Rc};
+use std::{fs::File, io::Write, path::Path, rc::Rc, fmt::format};
 
 use crate::{
     generator::{geometry, Complex},
@@ -26,12 +26,12 @@ use crate::{
         Output, Rendered, RenderedAngle, RenderedCircle, RenderedLine, RenderedPoint, RenderedRay,
         RenderedSegment,
     },
-    script::figure::Mode::{self, Bolded, Dashed, Default, Dotted},
+    script::figure::Style::{self, Bolded, Dashed, Solid, Dotted},
 };
 
 /// Function that assigns modes to the rendered variants.
-fn assign_mode(rendered: &Rendered, mode: Mode) -> (String, String) {
-    let default_width = "1".to_string();
+fn assign_mode(rendered: &Rendered, mode: Style) -> (String, String) {
+    let default_width = "0.5".to_string();
     let default_strarray = "1,0".to_string();
     match rendered {
         Rendered::Point(_) => unreachable!(),
@@ -39,31 +39,21 @@ fn assign_mode(rendered: &Rendered, mode: Mode) -> (String, String) {
             Dotted => (default_width, "0.8,1".to_string()),
             Dashed => (default_width, "2,2".to_string()),
             Bolded => ("2".to_string(), default_strarray),
-            Default => ("1".to_string(), default_strarray),
+            Solid => ("1".to_string(), default_strarray),
         },
     }
 }
 
 fn points(point: &Rc<RenderedPoint>) -> String {
-    // This of course requires a change. Labels will soon get an overhaul.
-    let p = Complex::new(point.position.real, point.position.imaginary);
-    let real = if p.real - 20.0 < 0.0 {
-        p.real + 20.0
-    } else {
-        p.real - 20.0
-    };
-
-    let imaginary = if p.imaginary - 20.0 < 0.0 {
-        p.imaginary + 20.0
-    } else {
-        p.imaginary - 20.0
-    };
     format!(
         r#"
-            <circle cx="{}" cy="{}" fill="black" r="2"/>
-            <text stroke="black" x="{}" y="{}">{}</text>
+            <circle cx="{}" cy="{}" fill="black" r="1"/>
+            <text transform="scale(-1,1), rotate(180, {}, {})" 
+            text-anchor="middle" dominant-baseline="middle" 
+            style="font-family: 'Computer Modern'" font-size="10px"
+            stroke="black" stroke-width="0" x="{}" y="{}">{}</text>
         "#,
-        point.position.real, point.position.imaginary, real, imaginary, point.label
+        point.position.real, point.position.imaginary, -point.label_position.real, point.label_position.imaginary, -point.label_position.real, point.label_position.imaginary, point.label
     )
 }
 
@@ -153,7 +143,15 @@ fn circles(circle: &RenderedCircle, rendered: &Rendered) -> String {
 pub fn draw(target: &Path, canvas_size: (usize, usize), output: &Output) {
     let mut content = String::new();
     content += &format!(
-        "<svg height=\"{}\" width=\"{}\" xmlns=\"http://www.w3.org/2000/svg\">",
+        r#"
+            <svg height="{}" width="{}" xmlns="http://www.w3.org/2000/svg">
+            <font>
+            <font-face font-family="New Computer Modern">
+            </font-face>
+            </font>
+            <g transform="translate(0,200)">
+            <g transform="scale(1,-1)">
+        "#,
         canvas_size.0, canvas_size.1
     );
 
@@ -167,7 +165,7 @@ pub fn draw(target: &Path, canvas_size: (usize, usize), output: &Output) {
             Rendered::Circle(circle) => circles(circle, elem),
         };
     }
-    content += "</svg>";
+    content += " </g> </g> </svg>";
 
     let mut file = File::create(target).unwrap();
     file.write_all(content.as_bytes()).unwrap();

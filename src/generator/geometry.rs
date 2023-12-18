@@ -78,3 +78,19 @@ pub fn get_angle_directed(arm1: Complex, origin: Complex, arm2: Complex) -> f64 
 pub fn rotate_around(p: Complex, origin: Complex, angle: f64) -> Complex {
     (p - origin) * Complex::new(angle.cos(), angle.sin()) + origin
 }
+
+// Computes Point-Line distance.
+#[must_use]
+pub fn distance_pt_ln(point: Complex, line: Line) -> f64 {
+    // Make the point coordinates relative to the origin and rotate.
+    let point_rot = (point - line.origin) / line.direction;
+
+    // Now we can just get the imaginary part. We have to take the absolute value here.
+    point_rot.imaginary.abs()
+}
+
+// Computes Point-Point distance.
+#[must_use]
+pub fn distance_pt_pt(p1: Complex, p2: Complex) -> f64 {
+    ((p1.real - p2.real) * (p1.real - p2.real) + (p1.imaginary - p2.imaginary) * (p1.imaginary - p2.imaginary)).sqrt()
+}

@@ -47,12 +47,13 @@ pub const SPECIAL_MATH: [&'static str; 49] = [
 ];
 
 /// The display mode of the expression.
-#[derive(Debug, Clone, Serialize, Copy)]
-pub enum Mode {
+#[derive(Debug, Clone, Serialize, Copy, Default)]
+pub enum Style {
     Dotted,
     Dashed,
     Bolded,
-    Default, // Normal solid curve
+    #[default]
+    Solid, // Normal solid curve
 }
 
 /// Defines the visual data of the figure.
@@ -61,15 +62,15 @@ pub struct Figure {
     /// Points to be displayed
     pub points: Vec<(Arc<Expression<PointExpr>>, MathString)>,
     /// Lines to be displayed
-    pub lines: Vec<(Arc<Expression<LineExpr>>, Mode)>,
+    pub lines: Vec<(Arc<Expression<LineExpr>>, Style)>,
     /// Angles to be displayed
-    pub angles: Vec<(Arc<Expression<ScalarExpr>>, u8, Mode)>, // This u8 refers to number of arcs in an angle!
+    pub angles: Vec<(Arc<Expression<ScalarExpr>>, u8, Style)>, // This u8 refers to number of arcs in an angle!
     /// Segments to be displayed
-    pub segments: Vec<(Point, Point, Mode)>,
+    pub segments: Vec<(Point, Point, Style)>,
     /// Rays to be displayed
-    pub rays: Vec<(Point, Point, Mode)>,
+    pub rays: Vec<(Point, Point, Style)>,
     /// Circles to be displayed
-    pub circles: Vec<(Arc<Expression<CircleExpr>>, Mode)>,
+    pub circles: Vec<(Arc<Expression<CircleExpr>>, Style)>,
     /// The canvas size.
     pub canvas_size: (usize, usize),
 }

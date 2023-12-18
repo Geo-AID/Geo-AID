@@ -28,7 +28,7 @@ use crate::{
     generator::fast_float::FastFloat,
     script::{
         compile::{Compile, Compiler},
-        figure::{Figure, MathString, Mode},
+        figure::{Figure, MathString, Style},
         unroll::{
             AssociatedData, BuildAssociated, CloneWithNode, HierarchyNode, LineNode, LineType,
         },
@@ -102,8 +102,8 @@ impl BuildAssociated<LineNode> for BisectorNode {
                     let b = compiler.compile(b);
                     let c = compiler.compile(c);
 
-                    figure.segments.push((b.clone(), a, Mode::Default));
-                    figure.segments.push((b, c, Mode::Default));
+                    figure.segments.push((b.clone(), a, Style::Solid));
+                    figure.segments.push((b, c, Style::Solid));
                 }
                 _ => unreachable!(),
             }

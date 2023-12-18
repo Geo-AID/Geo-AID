@@ -28,7 +28,8 @@ use uuid::Uuid;
 use crate::generator::expression::expr::{AngleLine, AnglePoint};
 use crate::generator::expression::{LineExpr, PointExpr, ScalarExpr};
 use crate::generator::geometry::get_line;
-use crate::script::figure::Mode;
+use crate::labels::point_label_position;
+use crate::script::figure::Style;
 use crate::{
     generator::{
         critic::EvaluationArgs, expression::Expression, expression::Line, geometry, Adjustable,
@@ -42,18 +43,19 @@ mod tests {
     use std::str::FromStr;
     use std::{path::PathBuf, sync::Arc};
 
+    use crate::generator::expression::{LineExpr, ScalarExpr, CircleExpr};
+    use crate::generator::expression::expr::{LinePoint, AnglePoint, CenterRadius, Literal};
     use crate::generator::fast_float::FastFloat;
     use crate::script::figure::MathString;
     use crate::{
         drawer,
         generator::{
             expression::{
-                expr::{AnglePoint, CenterRadius, FreePoint, LinePoint, Literal},
-                CircleExpr, Expression, LineExpr, PointExpr, ScalarExpr,
+                expr::FreePoint, Expression, PointExpr,
             },
             Adjustable, Complex,
         },
-        script::figure::{Figure, Mode},
+        script::figure::{Figure, Style},
     };
 
     use super::project;
@@ -109,7 +111,7 @@ mod tests {
                         }),
                         FastFloat::One,
                     )),
-                    Mode::Dashed,
+                    Style::Dashed,
                 ),
                 (
                     Arc::new(Expression::new(
@@ -119,7 +121,17 @@ mod tests {
                         }),
                         FastFloat::One,
                     )),
-                    Mode::Default,
+                    Style::default(),
+                ),
+                (
+                    Arc::new(Expression::new(
+                        LineExpr::Line(LinePoint {
+                            a: create_point_expr(2),
+                            b: create_point_expr(0),
+                        }),
+                        FastFloat::One,
+                    )),
+                    Style::default(),
                 ),
             ],
             angles: vec![(
@@ -132,15 +144,19 @@ mod tests {
                     FastFloat::One,
                 )),
                 x,
-                Mode::Dashed,
+                Style::Dashed,
             )],
 
             segments: vec![
-                (create_point_expr(0), create_point_expr(1), Mode::Dashed),
-                (create_point_expr(1), create_point_expr(2), Mode::Default),
+                (create_point_expr(0), create_point_expr(1), Style::default()),
+                (create_point_expr(1), create_point_expr(2), Style::default()),
+                (create_point_expr(2), create_point_expr(0), Style::default()),
             ],
-            rays: vec![(create_point_expr(0), create_point_expr(1), Mode::Default)],
-
+            rays: vec![
+                (create_point_expr(0), create_point_expr(1), Style::Solid),
+                (create_point_expr(1), create_point_expr(2), Style::Solid),
+                (create_point_expr(2), create_point_expr(0), Style::Solid),
+            ],
             circles: vec![(
                 Arc::new(Expression::new(
                     CircleExpr::CenterRadius(CenterRadius {
@@ -152,7 +168,7 @@ mod tests {
                     }),
                     FastFloat::One,
                 )),
-                Mode::Dashed,
+                Style::Dashed,
             )],
 
             canvas_size: (200, 200),
@@ -197,6 +213,8 @@ pub struct Output {
 pub struct RenderedPoint {
     /// The point's label
     pub label: String,
+    /// Label's position
+    pub label_position: Complex,
     /// Point's position
     pub position: Complex,
     /// Point's custom uuid
@@ -212,7 +230,7 @@ pub struct RenderedLine {
     /// Expression defining the line
     pub expr: Arc<Expression<LineExpr>>,
     /// Enum defining the mode in which the expression should be drawn
-    pub mode: Mode,
+    pub mode: Style,
 }
 
 #[derive(Serialize)]
@@ -228,7 +246,7 @@ pub struct RenderedAngle {
     /// Value of the angle (who'd have guessed)
     pub angle_value: f64,
     /// Enum defining the mode in which the expression should be drawn
-    pub mode: Mode,
+    pub mode: Style,
 }
 #[derive(Serialize)]
 pub struct RenderedSegment {
@@ -237,7 +255,7 @@ pub struct RenderedSegment {
     /// Points defining the segment
     pub points: (Complex, Complex),
     /// Enum defining the mode in which the expression should be drawn
-    pub mode: Mode,
+    pub mode: Style,
 }
 
 #[derive(Serialize)]
@@ -249,7 +267,7 @@ pub struct RenderedRay {
     /// Second drawing point
     pub draw_point: Complex,
     /// Enum defining the mode in which the expression should be drawn
-    pub mode: Mode,
+    pub mode: Style,
 }
 
 #[derive(Serialize)]
@@ -263,8 +281,9 @@ pub struct RenderedCircle {
     /// Radius
     pub radius: f64,
     /// Enum defining the mode in which the expression should be drawn
-    pub mode: Mode,
+    pub mode: Style,
 }
+
 /// Function getting the points defining the angle from the Expression defining it.
 ///
 /// # Panics
@@ -594,24 +613,11 @@ pub fn project(
 
     let points: Vec<Complex> = points.into_iter().map(|x| x * scale + size005).collect();
 
+    //let points = points(figure, generated_points, flags);
+
+    let mut vec_associated = Vec::new();
+
     let mut blueprint_points = Vec::new();
-
-    for (i, pt) in points.iter().enumerate() {
-        let pt_label = figure.points[i].1.to_string();
-        let id = Uuid::new_v4();
-        blueprint_points.push(Rc::new(RenderedPoint {
-            label: pt_label,
-            position: *pt,
-            uuid: id,
-        }));
-    }
-
-    // Creating a HashMap (the bridge between Expressions defining the points and those points).
-    let mut iden = HashMap::new();
-    for (i, pt) in figure.points.clone().iter().enumerate() {
-        let point = HashableArc::new(Arc::clone(&pt.0));
-        iden.insert(point, Rc::clone(&blueprint_points[i]));
-    }
 
     let blueprint_lines = lines(figure, offset, scale, size005, &args);
 
@@ -622,6 +628,28 @@ pub fn project(
     let blueprint_rays = rays(figure, offset, scale, size005, &args);
 
     let blueprint_circles = circles(figure, offset, scale, size005, &args);
+
+    for (i, pt) in points.iter().enumerate() {
+        let pt_label = figure.points[i].1.to_string();
+        let id = Uuid::new_v4();
+
+        let point = *pt;
+
+        blueprint_points.push(Rc::new(RenderedPoint {
+            label: pt_label,
+            label_position: point_label_position(&blueprint_lines, &blueprint_angles, &blueprint_segments, &blueprint_rays, &blueprint_circles, vec_associated.clone(), point),
+            position: *pt,
+            uuid: id,
+        }));
+        vec_associated.clear();
+    }
+
+    // Creating a HashMap (the bridge between Expressions defining the points and those points).
+    let mut iden = HashMap::new();
+    for (i, pt) in figure.points.clone().iter().enumerate() {
+        let point = HashableArc::new(Arc::clone(&pt.0));
+        iden.insert(point, Rc::clone(&blueprint_points[i]));
+    }
 
     Output {
         map: iden,
