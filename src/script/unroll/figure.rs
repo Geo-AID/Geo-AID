@@ -23,7 +23,7 @@ use std::{collections::HashMap, fmt::Debug, ops::Deref};
 use crate::{
     script::{
         compile::{Compile, Compiler},
-        figure::{Figure, MathString, Mode},
+        figure::{Figure, MathString, Style},
         parser::{FromProperty, Parse, PropertyValue},
         Error,
     },
@@ -715,7 +715,7 @@ impl Node for CircleNode {
         if self.display.unwrap() {
             figure.circles.push((
                 compiler.compile(&self.expr),
-                self.style.unwrap(), // if self.display_label.unwrap() {
+                Style::Solid, // if self.display_label.unwrap() {
                                //     let label = self.label.unwrap();
 
                                //     if label.is_empty() {
@@ -851,12 +851,12 @@ impl Node for LineNode {
             match self.line_type.unwrap() {
                 LineType::Line => figure
                     .lines
-                    .push((compiler.compile(&self.expr), self.style.unwrap())),
+                    .push((compiler.compile(&self.expr), Style::Solid)),
                 LineType::Ray => match &self.expr.data.as_ref() {
                     Line::LineFromPoints(a, b) => {
                         figure
                             .rays
-                            .push((compiler.compile(a), compiler.compile(b), self.style.unwrap()));
+                            .push((compiler.compile(a), compiler.compile(b), Style::Solid))
                     }
                     Line::AngleBisector(a, b, c) => {
                         let x = Expr::new_spanless(Point::LineLineIntersection(
@@ -869,7 +869,7 @@ impl Node for LineNode {
 
                         figure
                             .rays
-                            .push((compiler.compile(b), compiler.compile(&x), self.style.unwrap()));
+                            .push((compiler.compile(b), compiler.compile(&x), Style::Solid))
                     }
                     _ => unreachable!(),
                 },
@@ -877,7 +877,7 @@ impl Node for LineNode {
                     Line::LineFromPoints(a, b) => figure.segments.push((
                         compiler.compile(a),
                         compiler.compile(b),
-                        self.style.unwrap(),
+                        Style::Solid,
                     )),
                     _ => unreachable!(),
                 },

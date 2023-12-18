@@ -25,7 +25,7 @@ use crate::script::unroll::{
 use crate::{
     script::{
         compile::{Compile, Compiler},
-        figure::{Figure, Mode},
+        figure::{Figure, MathString, Style},
         unroll::{
             BuildAssociated, CloneWithNode, HierarchyNode, LineNode, LineType,
         },
@@ -97,8 +97,8 @@ impl BuildAssociated<LineNode> for Associated {
                     let b = compiler.compile(b);
                     let c = compiler.compile(c);
 
-                    figure.segments.push((b.clone(), a, arms_style));
-                    figure.segments.push((b, c, arms_style));
+                    figure.segments.push((b.clone(), a, Style::Solid));
+                    figure.segments.push((b, c, Style::Solid));
                 }
                 _ => unreachable!(),
             }

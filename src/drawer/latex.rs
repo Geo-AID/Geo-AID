@@ -32,7 +32,7 @@ use crate::projector::{
 };
 use crate::script::HashableArc;
 
-use crate::script::figure::Mode::{self, Bolded, Dashed, Default, Dotted};
+use crate::script::figure::Style::{self, Bolded, Dashed, Solid, Dotted};
 
 /// Function getting the point's name (if it exists, if not then it returns the point's coordinates).
 fn get_point_name(
@@ -52,14 +52,14 @@ fn get_point_name(
 }
 
 /// Function that assigns modes to the rendered variants.
-fn assign_mode(rendered: &Rendered, mode: Mode) -> String {
+fn assign_mode(rendered: &Rendered, mode: Style) -> String {
     match rendered {
         Rendered::Point(_) => unreachable!(),
         _ => match mode {
             Dotted => "dotted".to_string(),
             Dashed => "dashed".to_string(),
             Bolded => "ultra thick".to_string(),
-            Default => "thin".to_string(),
+            Solid => "thin".to_string(),
         },
     }
 }
@@ -67,9 +67,13 @@ fn assign_mode(rendered: &Rendered, mode: Mode) -> String {
 /// Function that handles the points.
 fn points(point: &Rc<RenderedPoint>, scale: f64) -> String {
     let position = point.position * scale;
+    let label_position = point.label_position * scale;
     format!(
-        "\\coordinate [label=left:${}$] ({}) at ({}, {}); \\fill[black] ({}) circle (1pt);",
-        point.label, point.uuid, position.real, position.imaginary, point.uuid
+        r#"
+            \coordinate ({}) at ({}, {}); \fill[black] ({}) circle (1pt);
+            \node at ({}, {}) {{{}}};
+        "#,
+        point.uuid, position.real, position.imaginary, point.uuid, label_position.real, label_position.imaginary, point.label
     )
 }
 
@@ -203,7 +207,7 @@ fn circles(circle: &RenderedCircle, scale: f64, rendered: &Rendered) -> String {
 pub fn draw(target: &Path, canvas_size: (usize, usize), output: &Output) {
     // We must allow losing precision here.
     #[allow(clippy::cast_precision_loss)]
-    let scale = f64::min(20.0 / canvas_size.0 as f64, 20.0 / canvas_size.1 as f64);
+    let scale = f64::min(10.0 / canvas_size.0 as f64, 10.0 / canvas_size.1 as f64);
     let mut content = String::from(
         r"
     \documentclass{article}
