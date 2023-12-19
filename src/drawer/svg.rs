@@ -26,7 +26,7 @@ use crate::{
         Output, Rendered, RenderedAngle, RenderedCircle, RenderedLine, RenderedPoint, RenderedRay,
         RenderedSegment,
     },
-    script::figure::Style::{self, Bolded, Dashed, Solid, Dotted},
+    script::figure::Style::{self, Bold, Dashed, Solid, Dotted},
 };
 
 /// Function that assigns modes to the rendered variants.
@@ -38,7 +38,7 @@ fn assign_mode(rendered: &Rendered, mode: Style) -> (String, String) {
         _ => match mode {
             Dotted => (default_width, "0.8,1".to_string()),
             Dashed => (default_width, "2,2".to_string()),
-            Bolded => ("2".to_string(), default_strarray),
+            Bold => ("2".to_string(), default_strarray),
             Solid => ("1".to_string(), default_strarray),
         },
     }

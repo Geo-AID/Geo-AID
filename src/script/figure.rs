@@ -43,7 +43,7 @@ pub const SPECIAL_MATH: [&str; 49] = [
     "zeta", "Zeta", "eta", "Eta", "theta", "Theta", "iota", "Iota", "kappa", "Kappa", "lambda",
     "Lambda", "mu", "Mu", "nu", "Nu", "xi", "Xi", "omicron", "Omicorn", "phi", "Phi", "rho", "Rho",
     "sigma", "Sigma", "tau", "Tau", "upsilon", "Upsilon", "phi", "Phi", "chi", "Chi", "psi", "Psi",
-    "omega", "Omega", "quote",
+    "omega", "Omega", "quote"
 ];
 
 /// The display mode of the expression.
@@ -51,7 +51,7 @@ pub const SPECIAL_MATH: [&str; 49] = [
 pub enum Style {
     Dotted,
     Dashed,
-    Bolded,
+    Bold,
     #[default]
     Solid, // Normal solid curve
 }
@@ -172,7 +172,7 @@ pub enum MathSpecial {
 impl MathSpecial {
     #[must_use]
     pub fn is_alphabetic(self) -> bool {
-        true
+        self != Self::Quote
     }
 
     /// # Errors
@@ -238,7 +238,11 @@ impl MathString {
         }
 
         if let Ok(special) = MathSpecial::parse(&letter, span!(0, 0, 0, 0)) {
-            result.push(MathChar::Special(special));
+            if special.is_alphabetic() {
+                result.push(MathChar::Special(special));
+            } else {
+                return None;
+            }
         } else if letter.len() == 1 {
             result.push(MathChar::Ascii(letter.chars().next().unwrap()));
         } else {

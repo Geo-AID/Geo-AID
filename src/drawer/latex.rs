@@ -32,7 +32,7 @@ use crate::projector::{
 };
 use crate::script::HashableArc;
 
-use crate::script::figure::Style::{self, Bolded, Dashed, Solid, Dotted};
+use crate::script::figure::Style::{self, Bold, Dashed, Solid, Dotted};
 
 /// Function getting the point's name (if it exists, if not then it returns the point's coordinates).
 fn get_point_name(
@@ -58,7 +58,7 @@ fn assign_mode(rendered: &Rendered, mode: Style) -> String {
         _ => match mode {
             Dotted => "dotted".to_string(),
             Dashed => "dashed".to_string(),
-            Bolded => "ultra thick".to_string(),
+            Bold => "ultra thick".to_string(),
             Solid => "thin".to_string(),
         },
     }

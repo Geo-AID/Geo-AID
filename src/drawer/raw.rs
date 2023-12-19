@@ -30,7 +30,7 @@ use crate::{
         RenderedSegment,
     },
     script::{
-        figure::Style::{self, Bolded, Dashed, Solid, Dotted},
+        figure::Style::{self, Bold, Dashed, Solid, Dotted},
         HashableArc,
     },
 };
@@ -52,7 +52,7 @@ fn assign_mode(rendered: &Rendered, mode: Style) -> String {
         _ => match mode {
             Dotted => "dotted".to_string(),
             Dashed => "dashed".to_string(),
-            Bolded => "bolded".to_string(),
+            Bold => "bolded".to_string(),
             Solid => "default".to_string(),
         },
     }

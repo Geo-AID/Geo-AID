@@ -811,7 +811,7 @@ property_enum_impl! {
         Solid: "solid",
         Dashed: "dashed",
         Dotted: "dotted",
-        Bolded: "bold"
+        Bold: "bold"
     }
 }
 
