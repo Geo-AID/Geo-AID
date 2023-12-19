@@ -16,6 +16,7 @@
         - [Identifiers](./reference/syntax/identifiers.md)
         - [Iterators](./reference/syntax/iterators.md)
         - [Numbers](./reference/syntax/numbers.md)
+        - [Properties](./reference/syntax/properties.md)
         - [Rules](./reference/syntax/rules.md)
         - [Variables](./reference/syntax/variables.md)
     - [Types](./reference/types.md)
@@ -24,3 +25,4 @@
     - [Operators](./reference/operators.md)
     - [Functions](./reference/functions.md)
     - [Rule operators](./reference/rule-operators.md)
+    - [Display system](./reference/display-system.md)

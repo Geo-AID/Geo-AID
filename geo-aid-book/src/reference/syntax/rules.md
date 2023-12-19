@@ -2,7 +2,7 @@
 
 > <sup>**Syntax**</sup>\
 > *RuleStatement* :\
-> &nbsp;&nbsp; *[Expression&lt;true&gt;](expressions.md)* *RuleOp* [Expression&lt;true&gt;](expressions.md)* `;`\
+> &nbsp;&nbsp; *[DisplayProperties](display-properties.md)* *[Expression&lt;true&gt;](expressions.md)* *RuleOp* [Expression&lt;true&gt;](expressions.md)* `;`\
 > \
 > *RuleOp* :\
 > &nbsp;&nbsp; &nbsp;&nbsp; `<` | `<=` | `=` | `>=` | `>`\
