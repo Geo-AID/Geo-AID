@@ -18,7 +18,7 @@ WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use std::{fs::File, io::Write, path::Path, rc::Rc, fmt::format};
+use std::{fs::File, io::Write, path::Path, rc::Rc};
 
 use crate::{
     generator::{geometry, Complex},

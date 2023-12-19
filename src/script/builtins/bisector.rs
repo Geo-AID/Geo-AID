@@ -22,14 +22,12 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 use crate::script::unroll::{
     CompileContext, Expr, Function, Library, Line, Point, PointCollection, Properties,
 };
-use crate::{
-    script::{
-        compile::{Compile, Compiler},
-        figure::{Figure, MathString, Style},
-        unroll::{
-            BuildAssociated, CloneWithNode, HierarchyNode, LineNode, LineType,
-        },
-    }
+use crate::script::{
+    compile::{Compile, Compiler},
+    figure::{Figure, Style},
+    unroll::{
+        BuildAssociated, CloneWithNode, HierarchyNode, LineNode, LineType,
+    },
 };
 use geo_aid_derive::overload;
 
@@ -97,8 +95,8 @@ impl BuildAssociated<LineNode> for Associated {
                     let b = compiler.compile(b);
                     let c = compiler.compile(c);
 
-                    figure.segments.push((b.clone(), a, Style::Solid));
-                    figure.segments.push((b, c, Style::Solid));
+                    figure.segments.push((b.clone(), a, arms_style));
+                    figure.segments.push((b, c, arms_style));
                 }
                 _ => unreachable!(),
             }
