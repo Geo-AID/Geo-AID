@@ -44,7 +44,7 @@ pub use context::{
 use self::figure::FromExpr;
 
 use super::figure::{MathString, Style};
-use super::parser::FromProperty;
+use super::parser::{FromProperty, RefStatement};
 use super::{
     builtins,
     parser::{
@@ -1431,7 +1431,7 @@ impl ConvertFrom<Expr<PointCollection>> for Scalar {
             // unnecessary props creation and drop errors.
             let display = value.node.as_mut()
                 .and_then(|x| x.root.props.take())
-                .unwrap_or_else(|| Properties::default());
+                .unwrap_or_default();
 
             let mut expr = builtins::dst::distance_function_pp(
                 index!(node value, 0),
@@ -2104,7 +2104,7 @@ impl AnyExpr {
     }
 
     #[must_use]
-    pub fn get_node<'r>(&'r self) -> Option<&'r dyn Node> {
+    pub fn get_node(&self) -> Option<&dyn Node> {
         match self {
             Self::Point(x) => x.node.as_ref().map(|c| c as &dyn Node),
             Self::Line(x) => x.node.as_ref().map(|c| c as &dyn Node),
@@ -3323,6 +3323,36 @@ fn create_variables(
     Ok(variable_nodes)
 }
 
+fn unroll_ref(
+    stat: &RefStatement,
+    context: &mut CompileContext,
+    library: &Library
+) -> Result<Vec<Box<dyn Node>>, Error> {
+    let mut nodes = Vec::new();
+    let tree = IterNode::from(&stat.operand);
+
+    // Check the lengths
+    tree.get_iter_lengths(&mut HashMap::new(), stat.get_span())?;
+
+    // And create the index
+    let mut index = IterTreeIterator::new(&tree);
+
+    while let Some(it_index) = index.get_currents() {
+        let node = unroll_expression(
+            &stat.operand,
+            context,
+            library,
+            it_index,
+            Properties::default()
+        ).replace_node(None).map(AnyExprNode::as_dyn);
+        nodes.extend(node);
+
+        index.next();
+    }
+
+    Ok(nodes)
+}
+
 fn unroll_let(
     mut stat: LetStatement,
     context: &mut CompileContext,
@@ -3369,9 +3399,9 @@ fn unroll_let(
 
         while let Some(it_index) = index.get_currents() {
             nodes.push(unroll_rule(
-                unroll_expression(&lhs, context, library, it_index, Properties::default()),
+                (unroll_expression(&lhs, context, library, it_index, Properties::default()),
                 &rule,
-                unroll_expression(&expr, context, library, it_index, Properties::default()),
+                unroll_expression(&expr, context, library, it_index, Properties::default())),
                 context,
                 library,
                 stat_span,
@@ -3542,9 +3572,7 @@ fn unroll_lt(
 }
 
 fn unroll_rule(
-    lhs: AnyExpr,
-    op: &RuleOperator,
-    rhs: AnyExpr,
+    (lhs, op, rhs): (AnyExpr, &RuleOperator, AnyExpr),
     context: &mut CompileContext,
     library: &Library,
     full_span: Span,
@@ -3622,7 +3650,7 @@ fn unroll_rule(
             def(lhs, rhs, context, display, inverted)
         }
         RuleOperator::Inverted(op) => {
-            unroll_rule(lhs, &op.operator, rhs, context, library, full_span, !inverted, display)
+            unroll_rule((lhs, &op.operator, rhs), context, library, full_span, !inverted, display)
         }
     }
 }
@@ -3641,9 +3669,9 @@ fn unroll_rulestat(
 
     while let Some(index) = it_index.get_currents() {
         nodes.push(unroll_rule(
-            unroll_expression(&rule.lhs, context, library, index, Properties::default()),
+            (unroll_expression(&rule.lhs, context, library, index, Properties::default()),
             &rule.op,
-            unroll_expression(&rule.rhs, context, library, index, Properties::default()),
+            unroll_expression(&rule.rhs, context, library, index, Properties::default())),
             context,
             library,
             rule.get_span(),
@@ -3871,6 +3899,14 @@ pub fn unroll(input: &str) -> Result<(CompileContext, CollectionNode), Vec<Error
                 },
                 Err(err) => context.push_error(err)
             },
+            Statement::Ref(stat) => match unroll_ref(&stat, &mut context, &library) {
+                Ok(nodes) => {
+                    for node in nodes {
+                        figure.push_boxed(node);
+                    }
+                },
+                Err(err) => context.push_error(err)
+            }
         }
     }
 

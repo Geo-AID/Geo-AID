@@ -34,7 +34,7 @@ use super::macros::call;
 fn circle_function(
     mut center: Expr<Point>,
     mut radius: Expr<Scalar>,
-    context: &mut CompileContext,
+    context: &CompileContext,
     display: Properties,
 ) -> Expr<Circle> {
     let nodes = take_nodes!(center, radius);

@@ -42,7 +42,87 @@ A constructive expression is one that *constructs* a new object: a point, a line
 
 ## Basic properties for types
 
-All [types](../types.md) have their basic properties assigned to them. `Point`s, `Line`s, `Circle`s, `Scalar`s, `PointCollection`s and bundle types accept the `display` (`bool`) property. `Point`s, `Line`s and `Circle`s accept additionally `label` (`MathString`) and `display_label` (`bool`) properties. `Point`s accept a `display_dot` (`bool`). `Line`s and `Circle`s also accept `style` (`Style`) property. Variables and literals don't accept any properties, no matter the type. Beyond that, additional properties may be added depending on the kind of construction (used function). Details on those are in the documentation of respective functions.
+All [types](../types.md) have their basic properties assigned to them. These are the following.
+
+*`Point`*
+
+```rust
+struct Properties {
+    display: bool, // Default: true
+    label: MathString, // Default: empty (except look at next section)
+    display_label: bool, // Default: true
+    display_dot: bool // Default: true
+}
+```
+
+The `display` property decides whethet the point should be displayed. `label` gives the point a label and `display_label` decides if it is to be displayed. If `display_dot` is `true`, a small dot is displayed in the point's position.
+
+**NOTE**: `display_dot` has currently no effect and the dot is always displayed.
+**NOTE**: Labels currently have poor support in drawers.
+
+*`Line`*
+
+```rust
+struct Line {
+    display: bool, // Default: true,
+    label: MathString, // Default empty (look at next section),
+    display_label: bool, // Default: true
+    style: Style, // Default: SOLID
+}
+```
+
+`display`, `label` and `display_label` work like with points. The `style` property decides how the line should be displayed (what "brush" should be used).
+
+**NOTE**: Labels don't currently work with lines.
+
+*`Circle`*
+
+```rust
+struct Circle {
+    display: bool, // Default: true,
+    label: MathString, // Default empty (look at next section),
+    display_label: bool, // Default: true
+    style: Style, // Default: SOLID
+}
+```
+
+`display`, `label`, `display_label` and `style` work like with lines.
+
+**NOTE**: Labels don't currently work with circles.
+
+*`Scalar`*
+
+```rust
+struct Scalar {
+    display: bool, // Default: true,
+    label: MathString, // Default empty (look at next section)
+    display_label: Style, // Default: SOLID
+}
+```
+
+All properties work like described before.
+
+**NOTE**: Labels don't currently work with scalars.
+
+*`PointCollection`*
+
+```rust
+struct PointCollection {
+    display: bool // Default: true
+}
+```
+
+The `display` property works as usual.
+
+Point collections also have special behavior when they are used in the context of lines or distances (see: [conversions](types.md)). Specifically, when converted to a distance measurement or a line, they also accept properties related to `Line`s (see above).
+
+*`Bundle`*
+
+All bundle types accept a `display` property.
+
+---
+
+Variables and literals don't accept any properties, no matter the type. Beyond that, additional properties may be added depending on the kind of construction (used function). Details on those are in the documentation of respective functions.
 
 ## Properties on variable deinitions
 

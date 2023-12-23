@@ -105,6 +105,34 @@ impl<T> MaybeUnset<T> {
         set
     }
 
+    /// Only sets the value if the `set` flag is false and `value` is `Some`.
+    /// Returns whether a new value was set.
+    pub fn try_set_if_unset(&mut self, value: Option<T>) -> bool {
+        let set = !self.set && value.is_some();
+
+        if let Some(value) = value {
+            if set {
+                self.set(value);
+            }
+        }
+
+        set
+    }
+
+    #[must_use]
+    pub fn get(&self) -> &T {
+        &self.value
+    }
+
+    /// Will return a `Some` only if the value has been set.
+    pub fn try_get(&self) -> Option<&T> {
+        if self.set {
+            Some(self.get())
+        } else {
+            None
+        }
+    }
+
     pub fn unwrap(self) -> T {
         self.value
     }
@@ -242,7 +270,8 @@ pub trait BuildAssociated<T: Node>: Debug {
 #[derive(Debug)]
 pub enum AssociatedData {
     Bool(MaybeUnset<bool>),
-    Style(MaybeUnset<Style>)
+    Style(MaybeUnset<Style>),
+    LineType(MaybeUnset<LineType>)
 }
 
 impl AssociatedData {
@@ -261,6 +290,14 @@ impl AssociatedData {
             _ => None
         }
     }
+
+    #[must_use]
+    pub fn as_line_type(&self) -> Option<MaybeUnset<LineType>> {
+        match self {
+            Self::LineType(v) => Some(v.copied()),
+            _ => None
+        }
+    }
 }
 
 impl From<MaybeUnset<bool>> for AssociatedData {
@@ -272,6 +309,12 @@ impl From<MaybeUnset<bool>> for AssociatedData {
 impl From<MaybeUnset<Style>> for AssociatedData {
     fn from(value: MaybeUnset<Style>) -> Self {
         Self::Style(value)
+    }
+}
+
+impl From<MaybeUnset<LineType>> for AssociatedData {
+    fn from(value: MaybeUnset<LineType>) -> Self {
+        Self::LineType(value)
     }
 }
 
@@ -856,7 +899,7 @@ impl Node for LineNode {
                     Line::LineFromPoints(a, b) => {
                         figure
                             .rays
-                            .push((compiler.compile(a), compiler.compile(b), Style::Solid))
+                            .push((compiler.compile(a), compiler.compile(b), Style::Solid));
                     }
                     Line::AngleBisector(a, b, c) => {
                         let x = Expr::new_spanless(Point::LineLineIntersection(
@@ -869,7 +912,7 @@ impl Node for LineNode {
 
                         figure
                             .rays
-                            .push((compiler.compile(b), compiler.compile(&x), Style::Solid))
+                            .push((compiler.compile(b), compiler.compile(&x), Style::Solid));
                     }
                     _ => unreachable!(),
                 },
@@ -896,7 +939,7 @@ impl FromExpr<Line> for LineNode {
                 .get("label")
                 .maybe_unset(MathString::new(span!(0, 0, 0, 0))),
             display_label: props.get("display_label").maybe_unset(false),
-            line_type: props.get("line_type").maybe_unset(LineType::Line),
+            line_type: MaybeUnset::new(LineType::Line),
             style: props.get("style").maybe_unset(Style::default()),
             expr: expr.clone_without_node(),
         };

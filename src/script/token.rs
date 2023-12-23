@@ -380,6 +380,12 @@ pub struct Ampersant {
     pub span: Span,
 }
 
+/// A '?' token.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Question {
+    pub span: Span,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Token {
     Semi(Semi),
@@ -410,6 +416,7 @@ pub enum Token {
     Colon(Colon),
     Dot(Dot),
     String(StrLit),
+    Question(Question),
 }
 
 impl Display for Token {
@@ -434,6 +441,7 @@ impl Display for Token {
             Self::Exclamation(_) => write!(f, "!"),
             Self::Dollar(_) => write!(f, "$"),
             Self::Ampersant(_) => write!(f, "&"),
+            Self::Question(_) => write!(f, "?"),
             Self::At(_) => write!(f, "@"),
             Self::LBrace(_) => write!(f, "{{"),
             Self::RBrace(_) => write!(f, "}}"),
@@ -492,6 +500,7 @@ impl Token {
             Self::LSquare(v) => v.span,
             Self::RSquare(v) => v.span,
             Self::Ampersant(v) => v.span,
+            Self::Question(v) => v.span,
             Self::Colon(v) => v.span,
             Self::Dot(v) => v.span,
             Self::String(s) => s.span,
@@ -948,6 +957,7 @@ fn tokenize_special<I: Iterator<Item = char>>(
             '!' => Token::Exclamation(Exclamation { span: sp }),
             '$' => Token::Dollar(Dollar { span: sp }),
             '&' => Token::Ampersant(Ampersant { span: sp }),
+            '?' => Token::Question(Question { span: sp }),
             '@' => Token::At(At { span: sp }),
             '{' => Token::LBrace(LBrace { span: sp }),
             '}' => Token::RBrace(RBrace { span: sp }),

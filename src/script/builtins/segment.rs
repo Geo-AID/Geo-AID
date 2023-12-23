@@ -39,10 +39,10 @@ fn segment_function_point_point(
     if let Some(node)  = &mut expr.node {
         node.root.display = display.get("display").maybe_unset(true);
 
-        let display_line = display.get("display_line").maybe_unset(true);
+        let display_segment = display.get("display_segment").maybe_unset(true);
         let style = display.get("style").maybe_unset(Style::default());
         
-        node.insert_data("display_line", display_line);
+        node.insert_data("display_segment", display_segment);
         node.insert_data("style", style);
         node.set_associated(Associated);
     }
@@ -54,7 +54,7 @@ fn segment_function_point_point(
 
 /// ```
 /// struct Associated {
-///     display_line: bool,
+///     display_segment: bool,
 ///     style: Mode
 /// }
 /// ```
@@ -68,15 +68,15 @@ impl BuildAssociated<BundleNode> for Associated {
             figure: &mut Figure,
             associated: &mut HierarchyNode<BundleNode>,
         ) {
-        let display_line = associated.get_data("display_line").unwrap().as_bool().unwrap();
+        let display_segment = associated.get_data("display_segment").unwrap().as_bool().unwrap();
         let style = associated.get_data("style").unwrap().as_style().unwrap();
 
-        if display_line.unwrap() {
+        if display_segment.unwrap() {
             figure.segments.push((
                 compiler.compile(associated.root.children["A"].as_point().unwrap()),
                 compiler.compile(associated.root.children["B"].as_point().unwrap()),
                 style.unwrap()
-            ))
+            ));
         }
     }
 }

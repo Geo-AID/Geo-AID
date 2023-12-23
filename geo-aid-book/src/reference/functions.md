@@ -9,6 +9,19 @@
 
 **Returns**: measurement of the angle `ABC`
 
+**Displays**: the angle's arms.
+
+The function accepts additional properties in the form of:
+
+```rust
+struct Angle {
+    display_arms: bool, // Default: true,
+    arms_type: LineType, // Default: SEGMENT
+}
+```
+
+`display_arms` decides whether the arms should be displayed and `arms_type` decides whether they should be segments, rays or lines. The assumed order for rays is `B -> A` and `B -> C`;
+
 * `angle(k: Line, l: Line)`
 
 **Return type**: [Scalar (angle)](./types/primitives.md#scalar)
@@ -30,6 +43,21 @@
 **Return type**: [Line](./types/primitives.md#Line)
 
 **Returns**: a bisector of the angle `ABC` - a line between lines `AB` and `BC`, where each point is in the same distance from both of these lines.
+
+**Displays**: the angle's arms.
+
+The function accepts additional properties in the form of:
+
+```rust
+struct Bisector {
+    display_arms: bool, // Default: true,
+    arms_type: LineType, // Default: SEGMENT
+}
+```
+
+`display_arms` decides whether the arms should be displayed and `arms_type` decides whether they should be segments, rays or lines. The assumed order for rays is `B -> A` and `B -> C`;
+
+* `angle(k: Line, l: Line)`
 
 ## `Circle`
 
@@ -63,12 +91,38 @@
 
 **Returns**: the distance between points `A` and `B`.
 
+**Displays**: the segment `AB`.
+
+The function accepts additional properties in the form of:
+
+```rust
+struct Dst {
+    display_segment: bool, // Default: true,
+    style: Style, // Default: SOLID
+}
+```
+
+`display_segment` decides whether the segment should be displayed and `style` decides how it should be displayed.
+
 * `dst(P: Point, k: Line)`
 * `dst(k: Line, P: Point)`
 
 **Return type**: [Scalar (distance)](./types/primitives.md#Scalar)
 
 **Returns**: the distance between point `P` and line `k`.
+
+**Displays**: the segment between `P` and its perpendicular projection onto `k`.
+
+The function accepts additional properties in the form of:
+
+```rust
+struct Dst {
+    display_segment: bool, // Default: true,
+    style: Style, // Default: DASHED
+}
+```
+
+`display_segment` decides whether the segment should be displayed and `style` decides how it should be displayed.
 
 * `dst(value: Scalar (no unit / distance))`
 
@@ -83,6 +137,10 @@
 **Return type**: [Point](./types/primitives.md#point)
 
 **Returns**: intersection of lines `k` and `l`.
+
+**Displays**: By default doesn't display the point dot. Modifiable with properties.
+
+**Note**: `display_dot` property is not currently supported.
 
 ## `mid`
 
@@ -142,3 +200,16 @@
 **Return type**: [Segment](./types/bundle-types.md#segment)
 
 **Returns**: the segment `AB`.
+
+**Displays**: the segment `AB`.
+
+The function accepts additional properties in the form of:
+
+```rust
+struct Segment {
+    display_segment: bool, // Default: true,
+    style: Style, // Default: SOLID
+}
+```
+
+`display_segment` decides whether the segment should be displayed and `style` decides how it should be displayed.

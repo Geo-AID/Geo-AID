@@ -612,6 +612,7 @@ pub fn project(
     // println!("furthest: {furthest}, scale: {scale}");
 
     let points: Vec<Complex> = points.into_iter().map(|x| x * scale + size005).collect();
+    // println!("{points:#?}");
 
     //let points = points(figure, generated_points, flags);
 

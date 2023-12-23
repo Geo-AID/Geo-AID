@@ -17,6 +17,7 @@
         - [Iterators](./reference/syntax/iterators.md)
         - [Numbers](./reference/syntax/numbers.md)
         - [Properties](./reference/syntax/properties.md)
+        - [Ref statements](./reference/syntax/refs.md)
         - [Rules](./reference/syntax/rules.md)
         - [Variables](./reference/syntax/variables.md)
     - [Types](./reference/types.md)

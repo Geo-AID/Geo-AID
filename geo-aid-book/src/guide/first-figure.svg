@@ -1,4 +1,35 @@
-<svg height="500" width="500" xmlns="http://www.w3.org/2000/svg"><circle cx="108.25382707993457" cy="25" fill="black" r="2"/>
-                <text stroke="black" x="88.25382707993457" y="5">A</text><circle cx="456.20165213420074" cy="322.2023194421235" fill="black" r="2"/>
-                <text stroke="black" x="436.20165213420074" y="302.2023194421235">B</text><circle cx="25" cy="475" fill="black" r="2"/>
-                <text stroke="black" x="5" y="455">C</text><line stroke="black" x1="108.25382707993457" x2="456.20165213420074" y1="25" y2="322.2023194421235"/><line stroke="black" x1="108.25382707993457" x2="25" y1="25" y2="475"/><line stroke="black" x1="108.25382707993457" x2="456.20165213420074" y1="25" y2="322.2023194421235"/><line stroke="black" x1="456.20165213420074" x2="25" y1="322.2023194421235" y2="475"/></svg>
+
+            <svg height="500" width="500" xmlns="http://www.w3.org/2000/svg">
+            <font>
+            <font-face font-family="New Computer Modern">
+            </font-face>
+            </font>
+            <g transform="translate(0,500)">
+            <g transform="scale(1,-1)">
+        
+            <circle cx="104.18860398731844" cy="25" fill="black" r="1"/>
+            <text transform="scale(-1,1), rotate(180, -101.66821472062827, 18.082495487681314)" 
+            text-anchor="middle" dominant-baseline="middle" 
+            style="font-family: 'Computer Modern'" font-size="10px"
+            stroke="black" stroke-width="0" x="-101.66821472062827" y="18.082495487681314">A</text>
+        
+            <circle cx="25" cy="475" fill="black" r="1"/>
+            <text transform="scale(-1,1), rotate(180, -20.99587178169123, 479.77494045192935)" 
+            text-anchor="middle" dominant-baseline="middle" 
+            style="font-family: 'Computer Modern'" font-size="10px"
+            stroke="black" stroke-width="0" x="-20.99587178169123" y="479.77494045192935">B</text>
+        
+            <circle cx="454.32450098172234" cy="318.6032476692835" fill="black" r="1"/>
+            <text transform="scale(-1,1), rotate(180, -459.64269665977884, 319.5393262860351)" 
+            text-anchor="middle" dominant-baseline="middle" 
+            style="font-family: 'Computer Modern'" font-size="10px"
+            stroke="black" stroke-width="0" x="-459.64269665977884" y="319.5393262860351">C</text>
+        
+            <line stroke-width="1" stroke-dasharray="1,0" stroke="black" x1="104.18860398731844" x2="25" y1="25" y2="475"/>
+        
+            <line stroke-width="1" stroke-dasharray="1,0" stroke="black" x1="25" x2="454.32450098172234" y1="475" y2="318.6032476692835"/>
+        
+            <line stroke-width="1" stroke-dasharray="1,0" stroke="black" x1="104.18860398731844" x2="454.32450098172234" y1="25" y2="318.6032476692835"/>
+        
+            <line stroke-width="1" stroke-dasharray="1,0" stroke="black" x1="25" x2="454.32450098172234" y1="475" y2="318.6032476692835"/>
+         </g> </g> </svg>

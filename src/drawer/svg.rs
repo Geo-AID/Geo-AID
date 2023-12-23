@@ -149,10 +149,10 @@ pub fn draw(target: &Path, canvas_size: (usize, usize), output: &Output) {
             <font-face font-family="New Computer Modern">
             </font-face>
             </font>
-            <g transform="translate(0,200)">
+            <g transform="translate(0,{})">
             <g transform="scale(1,-1)">
         "#,
-        canvas_size.0, canvas_size.1
+        canvas_size.0, canvas_size.1, canvas_size.1
     );
 
     for elem in &output.vec_rendered {

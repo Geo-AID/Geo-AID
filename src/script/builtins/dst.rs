@@ -35,7 +35,7 @@ pub fn distance_function_pp(
     mut display: Properties
 ) -> Expr<Scalar> {
     let display_segment = display.get("display_segment").maybe_unset(true);
-    let style = display.get("style").maybe_unset(Style::default());
+    let style = display.get("style").maybe_unset(Style::Solid);
 
     let mut expr = context.distance_pp_display(a, b, display);
 
@@ -101,7 +101,7 @@ impl BuildAssociated<ScalarNode> for Associated {
                         compiler.compile(a),
                         compiler.compile(b),
                         style.unwrap()
-                    ))
+                    ));
                 },
                 ScalarData::PointLineDistance(a, k) => {
                     // Projection
@@ -117,7 +117,7 @@ impl BuildAssociated<ScalarNode> for Associated {
                         compiler.compile(a),
                         compiler.compile(&b),
                         style.unwrap()
-                    ))
+                    ));
                 }
                 _ => unreachable!()
             }
