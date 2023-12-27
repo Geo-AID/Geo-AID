@@ -53,7 +53,7 @@ pub enum Style {
     Dashed,
     Bold,
     #[default]
-    Solid, // Normal solid curve
+    Solid,
 }
 
 /// Defines the visual data of the figure.
@@ -76,7 +76,7 @@ pub struct Figure {
 }
 
 /// Normal/lower index in math text.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub enum MathIndex {
     Normal,
     Lower,
@@ -92,7 +92,7 @@ impl Display for MathIndex {
 }
 
 /// A math character is either just an ASCII character or a special character.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub enum MathChar {
     /// A standard ASCII character.
     Ascii(char),
@@ -116,7 +116,7 @@ impl Display for MathChar {
 }
 
 /// A special character.
-#[derive(Debug, Clone, Copy, FromPrimitive, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, FromPrimitive, PartialEq, Eq, Serialize)]
 pub enum MathSpecial {
     Alpha,
     AlphaUpper,
@@ -205,10 +205,10 @@ impl Display for MathSpecial {
 }
 
 /// A series of math characters.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct MathString {
-    chars: Vec<MathChar>,
-    span: Span,
+    pub chars: Vec<MathChar>,
+    pub span: Span,
 }
 
 impl MathString {
