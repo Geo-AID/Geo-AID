@@ -1,4 +1,0 @@
-<svg height="500" width="500" xmlns="http://www.w3.org/2000/svg"><circle cx="475" cy="103.56756740756082" fill="black" r="2"/>
-                <text stroke="black" x="455" y="83.56756740756082">G</text><circle cx="181.9791545474394" cy="453.99761304525526" fill="black" r="2"/>
-                <text stroke="black" x="161.9791545474394" y="433.99761304525526">B</text><circle cx="25" cy="25" fill="black" r="2"/>
-                <text stroke="black" x="5" y="5">C</text><line stroke="black" x1="475" x2="181.9791545474394" y1="103.56756740756082" y2="453.99761304525526"/><line stroke="black" x1="475" x2="25" y1="103.56756740756082" y2="25"/><line stroke="black" x1="475" x2="181.9791545474394" y1="103.56756740756082" y2="453.99761304525526"/><line stroke="black" x1="181.9791545474394" x2="25" y1="453.99761304525526" y2="25"/></svg>
