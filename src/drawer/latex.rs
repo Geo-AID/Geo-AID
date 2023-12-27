@@ -26,13 +26,15 @@ use std::{fs::File, io::Write, path::Path};
 use crate::generator::expression::expr::AnglePoint;
 use crate::generator::expression::{Expression, PointExpr, ScalarExpr};
 use crate::generator::Complex;
+use crate::labels::get_special_char_latex;
 use crate::projector::{
     Output, Rendered, RenderedAngle, RenderedCircle, RenderedLine, RenderedPoint, RenderedRay,
     RenderedSegment,
 };
 use crate::script::HashableArc;
 
-use crate::script::figure::Style::{self, Bold, Dashed, Dotted, Solid};
+use crate::script::figure::{MathChar, MathIndex};
+use crate::script::figure::Style::{self, Bold, Dashed, Solid, Dotted};
 
 /// Function getting the point's name (if it exists, if not then it returns the point's coordinates).
 fn get_point_name(
@@ -51,8 +53,8 @@ fn get_point_name(
     }
 }
 
-/// Function that assigns modes to the rendered variants.
-fn assign_mode(rendered: &Rendered, mode: Style) -> String {
+/// Function that assigns the styling.
+fn styling(rendered: &Rendered, mode: Style) -> String {
     match rendered {
         Rendered::Point(_) => unreachable!(),
         _ => match mode {
@@ -68,18 +70,52 @@ fn assign_mode(rendered: &Rendered, mode: Style) -> String {
 fn points(point: &Rc<RenderedPoint>, scale: f64) -> String {
     let position = point.position * scale;
     let label_position = point.label_position * scale;
+
+    let mut label: String = String::default();
+    let mut seen = false;
+    let mut lower_last = false;
+
+    for char in &point.math_string.chars {
+        match char {
+            MathChar::Ascii(c) => {
+                label += &c.to_string();
+            }
+            MathChar::Special(c) => {
+                label += get_special_char_latex(c);
+            }
+            MathChar::SetIndex(i) => {
+                match i {
+                    MathIndex::Normal => {
+                        if seen {
+                            label += "}";
+                        }
+
+                        lower_last = false;
+                    }
+                    MathIndex::Lower => {
+                        seen = true;
+                        label += "_{";
+
+                        lower_last = true;
+                    }
+                }
+            }
+            MathChar::Prime => {
+                label += "^{'}";
+            }
+        }
+    }
+
+    if lower_last {
+        label += "}";
+    }
+    
     format!(
         r#"
             \coordinate ({}) at ({}, {}); \fill[black] ({}) circle (1pt);
-            \node at ({}, {}) {{{}}};
+            \node at ({}, {}) {{${}$}}; 
         "#,
-        point.uuid,
-        position.real,
-        position.imaginary,
-        point.uuid,
-        label_position.real,
-        label_position.imaginary,
-        point.label
+        point.uuid, position.real, position.imaginary, point.uuid, label_position.real, label_position.imaginary, label
     )
 }
 
@@ -90,16 +126,16 @@ fn lines(line: &RenderedLine, scale: f64, rendered: &Rendered) -> String {
     format!(
         r#"
             \begin{{scope}}
-            \coordinate (A) at ({},{});
-            \coordinate (B) at ({},{});
-            \tkzDrawSegment[{}](A,B)
+                \coordinate (A) at ({},{});
+                \coordinate (B) at ({},{});
+                \tkzDrawSegment[{}](A,B)
             \end{{scope}}
         "#,
         pos1.real,
         pos1.imaginary,
         pos2.real,
         pos2.imaginary,
-        assign_mode(rendered, line.mode)
+        styling(rendered, line.style)
     )
 }
 
@@ -111,16 +147,16 @@ fn angles(angle: &RenderedAngle, scale: f64, output: &Output, rendered: &Rendere
             format!(
                 r#"
                 \begin{{scope}}
-                \coordinate (A) at {};
-                \coordinate (B) at {};
-                \coordinate (C) at {};
-                \tkzMarkAngle[size = 0.5,mark = none,arc={no_arcs},mkcolor = black, {}](A,B,C)
+                    \coordinate (A) at {};
+                    \coordinate (B) at {};
+                    \coordinate (C) at {};
+                        \tkzMarkAngle[size = 0.5,mark = none,arc={no_arcs},mkcolor = black, {}](A,B,C)
                 \end{{scope}}
                 "#,
                 get_point_name(arm1, output, angle.points.0, scale),
                 get_point_name(origin, output, angle.points.1, scale),
                 get_point_name(arm2, output, angle.points.2, scale),
-                assign_mode(rendered, angle.mode)
+                styling(rendered, angle.style)
             )
         }
         // There are hard coded values in \coordinate, it is intentional, every point has it label marked by Rendered::Point sequence above
@@ -128,10 +164,10 @@ fn angles(angle: &RenderedAngle, scale: f64, output: &Output, rendered: &Rendere
             format!(
                 r#"
                 \begin{{scope}}
-                \coordinate (A) at ({}, {});
-                \coordinate (B) at ({}, {});
-                \coordinate (C) at ({}, {});
-                \tkzMarkAngle[size = 2,mark = none,arc={no_arcs},mkcolor = black, {}](A,B,C)
+                    \coordinate (A) at ({}, {});
+                    \coordinate (B) at ({}, {});
+                    \coordinate (C) at ({}, {});
+                        \tkzMarkAngle[size = 2,mark = none,arc={no_arcs},mkcolor = black, {}](A,B,C)
                 \end{{scope}}
                 "#,
                 angle.points.0.real,
@@ -140,7 +176,7 @@ fn angles(angle: &RenderedAngle, scale: f64, output: &Output, rendered: &Rendere
                 angle.points.1.imaginary,
                 angle.points.2.real,
                 angle.points.2.imaginary,
-                assign_mode(rendered, angle.mode)
+                styling(rendered, angle.style)
             )
         }
         _ => unreachable!(),
@@ -154,16 +190,16 @@ fn segments(segment: &RenderedSegment, scale: f64, rendered: &Rendered) -> Strin
     format!(
         r#"
         \begin{{scope}}
-        \coordinate (A) at ({}, {});
-        \coordinate (B) at ({}, {});
-        \tkzDrawSegment[{}](A,B)
+            \coordinate (A) at ({}, {});
+            \coordinate (B) at ({}, {});
+                \tkzDrawSegment[{}](A,B)
         \end{{scope}}
         "#,
         pos1.real,
         pos1.imaginary,
         pos2.real,
         pos2.imaginary,
-        assign_mode(rendered, segment.mode)
+        styling(rendered, segment.style)
     )
 }
 
@@ -174,16 +210,16 @@ fn rays(ray: &RenderedRay, scale: f64, rendered: &Rendered) -> String {
     format!(
         r#"
         \begin{{scope}}
-        \coordinate (A) at ({}, {});
-        \coordinate (B) at ({}, {});
-        \tkzDrawSegment[{}](A,B)
+            \coordinate (A) at ({}, {});
+            \coordinate (B) at ({}, {});
+                \tkzDrawSegment[{}](A,B)
         \end{{scope}}
         "#,
         pos1.real,
         pos1.imaginary,
         pos2.real,
         pos2.imaginary,
-        assign_mode(rendered, ray.mode)
+        styling(rendered, ray.style)
     )
 }
 
@@ -194,16 +230,16 @@ fn circles(circle: &RenderedCircle, scale: f64, rendered: &Rendered) -> String {
     format!(
         r#"
         \begin{{scope}}
-        \coordinate (A) at ({}, {});
-        \coordinate (B) at ({}, {});
-        \tkzDrawCircle[{}](A,B)
+            \coordinate (A) at ({}, {});
+            \coordinate (B) at ({}, {});
+                \tkzDrawCircle[{}](A,B)
         \end{{scope}}
         "#,
         pos1.real,
         pos1.imaginary,
         pos2.real,
         pos2.imaginary,
-        assign_mode(rendered, circle.mode)
+        styling(rendered, circle.style)
     )
 }
 /// Draws the given figure to a .tex file using tikz library.
@@ -215,13 +251,13 @@ pub fn draw(target: &Path, canvas_size: (usize, usize), output: &Output) {
     #[allow(clippy::cast_precision_loss)]
     let scale = f64::min(10.0 / canvas_size.0 as f64, 10.0 / canvas_size.1 as f64);
     let mut content = String::from(
-        r"
-    \documentclass{article}
-    \usepackage{tikz}
-    \usepackage{tkz-euclide}
-    \usetikzlibrary {angles,calc,quotes}
-    \begin{document}
-    \begin{tikzpicture}
+    r"
+        \documentclass{article}
+        \usepackage{tikz}
+        \usepackage{tkz-euclide}
+        \usetikzlibrary {angles,calc,quotes}
+        \begin{document}
+        \begin{tikzpicture}
     ",
     );
     for item in &output.vec_rendered {
