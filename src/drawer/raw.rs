@@ -30,23 +30,66 @@ use crate::{
         RenderedSegment,
     },
     script::{
-        figure::Style::{self, Bolded, Dashed, Solid, Dotted},
+        figure::{Style::{self, Bolded, Dashed, Solid, Dotted}, MathChar, MathIndex},
         HashableArc,
-    },
+    }, labels::get_special_char_raw,
 };
+
+/// Function evaluating point's `MathString` to a string which then can be displayed.
+fn math_string(point: &Rc<RenderedPoint>) -> String {
+    let mut label = String::default();
+    let mut seen = false;
+    let mut lower_last = false;
+
+    for char in &point.math_string.chars {
+        match char {
+            MathChar::Ascii(c) => {
+                label += &c.to_string();
+            }
+            MathChar::Special(c) => {
+                label += get_special_char_raw(c);
+            }
+            MathChar::SetIndex(i) => {
+                match i {
+                    MathIndex::Normal => {
+                        if seen {
+                            label += "}";
+                        }
+                        lower_last = false;
+                    }
+                    MathIndex::Lower => {
+                        seen = true;
+                        label += "_{";
+
+                        lower_last = true;
+                    }
+                }
+            }
+            MathChar::Prime => {
+                label += "'";
+            }
+        }
+    }
+
+    if lower_last {
+        label += "}";
+    }
+    
+    label
+}
 
 /// Function getting the point's name (if it exists, otherwise it returns the point's coordinates).
 fn get_point_name(expr: &Arc<Expression<PointExpr>>, output: &Output, point: Complex) -> String {
     match output.map.get(&HashableArc::new(Arc::clone(expr))) {
-        Some(p) => p.label.to_string(),
+        Some(p) => math_string(p),
         None => {
             format!("({}, {})", point.real, point.imaginary)
         }
     }
 }
 
-/// Function that assigns drawing modes to the rendered variants.
-fn assign_mode(rendered: &Rendered, mode: Style) -> String {
+/// Function that assigns the styling.
+fn styling(rendered: &Rendered, mode: Style) -> String {
     match rendered {
         Rendered::Point(_) => unreachable!(),
         _ => match mode {
@@ -60,8 +103,8 @@ fn assign_mode(rendered: &Rendered, mode: Style) -> String {
 
 /// Function that handles the points.
 fn points(mut file: &File, point: &Rc<RenderedPoint>) {
-    file.write_all((format!("\npoint: label of the point - \"{}\", coordinates: point - ({:.3}, {:.3}), label - ({:.3}, {:.3})", 
-        point.label,
+    file.write_all((format!("\npoint: label - \"{}\", coordinates: point - ({:.3}, {:.3}), label - ({:.3}, {:.3}) \n", 
+        math_string(point), 
         point.position.real,
         point.position.imaginary,
         point.label_position.real,
@@ -76,14 +119,12 @@ fn lines(mut file: &File, line: &RenderedLine, rendered: &Rendered) {
     let p2 = line.points.1;
     file.write_all(
         format!(
-            "\nline: label - \"{}\", 
-            x and y coordinates of the two points - ({:.3}, {:.3}) and ({:.3}, {:.3}), mode: {}",
-            line.label,
+            "\nline: points' coordinates: ({:.3}, {:.3}) and ({:.3}, {:.3}), mode: {} \n",
             p1.real,
             p1.imaginary,
             p2.real,
             p2.imaginary,
-            assign_mode(rendered, line.mode)
+            styling(rendered, line.style)
         )
         .as_bytes(),
     )
@@ -98,12 +139,12 @@ fn angles(mut file: &File, angle: &RenderedAngle, output: &Output, rendered: &Re
     let no_arcs = String::from("l"); // Requires a change later! It has to be based on info from the script
     match &angle.expr.kind {
         ScalarExpr::AnglePoint(AnglePoint { arm1, origin, arm2 }) => {
-            file.write_all(format!("\nangle defined with 3 points: points with x and y coordinates: point1 - {}, origin - {}, point2 - {}. Number of arcs: {no_arcs}. Mode: {}",
-                        get_point_name(arm1, output, p_1), get_point_name(origin, output, p_origin), get_point_name(arm2, output, p_2), assign_mode(rendered, angle.mode)).as_bytes()).unwrap();
+            file.write_all(format!("\n3 points angle: points' coordinates point1 - {}, origin - {}, point2 - {}, number of arcs: {no_arcs}, mode: {} \n",
+                        get_point_name(arm1, output, p_1), get_point_name(origin, output, p_origin), get_point_name(arm2, output, p_2), styling(rendered, angle.style)).as_bytes()).unwrap();
         }
         ScalarExpr::AngleLine(_) => {
-            file.write_all(format!("\nangle defined with 2 lines: coordinates of the points defining the angle: point1 - ({}, {}), origin - ({}, {}), point2 - ({}, {}), mode: {}", 
-                            p_1.real, p_1. imaginary, p_origin.real, p_origin.imaginary, p_2.real, p_2.imaginary, assign_mode(rendered, angle.mode)
+            file.write_all(format!("\n2 lines angle: points' coordinates: point1 - ({}, {}), origin - ({}, {}), point2 - ({}, {}), number of arcs: {no_arcs}, mode: {} \n", 
+                            p_1.real, p_1. imaginary, p_origin.real, p_origin.imaginary, p_2.real, p_2.imaginary, styling(rendered, angle.style)
                         ).as_bytes()).unwrap();
         }
         _ => unreachable!(),
@@ -114,12 +155,12 @@ fn angles(mut file: &File, angle: &RenderedAngle, output: &Output, rendered: &Re
 fn segments(mut file: &File, segment: &RenderedSegment, rendered: &Rendered) {
     file.write_all(
         format!(
-            "\nsegment defined by two points: point1 - ({:.3}, {:.3}), point2 - ({:.3}, {:.3}), mode: {}",
+            "\nsegment: points' coordinates point1 - ({:.3}, {:.3}), point2 - ({:.3}, {:.3}), mode: {} \n",
             segment.points.0.real,
             segment.points.1.real,
             segment.points.0.imaginary,
             segment.points.1.imaginary,
-            assign_mode(rendered, segment.mode)
+            styling(rendered, segment.style)
         )
         .as_bytes(),
     )
@@ -128,12 +169,12 @@ fn segments(mut file: &File, segment: &RenderedSegment, rendered: &Rendered) {
 
 /// Function that handles the rays.
 fn rays(mut file: &File, ray: &RenderedRay, rendered: &Rendered) {
-    file.write_all(format!("\nray defined with two points: first point - ({:.3}, {:.3}) second point - ({:.3}. {:.3}). Mode: {}", 
+    file.write_all(format!("\nray: points' coordinates first point - ({:.3}, {:.3}) second point - ({:.3}. {:.3}), mode: {} \n", 
         ray.points.0.real,
         ray.points.1.imaginary,
         ray.draw_point.real,
         ray.draw_point.imaginary,
-        assign_mode(rendered, ray.mode)).
+        styling(rendered, ray.style)).
             as_bytes())
             .unwrap();
 }
@@ -142,21 +183,21 @@ fn rays(mut file: &File, ray: &RenderedRay, rendered: &Rendered) {
 fn circles(mut file: &File, circle: &RenderedCircle, rendered: &Rendered) {
     file.write_all(
         format!(
-            "\ncircle: center - ({:.3}, {:.3}) radius - {:.3}, mode: {}",
+            "\ncircle: center - ({:.3}, {:.3}) radius - {:.3}, mode: {} \n",
             circle.center.real,
             circle.center.imaginary,
             circle.radius,
-            assign_mode(rendered, circle.mode)
+            styling(rendered, circle.style)
         )
         .as_bytes(),
     )
     .unwrap();
 }
 
-/// Outputs a file which can be read
+/// Outputs a file which can be read.
 ///
 /// # Panics
-/// Panics whenever there is a filesystem problem
+/// Panics whenever there is a filesystem problem.
 pub fn draw(target: &Path, canvas_size: (usize, usize), output: &Output) {
     let mut file = File::create(target).unwrap();
 
@@ -165,24 +206,12 @@ pub fn draw(target: &Path, canvas_size: (usize, usize), output: &Output) {
 
     for item in &output.vec_rendered {
         match item {
-            Rendered::Point(point) => {
-                points(&file, point);
-            }
-            Rendered::Line(line) => {
-                lines(&file, line, item);
-            }
-            Rendered::Angle(angle) => {
-                angles(&file, angle, output, item);
-            }
-            Rendered::Segment(segment) => {
-                segments(&file, segment, item);
-            }
-            Rendered::Ray(ray) => {
-                rays(&file, ray, item);
-            }
-            Rendered::Circle(circle) => {
-                circles(&file, circle, item);
-            }
+            Rendered::Point(point) => points(&file, point),
+            Rendered::Line(line) => lines(&file, line, item),
+            Rendered::Angle(angle) => angles(&file, angle, output, item),
+            Rendered::Segment(segment) => segments(&file, segment, item),
+            Rendered::Ray(ray) => rays(&file, ray, item),
+            Rendered::Circle(circle) => circles(&file, circle, item),
         }
     }
 }

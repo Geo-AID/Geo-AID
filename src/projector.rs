@@ -29,7 +29,7 @@ use crate::generator::expression::expr::{AngleLine, AnglePoint};
 use crate::generator::expression::{LineExpr, PointExpr, ScalarExpr};
 use crate::generator::geometry::get_line;
 use crate::labels::point_label_position;
-use crate::script::figure::Style;
+use crate::script::figure::{Style, MathString};
 use crate::{
     generator::{
         critic::EvaluationArgs, expression::Expression, expression::Line, geometry, Adjustable,
@@ -46,7 +46,8 @@ mod tests {
     use crate::generator::expression::{LineExpr, ScalarExpr, CircleExpr};
     use crate::generator::expression::expr::{LinePoint, AnglePoint, CenterRadius, Literal};
     use crate::generator::fast_float::FastFloat;
-    use crate::script::figure::MathString;
+    use crate::script::figure::{MathString, MathChar, MathIndex, MathSpecial};
+    use crate::script::token::{Span, Position};
     use crate::{
         drawer,
         generator::{
@@ -69,6 +70,7 @@ mod tests {
     }
 
     /// Function that tests the performance of the projector and drawers.
+    #[allow(clippy::too_many_lines)]
     #[test]
     fn test_project() {
         let x: u8 = 1;
@@ -98,7 +100,7 @@ mod tests {
 
         let fig = Figure {
             points: vec![
-                (create_point_expr(0), MathString::from_str("A").unwrap()),
+                (create_point_expr(0), MathString {chars: vec![MathChar::Special(MathSpecial::AlphaUpper), MathChar::SetIndex(MathIndex::Lower), MathChar::Ascii('X')], span: Span {start: Position { line: 0, column: 0 }, end: Position { line: 0, column: 0 }}}),
                 (create_point_expr(1), MathString::from_str("B").unwrap()),
                 (create_point_expr(2), MathString::from_str("C").unwrap()),
             ],
@@ -211,14 +213,14 @@ pub struct Output {
 
 #[derive(Debug, Serialize)]
 pub struct RenderedPoint {
-    /// The point's label
-    pub label: String,
     /// Label's position
     pub label_position: Complex,
     /// Point's position
     pub position: Complex,
     /// Point's custom uuid
     pub uuid: Uuid,
+    /// Math string assigned to the point
+    pub math_string: MathString,
 }
 
 #[derive(Serialize)]
@@ -229,8 +231,8 @@ pub struct RenderedLine {
     pub points: (Complex, Complex),
     /// Expression defining the line
     pub expr: Arc<Expression<LineExpr>>,
-    /// Enum defining the mode in which the expression should be drawn
-    pub mode: Style,
+    /// Enum defining the style in which the expression should be drawn
+    pub style: Style,
 }
 
 #[derive(Serialize)]
@@ -245,8 +247,8 @@ pub struct RenderedAngle {
     pub expr: Arc<Expression<ScalarExpr>>,
     /// Value of the angle (who'd have guessed)
     pub angle_value: f64,
-    /// Enum defining the mode in which the expression should be drawn
-    pub mode: Style,
+    /// Enum defining the style in which the expression should be drawn
+    pub style: Style,
 }
 #[derive(Serialize)]
 pub struct RenderedSegment {
@@ -254,8 +256,8 @@ pub struct RenderedSegment {
     pub label: String,
     /// Points defining the segment
     pub points: (Complex, Complex),
-    /// Enum defining the mode in which the expression should be drawn
-    pub mode: Style,
+    /// Enum defining the style in which the expression should be drawn
+    pub style: Style,
 }
 
 #[derive(Serialize)]
@@ -266,8 +268,8 @@ pub struct RenderedRay {
     pub points: (Complex, Complex),
     /// Second drawing point
     pub draw_point: Complex,
-    /// Enum defining the mode in which the expression should be drawn
-    pub mode: Style,
+    /// Enum defining the style in which the expression should be drawn
+    pub style: Style,
 }
 
 #[derive(Serialize)]
@@ -280,8 +282,8 @@ pub struct RenderedCircle {
     pub draw_point: Complex,
     /// Radius
     pub radius: f64,
-    /// Enum defining the mode in which the expression should be drawn
-    pub mode: Style,
+    /// Enum defining the style in which the expression should be drawn
+    pub style: Style,
 }
 
 /// Function getting the points defining the angle from the Expression defining it.
@@ -406,7 +408,7 @@ fn lines(
             label: String::new(),
             points: (line_ends.0, line_ends.1),
             expr: Arc::clone(&ln.0),
-            mode: ln.1,
+            style: ln.1,
         });
     }
     blueprint_lines
@@ -436,7 +438,7 @@ fn angles(
             no_arcs: ang.1,
             expr: Arc::clone(&ang.0),
             angle_value: ang.0.evaluate(args),
-            mode: ang.2,
+            style: ang.2,
         });
     }
     blueprint_angles
@@ -463,7 +465,7 @@ fn segments(
                 transform(offset, scale, size, seg1),
                 transform(offset, scale, size, seg2),
             ),
-            mode: segment.2,
+            style: segment.2,
         });
     }
     blueprint_segments
@@ -507,7 +509,7 @@ fn rays(
             label: String::new(),
             points: (ray_a, second_point),
             draw_point: ray_b,
-            mode: ray.2,
+            style: ray.2,
         });
     }
 
@@ -532,7 +534,7 @@ fn circles(
             center,
             draw_point: transform(offset, scale, size, draw_point),
             radius: sc_rad,
-            mode: circle_main.1,
+            style: circle_main.1,
         });
     }
 
@@ -630,16 +632,16 @@ pub fn project(
     let blueprint_circles = circles(figure, offset, scale, size005, &args);
 
     for (i, pt) in points.iter().enumerate() {
-        let pt_label = figure.points[i].1.to_string();
+        let math_string = figure.points[i].1.clone();
         let id = Uuid::new_v4();
 
         let point = *pt;
 
         blueprint_points.push(Rc::new(RenderedPoint {
-            label: pt_label,
             label_position: point_label_position(&blueprint_lines, &blueprint_angles, &blueprint_segments, &blueprint_rays, &blueprint_circles, vec_associated.clone(), point),
             position: *pt,
             uuid: id,
+            math_string,
         }));
         vec_associated.clear();
     }

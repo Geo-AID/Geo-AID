@@ -20,6 +20,8 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 use std::{fmt::Display, iter::Peekable};
 
+use serde::Serialize;
+
 use super::{parser::Parse, Error};
 
 #[cfg(test)]
@@ -130,7 +132,7 @@ let ABC = Triangle;
 }
 
 /// Defines a position in the script.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub struct Position {
     pub line: usize,
     pub column: usize,
@@ -152,7 +154,7 @@ impl Ord for Position {
 }
 
 /// Defines a span in the script.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub struct Span {
     pub start: Position,
     pub end: Position,
