@@ -3127,6 +3127,12 @@ fn create_variable_named(
                 props.finish(context);
             }
         }
+
+        // Point collection variables are amiguous and therefore cause compilation errors.
+        // They do not, however prevent the program from running properly.
+        context.push_error(Error::PCVariable {
+            error_span: stat.get_span()
+        });
     }
 
     match context.variables.entry(named.ident.clone()) {
