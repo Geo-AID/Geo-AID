@@ -507,7 +507,8 @@ impl Compiler {
                                 }),
                                 FastFloat::One,
                             ));
-                            self.adjustable_points.push((Arc::clone(&expr), self.template.len() - 1));
+                            self.adjustable_points
+                                .push((Arc::clone(&expr), self.template.len() - 1));
                             expr
                         }
                         EntPoint::OnCircle(circle) => {
@@ -519,7 +520,8 @@ impl Compiler {
                                 }),
                                 FastFloat::One,
                             ));
-                            self.adjustable_points.push((Arc::clone(&expr), self.template.len() - 1));
+                            self.adjustable_points
+                                .push((Arc::clone(&expr), self.template.len() - 1));
                             expr
                         }
                         EntPoint::OnLine(line) => {
@@ -531,7 +533,8 @@ impl Compiler {
                                 }),
                                 FastFloat::One,
                             ));
-                            self.adjustable_points.push((Arc::clone(&expr), self.template.len() - 1));
+                            self.adjustable_points
+                                .push((Arc::clone(&expr), self.template.len() - 1));
                             expr
                         }
                         EntPoint::Bind(expr) => self.compile(expr),
@@ -813,11 +816,7 @@ pub fn compile(input: &str, canvas_size: (usize, usize)) -> Result<Compiled, Vec
     // println!("{:#?}", criteria);
 
     // Add standard bounds
-    add_bounds(
-        &compiler.adjustable_points,
-        &mut criteria,
-        &flags,
-    );
+    add_bounds(&compiler.adjustable_points, &mut criteria, &flags);
 
     // Print the compiled (debugging)
     // for rule in &criteria {
@@ -842,10 +841,7 @@ fn add_bounds(
     // Point inequality principle.
     for (i, (pt_i, adj)) in points.iter().enumerate() {
         // For each of the next points, add an inequality rule.
-        for (pt_j, _) in points
-            .iter()
-            .skip(i + 1)
-        {
+        for (pt_j, _) in points.iter().skip(i + 1) {
             criteria.push(Weighed {
                 object: CriteriaKind::Inverse(Box::new(CriteriaKind::EqualPoint(
                     Arc::clone(pt_i),

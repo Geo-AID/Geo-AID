@@ -57,8 +57,10 @@
 - Fixed that any file involving the `lies_on` rule would inevitably crash because of point equality prevention rules.
 - Fixed that negating some normal rules would not actually negate them.
 - Fixed that negating `lies_on` would not actually negate it (no effect would be achieved).
-- The `SVG` drawing option is now default.
+- The `svg` drawing option is now default.
 - Updated README to contain information about the book.
 
 ## Version 0.3.0
 - Rewrote the entire display system (deciding what is displayed and what is not, based on the script)
+- Added smart label positioning
+- Point collection variables are no longer valid.

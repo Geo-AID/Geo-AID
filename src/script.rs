@@ -219,6 +219,9 @@ pub enum Error {
         first_span: Span,
         option: String,
     },
+    PCVariable {
+        error_span: Span,
+    },
 }
 
 impl Error {
@@ -529,6 +532,10 @@ impl Error {
                 DiagnosticData::new(&format!("repeated display option: `{option}`."))
                     .add_span(error_span)
                     .add_annotation(first_span, AnnotationKind::Help, &"first defined here.")
+            }
+            Self::PCVariable { error_span } => {
+                DiagnosticData::new(&" point collection variables are amgiuous and therefore not valid.")
+                    .add_span(error_span)
             }
         }
     }

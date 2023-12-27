@@ -464,24 +464,28 @@ impl CompileContext {
         expr
     }
 
-    pub fn average_p_display(&self, mut points: Vec<Expr<UnrolledPoint>>, display: Properties) -> Expr<UnrolledPoint> {
+    pub fn average_p_display(
+        &self,
+        mut points: Vec<Expr<UnrolledPoint>>,
+        display: Properties,
+    ) -> Expr<UnrolledPoint> {
         let nodes = points
             .iter_mut()
             .filter_map(|v| v.take_node().map(|v| Box::new(v) as Box<dyn Node>))
             .collect();
 
-        self.expr_with(
-            UnrolledPoint::Average(points.into()),
-            display,
-            nodes,
-        )
+        self.expr_with(UnrolledPoint::Average(points.into()), display, nodes)
     }
 
     pub fn average_p(&self, points: Vec<Expr<UnrolledPoint>>) -> Expr<UnrolledPoint> {
         self.average_p_display(points, Properties::from(None))
     }
 
-    pub fn average_s_display(&self, mut values: Vec<Expr<UnrolledScalar>>, display: Properties) -> Expr<UnrolledScalar> {
+    pub fn average_s_display(
+        &self,
+        mut values: Vec<Expr<UnrolledScalar>>,
+        display: Properties,
+    ) -> Expr<UnrolledScalar> {
         let nodes = values
             .iter_mut()
             .filter_map(|v| v.take_node().map(|v| Box::new(v) as Box<dyn Node>))
@@ -520,7 +524,12 @@ impl CompileContext {
         )
     }
 
-    pub fn set_unit_display(&self, mut v: Expr<UnrolledScalar>, unit: ComplexUnit, display: Properties) -> Expr<UnrolledScalar> {
+    pub fn set_unit_display(
+        &self,
+        mut v: Expr<UnrolledScalar>,
+        unit: ComplexUnit,
+        display: Properties,
+    ) -> Expr<UnrolledScalar> {
         let node = v.take_node();
         self.expr_with(
             UnrolledScalar {
@@ -580,7 +589,7 @@ macro_rules! generic_rule {
                 self.[<$f _display>](lhs, rhs, inverted, Properties::default())
             }
         }
-        
+
     };
 }
 
@@ -592,17 +601,14 @@ impl CompileContext {
         lhs: Option<N>,
         rhs: Option<M>,
         inverted: bool,
-        display: Properties
+        display: Properties,
     ) -> Box<dyn Node> {
         let mut node = CollectionNode::from_display(display, self);
 
         node.extend(lhs);
         node.extend(rhs);
 
-        self.push_rule(UnrolledRule {
-            kind,
-            inverted
-        });
+        self.push_rule(UnrolledRule { kind, inverted });
 
         Box::new(node)
     }

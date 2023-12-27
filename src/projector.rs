@@ -43,16 +43,14 @@ mod tests {
     use std::str::FromStr;
     use std::{path::PathBuf, sync::Arc};
 
-    use crate::generator::expression::{LineExpr, ScalarExpr, CircleExpr};
-    use crate::generator::expression::expr::{LinePoint, AnglePoint, CenterRadius, Literal};
+    use crate::generator::expression::expr::{AnglePoint, CenterRadius, LinePoint, Literal};
+    use crate::generator::expression::{CircleExpr, LineExpr, ScalarExpr};
     use crate::generator::fast_float::FastFloat;
     use crate::script::figure::MathString;
     use crate::{
         drawer,
         generator::{
-            expression::{
-                expr::FreePoint, Expression, PointExpr,
-            },
+            expression::{expr::FreePoint, Expression, PointExpr},
             Adjustable, Complex,
         },
         script::figure::{Figure, Style},
@@ -612,6 +610,7 @@ pub fn project(
     // println!("furthest: {furthest}, scale: {scale}");
 
     let points: Vec<Complex> = points.into_iter().map(|x| x * scale + size005).collect();
+    // println!("{points:#?}");
 
     //let points = points(figure, generated_points, flags);
 
@@ -637,7 +636,15 @@ pub fn project(
 
         blueprint_points.push(Rc::new(RenderedPoint {
             label: pt_label,
-            label_position: point_label_position(&blueprint_lines, &blueprint_angles, &blueprint_segments, &blueprint_rays, &blueprint_circles, vec_associated.clone(), point),
+            label_position: point_label_position(
+                &blueprint_lines,
+                &blueprint_angles,
+                &blueprint_segments,
+                &blueprint_rays,
+                &blueprint_circles,
+                vec_associated.clone(),
+                point,
+            ),
             position: *pt,
             uuid: id,
         }));

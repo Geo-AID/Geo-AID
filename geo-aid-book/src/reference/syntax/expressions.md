@@ -10,7 +10,7 @@
 > &nbsp;&nbsp; `+` | `-` | `*` | `/`\
 > \
 > *SimpleExpression* :\
-> &nbsp;&nbsp; *SimpleExpressionKind* *DisplayOptions*<sup>?</sup>\
+> &nbsp;&nbsp; *SimpleExpressionKind* *[DisplayProperties](display-properties.md)*<sup>?</sup>\
 > \
 > *SimpleExpressionKind* :\
 > &nbsp;&nbsp; &nbsp;&nbsp; [IDENT](identifiers.md)\
@@ -18,7 +18,7 @@
 > &nbsp;&nbsp; | *ExprCall*\
 > &nbsp;&nbsp; | *UnOp* *SimpleExpression*\
 > &nbsp;&nbsp; | `(` *Expression&lt;true&gt;* `)`\
-> &nbsp;&nbsp; | [*ExplicitIterator*](iterators.md)\
+> &nbsp;&nbsp; | *[ExplicitIterator](iterators.md)*\
 > &nbsp;&nbsp; | *PointCollectionConstructor*\
 >\
 > *ExprCall* :\

@@ -18,7 +18,7 @@ WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use std::{fs::File, io::Write, path::Path, rc::Rc, fmt::format};
+use std::{fs::File, io::Write, path::Path, rc::Rc};
 
 use crate::{
     generator::{geometry, Complex},
@@ -26,7 +26,7 @@ use crate::{
         Output, Rendered, RenderedAngle, RenderedCircle, RenderedLine, RenderedPoint, RenderedRay,
         RenderedSegment,
     },
-    script::figure::Style::{self, Bolded, Dashed, Solid, Dotted},
+    script::figure::Style::{self, Bold, Dashed, Dotted, Solid},
 };
 
 /// Function that assigns modes to the rendered variants.
@@ -38,7 +38,7 @@ fn assign_mode(rendered: &Rendered, mode: Style) -> (String, String) {
         _ => match mode {
             Dotted => (default_width, "0.8,1".to_string()),
             Dashed => (default_width, "2,2".to_string()),
-            Bolded => ("2".to_string(), default_strarray),
+            Bold => ("2".to_string(), default_strarray),
             Solid => ("1".to_string(), default_strarray),
         },
     }
@@ -53,7 +53,13 @@ fn points(point: &Rc<RenderedPoint>) -> String {
             style="font-family: 'Computer Modern'" font-size="10px"
             stroke="black" stroke-width="0" x="{}" y="{}">{}</text>
         "#,
-        point.position.real, point.position.imaginary, -point.label_position.real, point.label_position.imaginary, -point.label_position.real, point.label_position.imaginary, point.label
+        point.position.real,
+        point.position.imaginary,
+        -point.label_position.real,
+        point.label_position.imaginary,
+        -point.label_position.real,
+        point.label_position.imaginary,
+        point.label
     )
 }
 
@@ -149,10 +155,10 @@ pub fn draw(target: &Path, canvas_size: (usize, usize), output: &Output) {
             <font-face font-family="New Computer Modern">
             </font-face>
             </font>
-            <g transform="translate(0,200)">
+            <g transform="translate(0,{})">
             <g transform="scale(1,-1)">
         "#,
-        canvas_size.0, canvas_size.1
+        canvas_size.0, canvas_size.1, canvas_size.1
     );
 
     for elem in &output.vec_rendered {

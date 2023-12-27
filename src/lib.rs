@@ -23,9 +23,9 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 pub mod cli;
 pub mod drawer;
 pub mod generator;
+pub mod labels;
 pub mod projector;
 pub mod script;
-pub mod labels;
 
 #[derive(Debug)]
 pub enum Error {

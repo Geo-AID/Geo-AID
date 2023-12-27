@@ -18,10 +18,14 @@ WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use crate::script::{unroll::{BuildAssociated, ScalarNode, HierarchyNode, ScalarData}, compile::{Compiler, Compile}, figure::{Figure, Style}};
 #[allow(unused_imports)]
 use crate::script::unroll::{
     CompileContext, Expr, Function, Library, Line, Point, PointCollection, Properties, Scalar,
+};
+use crate::script::{
+    compile::{Compile, Compiler},
+    figure::{Figure, Style},
+    unroll::{BuildAssociated, CloneWithNode, HierarchyNode, LineType, ScalarData, ScalarNode},
 };
 use geo_aid_derive::overload;
 
@@ -38,12 +42,14 @@ fn angle_function_point_point_point(
 ) -> Expr<Scalar> {
     let display_arms = display.get("display_arms").maybe_unset(true);
     let arms_style = display.get("arms_style").maybe_unset(Style::default());
+    let arms_type = display.get("arms_type").maybe_unset(LineType::Segment);
 
     let mut expr = context.angle_ppp_display(a, b, c, display);
 
     if let Some(node) = &mut expr.node {
         node.insert_data("display_arms", display_arms);
         node.insert_data("arms_style", arms_style);
+        node.insert_data("arms_type", arms_type);
 
         node.set_associated(Associated);
     }
@@ -80,16 +86,44 @@ impl BuildAssociated<ScalarNode> for Associated {
             .unwrap()
             .unwrap();
 
+        let arms_type = associated
+            .get_data("arms_type")
+            .unwrap()
+            .as_line_type()
+            .unwrap()
+            .unwrap();
+
         if display_arms {
             match &associated.root.expr.data.data {
-                ScalarData::ThreePointAngle(a, b, c)
-                | ScalarData::ThreePointAngleDir(a, b, c) => {
-                    let a = compiler.compile(a);
-                    let b = compiler.compile(b);
-                    let c = compiler.compile(c);
+                ScalarData::ThreePointAngle(a_expr, b_expr, c_expr)
+                | ScalarData::ThreePointAngleDir(a_expr, b_expr, c_expr) => {
+                    let a = compiler.compile(a_expr);
+                    let b = compiler.compile(b_expr);
+                    let c = compiler.compile(c_expr);
 
-                    figure.segments.push((b.clone(), a, arms_style));
-                    figure.segments.push((b, c, arms_style));
+                    match arms_type {
+                        LineType::Line => {
+                            let line_a = Expr::new_spanless(Line::LineFromPoints(
+                                b_expr.clone_without_node(),
+                                a_expr.clone_without_node(),
+                            ));
+                            let line_c = Expr::new_spanless(Line::LineFromPoints(
+                                b_expr.clone_without_node(),
+                                c_expr.clone_without_node(),
+                            ));
+
+                            figure.lines.push((compiler.compile(&line_a), arms_style));
+                            figure.lines.push((compiler.compile(&line_c), arms_style));
+                        }
+                        LineType::Ray => {
+                            figure.rays.push((b.clone(), a, arms_style));
+                            figure.rays.push((b, c, arms_style));
+                        }
+                        LineType::Segment => {
+                            figure.segments.push((b.clone(), a, arms_style));
+                            figure.segments.push((b, c, arms_style));
+                        }
+                    }
                 }
                 _ => unreachable!(),
             }

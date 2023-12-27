@@ -29,8 +29,8 @@ use crate::span;
 use super::{
     token::{
         Ampersant, Asterisk, At, Colon, Comma, Dollar, Dot, Eq, Exclamation, Gt, Gteq, Ident,
-        LBrace, LParen, LSquare, Let, Lt, Lteq, Minus, NamedIdent, Number, Plus, RBrace, RParen,
-        RSquare, Semi, Slash, Span, StrLit, Token, Vertical,
+        LBrace, LParen, LSquare, Let, Lt, Lteq, Minus, NamedIdent, Number, Plus, Question, RBrace,
+        RParen, RSquare, Semi, Slash, Span, StrLit, Token, Vertical,
     },
     unit, ComplexUnit, Error,
 };
@@ -621,6 +621,33 @@ pub struct RuleStatement {
     pub semi: Semi,
 }
 
+/// `?expr`
+#[derive(Debug)]
+pub struct RefStatement {
+    /// The starting question mark.
+    pub question: Question,
+    /// Operand.
+    pub operand: Expression<true>,
+    /// The ending semicolon.
+    pub semi: Semi,
+}
+
+impl Parse for RefStatement {
+    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
+        it: &mut Peekable<I>,
+    ) -> Result<Self, Error> {
+        Ok(Self {
+            question: Question::parse(it)?,
+            operand: Expression::parse(it)?,
+            semi: Semi::parse(it)?,
+        })
+    }
+
+    fn get_span(&self) -> Span {
+        self.question.span.join(self.semi.span)
+    }
+}
+
 /// A general statement.
 #[derive(Debug)]
 pub enum Statement {
@@ -632,6 +659,8 @@ pub enum Statement {
     Rule(RuleStatement),
     /// Flag
     Flag(FlagStatement),
+    /// Reference
+    Ref(RefStatement),
 }
 
 impl Statement {
@@ -735,6 +764,7 @@ impl Parse for Statement {
             Token::Let(_) => Statement::Let(LetStatement::parse(it)?),
             Token::Semi(_) => Statement::Noop(Noop::parse(it)?),
             Token::At(_) => Statement::Flag(FlagStatement::parse(it)?),
+            Token::Question(_) => Statement::Ref(RefStatement::parse(it)?),
             _ => Statement::Rule(RuleStatement::parse(it)?),
         })
     }
@@ -745,6 +775,7 @@ impl Parse for Statement {
             Statement::Let(v) => v.get_span(),
             Statement::Rule(v) => v.get_span(),
             Statement::Flag(v) => v.get_span(),
+            Self::Ref(v) => v.get_span(),
         }
     }
 }
@@ -1198,6 +1229,7 @@ impl_token_parse! {Colon}
 impl_token_parse! {Exclamation}
 impl_token_parse! {Number}
 impl_token_parse! {Dot}
+impl_token_parse! {Question}
 
 impl Parse for StrLit {
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
@@ -1429,8 +1461,8 @@ impl FromProperty for bool {
         match property {
             PropertyValue::Ident(ident) => match ident {
                 Ident::Named(ident) => match ident.ident.as_str() {
-                    "enabled" | "on" | "true" => Ok(true),
-                    "disabled" | "off" | "false" => Ok(false),
+                    "enabled" | "on" | "true" | "yes" => Ok(true),
+                    "disabled" | "off" | "false" | "no" => Ok(false),
                     _ => Err(Error::BooleanExpected {
                         error_span: ident.get_span(),
                     }),
@@ -1447,8 +1479,8 @@ impl FromProperty for bool {
                 }),
             },
             PropertyValue::String(s) => match s.content.as_str() {
-                "enabled" | "on" | "true" => Ok(true),
-                "disabled" | "off" | "false" => Ok(false),
+                "enabled" | "on" | "true" | "yes" => Ok(true),
+                "disabled" | "off" | "false" | "no" => Ok(false),
                 _ => Err(Error::BooleanExpected {
                     error_span: s.get_span(),
                 }),

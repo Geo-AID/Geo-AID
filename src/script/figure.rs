@@ -51,7 +51,7 @@ pub const SPECIAL_MATH: [&str; 49] = [
 pub enum Style {
     Dotted,
     Dashed,
-    Bolded,
+    Bold,
     #[default]
     Solid, // Normal solid curve
 }
@@ -172,12 +172,12 @@ pub enum MathSpecial {
 impl MathSpecial {
     #[must_use]
     pub fn is_alphabetic(self) -> bool {
-        true
+        self != Self::Quote
     }
 
     /// # Errors
     /// Returns an error on parsing error.
-    /// 
+    ///
     /// # Panics
     /// Panics in this function are a bug.
     pub fn parse(charcode: &str, content_span: Span) -> Result<Self, Error> {
@@ -220,7 +220,6 @@ impl MathString {
         }
     }
 
-    
     /// # Panics
     /// Any panic here is a bug.
     #[must_use]
@@ -238,7 +237,11 @@ impl MathString {
         }
 
         if let Ok(special) = MathSpecial::parse(&letter, span!(0, 0, 0, 0)) {
-            result.push(MathChar::Special(special));
+            if special.is_alphabetic() {
+                result.push(MathChar::Special(special));
+            } else {
+                return None;
+            }
         } else if letter.len() == 1 {
             result.push(MathChar::Ascii(letter.chars().next().unwrap()));
         } else {
@@ -316,7 +319,7 @@ impl MathString {
                         error_span: content_span,
                     });
                 }
-                
+
                 math_string.push(MathChar::SetIndex(MathIndex::Lower));
                 indexed = true;
             } else if c == '[' {

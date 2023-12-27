@@ -172,10 +172,10 @@ fn pt_lies_on_segment(
                             field!(no-node POINT rhs, B with context),
                         ),
                     ),
-                    inverted: true
+                    inverted: true,
                 },
             ]),
-            inverted: false
+            inverted: false,
         });
     } else {
         context.point_on_line(&point, &line);

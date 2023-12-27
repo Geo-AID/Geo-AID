@@ -62,7 +62,7 @@ After a short wait a new file `figure.svg` should show up. Open it in any SVG pr
 
 Ok, but what exactly happened here? Let's take a closer look at the script we've just given to Geo-AID:
 
-First, we have the three `let` statements. These statements are used to create variables. In our case, these variables are points created with the `Point()` function. You can also add special display parameters to the variable definitions to change how they are rendered. For example, if you change the first line to the following:
+First, we have the three `let` statements. These statements are used to create variables. In our case, these variables are points created with the `Point()` function. You can also add special display propertes to the variable definitions to change how they are rendered. For example, if you change the first line to the following:
 
 ```
 let A [label = G] = Point();
@@ -71,6 +71,8 @@ let A [label = G] = Point();
 you should get something like this:
 
 <p><img style="background-color: white;" src="renamed-a.svg" alt="An equilateral triangle BCG"></p>
+
+You can find out more about the display system [here](../reference/display-system.md).
 
 After the variable definitions, we have the two lines:
 

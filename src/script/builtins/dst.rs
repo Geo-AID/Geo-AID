@@ -18,7 +18,11 @@ WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use crate::script::{figure::Style, unroll::{BuildAssociated, ScalarNode, ScalarData, CloneWithNode}, compile::Compile};
+use crate::script::{
+    compile::Compile,
+    figure::Style,
+    unroll::{BuildAssociated, CloneWithNode, ScalarData, ScalarNode},
+};
 #[allow(unused_imports)]
 use crate::script::{
     unit,
@@ -32,10 +36,10 @@ pub fn distance_function_pp(
     a: Expr<Point>,
     b: Expr<Point>,
     context: &CompileContext,
-    mut display: Properties
+    mut display: Properties,
 ) -> Expr<Scalar> {
     let display_segment = display.get("display_segment").maybe_unset(true);
-    let style = display.get("style").maybe_unset(Style::default());
+    let style = display.get("style").maybe_unset(Style::Solid);
 
     let mut expr = context.distance_pp_display(a, b, display);
 
@@ -52,7 +56,7 @@ fn distance_function_pl(
     a: Expr<Point>,
     k: Expr<Line>,
     context: &CompileContext,
-    mut display: Properties
+    mut display: Properties,
 ) -> Expr<Scalar> {
     let display_segment = display.get("display_segment").maybe_unset(true);
     let style = display.get("style").maybe_unset(Style::Dashed);
@@ -78,21 +82,17 @@ pub struct Associated;
 
 impl BuildAssociated<ScalarNode> for Associated {
     fn build_associated(
-            self: Box<Self>,
-            compiler: &mut crate::script::compile::Compiler,
-            figure: &mut crate::script::figure::Figure,
-            associated: &mut crate::script::unroll::HierarchyNode<ScalarNode>,
-        ) {
-        let display_segment = associated.
-            get_data("display_segment")
+        self: Box<Self>,
+        compiler: &mut crate::script::compile::Compiler,
+        figure: &mut crate::script::figure::Figure,
+        associated: &mut crate::script::unroll::HierarchyNode<ScalarNode>,
+    ) {
+        let display_segment = associated
+            .get_data("display_segment")
             .unwrap()
             .as_bool()
             .unwrap();
-        let style = associated
-            .get_data("style")
-            .unwrap()
-            .as_style()
-            .unwrap();
+        let style = associated.get_data("style").unwrap().as_style().unwrap();
 
         if display_segment.unwrap() {
             match &associated.root.expr.data.data {
@@ -100,31 +100,30 @@ impl BuildAssociated<ScalarNode> for Associated {
                     figure.segments.push((
                         compiler.compile(a),
                         compiler.compile(b),
-                        style.unwrap()
-                    ))
-                },
+                        style.unwrap(),
+                    ));
+                }
                 ScalarData::PointLineDistance(a, k) => {
                     // Projection
                     let b = Expr::new_spanless(Point::LineLineIntersection(
                         Expr::new_spanless(Line::PerpendicularThrough(
                             k.clone_without_node(),
-                            a.clone_without_node()
+                            a.clone_without_node(),
                         )),
-                        k.clone_without_node() 
+                        k.clone_without_node(),
                     ));
 
                     figure.segments.push((
                         compiler.compile(a),
                         compiler.compile(&b),
-                        style.unwrap()
-                    ))
+                        style.unwrap(),
+                    ));
                 }
-                _ => unreachable!()
+                _ => unreachable!(),
             }
         }
     }
 }
-
 
 pub fn register(library: &mut Library) {
     library.functions.insert(

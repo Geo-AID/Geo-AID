@@ -25,7 +25,7 @@ use std::f64::consts::PI;
 #[allow(unused_imports)]
 use crate::script::{
     unit,
-    unroll::{CompileContext, Expr, Function, Library, Scalar, Properties},
+    unroll::{CompileContext, Expr, Function, Library, Properties, Scalar},
 };
 
 #[allow(unused_imports)]

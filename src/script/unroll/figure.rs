@@ -31,8 +31,8 @@ use crate::{
 };
 
 use super::{
-    Bundle, Circle, CloneWithNode, CompileContext, Displayed, Expr, Line, Point, PointCollection,
-    Properties, Scalar, Unknown, AnyExpr,
+    AnyExpr, Bundle, Circle, CloneWithNode, CompileContext, Displayed, Expr, Line, Point,
+    PointCollection, Properties, Scalar, Unknown,
 };
 
 /// A node is a trait characterising objects meant to be parts of the figure's display tree.
@@ -43,7 +43,10 @@ pub trait Node: Debug {
 
     fn build(self: Box<Self>, compiler: &mut Compiler, figure: &mut Figure);
 
-    fn build_unboxed(self, compiler: &mut Compiler, figure: &mut Figure) where Self: Sized {
+    fn build_unboxed(self, compiler: &mut Compiler, figure: &mut Figure)
+    where
+        Self: Sized,
+    {
         Box::new(self).build(compiler, figure);
     }
 }
@@ -103,6 +106,34 @@ impl<T> MaybeUnset<T> {
         }
 
         set
+    }
+
+    /// Only sets the value if the `set` flag is false and `value` is `Some`.
+    /// Returns whether a new value was set.
+    pub fn try_set_if_unset(&mut self, value: Option<T>) -> bool {
+        let set = !self.set && value.is_some();
+
+        if let Some(value) = value {
+            if set {
+                self.set(value);
+            }
+        }
+
+        set
+    }
+
+    #[must_use]
+    pub fn get(&self) -> &T {
+        &self.value
+    }
+
+    /// Will return a `Some` only if the value has been set.
+    pub fn try_get(&self) -> Option<&T> {
+        if self.set {
+            Some(self.get())
+        } else {
+            None
+        }
     }
 
     pub fn unwrap(self) -> T {
@@ -190,7 +221,7 @@ impl CollectionNode {
     pub fn from_display(mut display: Properties, context: &CompileContext) -> Self {
         let node = Self {
             display: display.get("display").maybe_unset(true),
-            children: Vec::new()
+            children: Vec::new(),
         };
 
         display.finish(context);
@@ -242,7 +273,8 @@ pub trait BuildAssociated<T: Node>: Debug {
 #[derive(Debug)]
 pub enum AssociatedData {
     Bool(MaybeUnset<bool>),
-    Style(MaybeUnset<Style>)
+    Style(MaybeUnset<Style>),
+    LineType(MaybeUnset<LineType>),
 }
 
 impl AssociatedData {
@@ -250,7 +282,7 @@ impl AssociatedData {
     pub fn as_bool(&self) -> Option<MaybeUnset<bool>> {
         match self {
             Self::Bool(v) => Some(v.copied()),
-            _ => None
+            _ => None,
         }
     }
 
@@ -258,7 +290,15 @@ impl AssociatedData {
     pub fn as_style(&self) -> Option<MaybeUnset<Style>> {
         match self {
             Self::Style(v) => Some(v.copied()),
-            _ => None
+            _ => None,
+        }
+    }
+
+    #[must_use]
+    pub fn as_line_type(&self) -> Option<MaybeUnset<LineType>> {
+        match self {
+            Self::LineType(v) => Some(v.copied()),
+            _ => None,
         }
     }
 }
@@ -272,6 +312,12 @@ impl From<MaybeUnset<bool>> for AssociatedData {
 impl From<MaybeUnset<Style>> for AssociatedData {
     fn from(value: MaybeUnset<Style>) -> Self {
         Self::Style(value)
+    }
+}
+
+impl From<MaybeUnset<LineType>> for AssociatedData {
+    fn from(value: MaybeUnset<LineType>) -> Self {
+        Self::LineType(value)
     }
 }
 
@@ -592,7 +638,9 @@ impl BundleNode {
     }
 
     pub fn insert<T: Displayed>(&mut self, key: String, expr: Expr<T>)
-    where AnyExpr: From<Expr<T>> {
+    where
+        AnyExpr: From<Expr<T>>,
+    {
         self.children.insert(key, AnyExpr::from(expr));
     }
 
@@ -716,16 +764,16 @@ impl Node for CircleNode {
             figure.circles.push((
                 compiler.compile(&self.expr),
                 Style::Solid, // if self.display_label.unwrap() {
-                               //     let label = self.label.unwrap();
+                              //     let label = self.label.unwrap();
 
-                               //     if label.is_empty() {
-                               //         self.default_label
-                               //     } else {
-                               //         label
-                               //     }
-                               // } else {
-                               //     MathString::new()
-                               // }
+                              //     if label.is_empty() {
+                              //         self.default_label
+                              //     } else {
+                              //         label
+                              //     }
+                              // } else {
+                              //     MathString::new()
+                              // }
             ));
         }
     }
@@ -734,7 +782,7 @@ impl Node for CircleNode {
 impl FromExpr<Circle> for CircleNode {
     fn from_expr(expr: &Expr<Circle>, mut props: Properties, context: &CompileContext) -> Self {
         let _ = props.get::<MathString>("default-label");
-        
+
         let node = Self {
             display: props.get("display").maybe_unset(true),
             label: props
@@ -811,7 +859,7 @@ property_enum_impl! {
         Solid: "solid",
         Dashed: "dashed",
         Dotted: "dotted",
-        Bolded: "bold"
+        Bold: "bold"
     }
 }
 
@@ -856,7 +904,7 @@ impl Node for LineNode {
                     Line::LineFromPoints(a, b) => {
                         figure
                             .rays
-                            .push((compiler.compile(a), compiler.compile(b), Style::Solid))
+                            .push((compiler.compile(a), compiler.compile(b), Style::Solid));
                     }
                     Line::AngleBisector(a, b, c) => {
                         let x = Expr::new_spanless(Point::LineLineIntersection(
@@ -869,7 +917,7 @@ impl Node for LineNode {
 
                         figure
                             .rays
-                            .push((compiler.compile(b), compiler.compile(&x), Style::Solid))
+                            .push((compiler.compile(b), compiler.compile(&x), Style::Solid));
                     }
                     _ => unreachable!(),
                 },
@@ -896,7 +944,7 @@ impl FromExpr<Line> for LineNode {
                 .get("label")
                 .maybe_unset(MathString::new(span!(0, 0, 0, 0))),
             display_label: props.get("display_label").maybe_unset(false),
-            line_type: props.get("line_type").maybe_unset(LineType::Line),
+            line_type: MaybeUnset::new(LineType::Line),
             style: props.get("style").maybe_unset(Style::default()),
             expr: expr.clone_without_node(),
         };
@@ -910,7 +958,7 @@ impl FromExpr<Line> for LineNode {
 #[derive(Debug)]
 pub struct ScalarNode {
     pub display: MaybeUnset<bool>,
-    pub expr: Expr<Scalar>
+    pub expr: Expr<Scalar>,
 }
 
 impl Node for ScalarNode {
@@ -933,7 +981,7 @@ impl FromExpr<Scalar> for ScalarNode {
 
         let node = Self {
             display: props.get("display").maybe_unset(true),
-            expr: expr.clone_without_node()
+            expr: expr.clone_without_node(),
         };
 
         props.finish(context);

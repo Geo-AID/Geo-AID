@@ -22,14 +22,10 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 use crate::script::unroll::{
     CompileContext, Expr, Function, Library, Line, Point, PointCollection, Properties,
 };
-use crate::{
-    script::{
-        compile::{Compile, Compiler},
-        figure::{Figure, MathString, Style},
-        unroll::{
-            BuildAssociated, CloneWithNode, HierarchyNode, LineNode, LineType,
-        },
-    }
+use crate::script::{
+    compile::{Compile, Compiler},
+    figure::{Figure, Style},
+    unroll::{BuildAssociated, CloneWithNode, HierarchyNode, LineNode, LineType},
 };
 use geo_aid_derive::overload;
 
@@ -46,12 +42,16 @@ pub fn point_point_point(
 ) -> Expr<Line> {
     let display_arms = display.get("display_arms").maybe_unset(true);
     let arms_style = display.get("arms_style").maybe_unset(Style::default());
+    let line_type = display.get("line_type").maybe_unset(LineType::Ray);
+    let arms_type = display.get("arms_type").maybe_unset(LineType::Segment);
 
     let mut expr = context.bisector_ppp_display(a, b, c, display);
 
     if let Some(node) = &mut expr.node {
         node.insert_data("display_arms", display_arms);
         node.insert_data("arms_style", arms_style);
+        node.insert_data("line_type", line_type);
+        node.insert_data("arms_type", arms_type);
 
         node.set_associated(Associated);
     }
@@ -88,17 +88,53 @@ impl BuildAssociated<LineNode> for Associated {
             .unwrap()
             .unwrap();
 
-        associated.root.line_type.set_if_unset(LineType::Ray);
+        let mut line_type = associated
+            .get_data("line_type")
+            .unwrap()
+            .as_line_type()
+            .unwrap();
+
+        let arms_type = associated
+            .get_data("arms_type")
+            .unwrap()
+            .as_line_type()
+            .unwrap()
+            .unwrap();
+
+        // The old value takes advantage only if it has been manually set and the `line_type` prop has not.
+        line_type.try_set_if_unset(associated.root.line_type.try_get().copied());
+        associated.root.line_type.set(line_type.unwrap());
 
         if display_arms {
             match associated.root.expr.data.as_ref() {
-                Line::AngleBisector(a, b, c) => {
-                    let a = compiler.compile(a);
-                    let b = compiler.compile(b);
-                    let c = compiler.compile(c);
+                Line::AngleBisector(a_expr, b_expr, c_expr) => {
+                    let a = compiler.compile(a_expr);
+                    let b = compiler.compile(b_expr);
+                    let c = compiler.compile(c_expr);
 
-                    figure.segments.push((b.clone(), a, Style::Solid));
-                    figure.segments.push((b, c, Style::Solid));
+                    match arms_type {
+                        LineType::Line => {
+                            let line_a = Expr::new_spanless(Line::LineFromPoints(
+                                b_expr.clone_without_node(),
+                                a_expr.clone_without_node(),
+                            ));
+                            let line_c = Expr::new_spanless(Line::LineFromPoints(
+                                b_expr.clone_without_node(),
+                                c_expr.clone_without_node(),
+                            ));
+
+                            figure.lines.push((compiler.compile(&line_a), arms_style));
+                            figure.lines.push((compiler.compile(&line_c), arms_style));
+                        }
+                        LineType::Ray => {
+                            figure.rays.push((b.clone(), a, arms_style));
+                            figure.rays.push((b, c, arms_style));
+                        }
+                        LineType::Segment => {
+                            figure.segments.push((b.clone(), a, arms_style));
+                            figure.segments.push((b, c, arms_style));
+                        }
+                    }
                 }
                 _ => unreachable!(),
             }
@@ -110,7 +146,7 @@ impl BuildAssociated<LineNode> for Associated {
 pub fn point_point(
     a: Expr<Point>,
     b: Expr<Point>,
-    context: &mut CompileContext,
+    context: &CompileContext,
     display: Properties,
 ) -> Expr<Line> {
     use super::mid::function_point;

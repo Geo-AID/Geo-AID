@@ -20,7 +20,11 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #[allow(unused_imports)]
 use crate::script::builtins::macros::{call, construct_bundle, index};
-use crate::script::{unroll::{BuildAssociated, HierarchyNode, BundleNode}, figure::{Figure, Style}, compile::{Compiler, Compile}};
+use crate::script::{
+    compile::{Compile, Compiler},
+    figure::{Figure, Style},
+    unroll::{BuildAssociated, BundleNode, HierarchyNode},
+};
 use geo_aid_derive::overload;
 
 #[allow(unused_imports)]
@@ -36,13 +40,13 @@ fn segment_function_point_point(
 ) -> Expr<Bundle> {
     let mut expr = construct_bundle!(Segment { A: a, B: b });
 
-    if let Some(node)  = &mut expr.node {
+    if let Some(node) = &mut expr.node {
         node.root.display = display.get("display").maybe_unset(true);
 
-        let display_line = display.get("display_line").maybe_unset(true);
+        let display_segment = display.get("display_segment").maybe_unset(true);
         let style = display.get("style").maybe_unset(Style::default());
-        
-        node.insert_data("display_line", display_line);
+
+        node.insert_data("display_segment", display_segment);
         node.insert_data("style", style);
         node.set_associated(Associated);
     }
@@ -54,7 +58,7 @@ fn segment_function_point_point(
 
 /// ```
 /// struct Associated {
-///     display_line: bool,
+///     display_segment: bool,
 ///     style: Mode
 /// }
 /// ```
@@ -63,20 +67,24 @@ pub struct Associated;
 
 impl BuildAssociated<BundleNode> for Associated {
     fn build_associated(
-            self: Box<Self>,
-            compiler: &mut Compiler,
-            figure: &mut Figure,
-            associated: &mut HierarchyNode<BundleNode>,
-        ) {
-        let display_line = associated.get_data("display_line").unwrap().as_bool().unwrap();
+        self: Box<Self>,
+        compiler: &mut Compiler,
+        figure: &mut Figure,
+        associated: &mut HierarchyNode<BundleNode>,
+    ) {
+        let display_segment = associated
+            .get_data("display_segment")
+            .unwrap()
+            .as_bool()
+            .unwrap();
         let style = associated.get_data("style").unwrap().as_style().unwrap();
 
-        if display_line.unwrap() {
+        if display_segment.unwrap() {
             figure.segments.push((
                 compiler.compile(associated.root.children["A"].as_point().unwrap()),
                 compiler.compile(associated.root.children["B"].as_point().unwrap()),
-                style.unwrap()
-            ))
+                style.unwrap(),
+            ));
         }
     }
 }
