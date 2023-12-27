@@ -25,9 +25,7 @@ use crate::script::unroll::{
 use crate::script::{
     compile::{Compile, Compiler},
     figure::{Figure, Style},
-    unroll::{
-        BuildAssociated, CloneWithNode, HierarchyNode, LineNode, LineType,
-    },
+    unroll::{BuildAssociated, CloneWithNode, HierarchyNode, LineNode, LineType},
 };
 use geo_aid_derive::overload;
 
@@ -118,11 +116,11 @@ impl BuildAssociated<LineNode> for Associated {
                         LineType::Line => {
                             let line_a = Expr::new_spanless(Line::LineFromPoints(
                                 b_expr.clone_without_node(),
-                                a_expr.clone_without_node()
+                                a_expr.clone_without_node(),
                             ));
                             let line_c = Expr::new_spanless(Line::LineFromPoints(
                                 b_expr.clone_without_node(),
-                                c_expr.clone_without_node()
+                                c_expr.clone_without_node(),
                             ));
 
                             figure.lines.push((compiler.compile(&line_a), arms_style));

@@ -18,10 +18,8 @@ WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use crate::script::unroll::{Properties, BuildAssociated, PointNode, Point};
-use crate::{
-    script::unroll::{CompileContext, Expr, Function, Library, Line}
-};
+use crate::script::unroll::{BuildAssociated, Point, PointNode, Properties};
+use crate::script::unroll::{CompileContext, Expr, Function, Library, Line};
 use geo_aid_derive::overload;
 
 fn intersection_function_line_line(
@@ -44,11 +42,11 @@ pub struct Associated;
 
 impl BuildAssociated<PointNode> for Associated {
     fn build_associated(
-            self: Box<Self>,
-            _compiler: &mut crate::script::compile::Compiler,
-            _figure: &mut crate::script::figure::Figure,
-            associated: &mut crate::script::unroll::HierarchyNode<PointNode>,
-        ) {
+        self: Box<Self>,
+        _compiler: &mut crate::script::compile::Compiler,
+        _figure: &mut crate::script::figure::Figure,
+        associated: &mut crate::script::unroll::HierarchyNode<PointNode>,
+    ) {
         associated.root.display_dot.set_if_unset(false);
     }
 }

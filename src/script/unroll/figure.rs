@@ -31,8 +31,8 @@ use crate::{
 };
 
 use super::{
-    Bundle, Circle, CloneWithNode, CompileContext, Displayed, Expr, Line, Point, PointCollection,
-    Properties, Scalar, Unknown, AnyExpr,
+    AnyExpr, Bundle, Circle, CloneWithNode, CompileContext, Displayed, Expr, Line, Point,
+    PointCollection, Properties, Scalar, Unknown,
 };
 
 /// A node is a trait characterising objects meant to be parts of the figure's display tree.
@@ -43,7 +43,10 @@ pub trait Node: Debug {
 
     fn build(self: Box<Self>, compiler: &mut Compiler, figure: &mut Figure);
 
-    fn build_unboxed(self, compiler: &mut Compiler, figure: &mut Figure) where Self: Sized {
+    fn build_unboxed(self, compiler: &mut Compiler, figure: &mut Figure)
+    where
+        Self: Sized,
+    {
         Box::new(self).build(compiler, figure);
     }
 }
@@ -218,7 +221,7 @@ impl CollectionNode {
     pub fn from_display(mut display: Properties, context: &CompileContext) -> Self {
         let node = Self {
             display: display.get("display").maybe_unset(true),
-            children: Vec::new()
+            children: Vec::new(),
         };
 
         display.finish(context);
@@ -271,7 +274,7 @@ pub trait BuildAssociated<T: Node>: Debug {
 pub enum AssociatedData {
     Bool(MaybeUnset<bool>),
     Style(MaybeUnset<Style>),
-    LineType(MaybeUnset<LineType>)
+    LineType(MaybeUnset<LineType>),
 }
 
 impl AssociatedData {
@@ -279,7 +282,7 @@ impl AssociatedData {
     pub fn as_bool(&self) -> Option<MaybeUnset<bool>> {
         match self {
             Self::Bool(v) => Some(v.copied()),
-            _ => None
+            _ => None,
         }
     }
 
@@ -287,7 +290,7 @@ impl AssociatedData {
     pub fn as_style(&self) -> Option<MaybeUnset<Style>> {
         match self {
             Self::Style(v) => Some(v.copied()),
-            _ => None
+            _ => None,
         }
     }
 
@@ -295,7 +298,7 @@ impl AssociatedData {
     pub fn as_line_type(&self) -> Option<MaybeUnset<LineType>> {
         match self {
             Self::LineType(v) => Some(v.copied()),
-            _ => None
+            _ => None,
         }
     }
 }
@@ -635,7 +638,9 @@ impl BundleNode {
     }
 
     pub fn insert<T: Displayed>(&mut self, key: String, expr: Expr<T>)
-    where AnyExpr: From<Expr<T>> {
+    where
+        AnyExpr: From<Expr<T>>,
+    {
         self.children.insert(key, AnyExpr::from(expr));
     }
 
@@ -759,16 +764,16 @@ impl Node for CircleNode {
             figure.circles.push((
                 compiler.compile(&self.expr),
                 Style::Solid, // if self.display_label.unwrap() {
-                               //     let label = self.label.unwrap();
+                              //     let label = self.label.unwrap();
 
-                               //     if label.is_empty() {
-                               //         self.default_label
-                               //     } else {
-                               //         label
-                               //     }
-                               // } else {
-                               //     MathString::new()
-                               // }
+                              //     if label.is_empty() {
+                              //         self.default_label
+                              //     } else {
+                              //         label
+                              //     }
+                              // } else {
+                              //     MathString::new()
+                              // }
             ));
         }
     }
@@ -777,7 +782,7 @@ impl Node for CircleNode {
 impl FromExpr<Circle> for CircleNode {
     fn from_expr(expr: &Expr<Circle>, mut props: Properties, context: &CompileContext) -> Self {
         let _ = props.get::<MathString>("default-label");
-        
+
         let node = Self {
             display: props.get("display").maybe_unset(true),
             label: props
@@ -953,7 +958,7 @@ impl FromExpr<Line> for LineNode {
 #[derive(Debug)]
 pub struct ScalarNode {
     pub display: MaybeUnset<bool>,
-    pub expr: Expr<Scalar>
+    pub expr: Expr<Scalar>,
 }
 
 impl Node for ScalarNode {
@@ -976,7 +981,7 @@ impl FromExpr<Scalar> for ScalarNode {
 
         let node = Self {
             display: props.get("display").maybe_unset(true),
-            expr: expr.clone_without_node()
+            expr: expr.clone_without_node(),
         };
 
         props.finish(context);

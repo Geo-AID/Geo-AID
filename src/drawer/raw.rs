@@ -30,7 +30,7 @@ use crate::{
         RenderedSegment,
     },
     script::{
-        figure::Style::{self, Bold, Dashed, Solid, Dotted},
+        figure::Style::{self, Bold, Dashed, Dotted, Solid},
         HashableArc,
     },
 };

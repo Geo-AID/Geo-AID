@@ -92,5 +92,7 @@ pub fn distance_pt_ln(point: Complex, line: Line) -> f64 {
 // Computes Point-Point distance.
 #[must_use]
 pub fn distance_pt_pt(p1: Complex, p2: Complex) -> f64 {
-    ((p1.real - p2.real) * (p1.real - p2.real) + (p1.imaginary - p2.imaginary) * (p1.imaginary - p2.imaginary)).sqrt()
+    ((p1.real - p2.real) * (p1.real - p2.real)
+        + (p1.imaginary - p2.imaginary) * (p1.imaginary - p2.imaginary))
+        .sqrt()
 }

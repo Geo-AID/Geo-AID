@@ -26,7 +26,7 @@ use crate::{
         Output, Rendered, RenderedAngle, RenderedCircle, RenderedLine, RenderedPoint, RenderedRay,
         RenderedSegment,
     },
-    script::figure::Style::{self, Bold, Dashed, Solid, Dotted},
+    script::figure::Style::{self, Bold, Dashed, Dotted, Solid},
 };
 
 /// Function that assigns modes to the rendered variants.
@@ -53,7 +53,13 @@ fn points(point: &Rc<RenderedPoint>) -> String {
             style="font-family: 'Computer Modern'" font-size="10px"
             stroke="black" stroke-width="0" x="{}" y="{}">{}</text>
         "#,
-        point.position.real, point.position.imaginary, -point.label_position.real, point.label_position.imaginary, -point.label_position.real, point.label_position.imaginary, point.label
+        point.position.real,
+        point.position.imaginary,
+        -point.label_position.real,
+        point.label_position.imaginary,
+        -point.label_position.real,
+        point.label_position.imaginary,
+        point.label
     )
 }
 

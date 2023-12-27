@@ -43,7 +43,7 @@ pub const SPECIAL_MATH: [&str; 49] = [
     "zeta", "Zeta", "eta", "Eta", "theta", "Theta", "iota", "Iota", "kappa", "Kappa", "lambda",
     "Lambda", "mu", "Mu", "nu", "Nu", "xi", "Xi", "omicron", "Omicorn", "phi", "Phi", "rho", "Rho",
     "sigma", "Sigma", "tau", "Tau", "upsilon", "Upsilon", "phi", "Phi", "chi", "Chi", "psi", "Psi",
-    "omega", "Omega", "quote"
+    "omega", "Omega", "quote",
 ];
 
 /// The display mode of the expression.
@@ -177,7 +177,7 @@ impl MathSpecial {
 
     /// # Errors
     /// Returns an error on parsing error.
-    /// 
+    ///
     /// # Panics
     /// Panics in this function are a bug.
     pub fn parse(charcode: &str, content_span: Span) -> Result<Self, Error> {
@@ -220,7 +220,6 @@ impl MathString {
         }
     }
 
-    
     /// # Panics
     /// Any panic here is a bug.
     #[must_use]
@@ -320,7 +319,7 @@ impl MathString {
                         error_span: content_span,
                     });
                 }
-                
+
                 math_string.push(MathChar::SetIndex(MathIndex::Lower));
                 indexed = true;
             } else if c == '[' {

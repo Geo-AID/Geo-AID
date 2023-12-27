@@ -1117,7 +1117,7 @@ impl ConvertFrom<Expr<PointCollection>> for Point {
                             .maybe_unset(MathString::new(span!(0, 0, 0, 0)));
                         pt_node.root.display_dot = props.get("display_dot").maybe_unset(true);
                     }
-                       
+
                     props.finish(context);
                 }
             }
@@ -1429,7 +1429,9 @@ impl ConvertFrom<Expr<PointCollection>> for Scalar {
         if value.data.length == 2 {
             // IMPORTANT: unwrap_or_else MUST be used to prevent
             // unnecessary props creation and drop errors.
-            let display = value.node.as_mut()
+            let display = value
+                .node
+                .as_mut()
                 .and_then(|x| x.root.props.take())
                 .unwrap_or_default();
 
@@ -1437,7 +1439,7 @@ impl ConvertFrom<Expr<PointCollection>> for Scalar {
                 index!(node value, 0),
                 index!(node value, 1),
                 context,
-                display
+                display,
             );
 
             if let Some(pc_node) = value.node {
@@ -2097,9 +2099,10 @@ impl AnyExpr {
             Self::Bundle(v) => {
                 AnyExprNode::Bundle(mem::replace(&mut v.node, with.map(AnyExprNode::as_bundle))?)
             }
-            Self::Unknown(v) => {
-                AnyExprNode::Unknown(mem::replace(&mut v.node, with.map(AnyExprNode::as_unknown))?)
-            }
+            Self::Unknown(v) => AnyExprNode::Unknown(mem::replace(
+                &mut v.node,
+                with.map(AnyExprNode::as_unknown),
+            )?),
         })
     }
 
@@ -2477,7 +2480,7 @@ where
 #[derive(Debug)]
 pub struct UnrolledRule {
     pub kind: UnrolledRuleKind,
-    pub inverted: bool
+    pub inverted: bool,
 }
 
 impl Display for UnrolledRule {
@@ -2748,7 +2751,7 @@ fn unroll_simple(
                     display: display_pc,
                     children: pc_children,
                     props: Some(display),
-                }))
+                })),
             })
         }
     }
@@ -2941,7 +2944,7 @@ pub struct Properties {
     props: HashMap<String, PropertyValue>,
     finished: bool,
     errors: Vec<Error>,
-    expected: Vec<&'static str>
+    expected: Vec<&'static str>,
 }
 
 impl Clone for Properties {
@@ -2950,7 +2953,7 @@ impl Clone for Properties {
             props: self.props.clone(),
             finished: false,
             errors: Vec::new(),
-            expected: Vec::new()
+            expected: Vec::new(),
         }
     }
 }
@@ -2963,7 +2966,7 @@ impl Default for Properties {
             props: HashMap::new(),
             finished: false,
             errors: Vec::new(),
-            expected: Vec::new()
+            expected: Vec::new(),
         }
     }
 }
@@ -3066,7 +3069,7 @@ impl From<Option<DisplayProperties>> for Properties {
                 .collect(),
             finished: false,
             errors: Vec::new(),
-            expected: Vec::new()
+            expected: Vec::new(),
         }
     }
 }
@@ -3131,7 +3134,7 @@ fn create_variable_named(
         // Point collection variables are amiguous and therefore cause compilation errors.
         // They do not, however prevent the program from running properly.
         context.push_error(Error::PCVariable {
-            error_span: stat.get_span()
+            error_span: stat.get_span(),
         });
     }
 
@@ -3210,9 +3213,7 @@ fn create_variable_collection(
                 let var = rhs_unpacked.next().unwrap();
 
                 if let Some(rhs_node) = &mut rhs_node {
-                    let pt_node = rhs_node.root.children
-                        .get_mut(i)
-                        .and_then(Option::take);
+                    let pt_node = rhs_node.root.children.get_mut(i).and_then(Option::take);
 
                     variable_nodes.extend(pt_node.map(|x| Box::new(x) as Box<dyn Node>));
                 }
@@ -3332,7 +3333,7 @@ fn create_variables(
 fn unroll_ref(
     stat: &RefStatement,
     context: &mut CompileContext,
-    library: &Library
+    library: &Library,
 ) -> Result<Vec<Box<dyn Node>>, Error> {
     let mut nodes = Vec::new();
     let tree = IterNode::from(&stat.operand);
@@ -3349,8 +3350,10 @@ fn unroll_ref(
             context,
             library,
             it_index,
-            Properties::default()
-        ).replace_node(None).map(AnyExprNode::as_dyn);
+            Properties::default(),
+        )
+        .replace_node(None)
+        .map(AnyExprNode::as_dyn);
         nodes.extend(node);
 
         index.next();
@@ -3405,14 +3408,16 @@ fn unroll_let(
 
         while let Some(it_index) = index.get_currents() {
             nodes.push(unroll_rule(
-                (unroll_expression(&lhs, context, library, it_index, Properties::default()),
-                &rule,
-                unroll_expression(&expr, context, library, it_index, Properties::default())),
+                (
+                    unroll_expression(&lhs, context, library, it_index, Properties::default()),
+                    &rule,
+                    unroll_expression(&expr, context, library, it_index, Properties::default()),
+                ),
                 context,
                 library,
                 stat_span,
                 false,
-                Properties::from(None)
+                Properties::from(None),
             ));
 
             index.next();
@@ -3428,7 +3433,7 @@ fn unroll_eq(
     context: &mut CompileContext,
     full_span: Span,
     inverted: bool,
-    display: Properties
+    display: Properties,
 ) -> Box<dyn Node> {
     let lhs_type = lhs.get_type();
     let rhs_type = rhs.get_type();
@@ -3494,7 +3499,8 @@ fn unroll_eq(
                 context.scalar_eq_display(
                     Expr::new_spanless(Scalar::dummy()),
                     Expr::new_spanless(Scalar::dummy()),
-                    inverted, display
+                    inverted,
+                    display,
                 )
             }
         }
@@ -3507,7 +3513,7 @@ fn unroll_gt(
     context: &mut CompileContext,
     full_span: Span,
     inverted: bool,
-    display: Properties
+    display: Properties,
 ) -> Box<dyn Node> {
     if lhs.data.unit.is_some() {
         let rhs = if rhs.can_convert_unit(lhs.data.unit) {
@@ -3545,7 +3551,7 @@ fn unroll_lt(
     context: &mut CompileContext,
     full_span: Span,
     inverted: bool,
-    display: Properties
+    display: Properties,
 ) -> Box<dyn Node> {
     if lhs.data.unit.is_some() {
         let rhs = if rhs.can_convert_unit(lhs.data.unit) {
@@ -3583,18 +3589,20 @@ fn unroll_rule(
     library: &Library,
     full_span: Span,
     inverted: bool,
-    display: Properties
+    display: Properties,
 ) -> Box<dyn Node> {
     match op {
         RuleOperator::Predefined(pre) => match pre {
-            PredefinedRuleOperator::Eq(_) => unroll_eq(lhs, rhs, context, full_span, inverted, display),
+            PredefinedRuleOperator::Eq(_) => {
+                unroll_eq(lhs, rhs, context, full_span, inverted, display)
+            }
             PredefinedRuleOperator::Lt(_) => unroll_lt(
                 lhs.convert(context),
                 rhs.convert(context),
                 context,
                 full_span,
                 inverted,
-                display
+                display,
             ),
             PredefinedRuleOperator::Gt(_) => unroll_gt(
                 lhs.convert(context),
@@ -3602,7 +3610,7 @@ fn unroll_rule(
                 context,
                 full_span,
                 inverted,
-                display
+                display,
             ),
             PredefinedRuleOperator::Lteq(_) => unroll_gt(
                 lhs.convert(context),
@@ -3610,7 +3618,7 @@ fn unroll_rule(
                 context,
                 full_span,
                 !inverted,
-                display
+                display,
             ),
             PredefinedRuleOperator::Gteq(_) => unroll_lt(
                 lhs.convert(context),
@@ -3618,7 +3626,7 @@ fn unroll_rule(
                 context,
                 full_span,
                 !inverted,
-                display
+                display,
             ),
         },
         RuleOperator::Defined(op) => {
@@ -3655,9 +3663,14 @@ fn unroll_rule(
 
             def(lhs, rhs, context, display, inverted)
         }
-        RuleOperator::Inverted(op) => {
-            unroll_rule((lhs, &op.operator, rhs), context, library, full_span, !inverted, display)
-        }
+        RuleOperator::Inverted(op) => unroll_rule(
+            (lhs, &op.operator, rhs),
+            context,
+            library,
+            full_span,
+            !inverted,
+            display,
+        ),
     }
 }
 
@@ -3675,14 +3688,16 @@ fn unroll_rulestat(
 
     while let Some(index) = it_index.get_currents() {
         nodes.push(unroll_rule(
-            (unroll_expression(&rule.lhs, context, library, index, Properties::default()),
-            &rule.op,
-            unroll_expression(&rule.rhs, context, library, index, Properties::default())),
+            (
+                unroll_expression(&rule.lhs, context, library, index, Properties::default()),
+                &rule.op,
+                unroll_expression(&rule.rhs, context, library, index, Properties::default()),
+            ),
             context,
             library,
             rule.get_span(),
             false,
-            Properties::from(rule.display.clone())
+            Properties::from(rule.display.clone()),
         ));
 
         it_index.next();
@@ -3902,17 +3917,17 @@ pub fn unroll(input: &str) -> Result<(CompileContext, CollectionNode), Vec<Error
                     for node in nodes {
                         figure.push_boxed(node);
                     }
-                },
-                Err(err) => context.push_error(err)
+                }
+                Err(err) => context.push_error(err),
             },
             Statement::Ref(stat) => match unroll_ref(&stat, &mut context, &library) {
                 Ok(nodes) => {
                     for node in nodes {
                         figure.push_boxed(node);
                     }
-                },
-                Err(err) => context.push_error(err)
-            }
+                }
+                Err(err) => context.push_error(err),
+            },
         }
     }
 

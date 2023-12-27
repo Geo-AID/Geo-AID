@@ -18,10 +18,14 @@ WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use crate::script::{unroll::{BuildAssociated, ScalarNode, HierarchyNode, ScalarData, LineType, CloneWithNode}, compile::{Compiler, Compile}, figure::{Figure, Style}};
 #[allow(unused_imports)]
 use crate::script::unroll::{
     CompileContext, Expr, Function, Library, Line, Point, PointCollection, Properties, Scalar,
+};
+use crate::script::{
+    compile::{Compile, Compiler},
+    figure::{Figure, Style},
+    unroll::{BuildAssociated, CloneWithNode, HierarchyNode, LineType, ScalarData, ScalarNode},
 };
 use geo_aid_derive::overload;
 
@@ -101,11 +105,11 @@ impl BuildAssociated<ScalarNode> for Associated {
                         LineType::Line => {
                             let line_a = Expr::new_spanless(Line::LineFromPoints(
                                 b_expr.clone_without_node(),
-                                a_expr.clone_without_node()
+                                a_expr.clone_without_node(),
                             ));
                             let line_c = Expr::new_spanless(Line::LineFromPoints(
                                 b_expr.clone_without_node(),
-                                c_expr.clone_without_node()
+                                c_expr.clone_without_node(),
                             ));
 
                             figure.lines.push((compiler.compile(&line_a), arms_style));

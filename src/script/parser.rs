@@ -29,8 +29,8 @@ use crate::span;
 use super::{
     token::{
         Ampersant, Asterisk, At, Colon, Comma, Dollar, Dot, Eq, Exclamation, Gt, Gteq, Ident,
-        LBrace, LParen, LSquare, Let, Lt, Lteq, Minus, NamedIdent, Number, Plus, RBrace, RParen,
-        RSquare, Semi, Slash, Span, StrLit, Token, Vertical, Question,
+        LBrace, LParen, LSquare, Let, Lt, Lteq, Minus, NamedIdent, Number, Plus, Question, RBrace,
+        RParen, RSquare, Semi, Slash, Span, StrLit, Token, Vertical,
     },
     unit, ComplexUnit, Error,
 };
@@ -629,17 +629,17 @@ pub struct RefStatement {
     /// Operand.
     pub operand: Expression<true>,
     /// The ending semicolon.
-    pub semi: Semi
+    pub semi: Semi,
 }
 
 impl Parse for RefStatement {
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-            it: &mut Peekable<I>,
-        ) -> Result<Self, Error> {
+        it: &mut Peekable<I>,
+    ) -> Result<Self, Error> {
         Ok(Self {
             question: Question::parse(it)?,
             operand: Expression::parse(it)?,
-            semi: Semi::parse(it)?
+            semi: Semi::parse(it)?,
         })
     }
 
@@ -660,7 +660,7 @@ pub enum Statement {
     /// Flag
     Flag(FlagStatement),
     /// Reference
-    Ref(RefStatement)
+    Ref(RefStatement),
 }
 
 impl Statement {
@@ -775,7 +775,7 @@ impl Parse for Statement {
             Statement::Let(v) => v.get_span(),
             Statement::Rule(v) => v.get_span(),
             Statement::Flag(v) => v.get_span(),
-            Self::Ref(v) => v.get_span()
+            Self::Ref(v) => v.get_span(),
         }
     }
 }

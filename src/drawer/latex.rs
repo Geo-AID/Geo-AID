@@ -32,7 +32,7 @@ use crate::projector::{
 };
 use crate::script::HashableArc;
 
-use crate::script::figure::Style::{self, Bold, Dashed, Solid, Dotted};
+use crate::script::figure::Style::{self, Bold, Dashed, Dotted, Solid};
 
 /// Function getting the point's name (if it exists, if not then it returns the point's coordinates).
 fn get_point_name(
@@ -73,7 +73,13 @@ fn points(point: &Rc<RenderedPoint>, scale: f64) -> String {
             \coordinate ({}) at ({}, {}); \fill[black] ({}) circle (1pt);
             \node at ({}, {}) {{{}}};
         "#,
-        point.uuid, position.real, position.imaginary, point.uuid, label_position.real, label_position.imaginary, point.label
+        point.uuid,
+        position.real,
+        position.imaginary,
+        point.uuid,
+        label_position.real,
+        label_position.imaginary,
+        point.label
     )
 }
 

@@ -220,8 +220,8 @@ pub enum Error {
         option: String,
     },
     PCVariable {
-        error_span: Span
-    }
+        error_span: Span,
+    },
 }
 
 impl Error {
