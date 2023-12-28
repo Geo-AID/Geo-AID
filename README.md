@@ -29,4 +29,9 @@ geo-aid <arguments here, type --help for help>.
 
 ## Useful resources
 
-You can access the Geo-AID book through the git repository, by opening the file at `geo-aid-book/book/index.html`.
+The Geo-AID book is accessible under the `geo-aid-book/` directory. You can display it as HTML using [mdbook](https://github.com/rust-lang/mdBook):
+
+```
+cd geo-aid-book
+mdbook serve --open
+```
