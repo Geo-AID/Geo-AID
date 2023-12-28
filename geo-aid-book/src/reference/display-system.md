@@ -58,7 +58,7 @@ struct Properties {
 The `display` property decides whethet the point should be displayed. `label` gives the point a label and `display_label` decides if it is to be displayed. If `display_dot` is `true`, a small dot is displayed in the point's position.
 
 **NOTE**: `display_dot` has currently no effect and the dot is always displayed.
-**NOTE**: Labels currently have poor support in drawers.
+**NOTE**: Labels currently have poor support in SVG.
 
 *`Line`*
 
