@@ -20,121 +20,14 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 use std::{fmt::Display, iter::Peekable};
 
-use num::Rational64;
 use serde::Serialize;
 
-use self::number::ParsedUint;
+use self::number::{ParsedInt, ParsedFloat};
 
 use super::{parser::Parse, Error};
 
 /// Re-exports and zero-cost abstractions of number types used by geo-aid.
 pub mod number;
-
-#[cfg(test)]
-mod tests {
-    use crate::{
-        script::token::{
-            Dot, Eq, Ident, Let, NamedIdent, Number, PointCollection, PointCollectionItem, Semi, TokFloat, TokInteger,
-        },
-        span,
-    };
-
-    use super::{tokenize, Token};
-
-    #[test]
-    fn tokenizing() {
-        let script = r#"let x = 5; # Setting x
-let y = 5.5;
-let ABC = Triangle;
-        "#;
-
-        assert_eq!(
-            tokenize(script).unwrap(),
-            vec![
-                Token::Let(Let {
-                    span: span!(1, 1, 1, 4)
-                }),
-                Token::Ident(Ident::Named(NamedIdent {
-                    ident: String::from("x"),
-                    span: span!(1, 5, 1, 6),
-                    collection_likeness: 0.0
-                })),
-                Token::Eq(Eq {
-                    span: span!(1, 7, 1, 8)
-                }),
-                Token::Number(Number::Integer(TokInteger {
-                    span: span!(1, 9, 1, 10),
-                    integral: 5
-                })),
-                Token::Semi(Semi {
-                    span: span!(1, 10, 1, 11)
-                }),
-                Token::Let(Let {
-                    span: span!(2, 1, 2, 4)
-                }),
-                Token::Ident(Ident::Named(NamedIdent {
-                    ident: String::from("y"),
-                    span: span!(2, 5, 2, 6),
-                    collection_likeness: 0.0
-                })),
-                Token::Eq(Eq {
-                    span: span!(2, 7, 2, 8)
-                }),
-                Token::Number(Number {
-                    span: span!(2, 9, 2, 12),
-                    integral: 5,
-                    floating: Some(TokFloat {
-                        decimal: 5,
-                        decimal_places: 1,
-                        dot: Dot {
-                            span: span!(2, 10, 2, 11)
-                        }
-                    })
-                }),
-                Token::Semi(Semi {
-                    span: span!(2, 12, 2, 13)
-                }),
-                Token::Let(Let {
-                    span: span!(3, 1, 3, 4)
-                }),
-                Token::Ident(Ident::Collection(PointCollection {
-                    collection: vec![
-                        PointCollectionItem {
-                            letter: 'A',
-                            index: None,
-                            primes: 0,
-                            span: span!(3, 5, 3, 6)
-                        },
-                        PointCollectionItem {
-                            letter: 'B',
-                            index: None,
-                            primes: 0,
-                            span: span!(3, 6, 3, 7)
-                        },
-                        PointCollectionItem {
-                            letter: 'B',
-                            index: None,
-                            primes: 0,
-                            span: span!(3, 7, 3, 8)
-                        }
-                    ],
-                    span: span!(3, 5, 3, 8)
-                })),
-                Token::Eq(Eq {
-                    span: span!(3, 9, 3, 10)
-                }),
-                Token::Ident(Ident::Named(NamedIdent {
-                    ident: String::from("Triangle"),
-                    span: span!(3, 11, 3, 19),
-                    collection_likeness: 0.0
-                })),
-                Token::Semi(Semi {
-                    span: span!(3, 19, 3, 20)
-                })
-            ]
-        );
-    }
-}
 
 /// Defines a position in the script.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -464,15 +357,9 @@ impl Display for Token {
                     Ident::Collection(col) => format!("{col}"),
                 }
             ),
-            Self::Number(num) => match num.floating {
-                Some(floating) => write!(
-                    f,
-                    "{}.{:0>places$}",
-                    num.integral,
-                    floating.decimal,
-                    places = floating.decimal_places as usize
-                ),
-                None => write!(f, "{}", num.integral),
+            Self::Number(num) => match num {
+                Number::Integer(v) => write!(f, "{}", v.parsed),
+                Number::Float(v) => write!(f, "{}", v.parsed)
             },
         }
     }
@@ -499,7 +386,7 @@ impl Token {
             Self::Gteq(v) => v.span,
             Self::Exclamation(v) => v.span,
             Self::Ident(v) => v.get_span(),
-            Self::Number(v) => v.span,
+            Self::Number(v) => v.get_span(),
             Self::Dollar(v) => v.span,
             Self::At(v) => v.span,
             Self::LBrace(v) => v.span,
@@ -626,37 +513,25 @@ impl Display for Ident {
 }
 
 /// A number.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Number {
     Integer(TokInteger),
     Float(TokFloat)
 }
 
-impl Number {
-    pub fn eq_by_value()
-}
-
 /// An integer.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TokInteger {
     pub span: Span,
-    pub integral: ParsedUint
+    pub parsed: ParsedInt
 }
 
 /// The floating-point part of a number
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TokFloat {
     pub span: Span,
-    pub integral: u64,
     pub dot: Dot,
-    pub decimal: u64,
-    pub decimal_places: u8
-}
-
-impl TokFloat {
-    pub fn into_rational(self) -> Rational64 {
-
-    }
+    pub parsed: ParsedFloat
 }
 
 fn is_identifier_character(c: char) -> bool {
@@ -795,7 +670,7 @@ fn read_number<I: Iterator<Item = char>>(it: &mut Peekable<I>, position: &mut Po
             it.next();
             break;
         } else {
-            return Number {
+            return Number::Integer(TokInteger {
                 span: span!(
                     begin_pos.line,
                     begin_pos.column,
@@ -804,7 +679,7 @@ fn read_number<I: Iterator<Item = char>>(it: &mut Peekable<I>, position: &mut Po
                 ),
                 integral,
                 floating: None
-            };
+            })
         }
     }
 
