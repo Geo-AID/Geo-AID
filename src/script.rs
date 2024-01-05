@@ -57,9 +57,6 @@ pub enum Error {
     NewLineInString {
         error_span: Span,
     },
-    IteratorIdMustBeAnInteger {
-        error_span: Span,
-    },
     IteratorIdExceeds255 {
         error_span: Span,
     },
@@ -166,6 +163,9 @@ pub enum Error {
         error_span: Span,
     },
     BooleanExpected {
+        error_span: Span,
+    },
+    NumberExpected {
         error_span: Span,
     },
     InvalidIdentMathString {
@@ -388,10 +388,6 @@ impl Error {
                     .add_annotation(first_span, AnnotationKind::Note, "First iterator here.")
                     .add_annotation(second_span, AnnotationKind::Note, "Second iterator here.")
             }
-            Self::IteratorIdMustBeAnInteger { error_span } => {
-                DiagnosticData::new(&"iterator id must be an integer.")
-                    .add_span(error_span)
-            }
             Self::IteratorIdExceeds255 { error_span } => {
                 DiagnosticData::new(&"iterator id must be smaller than 256.")
                     .add_span(error_span)
@@ -430,6 +426,10 @@ impl Error {
             }
             Self::BooleanExpected { error_span } => {
                 DiagnosticData::new(&"expected a boolean value (enabled, disabled, on, off, true, false, 1 or 0)")
+                    .add_span(error_span)
+            }
+            Self::NumberExpected { error_span } => {
+                DiagnosticData::new(&"expected a number value")
                     .add_span(error_span)
             }
             Self::InvalidIdentMathString { error_span } => {

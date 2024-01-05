@@ -600,6 +600,8 @@ pub struct RuleStatement {
 /// `?expr`
 #[derive(Debug)]
 pub struct RefStatement {
+    /// Display properties.
+    pub display: Option<DisplayProperties>,
     /// The starting question mark.
     pub question: Question,
     /// Operand.
@@ -613,6 +615,7 @@ impl Parse for RefStatement {
         it: &mut Peekable<I>,
     ) -> Result<Self, Error> {
         Ok(Self {
+            display: Option::parse(it)?,
             question: Question::parse(it)?,
             operand: Expression::parse(it)?,
             semi: Semi::parse(it)?,

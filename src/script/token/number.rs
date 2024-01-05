@@ -38,6 +38,16 @@ impl ParsedInt {
                 v * 10.0 + item.to_f64().unwrap()
             })
     }
+
+    #[must_use]
+    pub fn is_zero(&self) -> bool {
+        self.digits[0] == 0
+    }
+
+    #[must_use]
+    pub fn is_one(&self) -> bool {
+        self.digits[0] == 1 && self.digits.len() == 1
+    }
 }
 
 impl Display for ParsedInt {
@@ -60,9 +70,7 @@ impl ParsedIntBuilder {
     }
 
     pub fn push_digit(&mut self, digit: u8) {
-        if !self.digits.is_empty() || digit != 0 {
-            self.digits.push(digit);
-        }
+        self.digits.push(digit);
     }
 
     #[must_use]
@@ -84,8 +92,8 @@ impl ParsedIntBuilder {
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 /// Signed integer for parsing.
 pub struct ParsedFloat {
-    pub integral: ParsedInt,
-    pub decimal: Vec<u8>
+    integral: ParsedInt,
+    decimal: Vec<u8>
 }
 
 impl ParsedFloat {
@@ -100,6 +108,16 @@ impl ParsedFloat {
             .fold(0.0, |v, (i, item)| {
                 v + item.to_f64().unwrap() * f64::powi(10.0, -(i.to_i32().unwrap() + 1))
             })
+    }
+
+    #[must_use]
+    pub fn is_zero(&self) -> bool {
+        self.integral.is_zero() && self.decimal.is_empty()
+    }
+
+    #[must_use]
+    pub fn is_one(&self) -> bool {
+        self.integral.is_one() && self.decimal.is_empty()
     }
 }
 

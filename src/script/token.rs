@@ -527,6 +527,22 @@ impl Number {
             Self::Float(f) => f.parsed.to_float()
         }
     }
+
+    #[must_use]
+    pub fn is_zero(&self) -> bool {
+        match self {
+            Self::Integer(i) => i.parsed.is_zero(),
+            Self::Float(f) => f.parsed.is_zero()
+        }
+    }
+
+    #[must_use]
+    pub fn is_one(&self) -> bool {
+        match self {
+            Self::Integer(i) => i.parsed.is_one(),
+            Self::Float(f) => f.parsed.is_one()
+        }
+    }
 }
 
 /// An integer.

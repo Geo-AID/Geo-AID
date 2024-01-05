@@ -21,6 +21,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 use geo_aid_derive::overload;
 use std::rc::Rc;
 
+use crate::generator::fast_float::FastFloat;
 use crate::script::builtins::macros::field;
 use crate::script::unroll::{
     Bundle, Circle, CloneWithNode, CollectionNode, Line, Point, PointCollection, Simplify,
@@ -157,6 +158,7 @@ fn pt_lies_on_segment(
                         context.distance_pl(point, line),
                     ),
                     inverted: true,
+                    weight: FastFloat::One
                 },
                 UnrolledRule {
                     kind: UnrolledRuleKind::ScalarEq(
@@ -173,9 +175,11 @@ fn pt_lies_on_segment(
                         ),
                     ),
                     inverted: true,
+                    weight: FastFloat::One
                 },
             ]),
             inverted: false,
+            weight: FastFloat::One
         });
     } else {
         context.point_on_line(&point, &line);
