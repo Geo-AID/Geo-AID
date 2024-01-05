@@ -30,7 +30,7 @@ use super::{
     token::{
         Ampersant, Asterisk, At, Colon, Comma, Dollar, Dot, Eq, Exclamation, Gt, Gteq, Ident,
         LBrace, LParen, LSquare, Let, Lt, Lteq, Minus, NamedIdent, Number, Plus, Question, RBrace,
-        RParen, RSquare, Semi, Slash, Span, StrLit, Token, Vertical,
+        RParen, RSquare, Semi, Slash, Span, StrLit, Token, Vertical, TokInteger,
     },
     unit, ComplexUnit, Error,
 };
@@ -181,7 +181,7 @@ impl ImplicitIterator {
 #[derive(Debug)]
 pub struct ExplicitIterator {
     pub exprs: Punctuated<Expression<false>, Comma>,
-    pub id_token: Number,
+    pub id_token: TokInteger,
     pub id: u8,
     pub dollar: Dollar,
     pub left_paren: LParen,
@@ -214,7 +214,7 @@ impl Parse for ExplicitIterator {
         it: &mut Peekable<I>,
     ) -> Result<Self, Error> {
         let dollar = Dollar::parse(it)?;
-        let id_token = ExprNumber::parse(it)?;
+        let id_token = TokInteger::parse(it)?;
         let left_paren = LParen::parse(it)?;
         let exprs = Punctuated::parse(it)?;
         let right_paren = RParen::parse(it)?;
@@ -225,26 +225,11 @@ impl Parse for ExplicitIterator {
             });
         }
 
-        Ok(ExplicitIterator {
-            dollar,
-            id_token: id_token.token,
-            left_paren,
-            exprs,
-            right_paren,
-            id: if id_token.token.dot.is_none() {
-                if id_token.token.integral < 256 {
-                    id_token.token.integral.try_into().unwrap()
-                } else {
-                    return Err(Error::IteratorIdExceeds255 {
-                        error_span: id_token.get_span(),
-                    });
-                }
-            } else {
-                return Err(Error::IteratorIdMustBeAnInteger {
-                    error_span: id_token.get_span(),
-                });
-            },
-        })
+        let id = id_token.parsed.parse().map_err(|_| Error::IteratorIdExceeds255 {
+            error_span: id_token.get_span(),
+        })?;
+
+        Ok(ExplicitIterator { exprs, id_token, id, dollar, left_paren, right_paren })
     }
 
     fn get_span(&self) -> Span {
@@ -288,7 +273,7 @@ pub enum SimpleExpressionKind {
     /// An identifier (variable access, most likely)
     Ident(Ident),
     /// A raw number
-    Number(ExprNumber),
+    Number(Number),
     /// A function call
     Call(ExprCall),
     /// A unary operator expression
@@ -375,15 +360,6 @@ impl FloatOrInteger {
             FloatOrInteger::Float(f) => f,
         }
     }
-}
-
-/// A parsed raw number.
-#[derive(Debug, Clone)]
-pub struct ExprNumber {
-    /// Its value.
-    pub value: FloatOrInteger,
-    /// Its token.
-    pub token: Number,
 }
 
 /// A no-operation statement - a single semicolon.
@@ -551,7 +527,7 @@ impl Parse for FlagValue {
         match self {
             FlagValue::Ident(v) => v.span,
             FlagValue::Set(v) => v.get_span(),
-            FlagValue::Number(v) => v.span,
+            FlagValue::Number(v) => v.get_span(),
         }
     }
 }
@@ -869,35 +845,6 @@ impl Parse for LetStatement {
     }
 }
 
-impl Parse for ExprNumber {
-    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-        it: &mut Peekable<I>,
-    ) -> Result<Self, Error> {
-        match it.next() {
-            // The integral and decimal parts have to be merged into one floating point number.
-            #[allow(clippy::cast_precision_loss)]
-            Some(Token::Number(num)) => Ok(ExprNumber {
-                value: if num.dot.is_some() {
-                    FloatOrInteger::Float(
-                        num.integral as f64
-                            + num.decimal as f64 * f64::powi(10.0, -i32::from(num.decimal_places)),
-                    )
-                } else {
-                    #[allow(clippy::cast_precision_loss, clippy::cast_possible_wrap)]
-                    FloatOrInteger::Integer(num.integral.try_into().unwrap())
-                },
-                token: *num,
-            }),
-            Some(t) => Err(Error::InvalidToken { token: t.clone() }),
-            None => Err(Error::EndOfInput),
-        }
-    }
-
-    fn get_span(&self) -> Span {
-        self.token.span
-    }
-}
-
 impl<const ITER: bool> Parse for Expression<ITER> {
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
         it: &mut Peekable<I>,
@@ -1030,7 +977,7 @@ impl Parse for SimpleExpressionKind {
 
         let expr = match next {
             Some(next) => match next {
-                Token::Number(_) => Self::Number(ExprNumber::parse(it)?),
+                Token::Number(_) => Self::Number(Number::parse(it)?),
                 Token::Minus(m) => {
                     it.next();
                     // negation
@@ -1227,9 +1174,43 @@ impl_token_parse! {RParen}
 impl_token_parse! {Let}
 impl_token_parse! {Colon}
 impl_token_parse! {Exclamation}
-impl_token_parse! {Number}
 impl_token_parse! {Dot}
 impl_token_parse! {Question}
+
+impl Parse for Number {
+    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
+        it: &mut Peekable<I>,
+    ) -> Result<Self, Error> {
+        match it.next() {
+            Some(Token::Number(tok)) => Ok(tok.clone()),
+            Some(t) => Err(Error::InvalidToken { token: t.clone() }),
+            None => Err(Error::EndOfInput),
+        }
+    }
+
+    fn get_span(&self) -> Span {
+        match self {
+            Self::Float(f) => f.span,
+            Self::Integer(i) => i.span
+        }
+    }
+}
+
+impl Parse for TokInteger {
+    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
+        it: &mut Peekable<I>,
+    ) -> Result<Self, Error> {
+        match it.next() {
+            Some(Token::Number(Number::Integer(tok))) => Ok(tok.clone()),
+            Some(t) => Err(Error::InvalidToken { token: t.clone() }),
+            None => Err(Error::EndOfInput),
+        }
+    }
+
+    fn get_span(&self) -> Span {
+        self.span
+    }
+}
 
 impl Parse for StrLit {
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
@@ -1423,7 +1404,7 @@ impl Parse for Property {
 /// A property's value
 #[derive(Debug, Clone)]
 pub enum PropertyValue {
-    Number(ExprNumber),
+    Number(Number),
     Ident(Ident),
     RawString(RawString),
     String(StrLit),
@@ -1471,11 +1452,18 @@ impl FromProperty for bool {
                     error_span: ident.get_span(),
                 }),
             },
-            PropertyValue::Number(num) => match num.value {
-                FloatOrInteger::Integer(1) => Ok(true),
-                FloatOrInteger::Integer(0) => Ok(false),
-                _ => Err(Error::BooleanExpected {
-                    error_span: num.get_span(),
+            PropertyValue::Number(num) => match num {
+                Number::Integer(i) => {
+                    match i.parsed.parse::<u8>() {
+                        Ok(0) => Ok(false),
+                        Ok(1) => Ok(true),
+                        _ => Err(Error::BooleanExpected {
+                            error_span: i.span,
+                        })
+                    }
+                },
+                Number::Float(f) => Err(Error::BooleanExpected {
+                    error_span: f.span,
                 }),
             },
             PropertyValue::String(s) => match s.content.as_str() {
@@ -1522,7 +1510,7 @@ impl Parse for PropertyValue {
 
         match peeked {
             Some(Token::Ident(_)) => Ok(Self::Ident(Ident::parse(it)?)),
-            Some(Token::Number(_)) => Ok(Self::Number(ExprNumber::parse(it)?)),
+            Some(Token::Number(_)) => Ok(Self::Number(Number::parse(it)?)),
             Some(Token::Exclamation(_)) => Ok(Self::RawString(RawString::parse(it)?)),
             Some(Token::String(_)) => Ok(Self::String(StrLit::parse(it)?)),
             Some(t) => Err(Error::InvalidToken { token: t.clone() }),

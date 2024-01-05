@@ -22,7 +22,7 @@ use std::{fmt::Display, iter::Peekable};
 
 use serde::Serialize;
 
-use self::number::{ParsedInt, ParsedFloat};
+use self::number::{ParsedInt, ParsedFloat, ParsedIntBuilder};
 
 use super::{parser::Parse, Error};
 
@@ -519,6 +519,16 @@ pub enum Number {
     Float(TokFloat)
 }
 
+impl Number {
+    #[must_use]
+    pub fn to_float(&self) -> f64 {
+        match self {
+            Self::Integer(i) => i.parsed.to_float(),
+            Self::Float(f) => f.parsed.to_float()
+        }
+    }
+}
+
 /// An integer.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TokInteger {
@@ -646,15 +656,14 @@ fn read_string<I: Iterator<Item = char>>(
 }
 
 fn read_number<I: Iterator<Item = char>>(it: &mut Peekable<I>, position: &mut Position) -> Number {
-    let mut integral: u64 = 0;
-    let mut decimal: u64 = 0;
+    let mut integer = ParsedIntBuilder::new();
+    let mut floating = None;
     let begin_pos = *position;
     let mut dot = None;
 
     while let Some(&c) = it.peek() {
         if c.is_ascii_digit() {
-            integral *= 10;
-            integral += (c as u64) - u64::from(b'0');
+            integer.push_digit((c as u8) - b'0');
             position.column += 1;
             it.next();
         } else if c == '.' {
@@ -668,6 +677,7 @@ fn read_number<I: Iterator<Item = char>>(it: &mut Peekable<I>, position: &mut Po
             });
             position.column += 1;
             it.next();
+            floating = Some(integer.dot());
             break;
         } else {
             return Number::Integer(TokInteger {
@@ -677,39 +687,34 @@ fn read_number<I: Iterator<Item = char>>(it: &mut Peekable<I>, position: &mut Po
                     position.line,
                     position.column
                 ),
-                integral,
-                floating: None
-            })
+                parsed: integer.build()
+            });
         }
     }
 
-    let mut decimal_places = 0;
-
-    while let Some(&c) = it.peek() {
-        if c.is_ascii_digit() {
-            decimal *= 10;
-            decimal += (c as u64) - u64::from(b'0');
-            decimal_places += 1;
-            position.column += 1;
-            it.next();
-        } else {
-            break;
+    if let Some(mut floating) = floating {
+        while let Some(&c) = it.peek() {
+            if c.is_ascii_digit() {
+                floating.push_digit((c as u8) - b'0');
+                position.column += 1;
+                it.next();
+            } else {
+                break;
+            }
         }
-    }
-
-    Number {
-        span: span!(
-            begin_pos.line,
-            begin_pos.column,
-            position.line,
-            position.column
-        ),
-        integral,
-        floating: Some(TokFloat {
-            decimal,
-            decimal_places,
+    
+        Number::Float(TokFloat{
+            span: span!(
+                begin_pos.line,
+                begin_pos.column,
+                position.line,
+                position.column
+            ),
             dot: dot.unwrap(),
+            parsed: floating.build()
         })
+    } else {
+        unreachable!()
     }
 }
 

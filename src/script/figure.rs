@@ -20,8 +20,8 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 use std::{fmt::Display, str::FromStr, sync::Arc};
 
-use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
+use num_derive::FromPrimitive;
 use serde::Serialize;
 
 use crate::{
