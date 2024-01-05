@@ -45,6 +45,8 @@ use self::figure::FromExpr;
 
 use super::figure::{MathString, Style};
 use super::parser::{FromProperty, RefStatement};
+use super::token::Number;
+use super::token::number::CompFloat;
 use super::{
     builtins,
     parser::{
@@ -1345,8 +1347,8 @@ impl Display for Line {
 pub enum ScalarData {
     Generic(Generic<Scalar>),
     Entity(#[def(entity)] usize),
-    Number(#[def(no_entity)] f64),
-    DstLiteral(#[def(no_entity)] f64),
+    Number(#[def(no_entity)] CompFloat),
+    DstLiteral(#[def(no_entity)] CompFloat),
     SetUnit(Expr<Scalar>, #[def(no_entity)] ComplexUnit),
     PointPointDistance(Expr<Point>, Expr<Point>),
     PointLineDistance(Expr<Point>, Expr<Line>),
@@ -2613,7 +2615,7 @@ fn unroll_simple(
                 weight: FastFloat::Zero, // Always zero.
                 data: Rc::new(Scalar {
                     unit: None,
-                    data: ScalarData::Number(num.value.to_float()),
+                    data: ScalarData::Number(num.to_float()),
                 }),
                 span: num.get_span(),
                 node: None,
@@ -3742,24 +3744,23 @@ fn set_flag_bool(flag: &mut Flag, stmt: &FlagStatement) -> Result<(), Error> {
         super::parser::FlagValue::Number(num) => match &mut flag.kind {
             FlagKind::Setting(s) => match s {
                 FlagSetting::Default(_) | FlagSetting::Unset => {
-                    if num.dot.is_none() {
-                        *s = FlagSetting::Set(
-                            FlagValue::Bool(match num.integral {
-                                1 => true,
-                                0 => false,
-                                _ => {
-                                    return Err(Error::BooleanExpected {
+                    *s = FlagSetting::Set(
+                        FlagValue::Bool(match num {
+                            Number::Integer(i) => {
+                                match i.parsed.parse::<u8>() {
+                                    Ok(0) => false,
+                                    Ok(1) => true,
+                                    _ => return Err(Error::BooleanExpected {
                                         error_span: stmt.get_span(),
                                     })
                                 }
+                            },
+                            Number::Float(_) => return Err(Error::BooleanExpected {
+                                error_span: stmt.get_span(),
                             }),
-                            stmt.get_span(),
-                        );
-                    } else {
-                        return Err(Error::BooleanExpected {
-                            error_span: stmt.get_span(),
-                        });
-                    }
+                        }),
+                        stmt.get_span()
+                    );
                 }
                 FlagSetting::Set(_, sp) => {
                     return Err(Error::RedefinedFlag {
