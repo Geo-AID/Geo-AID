@@ -28,6 +28,7 @@ fn intersection_function_line_line(
     context: &CompileContext,
     display: Properties,
 ) -> Expr<Point> {
+    // println!("{display:#?}");
     let mut expr = context.intersection_display(k, l, display);
 
     if let Some(node) = &mut expr.node {

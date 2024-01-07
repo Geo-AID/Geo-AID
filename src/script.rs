@@ -219,7 +219,7 @@ pub enum Error {
         first_span: Span,
         option: String,
     },
-    PCVariable {
+    InvalidPC {
         error_span: Span,
     },
 }
@@ -533,8 +533,8 @@ impl Error {
                     .add_span(error_span)
                     .add_annotation(first_span, AnnotationKind::Help, &"first defined here.")
             }
-            Self::PCVariable { error_span } => {
-                DiagnosticData::new(&" point collection variables are amgiuous and therefore not valid.")
+            Self::InvalidPC { error_span } => {
+                DiagnosticData::new(&"point collections in this place are amgiuous and therefore not valid.")
                     .add_span(error_span)
             }
         }

@@ -561,7 +561,10 @@ pub fn project(
     let points: Vec<Complex> = figure
         .points
         .iter()
-        .map(|pt| pt.0.evaluate(&args))
+        .map(|pt| {
+            // println!("{pt:#?}");
+            pt.0.evaluate(&args)
+        })
         .collect::<Vec<Complex>>();
 
     #[allow(clippy::cast_precision_loss)]

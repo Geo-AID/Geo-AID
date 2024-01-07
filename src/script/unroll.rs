@@ -3152,7 +3152,7 @@ fn create_variable_named(
 
         // Point collection variables are amiguous and therefore cause compilation errors.
         // They do not, however prevent the program from running properly.
-        context.push_error(Error::PCVariable {
+        context.push_error(Error::InvalidPC {
             error_span: stat.get_span(),
         });
     }
@@ -3332,6 +3332,8 @@ fn create_variables(
         );
         it_index.next();
 
+        // println!("let {} = {rhs_unrolled}", def.name);
+
         match &def.name {
             Ident::Named(named) => {
                 create_variable_named(stat, context, named, rhs_unrolled, &mut variable_nodes)?;
@@ -3370,6 +3372,16 @@ fn unroll_ref(
             it_index,
             display,
         );
+
+        if let AnyExpr::PointCollection(pc) = &mut expr {
+            if let Some(node) = pc.node.take() {
+                if let Some(props) = node.root.props {
+                    props.finish(context);
+                }
+            }
+
+            context.push_error(Error::InvalidPC { error_span: expr.get_span() });
+        }
 
         let node = expr
             .replace_node(None)
@@ -3961,11 +3973,7 @@ pub fn unroll(input: &str) -> Result<(CompileContext, CollectionNode), Vec<Error
         }
     }
 
-    // for v in context.variables.values() {
-    //     println!("let {} = {}", v.name, v.definition);
-    // }
-
-    // for x in &unrolled {
+    // for x in context.rules.borrow().iter() {
     //     println!("{x}");
     // }
 
