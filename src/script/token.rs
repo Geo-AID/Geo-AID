@@ -22,7 +22,7 @@ use std::{fmt::Display, iter::Peekable};
 
 use serde::Serialize;
 
-use self::number::{ParsedInt, ParsedFloat, ParsedIntBuilder};
+use self::number::{ParsedFloat, ParsedInt, ParsedIntBuilder};
 
 use super::{parser::Parse, Error};
 
@@ -359,7 +359,7 @@ impl Display for Token {
             ),
             Self::Number(num) => match num {
                 Number::Integer(v) => write!(f, "{}", v.parsed),
-                Number::Float(v) => write!(f, "{}", v.parsed)
+                Number::Float(v) => write!(f, "{}", v.parsed),
             },
         }
     }
@@ -516,7 +516,7 @@ impl Display for Ident {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Number {
     Integer(TokInteger),
-    Float(TokFloat)
+    Float(TokFloat),
 }
 
 impl Number {
@@ -524,7 +524,23 @@ impl Number {
     pub fn to_float(&self) -> f64 {
         match self {
             Self::Integer(i) => i.parsed.to_float(),
-            Self::Float(f) => f.parsed.to_float()
+            Self::Float(f) => f.parsed.to_float(),
+        }
+    }
+
+    #[must_use]
+    pub fn is_zero(&self) -> bool {
+        match self {
+            Self::Integer(i) => i.parsed.is_zero(),
+            Self::Float(f) => f.parsed.is_zero(),
+        }
+    }
+
+    #[must_use]
+    pub fn is_one(&self) -> bool {
+        match self {
+            Self::Integer(i) => i.parsed.is_one(),
+            Self::Float(f) => f.parsed.is_one(),
         }
     }
 }
@@ -533,7 +549,7 @@ impl Number {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TokInteger {
     pub span: Span,
-    pub parsed: ParsedInt
+    pub parsed: ParsedInt,
 }
 
 /// The floating-point part of a number
@@ -541,7 +557,7 @@ pub struct TokInteger {
 pub struct TokFloat {
     pub span: Span,
     pub dot: Dot,
-    pub parsed: ParsedFloat
+    pub parsed: ParsedFloat,
 }
 
 fn is_identifier_character(c: char) -> bool {
@@ -687,7 +703,7 @@ fn read_number<I: Iterator<Item = char>>(it: &mut Peekable<I>, position: &mut Po
                     position.line,
                     position.column
                 ),
-                parsed: integer.build()
+                parsed: integer.build(),
             });
         }
     }
@@ -702,8 +718,8 @@ fn read_number<I: Iterator<Item = char>>(it: &mut Peekable<I>, position: &mut Po
                 break;
             }
         }
-    
-        Number::Float(TokFloat{
+
+        Number::Float(TokFloat {
             span: span!(
                 begin_pos.line,
                 begin_pos.column,
@@ -711,7 +727,7 @@ fn read_number<I: Iterator<Item = char>>(it: &mut Peekable<I>, position: &mut Po
                 position.column
             ),
             dot: dot.unwrap(),
-            parsed: floating.build()
+            parsed: floating.build(),
         })
     } else {
         unreachable!()

@@ -2,7 +2,7 @@
 
 > <sup>**Syntax**</sup>\
 > *Properties* :\
-> &nbsp;&nbsp; *Property* (`;` *Property*)<sup>\*</sup>\
+> &nbsp;&nbsp; `[` *Property* (`;` *Property*)<sup>\*</sup> `]`\
 > \
 > *Property* :\
 > &nbsp;&nbsp; [NAMED_IDENT](identifiers.md) `=` *PropertyValue*\
@@ -34,6 +34,10 @@ A false value can be represented like this:
 
 **NOTE**: Cannot be represented by a raw string.
 **NOTE**: In case of boolean values, parsing of identifiers and strings is case-insensitive.
+
+### `number`
+
+Number values accept positive integers and floats. They cannot be expressed by idents or strings. Used for weights.
 
 ### `Style`
 

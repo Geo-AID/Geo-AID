@@ -20,11 +20,15 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 use serde::Serialize;
 use std::iter::Sum;
-use std::ops::{Add, AddAssign, Div, Mul};
+use std::ops::{Add, AddAssign, Div, Mul, MulAssign};
+
+use crate::script::parser::{FromProperty, Parse, PropertyValue};
+use crate::script::Error;
 
 /// A floating point value for optimized operations with often use of values 1 and 0.
-#[derive(Debug, Clone, Copy, Serialize)]
+#[derive(Debug, Clone, Copy, Serialize, Default)]
 pub enum FastFloat {
+    #[default]
     Zero,
     One,
     Other(f64),
@@ -39,7 +43,7 @@ impl FastFloat {
 
     /// Converts the value to a standard `f64`.
     #[must_use]
-    pub fn to_f64(self) -> f64 {
+    pub const fn to_f64(self) -> f64 {
         match self {
             Self::One => 1.0,
             Self::Zero => 0.0,
@@ -90,6 +94,12 @@ impl Mul for FastFloat {
     }
 }
 
+impl MulAssign for FastFloat {
+    fn mul_assign(&mut self, rhs: Self) {
+        *self = *self * rhs;
+    }
+}
+
 impl Div for FastFloat {
     type Output = FastFloat;
 
@@ -115,5 +125,26 @@ impl Sum<Self> for FastFloat {
         }
 
         s
+    }
+}
+
+impl FromProperty for FastFloat {
+    fn from_property(property: PropertyValue) -> Result<Self, Error> {
+        match property {
+            PropertyValue::Number(num) => {
+                if num.is_zero() {
+                    Ok(FastFloat::Zero)
+                } else if num.is_one() {
+                    Ok(FastFloat::One)
+                } else {
+                    Ok(FastFloat::Other(num.to_float()))
+                }
+            }
+            PropertyValue::Ident(_) | PropertyValue::RawString(_) | PropertyValue::String(_) => {
+                Err(Error::NumberExpected {
+                    error_span: property.get_span(),
+                })
+            }
+        }
     }
 }

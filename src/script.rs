@@ -28,7 +28,7 @@ use std::{
 
 use serde::Serialize;
 
-use crate::generator::fast_float::FastFloat;
+use crate::generator::{expression::Weights, fast_float::FastFloat};
 use crate::{
     cli::{AnnotationKind, Change, DiagnosticData, Fix},
     generator::expression::{AnyExpr, Expression, PointExpr, ScalarExpr},
@@ -55,9 +55,6 @@ pub enum Error {
         error_span: Span,
     },
     NewLineInString {
-        error_span: Span,
-    },
-    IteratorIdMustBeAnInteger {
         error_span: Span,
     },
     IteratorIdExceeds255 {
@@ -168,6 +165,9 @@ pub enum Error {
     BooleanExpected {
         error_span: Span,
     },
+    NumberExpected {
+        error_span: Span,
+    },
     InvalidIdentMathString {
         error_span: Span,
     },
@@ -219,7 +219,7 @@ pub enum Error {
         first_span: Span,
         option: String,
     },
-    PCVariable {
+    InvalidPC {
         error_span: Span,
     },
 }
@@ -388,10 +388,6 @@ impl Error {
                     .add_annotation(first_span, AnnotationKind::Note, "First iterator here.")
                     .add_annotation(second_span, AnnotationKind::Note, "Second iterator here.")
             }
-            Self::IteratorIdMustBeAnInteger { error_span } => {
-                DiagnosticData::new(&"iterator id must be an integer.")
-                    .add_span(error_span)
-            }
             Self::IteratorIdExceeds255 { error_span } => {
                 DiagnosticData::new(&"iterator id must be smaller than 256.")
                     .add_span(error_span)
@@ -430,6 +426,10 @@ impl Error {
             }
             Self::BooleanExpected { error_span } => {
                 DiagnosticData::new(&"expected a boolean value (enabled, disabled, on, off, true, false, 1 or 0)")
+                    .add_span(error_span)
+            }
+            Self::NumberExpected { error_span } => {
+                DiagnosticData::new(&"expected a number value")
                     .add_span(error_span)
             }
             Self::InvalidIdentMathString { error_span } => {
@@ -533,8 +533,8 @@ impl Error {
                     .add_span(error_span)
                     .add_annotation(first_span, AnnotationKind::Help, &"first defined here.")
             }
-            Self::PCVariable { error_span } => {
-                DiagnosticData::new(&" point collection variables are amgiuous and therefore not valid.")
+            Self::InvalidPC { error_span } => {
+                DiagnosticData::new(&"point collections in this place are amgiuous and therefore not valid.")
                     .add_span(error_span)
             }
         }
@@ -741,7 +741,7 @@ pub enum CriteriaKind {
     /// Bias. Always evaluates to 1.0. Artificially raises quality for everything contained  in the arc.
     Bias(Arc<Expression<AnyExpr>>),
     /// Maximal quality of the given rules.
-    Alternative(Vec<Criteria>),
+    Alternative(Vec<CriteriaKind>),
 }
 
 impl CriteriaKind {
@@ -761,15 +761,59 @@ impl CriteriaKind {
             }
             CriteriaKind::Alternative(v) => {
                 for crit in v {
-                    crit.object.collect(exprs);
+                    crit.collect(exprs);
                 }
+            }
+        }
+    }
+
+    #[must_use]
+    pub fn get_weights(&self) -> Weights {
+        match self {
+            Self::EqualScalar(lhs, rhs) | Self::Less(lhs, rhs) | Self::Greater(lhs, rhs) => {
+                lhs.weights.clone() + &rhs.weights
+            }
+            Self::Inverse(v) => v.get_weights(),
+            Self::Bias(v) => v.weights.clone(),
+            Self::EqualPoint(lhs, rhs) => lhs.weights.clone() + &rhs.weights,
+            Self::Alternative(v) => {
+                let mut weights = Weights::empty();
+
+                for crit in v {
+                    weights += &crit.get_weights();
+                }
+
+                weights
             }
         }
     }
 }
 
 /// Defines a weighed piece of criteria the figure must obey.
-pub type Criteria = Weighed<CriteriaKind>;
+#[derive(Debug)]
+pub struct Criteria {
+    kind: CriteriaKind,
+    weights: Weights,
+}
+
+impl Criteria {
+    #[must_use]
+    pub fn new(kind: CriteriaKind, weight: FastFloat) -> Self {
+        let weights = kind.get_weights().normalize() * weight;
+
+        Self { kind, weights }
+    }
+
+    #[must_use]
+    pub const fn get_kind(&self) -> &CriteriaKind {
+        &self.kind
+    }
+
+    #[must_use]
+    pub const fn get_weights(&self) -> &Weights {
+        &self.weights
+    }
+}
 
 #[derive(Serialize, Debug, Clone)]
 pub struct HashableArc<T>(Arc<T>);

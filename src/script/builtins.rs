@@ -159,23 +159,5 @@ pub mod macros {
         }};
     }
 
-    macro_rules! mneg {
-        (neg = $neg:expr) => {
-            $neg
-        };
-        () => {
-            false
-        };
-    }
-
-    macro_rules! rule {
-        ($context:ident : $rule_op:ident($lhs:expr, $rhs:expr) $(neg = $neg:expr)?) => {
-            $rule_op($lhs, $rhs, $context, $crate::script::unroll::Properties::from(None), $crate::script::builtins::macros::mneg!($(neg = $neg)?))
-        };
-        ($context:ident : $rule_op:ident($lhs:expr, $rhs:expr); $props:expr; $(neg = $neg:expr)?) => {
-            $rule_op($lhs, $rhs, $context, $props, $crate::script::builtins::macros::mneg!($(neg = $neg)?))
-        };
-    }
-
-    pub(crate) use {call, construct_bundle, field, index, mneg, number, rule};
+    pub(crate) use {call, construct_bundle, field, index, number};
 }

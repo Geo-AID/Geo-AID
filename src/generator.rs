@@ -33,7 +33,10 @@ use serde::Serialize;
 
 use crate::script::Criteria;
 
-use self::expression::{ExprCache, Value};
+use self::{
+    expression::{ExprCache, Value},
+    fast_float::FastFloat,
+};
 
 pub mod critic;
 pub mod expression;
@@ -245,7 +248,7 @@ impl Default for Complex {
 
 pub type Logger = Vec<String>;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub enum Adjustable {
     Point(Complex),
     Real(f64),
@@ -283,7 +286,7 @@ impl Adjustable {
 }
 
 pub enum Message {
-    Generate(f64, Vec<(Adjustable, f64)>, Logger),
+    Generate(f64, Vec<(Adjustable, f64)>),
     Terminate,
 }
 
@@ -295,7 +298,7 @@ pub struct GenerationArgs {
 
 fn generation_cycle(
     receiver: &mpsc::Receiver<Message>,
-    sender: &mpsc::Sender<(Vec<(Adjustable, f64)>, Logger)>,
+    sender: &mpsc::Sender<Vec<(Adjustable, f64)>>,
     args: &GenerationArgs,
     flags: &Arc<Flags>,
 ) {
@@ -305,7 +308,7 @@ fn generation_cycle(
     if flags.optimizations.identical_expressions {
         for crit in args.criteria.as_ref() {
             let mut exprs = Vec::new();
-            crit.object.collect(&mut exprs);
+            crit.get_kind().collect(&mut exprs);
 
             for expr in exprs {
                 // We use weak to not mess with the strong count.
@@ -323,23 +326,44 @@ fn generation_cycle(
     let mut point_evaluation = Vec::new();
     point_evaluation.resize(args.point_count, Vec::new());
 
+    let weights: Vec<Vec<FastFloat>> = (0..args.point_count)
+        .map(|i| {
+            let mut ws = Vec::new();
+            let mut sum = FastFloat::Zero;
+
+            for crit in args.criteria.iter() {
+                let v = crit.get_weights().0.get(i).copied().unwrap_or_default();
+                ws.push(v);
+                sum += v;
+            }
+
+            ws.into_iter().map(|v| v / sum).collect()
+        })
+        .collect();
+
+    // println!("{:#?}", args.criteria);
+
+    // for ws in &weights {
+    //     println!("{ws:?}");
+    // }
+
     loop {
         match receiver.recv().unwrap() {
-            Message::Generate(adjustment, points, mut logger) => {
+            Message::Generate(adjustment, points) => {
                 let points = magic_box::adjust(points, adjustment);
                 let points = critic::evaluate(
                     &points,
                     &args.criteria,
-                    &mut logger,
                     generation,
                     flags,
                     Some(&record),
+                    &weights,
                     &mut point_evaluation,
                 );
 
                 // println!("Adjustment + critic = {:#?}", points);
 
-                sender.send((points, logger)).unwrap();
+                sender.send(points).unwrap();
             }
             Message::Terminate => return,
         }
@@ -357,7 +381,7 @@ pub struct Generator {
     /// Senders for the workers
     senders: Vec<mpsc::Sender<Message>>,
     /// The receiver for adjusted points from each generation cycle.
-    receiver: mpsc::Receiver<(Vec<(Adjustable, f64)>, Logger)>,
+    receiver: mpsc::Receiver<Vec<(Adjustable, f64)>>,
     /// Total quality of the points - the arithmetic mean of their qualities.
     total_quality: f64,
     /// A delta of the qualities in comparison to previous generation.
@@ -441,20 +465,14 @@ impl Generator {
         // Send data to each worker
         for (i, sender) in self.senders.iter().enumerate() {
             sender
-                .send(Message::Generate(
-                    magnitudes[i],
-                    self.current_state.clone(),
-                    Vec::new(),
-                ))
+                .send(Message::Generate(magnitudes[i], self.current_state.clone()))
                 .unwrap();
         }
-
-        let mut final_logger = Vec::new();
 
         // Wait for each handle to finish and consider its outcome
         for _ in 0..self.workers.len() {
             // If the total quality is larger than the current total, replace the points.
-            let (points, logger) = self.receiver.recv().unwrap();
+            let points = self.receiver.recv().unwrap();
             #[allow(clippy::cast_precision_loss)]
             let total_quality =
                 points.iter().map(|x| x.1).sum::<f64>() / self.current_state.len() as f64;
@@ -464,18 +482,10 @@ impl Generator {
             if total_quality > self.total_quality {
                 self.current_state = points;
                 self.total_quality = total_quality;
-                final_logger = logger;
             }
         }
 
-        let delta = now.elapsed();
-
-        // Show the logger's output
-        for line in final_logger {
-            println!("{line}");
-        }
-
-        delta
+        now.elapsed()
     }
 
     fn bake_magnitudes(&self, maximum_adjustment: f64) -> Vec<f64> {

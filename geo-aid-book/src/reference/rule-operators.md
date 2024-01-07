@@ -8,6 +8,8 @@ The operator `=` (and its negation, `!=`) is allowed between [Scalars](./types/p
 
 ## `lies_on`
 
+All uses accept `weight` property.
+
 * `P: Point lies_on k: Line`
 
 Tells Geo-AID that point `P` lies on (has zero distance) from line `k`. Note: zero distance rules do not have any impact on the distance variable and decrease figure stability much less than other distance rules.

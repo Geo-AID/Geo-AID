@@ -323,7 +323,12 @@ impl CompileContext {
 
 /// Everything related to circles.
 impl CompileContext {
-    pub fn point_on_circle(&mut self, lhs: &Expr<UnrolledPoint>, rhs: &Expr<UnrolledCircle>) {
+    pub fn point_on_circle(
+        &mut self,
+        lhs: &Expr<UnrolledPoint>,
+        rhs: &Expr<UnrolledCircle>,
+        weight: FastFloat,
+    ) {
         if let Some(point) = self.get_point_entity_mut(lhs) {
             match point {
                 Point::Free => {
@@ -334,17 +339,25 @@ impl CompileContext {
             }
         }
 
-        self.scalar_eq(
-            self.distance_pp(
-                lhs.clone_without_node(),
-                self.circle_center(rhs.clone_without_node()),
+        self.push_rule(UnrolledRule {
+            kind: UnrolledRuleKind::ScalarEq(
+                self.distance_pp(
+                    lhs.clone_without_node(),
+                    self.circle_center(rhs.clone_without_node()),
+                ),
+                self.circle_radius(rhs.clone_without_node()),
             ),
-            self.circle_radius(rhs.clone_without_node()),
-            false,
-        );
+            inverted: false,
+            weight,
+        });
     }
 
-    pub fn point_on_line(&mut self, lhs: &Expr<UnrolledPoint>, rhs: &Expr<UnrolledLine>) {
+    pub fn point_on_line(
+        &mut self,
+        lhs: &Expr<UnrolledPoint>,
+        rhs: &Expr<UnrolledLine>,
+        weight: FastFloat,
+    ) {
         if let Some(point) = self.get_point_entity_mut(lhs) {
             match point {
                 Point::Free => {
@@ -367,11 +380,14 @@ impl CompileContext {
             }
         }
 
-        self.scalar_eq(
-            self.distance_pl(lhs.clone_without_node(), rhs.clone_without_node()),
-            number!(=0.0),
-            false,
-        );
+        self.push_rule(UnrolledRule {
+            kind: UnrolledRuleKind::ScalarEq(
+                self.distance_pl(lhs.clone_without_node(), rhs.clone_without_node()),
+                number!(=0.0),
+            ),
+            inverted: false,
+            weight,
+        });
     }
 }
 
@@ -443,14 +459,14 @@ impl CompileContext {
     pub fn expr_with<T: Displayed>(
         &self,
         content: T,
-        display: Properties,
+        mut display: Properties,
         nodes: Vec<Box<dyn Node>>,
     ) -> Expr<T>
     where
         T::Node: FromExpr<T>,
     {
         let mut expr = Expr {
-            weight: FastFloat::One,
+            weight: display.get("weight").get_or(FastFloat::One),
             span: span!(0, 0, 0, 0),
             data: Rc::new(content),
             node: None,
@@ -577,7 +593,7 @@ macro_rules! generic_rule {
                 display: Properties
             ) -> Box<dyn Node> {
                 let (lhs_node, rhs_node) = (lhs.take_node(), rhs.take_node());
-                self.rule_with(UnrolledRuleKind::$r(lhs, rhs), lhs_node, rhs_node, inverted, display)
+                self.rule_with(UnrolledRuleKind::$r(lhs, rhs), lhs_node, rhs_node, inverted, display, FastFloat::One)
             }
 
             pub fn $f(
@@ -601,14 +617,20 @@ impl CompileContext {
         lhs: Option<N>,
         rhs: Option<M>,
         inverted: bool,
-        display: Properties,
+        mut display: Properties,
+        def_weight: FastFloat,
     ) -> Box<dyn Node> {
+        let weight = display.get("weight").get_or(def_weight);
         let mut node = CollectionNode::from_display(display, self);
 
         node.extend(lhs);
         node.extend(rhs);
 
-        self.push_rule(UnrolledRule { kind, inverted });
+        self.push_rule(UnrolledRule {
+            kind,
+            inverted,
+            weight,
+        });
 
         Box::new(node)
     }

@@ -21,13 +21,14 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 use geo_aid_derive::overload;
 use std::rc::Rc;
 
+use crate::generator::fast_float::FastFloat;
 use crate::script::builtins::macros::field;
 use crate::script::unroll::{
     Bundle, Circle, CloneWithNode, CollectionNode, Line, Point, PointCollection, Simplify,
     UnrolledRule, UnrolledRuleKind,
 };
 use crate::script::{
-    builtins::macros::{index, number, rule},
+    builtins::macros::{index, number},
     unroll::{CompileContext, Expr, Library, Properties, Rule},
 };
 
@@ -37,6 +38,7 @@ fn pt_lies_on_circle(
     context: &mut CompileContext,
     display: Properties,
     inverted: bool,
+    weight: FastFloat,
 ) -> CollectionNode {
     let mut node = CollectionNode::from_display(display, context);
     node.extend(lhs.node.take());
@@ -46,13 +48,16 @@ fn pt_lies_on_circle(
     let circle = rhs.simplify(context);
 
     if inverted {
-        context.scalar_eq(
-            context.circle_radius(circle.clone_without_node()),
-            context.distance_pp(point, context.circle_center(circle)),
-            true,
-        );
+        context.push_rule(UnrolledRule {
+            kind: UnrolledRuleKind::ScalarEq(
+                context.circle_radius(circle.clone_without_node()),
+                context.distance_pp(point, context.circle_center(circle)),
+            ),
+            inverted: true,
+            weight,
+        });
     } else {
-        context.point_on_circle(&point, &circle);
+        context.point_on_circle(&point, &circle, weight);
     }
 
     node
@@ -64,6 +69,7 @@ fn pt_lies_on_line(
     context: &mut CompileContext,
     display: Properties,
     inverted: bool,
+    weight: FastFloat,
 ) -> CollectionNode {
     let mut node = CollectionNode::from_display(display, context);
     node.extend(lhs.node.take());
@@ -73,9 +79,13 @@ fn pt_lies_on_line(
     let line = rhs.simplify(context);
 
     if inverted {
-        context.scalar_eq(number!(=0.0), context.distance_pl(point, line), true);
+        context.push_rule(UnrolledRule {
+            kind: UnrolledRuleKind::ScalarEq(number!(=0.0), context.distance_pl(point, line)),
+            inverted: true,
+            weight,
+        });
     } else {
-        context.point_on_line(&point, &line);
+        context.point_on_line(&point, &line, weight);
     }
 
     node
@@ -87,13 +97,21 @@ fn col_lies_on_circle(
     context: &mut CompileContext,
     display: Properties,
     inverted: bool,
+    weight: FastFloat,
 ) -> CollectionNode {
     let len = lhs.data.length;
 
     let mut node = CollectionNode::from_display(display, context);
 
     for i in 0..len {
-        node.push(rule!(context:pt_lies_on_circle(index!(node lhs, i), rhs.clone_with_node()) neg=inverted));
+        node.push(pt_lies_on_circle(
+            index!(node lhs, i),
+            rhs.clone_with_node(),
+            context,
+            Properties::default(),
+            inverted,
+            weight,
+        ));
     }
 
     /*
@@ -106,22 +124,25 @@ fn col_lies_on_circle(
             let i_plus_1 = (i + 1) % len;
             let i_plus_2 = (i + 2) % len;
 
-            context.gt(
-                context.mult(
-                    context.angle_dir(
-                        index!(no-node lhs, i),
-                        index!(no-node lhs, i-1),
-                        index!(no-node lhs, i_plus_1),
+            context.push_rule(UnrolledRule {
+                kind: UnrolledRuleKind::ScalarEq(
+                    context.mult(
+                        context.angle_dir(
+                            index!(no-node lhs, i),
+                            index!(no-node lhs, i-1),
+                            index!(no-node lhs, i_plus_1),
+                        ),
+                        context.angle_dir(
+                            index!(no-node lhs, i_plus_1),
+                            index!(no-node lhs, i),
+                            index!(no-node lhs, i_plus_2),
+                        ),
                     ),
-                    context.angle_dir(
-                        index!(no-node lhs, i_plus_1),
-                        index!(no-node lhs, i),
-                        index!(no-node lhs, i_plus_2),
-                    ),
+                    number!(ANGLE 0.0),
                 ),
-                number!(ANGLE 0.0),
-                false,
-            );
+                inverted: false,
+                weight,
+            });
         }
     }
 
@@ -134,6 +155,7 @@ fn pt_lies_on_segment(
     context: &mut CompileContext,
     display: Properties,
     inverted: bool,
+    weight: FastFloat,
 ) -> CollectionNode {
     let mut node = CollectionNode::from_display(display, context);
     node.extend(lhs.node.take());
@@ -157,6 +179,7 @@ fn pt_lies_on_segment(
                         context.distance_pl(point, line),
                     ),
                     inverted: true,
+                    weight: FastFloat::One,
                 },
                 UnrolledRule {
                     kind: UnrolledRuleKind::ScalarEq(
@@ -173,27 +196,32 @@ fn pt_lies_on_segment(
                         ),
                     ),
                     inverted: true,
+                    weight: FastFloat::One,
                 },
             ]),
             inverted: false,
+            weight,
         });
     } else {
-        context.point_on_line(&point, &line);
+        context.point_on_line(&point, &line, weight);
 
-        context.scalar_eq(
-            context.add(
+        context.push_rule(UnrolledRule {
+            kind: UnrolledRuleKind::ScalarEq(
+                context.add(
+                    context.distance_pp(
+                        field!(no-node POINT rhs, A with context),
+                        lhs.clone_without_node(),
+                    ),
+                    context.distance_pp(field!(no-node POINT rhs, B with context), lhs),
+                ),
                 context.distance_pp(
                     field!(no-node POINT rhs, A with context),
-                    lhs.clone_without_node(),
+                    field!(no-node POINT rhs, B with context),
                 ),
-                context.distance_pp(field!(no-node POINT rhs, B with context), lhs),
             ),
-            context.distance_pp(
-                field!(no-node POINT rhs, A with context),
-                field!(no-node POINT rhs, B with context),
-            ),
-            false,
-        );
+            inverted: false,
+            weight,
+        });
     }
 
     node

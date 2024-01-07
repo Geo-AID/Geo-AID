@@ -35,8 +35,7 @@ use crate::{
                 AngleBisector, AngleLine, AnglePoint, AnglePointDir, Average, CenterRadius,
                 CircleCenter, CircleRadius, Difference, FreePoint, LineLineIntersection, LinePoint,
                 Literal, Negation, ParallelThrough, PerpendicularThrough, PointLineDistance,
-                PointOnCircle, PointPointDistance, PointX, PointY, Product, Quotient, Real,
-                SetUnit, Sum,
+                PointOnCircle, PointPointDistance, PointX, PointY, Product, Quotient, Real, Sum,
             },
             AnyExpr, CircleExpr, Expression, LineExpr, PointExpr, ScalarExpr, Weights,
         },
@@ -52,7 +51,7 @@ use super::{
         self, CompileContext, EntCircle, EntLine, EntPoint, EntScalar, Entity, Expr, Flag,
         UnrolledRuleKind, Variable,
     },
-    Criteria, CriteriaKind, Error, HashableRc, SimpleUnit, Weighed,
+    Criteria, CriteriaKind, Error, HashableRc, SimpleUnit,
 };
 
 trait Mapping<K, T> {
@@ -283,19 +282,19 @@ impl Compile<Point, PointExpr> for Compiler {
                     k: self.compile(k),
                     l: self.compile(l),
                 }),
-                FastFloat::One,
+                expr.weight,
             )),
             Point::Average(exprs) => Arc::new(Expression::new(
                 PointExpr::Average(Average {
                     items: exprs.iter().map(|expr| self.compile(expr)).collect(),
                 }),
-                FastFloat::One,
+                expr.weight,
             )),
             Point::CircleCenter(circle) => Arc::new(Expression::new(
                 PointExpr::CircleCenter(CircleCenter {
                     circle: self.compile(circle),
                 }),
-                FastFloat::One,
+                expr.weight,
             )),
         };
 
@@ -324,21 +323,21 @@ impl Compile<Line, LineExpr> for Compiler {
                     a: self.compile(p1),
                     b: self.compile(p2),
                 }),
-                FastFloat::One,
+                expr.weight,
             )),
             Line::ParallelThrough(line, point) => Arc::new(Expression::new(
                 LineExpr::ParallelThrough(ParallelThrough {
                     line: self.compile(line),
                     point: self.compile(point),
                 }),
-                FastFloat::One,
+                expr.weight,
             )),
             Line::PerpendicularThrough(line, point) => Arc::new(Expression::new(
                 LineExpr::PerpendicularThrough(PerpendicularThrough {
                     line: self.compile(line),
                     point: self.compile(point),
                 }),
-                FastFloat::One,
+                expr.weight,
             )),
             Line::AngleBisector(v1, v2, v3) => Arc::new(Expression::new(
                 LineExpr::AngleBisector(AngleBisector {
@@ -346,7 +345,7 @@ impl Compile<Line, LineExpr> for Compiler {
                     origin: self.compile(v2),
                     arm2: self.compile(v3),
                 }),
-                FastFloat::One,
+                expr.weight,
             )),
         };
 
@@ -373,7 +372,7 @@ impl Compile<Circle, CircleExpr> for Compiler {
                     center: self.compile(center),
                     radius: self.compile(radius),
                 }),
-                FastFloat::One,
+                expr.weight,
             )),
             Circle::Entity(i) => self.compile_entity(*i).as_circle().unwrap().clone(),
         };
@@ -435,7 +434,7 @@ impl Compiler {
                     unit: expr.data.unit,
                     data: ScalarData::SetUnit(
                         Expr {
-                            weight: FastFloat::One,
+                            weight: expr.weight,
                             span: expr.span,
                             data: Rc::new(Scalar {
                                 unit: Some(unit::SCALAR),
@@ -554,55 +553,98 @@ impl Compiler {
         }
     }
 
-    fn compile_rule_vec(&mut self, rules: &[UnrolledRule]) -> Vec<Criteria> {
+    fn compile_rule_vec<'r, I: IntoIterator<Item = &'r UnrolledRule>>(
+        &mut self,
+        rules: I,
+    ) -> Vec<Criteria> {
         rules
-            .iter()
-            .filter_map(|rule| self.compile_rule(rule))
+            .into_iter()
+            .map(|rule| self.compile_rule(rule))
             .collect()
     }
 
-    fn compile_rule(&mut self, rule: &UnrolledRule) -> Option<Criteria> {
-        // println!("{rule}");
+    fn compile_rule_kind_vec<'r, I: IntoIterator<Item = &'r UnrolledRuleKind>>(
+        &mut self,
+        rules: I,
+    ) -> Vec<CriteriaKind> {
+        rules
+            .into_iter()
+            .map(|rule| self.compile_rule_kind(rule))
+            .collect()
+    }
 
-        let crit = match &rule.kind {
+    fn compile_rule_kind(&mut self, rule: &UnrolledRuleKind) -> CriteriaKind {
+        match &rule {
             UnrolledRuleKind::PointEq(lhs, rhs) => {
                 let lhs = self.compile(lhs);
                 let rhs = self.compile(rhs);
 
-                Weighed::one(CriteriaKind::EqualPoint(lhs, rhs))
+                CriteriaKind::EqualPoint(lhs, rhs)
             }
             UnrolledRuleKind::ScalarEq(lhs, rhs) => {
                 let lhs = self.compile(lhs);
                 let rhs = self.compile(rhs);
 
-                Weighed::one(CriteriaKind::EqualScalar(lhs, rhs))
+                CriteriaKind::EqualScalar(lhs, rhs)
             }
             UnrolledRuleKind::Gt(lhs, rhs) => {
                 let lhs = self.compile(lhs);
                 let rhs = self.compile(rhs);
 
-                Weighed::one(CriteriaKind::Greater(lhs, rhs))
+                CriteriaKind::Greater(lhs, rhs)
             }
             UnrolledRuleKind::Lt(lhs, rhs) => {
                 let lhs = self.compile(lhs);
                 let rhs = self.compile(rhs);
 
-                Weighed::one(CriteriaKind::Less(lhs, rhs))
+                CriteriaKind::Less(lhs, rhs)
             }
             UnrolledRuleKind::Alternative(rules) => {
-                Weighed::one(CriteriaKind::Alternative(self.compile_rule_vec(rules)))
+                CriteriaKind::Alternative(self.compile_rule_kind_vec(rules.iter().map(|x| &x.kind)))
             }
-            UnrolledRuleKind::Display => return None,
-        };
+            UnrolledRuleKind::Bias(expr) => CriteriaKind::Bias(match expr {
+                UnrolledAny::Point(v) => {
+                    let e = self.compile(v);
+                    Arc::new(Expression {
+                        kind: AnyExpr::Point(e.kind.clone()),
+                        weights: e.weights.clone(),
+                    })
+                }
+                UnrolledAny::Line(v) => {
+                    let e = self.compile(v);
+                    Arc::new(Expression {
+                        kind: AnyExpr::Line(e.kind.clone()),
+                        weights: e.weights.clone(),
+                    })
+                }
+                UnrolledAny::Scalar(v) => {
+                    let e = self.compile(v);
+                    Arc::new(Expression {
+                        kind: AnyExpr::Scalar(e.kind.clone()),
+                        weights: e.weights.clone(),
+                    })
+                }
+                UnrolledAny::Circle(v) => {
+                    let e = self.compile(v);
+                    Arc::new(Expression {
+                        kind: AnyExpr::Circle(e.kind.clone()),
+                        weights: e.weights.clone(),
+                    })
+                }
+                _ => unreachable!(),
+            }),
+        }
+    }
 
-        Some(if rule.inverted {
-            Weighed {
-                object: CriteriaKind::Inverse(Box::new(crit.object)),
-                weight: crit.weight,
-            }
+    fn compile_rule(&mut self, rule: &UnrolledRule) -> Criteria {
+        if rule.inverted {
+            Criteria::new(
+                CriteriaKind::Inverse(Box::new(self.compile_rule_kind(&rule.kind))),
+                rule.weight,
+            )
         } else {
-            crit
-        })
+            Criteria::new(self.compile_rule_kind(&rule.kind), rule.weight)
+        }
     }
 
     #[must_use]
@@ -641,77 +683,65 @@ impl Compile<Scalar, ScalarExpr> for Compiler {
             ScalarData::Generic(generic) => self.compile_generic(generic),
             ScalarData::Number(v) => self.compile_number(expr, *v),
             ScalarData::DstLiteral(v) => Arc::new(Expression::new(
-                ScalarExpr::SetUnit(SetUnit {
-                    unit: unit::DISTANCE,
-                    value: Arc::new(Expression::new(
-                        ScalarExpr::Literal(Literal { value: *v }),
-                        FastFloat::One,
-                    )),
-                }),
-                FastFloat::One,
+                ScalarExpr::Literal(Literal { value: *v }),
+                FastFloat::Zero,
             )),
             ScalarData::Entity(i) => self.compile_entity(*i).as_scalar().unwrap().clone(),
-            ScalarData::SetUnit(expr, unit) => Arc::new(Expression::new(
-                ScalarExpr::SetUnit(SetUnit {
-                    value: self.compile(&self.fix_distance(
-                        expr.clone_without_node(),
-                        unit[SimpleUnit::Distance as usize]
-                            - match expr.data.unit {
-                                Some(unit) => unit[SimpleUnit::Distance as usize],
-                                None => 0,
-                            },
-                    )),
-                    unit: *unit,
-                }),
-                FastFloat::One,
+            ScalarData::SetUnit(expr, unit) => self.compile(&self.fix_distance(
+                expr.clone_without_node(),
+                unit[SimpleUnit::Distance as usize]
+                    - match expr.data.unit {
+                        Some(unit) => unit[SimpleUnit::Distance as usize],
+                        None => 0,
+                    },
             )),
             ScalarData::PointPointDistance(p1, p2) => Arc::new(Expression::new(
                 ScalarExpr::PointPointDistance(PointPointDistance {
                     a: self.compile(p1),
                     b: self.compile(p2),
                 }),
-                FastFloat::One,
+                expr.weight,
             )),
             ScalarData::PointLineDistance(p, l) => Arc::new(Expression::new(
                 ScalarExpr::PointLineDistance(PointLineDistance {
                     point: self.compile(p),
                     line: self.compile(l),
                 }),
-                FastFloat::One,
+                expr.weight,
             )),
             ScalarData::Negate(expr) => Arc::new(Expression::new(
                 ScalarExpr::Negation(Negation {
                     value: self.compile(expr),
                 }),
-                FastFloat::One,
+                expr.weight,
             )),
             ScalarData::Add(v1, v2) => Arc::new(Expression::new(
                 ScalarExpr::Sum(Sum {
                     a: self.compile(v1),
                     b: self.compile(v2),
                 }),
-                FastFloat::One,
+                expr.weight,
             )),
             ScalarData::Subtract(v1, v2) => Arc::new(Expression::new(
                 ScalarExpr::Difference(Difference {
                     a: self.compile(v1),
                     b: self.compile(v2),
                 }),
-                FastFloat::One,
+                expr.weight,
             )),
             ScalarData::Multiply(v1, v2) => Arc::new(Expression::new(
                 ScalarExpr::Product(Product {
                     a: self.compile(v1),
                     b: self.compile(v2),
                 }),
-                FastFloat::One,
+                expr.weight,
             )),
             ScalarData::Divide(v1, v2) => Arc::new(Expression::new(
                 ScalarExpr::Quotient(Quotient {
                     a: self.compile(v1),
                     b: self.compile(v2),
                 }),
-                FastFloat::One,
+                expr.weight,
             )),
             ScalarData::ThreePointAngle(v1, v2, v3) => Arc::new(Expression::new(
                 ScalarExpr::AnglePoint(AnglePoint {
@@ -719,7 +749,7 @@ impl Compile<Scalar, ScalarExpr> for Compiler {
                     origin: self.compile(v2),
                     arm2: self.compile(v3),
                 }),
-                FastFloat::One,
+                expr.weight,
             )),
             ScalarData::ThreePointAngleDir(v1, v2, v3) => Arc::new(Expression::new(
                 ScalarExpr::AnglePointDir(AnglePointDir {
@@ -727,26 +757,26 @@ impl Compile<Scalar, ScalarExpr> for Compiler {
                     origin: self.compile(v2),
                     arm2: self.compile(v3),
                 }),
-                FastFloat::One,
+                expr.weight,
             )),
             ScalarData::TwoLineAngle(v1, v2) => Arc::new(Expression::new(
                 ScalarExpr::AngleLine(AngleLine {
                     k: self.compile(v1),
                     l: self.compile(v2),
                 }),
-                FastFloat::One,
+                expr.weight,
             )),
             ScalarData::Average(exprs) => Arc::new(Expression::new(
                 ScalarExpr::Average(Average {
                     items: exprs.iter().map(|expr| self.compile(expr)).collect(),
                 }),
-                FastFloat::One,
+                expr.weight,
             )),
             ScalarData::CircleRadius(circle) => Arc::new(Expression::new(
                 ScalarExpr::CircleRadius(CircleRadius {
                     circle: self.compile(circle),
                 }),
-                FastFloat::One,
+                expr.weight,
             )),
         };
 
@@ -807,10 +837,10 @@ pub fn compile(input: &str, canvas_size: (usize, usize)) -> Result<Compiled, Vec
             weights: dst.weights.clone(),
         });
 
-        criteria.push(Weighed {
-            object: CriteriaKind::Bias(dst_any),
-            weight: FastFloat::Other(10.0), // The bias.
-        });
+        criteria.push(Criteria::new(
+            CriteriaKind::Bias(dst_any),
+            FastFloat::Other(10.0), // The bias.
+        ));
     }
 
     // println!("{:#?}", criteria);
@@ -835,26 +865,26 @@ pub fn compile(input: &str, canvas_size: (usize, usize)) -> Result<Compiled, Vec
 /// Inequality principle and the point plane limit.
 fn add_bounds(
     points: &[(Arc<Expression<PointExpr>>, usize)],
-    criteria: &mut Vec<Weighed<CriteriaKind>>,
+    criteria: &mut Vec<Criteria>,
     flags: &Flags,
 ) {
     // Point inequality principle.
     for (i, (pt_i, adj)) in points.iter().enumerate() {
         // For each of the next points, add an inequality rule.
         for (pt_j, _) in points.iter().skip(i + 1) {
-            criteria.push(Weighed {
-                object: CriteriaKind::Inverse(Box::new(CriteriaKind::EqualPoint(
+            criteria.push(Criteria::new(
+                CriteriaKind::Inverse(Box::new(CriteriaKind::EqualPoint(
                     Arc::clone(pt_i),
                     Arc::clone(pt_j),
                 ))),
-                weight: FastFloat::One,
-            });
+                FastFloat::One,
+            ));
         }
 
         if flags.point_bounds {
             // For each point, add a rule limiting its range.
-            criteria.push(Weighed {
-                object: CriteriaKind::Greater(
+            criteria.push(Criteria::new(
+                CriteriaKind::Greater(
                     Arc::new(Expression {
                         weights: Weights::one_at(*adj),
                         kind: ScalarExpr::PointX(PointX {
@@ -866,11 +896,11 @@ fn add_bounds(
                         kind: ScalarExpr::Literal(Literal { value: 0.0 }),
                     }),
                 ),
-                weight: FastFloat::One,
-            }); // x > 0
+                FastFloat::One,
+            )); // x > 0
 
-            criteria.push(Weighed {
-                object: CriteriaKind::Greater(
+            criteria.push(Criteria::new(
+                CriteriaKind::Greater(
                     Arc::new(Expression {
                         weights: Weights::one_at(*adj),
                         kind: ScalarExpr::PointY(PointY {
@@ -882,11 +912,11 @@ fn add_bounds(
                         kind: ScalarExpr::Literal(Literal { value: 1.0 }),
                     }),
                 ),
-                weight: FastFloat::One,
-            }); // y > 0
+                FastFloat::One,
+            )); // y > 0
 
-            criteria.push(Weighed {
-                object: CriteriaKind::Less(
+            criteria.push(Criteria::new(
+                CriteriaKind::Less(
                     Arc::new(Expression {
                         weights: Weights::one_at(*adj),
                         kind: ScalarExpr::PointX(PointX {
@@ -898,11 +928,11 @@ fn add_bounds(
                         kind: ScalarExpr::Literal(Literal { value: 1.0 }),
                     }),
                 ),
-                weight: FastFloat::One,
-            }); // x < 1
+                FastFloat::One,
+            )); // x < 1
 
-            criteria.push(Weighed {
-                object: CriteriaKind::Less(
+            criteria.push(Criteria::new(
+                CriteriaKind::Less(
                     Arc::new(Expression {
                         weights: Weights::one_at(*adj),
                         kind: ScalarExpr::PointY(PointY {
@@ -914,8 +944,8 @@ fn add_bounds(
                         kind: ScalarExpr::Literal(Literal { value: 1.0 }),
                     }),
                 ),
-                weight: FastFloat::One,
-            }); // y < 1
+                FastFloat::One,
+            )); // y < 1
         }
     }
 }

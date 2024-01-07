@@ -29,7 +29,7 @@ use crate::generator::expression::expr::{AngleLine, AnglePoint};
 use crate::generator::expression::{LineExpr, PointExpr, ScalarExpr};
 use crate::generator::geometry::get_line;
 use crate::labels::point_label_position;
-use crate::script::figure::{Style, MathString};
+use crate::script::figure::{MathString, Style};
 use crate::{
     generator::{
         critic::EvaluationArgs, expression::Expression, expression::Line, geometry, Adjustable,
@@ -46,8 +46,8 @@ mod tests {
     use crate::generator::expression::expr::{AnglePoint, CenterRadius, LinePoint, Literal};
     use crate::generator::expression::{CircleExpr, LineExpr, ScalarExpr};
     use crate::generator::fast_float::FastFloat;
-    use crate::script::figure::{MathString, MathChar, MathIndex, MathSpecial};
-    use crate::script::token::{Span, Position};
+    use crate::script::figure::{MathChar, MathIndex, MathSpecial, MathString};
+    use crate::script::token::{Position, Span};
     use crate::{
         drawer,
         generator::{
@@ -98,7 +98,20 @@ mod tests {
 
         let fig = Figure {
             points: vec![
-                (create_point_expr(0), MathString {chars: vec![MathChar::Special(MathSpecial::AlphaUpper), MathChar::SetIndex(MathIndex::Lower), MathChar::Ascii('X')], span: Span {start: Position { line: 0, column: 0 }, end: Position { line: 0, column: 0 }}}),
+                (
+                    create_point_expr(0),
+                    MathString {
+                        chars: vec![
+                            MathChar::Special(MathSpecial::AlphaUpper),
+                            MathChar::SetIndex(MathIndex::Lower),
+                            MathChar::Ascii('X'),
+                        ],
+                        span: Span {
+                            start: Position { line: 0, column: 0 },
+                            end: Position { line: 0, column: 0 },
+                        },
+                    },
+                ),
                 (create_point_expr(1), MathString::from_str("B").unwrap()),
                 (create_point_expr(2), MathString::from_str("C").unwrap()),
             ],
@@ -551,9 +564,7 @@ pub fn project(
     generated_points: &[(Adjustable, f64)],
     flags: &Arc<Flags>,
 ) -> Output {
-    let mut logger = Vec::new();
     let args = EvaluationArgs {
-        logger: &mut logger,
         adjustables: generated_points,
         generation: 0,
         flags,
@@ -563,7 +574,10 @@ pub fn project(
     let points: Vec<Complex> = figure
         .points
         .iter()
-        .map(|pt| pt.0.evaluate(&args))
+        .map(|pt| {
+            // println!("{pt:#?}");
+            pt.0.evaluate(&args)
+        })
         .collect::<Vec<Complex>>();
 
     #[allow(clippy::cast_precision_loss)]
@@ -637,7 +651,15 @@ pub fn project(
         let point = *pt;
 
         blueprint_points.push(Rc::new(RenderedPoint {
-            label_position: point_label_position(&blueprint_lines, &blueprint_angles, &blueprint_segments, &blueprint_rays, &blueprint_circles, vec_associated.clone(), point),
+            label_position: point_label_position(
+                &blueprint_lines,
+                &blueprint_angles,
+                &blueprint_segments,
+                &blueprint_rays,
+                &blueprint_circles,
+                vec_associated.clone(),
+                point,
+            ),
             position: *pt,
             uuid: id,
             math_string,

@@ -36,7 +36,7 @@ fn style_width(mode: Style) -> String {
     match mode {
         Style::Dashed | Style::Dotted => default_width,
         Style::Bold => "2".to_string(),
-        Style::Solid => "1".to_string(), 
+        Style::Solid => "1".to_string(),
     }
 }
 
@@ -61,7 +61,11 @@ fn points(point: &Rc<RenderedPoint>) -> String {
                     stroke="black" stroke-width="0" x="{}" y="-{}">{}
                 </text>
         "#,
-        point.position.real, point.position.imaginary, point.label_position.real, point.label_position.imaginary, point.math_string.chars.first().unwrap()
+        point.position.real,
+        point.position.imaginary,
+        point.label_position.real,
+        point.label_position.imaginary,
+        point.math_string.chars.first().unwrap()
     )
 }
 

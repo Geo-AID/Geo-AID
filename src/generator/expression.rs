@@ -33,7 +33,7 @@ use self::expr::{
     AngleBisector, AngleLine, AnglePoint, AnglePointDir, Average, CenterRadius, CircleCenter,
     CircleRadius, Difference, FreePoint, LineLineIntersection, LinePoint, Literal, Negation,
     ParallelThrough, PerpendicularThrough, PointLineDistance, PointOnCircle, PointPointDistance,
-    PointX, PointY, Product, Quotient, Real, SetUnit, Sum,
+    PointX, PointY, Product, Quotient, Real, Sum,
 };
 
 use super::{critic::EvaluationArgs, Complex};
@@ -67,6 +67,18 @@ impl Weights {
     pub fn set(&mut self, index: usize, weight: FastFloat) {
         self.0.resize(index + 1, FastFloat::Zero);
         self.0[index] = weight;
+    }
+
+    /// Squeezes weights into [0, 1] range.
+    #[must_use]
+    pub fn normalize(self) -> Self {
+        let sum: FastFloat = self.0.iter().copied().sum();
+
+        if sum.is_zero() {
+            Self::empty()
+        } else {
+            Self(self.0.into_iter().map(|v| v / sum).collect())
+        }
     }
 }
 
@@ -378,10 +390,7 @@ pub mod expr {
 
     use serde::Serialize;
 
-    use crate::{
-        generator::{critic::EvaluationArgs, geometry, Complex},
-        script::ComplexUnit,
-    };
+    use crate::generator::{critic::EvaluationArgs, geometry, Complex};
 
     use super::{
         Circle, CircleExpr, Evaluate, Expression, Kind, Line, LineExpr, PointExpr, ScalarExpr,
@@ -630,24 +639,6 @@ pub mod expr {
 
         fn evaluate(&self, args: &EvaluationArgs) -> f64 {
             self.circle.evaluate(args).radius
-        }
-    }
-
-    #[derive(Debug, Clone, Serialize, Kind)]
-    #[trivial]
-    /// Changes the scalar's unit.
-    pub struct SetUnit {
-        pub value: Arc<Expression<ScalarExpr>>,
-        #[skip_collecting]
-        #[weigh_with(|_| Weights::empty())]
-        pub unit: ComplexUnit,
-    }
-
-    impl Evaluate for SetUnit {
-        type Output = f64;
-
-        fn evaluate(&self, args: &EvaluationArgs) -> f64 {
-            self.value.evaluate(args)
         }
     }
 
@@ -987,8 +978,6 @@ pub enum ScalarExpr {
     AngleLine(AngleLine),
     /// A real literal.
     Literal(Literal),
-    /// Changes the unit
-    SetUnit(SetUnit),
     /// Adds two values
     Sum(Sum),
     /// Subtracts two values
@@ -1020,6 +1009,8 @@ pub enum AnyExpr {
     Point(PointExpr),
     /// A line
     Line(LineExpr),
+    /// A circle
+    Circle(CircleExpr),
 }
 
 impl Evaluate for AnyExpr {
@@ -1030,6 +1021,7 @@ impl Evaluate for AnyExpr {
             Self::Line(line) => line.evaluate(args).into(),
             Self::Point(point) => point.evaluate(args).into(),
             Self::Scalar(scalar) => scalar.evaluate(args).into(),
+            Self::Circle(circle) => circle.evaluate(args).into(),
         }
     }
 }

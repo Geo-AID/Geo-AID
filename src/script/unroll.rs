@@ -45,8 +45,8 @@ use self::figure::FromExpr;
 
 use super::figure::{MathString, Style};
 use super::parser::{FromProperty, RefStatement};
-use super::token::Number;
 use super::token::number::CompFloat;
+use super::token::Number;
 use super::{
     builtins,
     parser::{
@@ -299,7 +299,8 @@ pub struct RuleOverload {
 }
 
 /// geoscript rule declaration
-type GeoRule = dyn Fn(AnyExpr, AnyExpr, &mut CompileContext, Properties, bool) -> Box<dyn Node>;
+type GeoRule =
+    dyn Fn(AnyExpr, AnyExpr, &mut CompileContext, Properties, bool, FastFloat) -> Box<dyn Node>;
 
 /// A function definition.
 pub struct RuleDefinition(pub Box<GeoRule>);
@@ -783,7 +784,7 @@ pub enum UnrolledRuleKind {
     Gt(Expr<Scalar>, Expr<Scalar>),
     Lt(Expr<Scalar>, Expr<Scalar>),
     Alternative(Vec<UnrolledRule>),
-    Display, // No content, used only for displaying stuff
+    Bias(AnyExpr), // Bias an expression
 }
 
 pub trait ConvertFrom<T>: Displayed {
@@ -1787,10 +1788,8 @@ impl Expr<PointCollection> {
             });
 
             Self {
-                weight: self.weight,
-                span: self.span,
                 data: Rc::new(PointCollection::dummy()),
-                node: self.node,
+                ..self
             }
         }
     }
@@ -1952,10 +1951,8 @@ impl Expr<Bundle> {
             });
 
             Self {
-                weight: self.weight,
-                span: self.span,
                 data: Rc::new(Bundle::dummy()),
-                node: self.node,
+                ..self
             }
         }
     }
@@ -2077,6 +2074,19 @@ impl AnyExpr {
             Self::PointCollection(v) => v.weight,
             Self::Bundle(v) => v.weight,
             Self::Unknown(v) => v.weight,
+        }
+    }
+
+    #[must_use]
+    pub fn get_weight_mut(&mut self) -> &mut FastFloat {
+        match self {
+            Self::Point(v) => &mut v.weight,
+            Self::Line(v) => &mut v.weight,
+            Self::Scalar(v) => &mut v.weight,
+            Self::Circle(v) => &mut v.weight,
+            Self::PointCollection(v) => &mut v.weight,
+            Self::Bundle(v) => &mut v.weight,
+            Self::Unknown(v) => &mut v.weight,
         }
     }
 
@@ -2483,6 +2493,7 @@ where
 pub struct UnrolledRule {
     pub kind: UnrolledRuleKind,
     pub inverted: bool,
+    pub weight: FastFloat,
 }
 
 impl Display for UnrolledRule {
@@ -2508,7 +2519,7 @@ impl Display for UnrolledRule {
                         .join(" || ")
                 )
             }
-            UnrolledRuleKind::Display => write!(f, "display rule"),
+            UnrolledRuleKind::Bias(v) => write!(f, "bias {v}"),
         }
     }
 }
@@ -2566,7 +2577,7 @@ fn unroll_simple(
     it_index: &HashMap<u8, usize>,
     external_display: Properties,
 ) -> AnyExpr {
-    let display = Properties::from(expr.display.clone()).merge_with(external_display);
+    let mut display = Properties::from(expr.display.clone()).merge_with(external_display);
 
     match &expr.kind {
         SimpleExpressionKind::Ident(i) => match i {
@@ -2579,13 +2590,14 @@ fn unroll_simple(
             Ident::Collection(col) => {
                 let mut display = display;
                 let display_pc = display.get("display").maybe_unset(true);
+                let weight = display.get("weight").get_or(FastFloat::One);
 
                 let mut pc_children = Vec::new();
                 pc_children.resize_with(col.collection.len(), || None);
 
                 // No options are expected, as pcs don't generate nodes.
                 AnyExpr::PointCollection(Expr {
-                    weight: FastFloat::One, // TODO: UPDATE FOR WEIGHING SUPPORT IN GEOSCRIPT
+                    weight: FastFloat::One, // PCs always have weight of one.
                     data: Rc::new(PointCollection {
                         length: col.collection.len(),
                         data: PointCollectionData::PointCollection(
@@ -2594,6 +2606,7 @@ fn unroll_simple(
                                 .map(|item| {
                                     fetch_variable(context, &format!("{item}"), col.span)
                                         .convert::<Point>(context)
+                                        .with_weight(weight)
                                 })
                                 .collect::<Vec<_>>()
                                 .into(),
@@ -2636,6 +2649,7 @@ fn unroll_simple(
                 let param_types = params.iter().map(AnyExpr::get_type).collect();
 
                 if let Some(overload) = func.get_overload(&param_types) {
+                    let weight = display.get("weight").get_or(FastFloat::One);
                     let params = params
                         .into_iter()
                         .enumerate()
@@ -2650,8 +2664,7 @@ fn unroll_simple(
 
                     let ret = unroll_parameters(&overload.definition, params, display, context);
 
-                    // TODO: UPDATE FOR WEIGHING SUPPORT
-                    ret.boxed(FastFloat::One, e.get_span())
+                    ret.boxed(weight, e.get_span())
                 } else {
                     context.push_error(Error::OverloadNotFound {
                         error_span: e.get_span(),
@@ -2703,12 +2716,13 @@ fn unroll_simple(
         SimpleExpressionKind::PointCollection(col) => {
             let mut display = display;
             let display_pc = display.get("display").maybe_unset(true);
+            let weight_pc = display.get("weight").get_or(FastFloat::One);
 
             let mut pc_children = Vec::new();
             pc_children.resize_with(col.points.len(), || None);
 
             AnyExpr::PointCollection(Expr {
-                weight: FastFloat::One, // TODO: UPDATE FOR WEIGHING SUPPORT IN GEOSCRIPT
+                weight: FastFloat::One, // PCs always have a weight of one.
                 span: col.get_span(),
                 data: Rc::new(PointCollection {
                     length: col.points.len(),
@@ -2724,6 +2738,8 @@ fn unroll_simple(
                                 Properties::default(),
                             );
 
+                            *unrolled.get_weight_mut() *= weight_pc;
+
                             if unrolled.can_convert_to(ty::POINT) {
                                 points.push(unrolled.convert(context));
                             } else {
@@ -2734,7 +2750,7 @@ fn unroll_simple(
 
                                 // Pretend the point is valid.
                                 points.push(Expr {
-                                    weight: unrolled.get_weight(),
+                                    weight: FastFloat::One,
                                     span: unrolled.get_span(),
                                     data: Rc::new(Point::dummy()),
                                     node: unrolled.replace_node(None).map(AnyExprNode::as_point),
@@ -2763,7 +2779,7 @@ fn unroll_binop(
     lhs: AnyExpr,
     op: &BinaryOperator,
     rhs: AnyExpr,
-    display: Properties,
+    mut display: Properties,
     context: &CompileContext,
 ) -> AnyExpr {
     let full_span = lhs.get_span().join(rhs.get_span());
@@ -2778,7 +2794,7 @@ fn unroll_binop(
         });
 
         Expr {
-            weight: lhs.get_weight(),
+            weight: FastFloat::One,
             span: lhs.get_span(),
             data: Rc::new(Scalar::dummy()),
             node: None,
@@ -2795,7 +2811,7 @@ fn unroll_binop(
         });
 
         Expr {
-            weight: rhs.get_weight(),
+            weight: FastFloat::One,
             span: rhs.get_span(),
             data: Rc::new(Scalar::dummy()),
             node: None,
@@ -2805,6 +2821,8 @@ fn unroll_binop(
     // Binary operators generate collection nodes for the lhs and rhs nodes.
     let lhs_node = lhs.take_node();
     let rhs_node = rhs.take_node();
+
+    let weight = display.get("weight").get_or(FastFloat::One);
 
     match op {
         BinaryOperator::Add(_) | BinaryOperator::Sub(_) => {
@@ -2816,7 +2834,7 @@ fn unroll_binop(
 
             let rhs = rhs.convert_unit(lhs.data.unit, context);
             let mut expr = Expr {
-                weight: FastFloat::One, // Technically, the only way to assign weight to an arithmetic op is to put it in parentheses it.
+                weight,
                 span: full_span,
                 data: Rc::new(Scalar {
                     unit: rhs.data.unit,
@@ -2842,7 +2860,7 @@ fn unroll_binop(
 
             let rhs = rhs.specify_unit(context);
             let mut expr = Expr {
-                weight: FastFloat::One, // Technically, the only way to assign weight to an arithmetic op is to put it in parentheses.
+                weight,
                 span: full_span,
                 data: Rc::new(Scalar {
                     unit: Some(lhs.data.unit.unwrap() * rhs.data.unit.as_ref().unwrap()),
@@ -3135,7 +3153,7 @@ fn create_variable_named(
 
         // Point collection variables are amiguous and therefore cause compilation errors.
         // They do not, however prevent the program from running properly.
-        context.push_error(Error::PCVariable {
+        context.push_error(Error::InvalidPC {
             error_span: stat.get_span(),
         });
     }
@@ -3221,10 +3239,6 @@ fn create_variable_collection(
                 }
 
                 let var = var.make_variable(entry.key().clone());
-
-                // if let Some(node) = pt_node {
-                //     todo!()
-                // }
 
                 let var = AnyExpr::Point(var);
                 entry.insert(var);
@@ -3319,6 +3333,8 @@ fn create_variables(
         );
         it_index.next();
 
+        // println!("let {} = {rhs_unrolled}", def.name);
+
         match &def.name {
             Ident::Named(named) => {
                 create_variable_named(stat, context, named, rhs_unrolled, &mut variable_nodes)?;
@@ -3347,16 +3363,34 @@ fn unroll_ref(
     let mut index = IterTreeIterator::new(&tree);
 
     while let Some(it_index) = index.get_currents() {
-        let node = unroll_expression(
-            &stat.operand,
-            context,
-            library,
-            it_index,
-            Properties::default(),
-        )
-        .replace_node(None)
-        .map(AnyExprNode::as_dyn);
+        let mut display = Properties::from(stat.display.clone());
+        let weight = display.get("weight").get_or(FastFloat::Zero);
+
+        let mut expr = unroll_expression(&stat.operand, context, library, it_index, display);
+
+        if let AnyExpr::PointCollection(pc) = &mut expr {
+            if let Some(node) = pc.node.take() {
+                if let Some(props) = node.root.props {
+                    props.finish(context);
+                }
+            }
+
+            context.push_error(Error::InvalidPC {
+                error_span: expr.get_span(),
+            });
+        }
+
+        let node = expr.replace_node(None).map(AnyExprNode::as_dyn);
         nodes.extend(node);
+
+        // If any weight is given, add a bias
+        if !weight.is_zero() {
+            context.push_rule(UnrolledRule {
+                kind: UnrolledRuleKind::Bias(expr),
+                inverted: false,
+                weight,
+            });
+        }
 
         index.next();
     }
@@ -3470,7 +3504,7 @@ fn unroll_eq(
                 lhs,
                 AnyExpr::Point(Expr {
                     span: rhs.get_span(),
-                    weight: rhs.get_weight(),
+                    weight: FastFloat::One,
                     data: Rc::new(Point::dummy()),
                     node: None,
                 })
@@ -3529,7 +3563,7 @@ fn unroll_gt(
 
             Expr {
                 span: rhs.span,
-                weight: rhs.weight,
+                weight: FastFloat::One,
                 node: rhs.node,
                 data: Rc::new(Scalar::dummy()),
             }
@@ -3567,7 +3601,7 @@ fn unroll_lt(
 
             Expr {
                 span: rhs.span,
-                weight: rhs.weight,
+                weight: FastFloat::One,
                 node: rhs.node,
                 data: Rc::new(Scalar::dummy()),
             }
@@ -3591,7 +3625,7 @@ fn unroll_rule(
     library: &Library,
     full_span: Span,
     inverted: bool,
-    display: Properties,
+    mut display: Properties,
 ) -> Box<dyn Node> {
     match op {
         RuleOperator::Predefined(pre) => match pre {
@@ -3632,6 +3666,8 @@ fn unroll_rule(
             ),
         },
         RuleOperator::Defined(op) => {
+            let weight = display.get("weight").get_or(FastFloat::One);
+
             let (def, lhs, rhs) = if let Some(func) = library.rule_ops.get(&op.ident.ident) {
                 if let Some(overload) = func.get_overload((&lhs.get_type(), &rhs.get_type())) {
                     let lhs = lhs.convert_to(overload.params.0, context);
@@ -3663,7 +3699,7 @@ fn unroll_rule(
                 return Box::new(EmptyNode);
             };
 
-            def(lhs, rhs, context, display, inverted)
+            def(lhs, rhs, context, display, inverted, weight)
         }
         RuleOperator::Inverted(op) => unroll_rule(
             (lhs, &op.operator, rhs),
@@ -3746,20 +3782,22 @@ fn set_flag_bool(flag: &mut Flag, stmt: &FlagStatement) -> Result<(), Error> {
                 FlagSetting::Default(_) | FlagSetting::Unset => {
                     *s = FlagSetting::Set(
                         FlagValue::Bool(match num {
-                            Number::Integer(i) => {
-                                match i.parsed.parse::<u8>() {
-                                    Ok(0) => false,
-                                    Ok(1) => true,
-                                    _ => return Err(Error::BooleanExpected {
+                            Number::Integer(i) => match i.parsed.parse::<u8>() {
+                                Ok(0) => false,
+                                Ok(1) => true,
+                                _ => {
+                                    return Err(Error::BooleanExpected {
                                         error_span: stmt.get_span(),
                                     })
                                 }
                             },
-                            Number::Float(_) => return Err(Error::BooleanExpected {
-                                error_span: stmt.get_span(),
-                            }),
+                            Number::Float(_) => {
+                                return Err(Error::BooleanExpected {
+                                    error_span: stmt.get_span(),
+                                })
+                            }
                         }),
-                        stmt.get_span()
+                        stmt.get_span(),
                     );
                 }
                 FlagSetting::Set(_, sp) => {
@@ -3932,11 +3970,7 @@ pub fn unroll(input: &str) -> Result<(CompileContext, CollectionNode), Vec<Error
         }
     }
 
-    // for v in context.variables.values() {
-    //     println!("let {} = {}", v.name, v.definition);
-    // }
-
-    // for x in &unrolled {
+    // for x in context.rules.borrow().iter() {
     //     println!("{x}");
     // }
 

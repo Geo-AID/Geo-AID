@@ -25,14 +25,18 @@ use crate::{
         expression::{expr::AnglePoint, Expression, PointExpr, ScalarExpr},
         Complex,
     },
+    labels::get_special_char_raw,
     projector::{
         Output, Rendered, RenderedAngle, RenderedCircle, RenderedLine, RenderedPoint, RenderedRay,
         RenderedSegment,
     },
     script::{
-        figure::{Style::{self, Bold, Dashed, Solid, Dotted}, MathChar, MathIndex},
+        figure::{
+            MathChar, MathIndex,
+            Style::{self, Bold, Dashed, Dotted, Solid},
+        },
         HashableArc,
-    }, labels::get_special_char_raw,
+    },
 };
 
 /// Function evaluating point's `MathString` to a string which then can be displayed.
@@ -49,22 +53,20 @@ fn math_string(point: &Rc<RenderedPoint>) -> String {
             MathChar::Special(c) => {
                 label += get_special_char_raw(c);
             }
-            MathChar::SetIndex(i) => {
-                match i {
-                    MathIndex::Normal => {
-                        if seen {
-                            label += "}";
-                        }
-                        lower_last = false;
+            MathChar::SetIndex(i) => match i {
+                MathIndex::Normal => {
+                    if seen {
+                        label += "}";
                     }
-                    MathIndex::Lower => {
-                        seen = true;
-                        label += "_{";
-
-                        lower_last = true;
-                    }
+                    lower_last = false;
                 }
-            }
+                MathIndex::Lower => {
+                    seen = true;
+                    label += "_{";
+
+                    lower_last = true;
+                }
+            },
             MathChar::Prime => {
                 label += "'";
             }
@@ -74,7 +76,7 @@ fn math_string(point: &Rc<RenderedPoint>) -> String {
     if lower_last {
         label += "}";
     }
-    
+
     label
 }
 
@@ -104,7 +106,7 @@ fn styling(rendered: &Rendered, mode: Style) -> String {
 /// Function that handles the points.
 fn points(mut file: &File, point: &Rc<RenderedPoint>) {
     file.write_all((format!("\npoint: label - \"{}\", coordinates: point - ({:.3}, {:.3}), label - ({:.3}, {:.3}) \n", 
-        math_string(point), 
+        math_string(point),
         point.position.real,
         point.position.imaginary,
         point.label_position.real,

@@ -30,7 +30,7 @@ use super::{
     token::{
         Ampersant, Asterisk, At, Colon, Comma, Dollar, Dot, Eq, Exclamation, Gt, Gteq, Ident,
         LBrace, LParen, LSquare, Let, Lt, Lteq, Minus, NamedIdent, Number, Plus, Question, RBrace,
-        RParen, RSquare, Semi, Slash, Span, StrLit, Token, Vertical, TokInteger,
+        RParen, RSquare, Semi, Slash, Span, StrLit, TokInteger, Token, Vertical,
     },
     unit, ComplexUnit, Error,
 };
@@ -225,11 +225,21 @@ impl Parse for ExplicitIterator {
             });
         }
 
-        let id = id_token.parsed.parse().map_err(|_| Error::IteratorIdExceeds255 {
-            error_span: id_token.get_span(),
-        })?;
+        let id = id_token
+            .parsed
+            .parse()
+            .map_err(|_| Error::IteratorIdExceeds255 {
+                error_span: id_token.get_span(),
+            })?;
 
-        Ok(ExplicitIterator { exprs, id_token, id, dollar, left_paren, right_paren })
+        Ok(ExplicitIterator {
+            exprs,
+            id_token,
+            id,
+            dollar,
+            left_paren,
+            right_paren,
+        })
     }
 
     fn get_span(&self) -> Span {
@@ -600,6 +610,8 @@ pub struct RuleStatement {
 /// `?expr`
 #[derive(Debug)]
 pub struct RefStatement {
+    /// Display properties.
+    pub display: Option<DisplayProperties>,
     /// The starting question mark.
     pub question: Question,
     /// Operand.
@@ -613,6 +625,7 @@ impl Parse for RefStatement {
         it: &mut Peekable<I>,
     ) -> Result<Self, Error> {
         Ok(Self {
+            display: Option::parse(it)?,
             question: Question::parse(it)?,
             operand: Expression::parse(it)?,
             semi: Semi::parse(it)?,
@@ -1191,7 +1204,7 @@ impl Parse for Number {
     fn get_span(&self) -> Span {
         match self {
             Self::Float(f) => f.span,
-            Self::Integer(i) => i.span
+            Self::Integer(i) => i.span,
         }
     }
 }
@@ -1453,18 +1466,12 @@ impl FromProperty for bool {
                 }),
             },
             PropertyValue::Number(num) => match num {
-                Number::Integer(i) => {
-                    match i.parsed.parse::<u8>() {
-                        Ok(0) => Ok(false),
-                        Ok(1) => Ok(true),
-                        _ => Err(Error::BooleanExpected {
-                            error_span: i.span,
-                        })
-                    }
+                Number::Integer(i) => match i.parsed.parse::<u8>() {
+                    Ok(0) => Ok(false),
+                    Ok(1) => Ok(true),
+                    _ => Err(Error::BooleanExpected { error_span: i.span }),
                 },
-                Number::Float(f) => Err(Error::BooleanExpected {
-                    error_span: f.span,
-                }),
+                Number::Float(f) => Err(Error::BooleanExpected { error_span: f.span }),
             },
             PropertyValue::String(s) => match s.content.as_str() {
                 "enabled" | "on" | "true" | "yes" => Ok(true),

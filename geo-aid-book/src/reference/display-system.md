@@ -1,6 +1,6 @@
 # Display system
 
-The display system decides which expressions are displayed and which are not. Syntax documentation is available [here](syntax/display-properties.md).
+The display system decides which expressions are displayed and which are not. Its options are expressed through [properties](syntax/properties.md).
 
 ## What is displayed?
 

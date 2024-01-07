@@ -20,9 +20,16 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 use std::f64::consts::PI;
 
-use crate::{projector::{RenderedLine, RenderedAngle, RenderedRay, RenderedSegment, RenderedCircle}, generator::{geometry::{distance_pt_ln, get_line, distance_pt_pt}, Complex}, script::figure::MathSpecial};
+use crate::{
+    generator::{
+        geometry::{distance_pt_ln, distance_pt_pt, get_line},
+        Complex,
+    },
+    projector::{RenderedAngle, RenderedCircle, RenderedLine, RenderedRay, RenderedSegment},
+    script::figure::MathSpecial,
+};
 
-#[must_use] 
+#[must_use]
 /// Funtion assigning appropriate strings to `MathSpecial` enum variants for the latex drawer.
 pub fn get_special_char_latex(char: &MathSpecial) -> &str {
     match char {
@@ -74,11 +81,11 @@ pub fn get_special_char_latex(char: &MathSpecial) -> &str {
         MathSpecial::PsiUpper => "\\Psi",
         MathSpecial::Omega => "\\omega",
         MathSpecial::OmegaUpper => "\\Omega",
-        MathSpecial::Quote => "\"" // I have no clue what "Quote" is supposed to mean is context of MathSpecial
+        MathSpecial::Quote => "\"", // I have no clue what "Quote" is supposed to mean is context of MathSpecial
     }
 }
 
-#[must_use] 
+#[must_use]
 /// Funtion assigning appropriate strings to `MathSpecial` enum variants for the raw drawer.
 pub fn get_special_char_raw(char: &MathSpecial) -> &str {
     match char {
@@ -130,7 +137,7 @@ pub fn get_special_char_raw(char: &MathSpecial) -> &str {
         MathSpecial::PsiUpper => "[Psi]",
         MathSpecial::Omega => "[omega]",
         MathSpecial::OmegaUpper => "[Omega]",
-        MathSpecial::Quote => "\"" // I have no clue what "Quote" is supposed to mean is context of MathSpecial
+        MathSpecial::Quote => "\"", // I have no clue what "Quote" is supposed to mean is context of MathSpecial
     }
 }
 
@@ -252,7 +259,11 @@ pub fn point_label_position(
 
         if distance < 1e-2 {
             if a > 0.0 {
-                if seg1.real - u1 < point.real && point.real < seg2.real + u1 && seg1.imaginary - u2 < point.imaginary && point.imaginary < seg2.imaginary + u2 {
+                if seg1.real - u1 < point.real
+                    && point.real < seg2.real + u1
+                    && seg1.imaginary - u2 < point.imaginary
+                    && point.imaginary < seg2.imaginary + u2
+                {
                     if distance_pt_pt(point, seg1) < 1.0 {
                         vec_associated.push(ln.direction);
                     } else if distance_pt_pt(point, seg2) < 1.0 {
@@ -262,7 +273,12 @@ pub fn point_label_position(
                         vec_associated.push(-ln.direction);
                     }
                 }
-            } else if a < 0.0 && seg1.real - u1 < point.real && point.real < seg2.real + u1 && seg1.imaginary - u2 > point.imaginary && point.imaginary > seg2.imaginary + u2 {
+            } else if a < 0.0
+                && seg1.real - u1 < point.real
+                && point.real < seg2.real + u1
+                && seg1.imaginary - u2 > point.imaginary
+                && point.imaginary > seg2.imaginary + u2
+            {
                 if distance_pt_pt(point, seg1) < 1.0 {
                     vec_associated.push(ln.direction);
                 } else if distance_pt_pt(point, seg2) < 1.0 {
@@ -281,7 +297,9 @@ pub fn point_label_position(
         let frame_point = ray.points.1;
 
         // Identifying the points that will be used for calculations (it's the one that farther from the frame point).
-        let ray_point = if distance_pt_pt(ray.points.0, frame_point) > distance_pt_pt(ray.draw_point, frame_point) {
+        let ray_point = if distance_pt_pt(ray.points.0, frame_point)
+            > distance_pt_pt(ray.draw_point, frame_point)
+        {
             ray.points.0
         } else {
             ray.draw_point
@@ -296,11 +314,27 @@ pub fn point_label_position(
         let u2 = unit.imaginary;
 
         // Set of bools that makes the code more readable.
-        let b1 = ray_point.real > frame_point.real && frame_point.real < point.real && point.real < ray_point.real - u1 && frame_point.imaginary < point.imaginary && point.imaginary < ray_point.imaginary - u2;
-        let b2 = frame_point.real > ray_point.real && ray_point.real - u1 < point.real && point.real < frame_point.real && ray_point.imaginary - u2 < point.imaginary && point.imaginary < frame_point.imaginary;
+        let b1 = ray_point.real > frame_point.real
+            && frame_point.real < point.real
+            && point.real < ray_point.real - u1
+            && frame_point.imaginary < point.imaginary
+            && point.imaginary < ray_point.imaginary - u2;
+        let b2 = frame_point.real > ray_point.real
+            && ray_point.real - u1 < point.real
+            && point.real < frame_point.real
+            && ray_point.imaginary - u2 < point.imaginary
+            && point.imaginary < frame_point.imaginary;
 
-        let b3 = frame_point.real > ray_point.real && ray_point.real - u1 < point.real && point.real < frame_point.real && point.imaginary < ray_point.imaginary - u2 && frame_point.imaginary < point.imaginary;
-        let b4 = ray_point.real > frame_point.real && frame_point.real < point.real && point.real < ray_point.real - u1 && point.imaginary < frame_point.imaginary && ray_point.imaginary - u2 < point.imaginary;
+        let b3 = frame_point.real > ray_point.real
+            && ray_point.real - u1 < point.real
+            && point.real < frame_point.real
+            && point.imaginary < ray_point.imaginary - u2
+            && frame_point.imaginary < point.imaginary;
+        let b4 = ray_point.real > frame_point.real
+            && frame_point.real < point.real
+            && point.real < ray_point.real - u1
+            && point.imaginary < frame_point.imaginary
+            && ray_point.imaginary - u2 < point.imaginary;
 
         if distance_pt_ln(point, ln) < 1e-2 {
             if a > 0.0 {
@@ -334,7 +368,7 @@ pub fn point_label_position(
     }
 
     // Sorting by the complex number argument.
-    vec_associated.sort_by(|a,b| (a.arg()).partial_cmp(&b.arg()).unwrap());
+    vec_associated.sort_by(|a, b| (a.arg()).partial_cmp(&b.arg()).unwrap());
 
     get_label_pos(&vec_associated, point)
 }
