@@ -323,7 +323,7 @@ impl CompileContext {
 
 /// Everything related to circles.
 impl CompileContext {
-    pub fn point_on_circle(&mut self, lhs: &Expr<UnrolledPoint>, rhs: &Expr<UnrolledCircle>) {
+    pub fn point_on_circle(&mut self, lhs: &Expr<UnrolledPoint>, rhs: &Expr<UnrolledCircle>, weight: FastFloat) {
         if let Some(point) = self.get_point_entity_mut(lhs) {
             match point {
                 Point::Free => {
@@ -334,17 +334,20 @@ impl CompileContext {
             }
         }
 
-        self.scalar_eq(
-            self.distance_pp(
-                lhs.clone_without_node(),
-                self.circle_center(rhs.clone_without_node()),
+        self.push_rule(UnrolledRule {
+            kind: UnrolledRuleKind::ScalarEq(
+                self.distance_pp(
+                    lhs.clone_without_node(),
+                    self.circle_center(rhs.clone_without_node()),
+                ),
+                self.circle_radius(rhs.clone_without_node()),
             ),
-            self.circle_radius(rhs.clone_without_node()),
-            false,
-        );
+            inverted: false,
+            weight
+        });
     }
 
-    pub fn point_on_line(&mut self, lhs: &Expr<UnrolledPoint>, rhs: &Expr<UnrolledLine>) {
+    pub fn point_on_line(&mut self, lhs: &Expr<UnrolledPoint>, rhs: &Expr<UnrolledLine>, weight: FastFloat) {
         if let Some(point) = self.get_point_entity_mut(lhs) {
             match point {
                 Point::Free => {
@@ -367,11 +370,14 @@ impl CompileContext {
             }
         }
 
-        self.scalar_eq(
-            self.distance_pl(lhs.clone_without_node(), rhs.clone_without_node()),
-            number!(=0.0),
-            false,
-        );
+        self.push_rule(UnrolledRule {
+            kind: UnrolledRuleKind::ScalarEq(
+                self.distance_pl(lhs.clone_without_node(), rhs.clone_without_node()),
+                number!(=0.0),
+            ),
+            inverted: false,
+            weight
+        });
     }
 }
 

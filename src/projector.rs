@@ -551,9 +551,7 @@ pub fn project(
     generated_points: &[(Adjustable, f64)],
     flags: &Arc<Flags>,
 ) -> Output {
-    let mut logger = Vec::new();
     let args = EvaluationArgs {
-        logger: &mut logger,
         adjustables: generated_points,
         generation: 0,
         flags,

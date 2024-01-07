@@ -26,8 +26,9 @@ use crate::script::Error;
 use crate::script::parser::{FromProperty, PropertyValue, Parse};
 
 /// A floating point value for optimized operations with often use of values 1 and 0.
-#[derive(Debug, Clone, Copy, Serialize)]
+#[derive(Debug, Clone, Copy, Serialize, Default)]
 pub enum FastFloat {
+    #[default]
     Zero,
     One,
     Other(f64),
@@ -42,7 +43,7 @@ impl FastFloat {
 
     /// Converts the value to a standard `f64`.
     #[must_use]
-    pub fn to_f64(self) -> f64 {
+    pub const fn to_f64(self) -> f64 {
         match self {
             Self::One => 1.0,
             Self::Zero => 0.0,

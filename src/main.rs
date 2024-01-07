@@ -99,7 +99,10 @@ fn main() {
         fs::write(path, clap_markdown::help_markdown::<Args>()).unwrap();
     }
 
-    let script = fs::read_to_string(&args.input).expect("Failed to read file.");
+    let Ok(script) = fs::read_to_string(&args.input) else {
+        println!("Failed to read file. Does it exist?");
+        return;
+    };
     let canvas_size = (args.width, args.height);
 
     let result = compile::compile(&script, canvas_size);

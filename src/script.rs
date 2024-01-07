@@ -28,7 +28,7 @@ use std::{
 
 use serde::Serialize;
 
-use crate::generator::fast_float::FastFloat;
+use crate::generator::{fast_float::FastFloat, expression::Weights};
 use crate::{
     cli::{AnnotationKind, Change, DiagnosticData, Fix},
     generator::expression::{AnyExpr, Expression, PointExpr, ScalarExpr},
@@ -741,7 +741,7 @@ pub enum CriteriaKind {
     /// Bias. Always evaluates to 1.0. Artificially raises quality for everything contained  in the arc.
     Bias(Arc<Expression<AnyExpr>>),
     /// Maximal quality of the given rules.
-    Alternative(Vec<Criteria>),
+    Alternative(Vec<CriteriaKind>),
 }
 
 impl CriteriaKind {
@@ -761,15 +761,66 @@ impl CriteriaKind {
             }
             CriteriaKind::Alternative(v) => {
                 for crit in v {
-                    crit.object.collect(exprs);
+                    crit.collect(exprs);
                 }
+            }
+        }
+    }
+
+    #[must_use]
+    pub fn get_weights(&self) -> Weights {
+        match self {
+            Self::EqualScalar(lhs, rhs)
+            | Self::Less(lhs, rhs)
+            | Self::Greater(lhs, rhs) => {
+                lhs.weights.clone() + &rhs.weights
+            }
+            Self::Inverse(v) => v.get_weights(),
+            Self::Bias(v) => v.weights.clone(),
+            Self::EqualPoint(lhs, rhs) => {
+                lhs.weights.clone() + &rhs.weights
+            }
+            Self::Alternative(v) => {
+                let mut weights = Weights::empty();
+
+                for crit in v {
+                    weights += &crit.get_weights();
+                }
+
+                weights
             }
         }
     }
 }
 
 /// Defines a weighed piece of criteria the figure must obey.
-pub type Criteria = Weighed<CriteriaKind>;
+#[derive(Debug)]
+pub struct Criteria {
+    kind: CriteriaKind,
+    weights: Weights
+}
+
+impl Criteria {
+    #[must_use]
+    pub fn new(kind: CriteriaKind, weight: FastFloat) -> Self {
+        let weights = kind.get_weights().normalize() * weight;
+
+        Self {
+            kind,
+            weights
+        }
+    }
+
+    #[must_use]
+    pub const fn get_kind(&self) -> &CriteriaKind {
+        &self.kind
+    }
+
+    #[must_use]
+    pub const fn get_weights(&self) -> &Weights {
+        &self.weights
+    }
+}
 
 #[derive(Serialize, Debug, Clone)]
 pub struct HashableArc<T>(Arc<T>);

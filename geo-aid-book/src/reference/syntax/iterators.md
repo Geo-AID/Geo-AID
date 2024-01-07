@@ -5,7 +5,7 @@
 > &nbsp;&nbsp; [*Expression&lt;false&gt;*](expressions.md) (`,` [*Expression&lt;false&gt;*](expressions.md))<sup>+</sup>\
 > \
 > *ExplicitIterator* :\
-> &nbsp;&nbsp; `$` `(` [*Expression&lt;false&gt;*](expressions.md) (`,` [*Expression&lt;false&gt;*](expressions.md))<sup>*</sup> `)`
+> &nbsp;&nbsp; `$` [INTEGER](numbers.md) `(` [*Expression&lt;false&gt;*](expressions.md) (`,` [*Expression&lt;false&gt;*](expressions.md))<sup>*</sup> `)`
 
 Iterators can be used in `let` statements and rules on both sides. A sequence of expressions separated by a comma is called an *implicit iterator*. Using these, multiple lines of a script can be collapsed into a single one. For example:
 

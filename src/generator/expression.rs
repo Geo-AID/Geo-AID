@@ -68,6 +68,18 @@ impl Weights {
         self.0.resize(index + 1, FastFloat::Zero);
         self.0[index] = weight;
     }
+
+    /// Squeezes weights into [0, 1] range.
+    #[must_use]
+    pub fn normalize(self) -> Self {
+        let sum: FastFloat = self.0.iter().copied().sum();
+
+        if sum.is_zero() {
+            Self::empty()
+        } else {
+            Self(self.0.into_iter().map(|v| v / sum).collect())
+        }
+    }
 }
 
 impl Add<&Weights> for Weights {

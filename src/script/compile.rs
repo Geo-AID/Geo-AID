@@ -52,7 +52,7 @@ use super::{
         self, CompileContext, EntCircle, EntLine, EntPoint, EntScalar, Entity, Expr, Flag,
         UnrolledRuleKind, Variable,
     },
-    Criteria, CriteriaKind, Error, HashableRc, SimpleUnit, Weighed,
+    Criteria, CriteriaKind, Error, HashableRc, SimpleUnit,
 };
 
 trait Mapping<K, T> {
@@ -554,75 +554,76 @@ impl Compiler {
         }
     }
 
-    fn compile_rule_vec(&mut self, rules: &[UnrolledRule]) -> Vec<Criteria> {
+    fn compile_rule_vec<'r, I: IntoIterator<Item = &'r UnrolledRule>>(&mut self, rules: I) -> Vec<Criteria> {
         rules
-            .iter()
+            .into_iter()
             .map(|rule| self.compile_rule(rule))
             .collect()
     }
 
-    fn compile_rule(&mut self, rule: &UnrolledRule) -> Criteria {
-        // println!("{rule}");
+    fn compile_rule_kind_vec<'r, I: IntoIterator<Item = &'r UnrolledRuleKind>>(&mut self, rules: I) -> Vec<CriteriaKind> {
+        rules
+            .into_iter()
+            .map(|rule| self.compile_rule_kind(rule))
+            .collect()
+    }
 
-        let crit = Weighed {
-            object: match &rule.kind {
-                UnrolledRuleKind::PointEq(lhs, rhs) => {
-                    let lhs = self.compile(lhs);
-                    let rhs = self.compile(rhs);
+    fn compile_rule_kind(&mut self, rule: &UnrolledRuleKind) -> CriteriaKind {
+        match &rule {
+            UnrolledRuleKind::PointEq(lhs, rhs) => {
+                let lhs = self.compile(lhs);
+                let rhs = self.compile(rhs);
 
-                    CriteriaKind::EqualPoint(lhs, rhs)
-                }
-                UnrolledRuleKind::ScalarEq(lhs, rhs) => {
-                    let lhs = self.compile(lhs);
-                    let rhs = self.compile(rhs);
-
-                    CriteriaKind::EqualScalar(lhs, rhs)
-                }
-                UnrolledRuleKind::Gt(lhs, rhs) => {
-                    let lhs = self.compile(lhs);
-                    let rhs = self.compile(rhs);
-
-                    CriteriaKind::Greater(lhs, rhs)
-                }
-                UnrolledRuleKind::Lt(lhs, rhs) => {
-                    let lhs = self.compile(lhs);
-                    let rhs = self.compile(rhs);
-
-                    CriteriaKind::Less(lhs, rhs)
-                }
-                UnrolledRuleKind::Alternative(rules) => {
-                    CriteriaKind::Alternative(self.compile_rule_vec(rules))
-                }
-                UnrolledRuleKind::Bias(expr) => CriteriaKind::Bias(match expr {
-                    UnrolledAny::Point(v) => {
-                        let e = self.compile(v);
-                        Arc::new(Expression { kind: AnyExpr::Point(e.kind.clone()), weights: e.weights.clone() })
-                    },
-                    UnrolledAny::Line(v) => {
-                        let e = self.compile(v);
-                        Arc::new(Expression { kind: AnyExpr::Line(e.kind.clone()), weights: e.weights.clone() })
-                    },
-                    UnrolledAny::Scalar(v) => {
-                        let e = self.compile(v);
-                        Arc::new(Expression{ kind: AnyExpr::Scalar(e.kind.clone()), weights: e.weights.clone() })
-                    },
-                    UnrolledAny::Circle(v) => {
-                        let e = self.compile(v);
-                        Arc::new(Expression { kind: AnyExpr::Circle(e.kind.clone()), weights: e.weights.clone() })
-                    },
-                    _ => unreachable!()
-                })
-            },
-            weight: rule.weight
-        };
-
-        if rule.inverted {
-            Weighed {
-                object: CriteriaKind::Inverse(Box::new(crit.object)),
-                weight: crit.weight,
+                CriteriaKind::EqualPoint(lhs, rhs)
             }
+            UnrolledRuleKind::ScalarEq(lhs, rhs) => {
+                let lhs = self.compile(lhs);
+                let rhs = self.compile(rhs);
+
+                CriteriaKind::EqualScalar(lhs, rhs)
+            }
+            UnrolledRuleKind::Gt(lhs, rhs) => {
+                let lhs = self.compile(lhs);
+                let rhs = self.compile(rhs);
+
+                CriteriaKind::Greater(lhs, rhs)
+            }
+            UnrolledRuleKind::Lt(lhs, rhs) => {
+                let lhs = self.compile(lhs);
+                let rhs = self.compile(rhs);
+
+                CriteriaKind::Less(lhs, rhs)
+            }
+            UnrolledRuleKind::Alternative(rules) => {
+                CriteriaKind::Alternative(self.compile_rule_kind_vec(rules.iter().map(|x| &x.kind)))
+            }
+            UnrolledRuleKind::Bias(expr) => CriteriaKind::Bias(match expr {
+                UnrolledAny::Point(v) => {
+                    let e = self.compile(v);
+                    Arc::new(Expression { kind: AnyExpr::Point(e.kind.clone()), weights: e.weights.clone() })
+                },
+                UnrolledAny::Line(v) => {
+                    let e = self.compile(v);
+                    Arc::new(Expression { kind: AnyExpr::Line(e.kind.clone()), weights: e.weights.clone() })
+                },
+                UnrolledAny::Scalar(v) => {
+                    let e = self.compile(v);
+                    Arc::new(Expression{ kind: AnyExpr::Scalar(e.kind.clone()), weights: e.weights.clone() })
+                },
+                UnrolledAny::Circle(v) => {
+                    let e = self.compile(v);
+                    Arc::new(Expression { kind: AnyExpr::Circle(e.kind.clone()), weights: e.weights.clone() })
+                },
+                _ => unreachable!()
+            })
+        }
+    }
+
+    fn compile_rule(&mut self, rule: &UnrolledRule) -> Criteria {
+        if rule.inverted {
+            Criteria::new(CriteriaKind::Inverse(Box::new(self.compile_rule_kind(&rule.kind))), rule.weight)
         } else {
-            crit
+            Criteria::new(self.compile_rule_kind(&rule.kind), rule.weight)
         }
     }
 
@@ -816,10 +817,10 @@ pub fn compile(input: &str, canvas_size: (usize, usize)) -> Result<Compiled, Vec
             weights: dst.weights.clone(),
         });
 
-        criteria.push(Weighed {
-            object: CriteriaKind::Bias(dst_any),
-            weight: FastFloat::Other(10.0), // The bias.
-        });
+        criteria.push(Criteria::new(
+            CriteriaKind::Bias(dst_any),
+            FastFloat::Other(10.0), // The bias.
+        ));
     }
 
     // println!("{:#?}", criteria);
@@ -844,26 +845,26 @@ pub fn compile(input: &str, canvas_size: (usize, usize)) -> Result<Compiled, Vec
 /// Inequality principle and the point plane limit.
 fn add_bounds(
     points: &[(Arc<Expression<PointExpr>>, usize)],
-    criteria: &mut Vec<Weighed<CriteriaKind>>,
+    criteria: &mut Vec<Criteria>,
     flags: &Flags,
 ) {
     // Point inequality principle.
     for (i, (pt_i, adj)) in points.iter().enumerate() {
         // For each of the next points, add an inequality rule.
         for (pt_j, _) in points.iter().skip(i + 1) {
-            criteria.push(Weighed {
-                object: CriteriaKind::Inverse(Box::new(CriteriaKind::EqualPoint(
+            criteria.push(Criteria::new(
+                CriteriaKind::Inverse(Box::new(CriteriaKind::EqualPoint(
                     Arc::clone(pt_i),
                     Arc::clone(pt_j),
                 ))),
-                weight: FastFloat::One,
-            });
+                FastFloat::One,
+            ));
         }
 
         if flags.point_bounds {
             // For each point, add a rule limiting its range.
-            criteria.push(Weighed {
-                object: CriteriaKind::Greater(
+            criteria.push(Criteria::new(
+                CriteriaKind::Greater(
                     Arc::new(Expression {
                         weights: Weights::one_at(*adj),
                         kind: ScalarExpr::PointX(PointX {
@@ -875,11 +876,11 @@ fn add_bounds(
                         kind: ScalarExpr::Literal(Literal { value: 0.0 }),
                     }),
                 ),
-                weight: FastFloat::One,
-            }); // x > 0
+                FastFloat::One,
+            )); // x > 0
 
-            criteria.push(Weighed {
-                object: CriteriaKind::Greater(
+            criteria.push(Criteria::new(
+                CriteriaKind::Greater(
                     Arc::new(Expression {
                         weights: Weights::one_at(*adj),
                         kind: ScalarExpr::PointY(PointY {
@@ -891,11 +892,11 @@ fn add_bounds(
                         kind: ScalarExpr::Literal(Literal { value: 1.0 }),
                     }),
                 ),
-                weight: FastFloat::One,
-            }); // y > 0
+                FastFloat::One,
+            )); // y > 0
 
-            criteria.push(Weighed {
-                object: CriteriaKind::Less(
+            criteria.push(Criteria::new(
+                CriteriaKind::Less(
                     Arc::new(Expression {
                         weights: Weights::one_at(*adj),
                         kind: ScalarExpr::PointX(PointX {
@@ -907,11 +908,11 @@ fn add_bounds(
                         kind: ScalarExpr::Literal(Literal { value: 1.0 }),
                     }),
                 ),
-                weight: FastFloat::One,
-            }); // x < 1
+                FastFloat::One,
+            )); // x < 1
 
-            criteria.push(Weighed {
-                object: CriteriaKind::Less(
+            criteria.push(Criteria::new(
+                CriteriaKind::Less(
                     Arc::new(Expression {
                         weights: Weights::one_at(*adj),
                         kind: ScalarExpr::PointY(PointY {
@@ -923,8 +924,8 @@ fn add_bounds(
                         kind: ScalarExpr::Literal(Literal { value: 1.0 }),
                     }),
                 ),
-                weight: FastFloat::One,
-            }); // y < 1
+                FastFloat::One,
+            )); // y < 1
         }
     }
 }

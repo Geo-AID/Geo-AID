@@ -299,7 +299,7 @@ pub struct RuleOverload {
 }
 
 /// geoscript rule declaration
-type GeoRule = dyn Fn(AnyExpr, AnyExpr, &mut CompileContext, Properties, bool) -> Box<dyn Node>;
+type GeoRule = dyn Fn(AnyExpr, AnyExpr, &mut CompileContext, Properties, bool, FastFloat) -> Box<dyn Node>;
 
 /// A function definition.
 pub struct RuleDefinition(pub Box<GeoRule>);
@@ -3618,7 +3618,7 @@ fn unroll_rule(
     library: &Library,
     full_span: Span,
     inverted: bool,
-    display: Properties,
+    mut display: Properties,
 ) -> Box<dyn Node> {
     match op {
         RuleOperator::Predefined(pre) => match pre {
@@ -3659,6 +3659,8 @@ fn unroll_rule(
             ),
         },
         RuleOperator::Defined(op) => {
+            let weight = display.get("weight").get_or(FastFloat::One);
+
             let (def, lhs, rhs) = if let Some(func) = library.rule_ops.get(&op.ident.ident) {
                 if let Some(overload) = func.get_overload((&lhs.get_type(), &rhs.get_type())) {
                     let lhs = lhs.convert_to(overload.params.0, context);
@@ -3690,7 +3692,7 @@ fn unroll_rule(
                 return Box::new(EmptyNode);
             };
 
-            def(lhs, rhs, context, display, inverted)
+            def(lhs, rhs, context, display, inverted, weight)
         }
         RuleOperator::Inverted(op) => unroll_rule(
             (lhs, &op.operator, rhs),
