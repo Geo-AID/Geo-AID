@@ -35,8 +35,7 @@ use crate::{
                 AngleBisector, AngleLine, AnglePoint, AnglePointDir, Average, CenterRadius,
                 CircleCenter, CircleRadius, Difference, FreePoint, LineLineIntersection, LinePoint,
                 Literal, Negation, ParallelThrough, PerpendicularThrough, PointLineDistance,
-                PointOnCircle, PointPointDistance, PointX, PointY, Product, Quotient, Real,
-                Sum,
+                PointOnCircle, PointPointDistance, PointX, PointY, Product, Quotient, Real, Sum,
             },
             AnyExpr, CircleExpr, Expression, LineExpr, PointExpr, ScalarExpr, Weights,
         },
@@ -554,14 +553,20 @@ impl Compiler {
         }
     }
 
-    fn compile_rule_vec<'r, I: IntoIterator<Item = &'r UnrolledRule>>(&mut self, rules: I) -> Vec<Criteria> {
+    fn compile_rule_vec<'r, I: IntoIterator<Item = &'r UnrolledRule>>(
+        &mut self,
+        rules: I,
+    ) -> Vec<Criteria> {
         rules
             .into_iter()
             .map(|rule| self.compile_rule(rule))
             .collect()
     }
 
-    fn compile_rule_kind_vec<'r, I: IntoIterator<Item = &'r UnrolledRuleKind>>(&mut self, rules: I) -> Vec<CriteriaKind> {
+    fn compile_rule_kind_vec<'r, I: IntoIterator<Item = &'r UnrolledRuleKind>>(
+        &mut self,
+        rules: I,
+    ) -> Vec<CriteriaKind> {
         rules
             .into_iter()
             .map(|rule| self.compile_rule_kind(rule))
@@ -600,28 +605,43 @@ impl Compiler {
             UnrolledRuleKind::Bias(expr) => CriteriaKind::Bias(match expr {
                 UnrolledAny::Point(v) => {
                     let e = self.compile(v);
-                    Arc::new(Expression { kind: AnyExpr::Point(e.kind.clone()), weights: e.weights.clone() })
-                },
+                    Arc::new(Expression {
+                        kind: AnyExpr::Point(e.kind.clone()),
+                        weights: e.weights.clone(),
+                    })
+                }
                 UnrolledAny::Line(v) => {
                     let e = self.compile(v);
-                    Arc::new(Expression { kind: AnyExpr::Line(e.kind.clone()), weights: e.weights.clone() })
-                },
+                    Arc::new(Expression {
+                        kind: AnyExpr::Line(e.kind.clone()),
+                        weights: e.weights.clone(),
+                    })
+                }
                 UnrolledAny::Scalar(v) => {
                     let e = self.compile(v);
-                    Arc::new(Expression{ kind: AnyExpr::Scalar(e.kind.clone()), weights: e.weights.clone() })
-                },
+                    Arc::new(Expression {
+                        kind: AnyExpr::Scalar(e.kind.clone()),
+                        weights: e.weights.clone(),
+                    })
+                }
                 UnrolledAny::Circle(v) => {
                     let e = self.compile(v);
-                    Arc::new(Expression { kind: AnyExpr::Circle(e.kind.clone()), weights: e.weights.clone() })
-                },
-                _ => unreachable!()
-            })
+                    Arc::new(Expression {
+                        kind: AnyExpr::Circle(e.kind.clone()),
+                        weights: e.weights.clone(),
+                    })
+                }
+                _ => unreachable!(),
+            }),
         }
     }
 
     fn compile_rule(&mut self, rule: &UnrolledRule) -> Criteria {
         if rule.inverted {
-            Criteria::new(CriteriaKind::Inverse(Box::new(self.compile_rule_kind(&rule.kind))), rule.weight)
+            Criteria::new(
+                CriteriaKind::Inverse(Box::new(self.compile_rule_kind(&rule.kind))),
+                rule.weight,
+            )
         } else {
             Criteria::new(self.compile_rule_kind(&rule.kind), rule.weight)
         }
@@ -668,13 +688,13 @@ impl Compile<Scalar, ScalarExpr> for Compiler {
             )),
             ScalarData::Entity(i) => self.compile_entity(*i).as_scalar().unwrap().clone(),
             ScalarData::SetUnit(expr, unit) => self.compile(&self.fix_distance(
-                    expr.clone_without_node(),
-                    unit[SimpleUnit::Distance as usize]
-                        - match expr.data.unit {
-                            Some(unit) => unit[SimpleUnit::Distance as usize],
-                            None => 0,
-                        },
-                )),
+                expr.clone_without_node(),
+                unit[SimpleUnit::Distance as usize]
+                    - match expr.data.unit {
+                        Some(unit) => unit[SimpleUnit::Distance as usize],
+                        None => 0,
+                    },
+            )),
             ScalarData::PointPointDistance(p1, p2) => Arc::new(Expression::new(
                 ScalarExpr::PointPointDistance(PointPointDistance {
                     a: self.compile(p1),

@@ -323,7 +323,12 @@ impl CompileContext {
 
 /// Everything related to circles.
 impl CompileContext {
-    pub fn point_on_circle(&mut self, lhs: &Expr<UnrolledPoint>, rhs: &Expr<UnrolledCircle>, weight: FastFloat) {
+    pub fn point_on_circle(
+        &mut self,
+        lhs: &Expr<UnrolledPoint>,
+        rhs: &Expr<UnrolledCircle>,
+        weight: FastFloat,
+    ) {
         if let Some(point) = self.get_point_entity_mut(lhs) {
             match point {
                 Point::Free => {
@@ -343,11 +348,16 @@ impl CompileContext {
                 self.circle_radius(rhs.clone_without_node()),
             ),
             inverted: false,
-            weight
+            weight,
         });
     }
 
-    pub fn point_on_line(&mut self, lhs: &Expr<UnrolledPoint>, rhs: &Expr<UnrolledLine>, weight: FastFloat) {
+    pub fn point_on_line(
+        &mut self,
+        lhs: &Expr<UnrolledPoint>,
+        rhs: &Expr<UnrolledLine>,
+        weight: FastFloat,
+    ) {
         if let Some(point) = self.get_point_entity_mut(lhs) {
             match point {
                 Point::Free => {
@@ -376,7 +386,7 @@ impl CompileContext {
                 number!(=0.0),
             ),
             inverted: false,
-            weight
+            weight,
         });
     }
 }
@@ -608,7 +618,7 @@ impl CompileContext {
         rhs: Option<M>,
         inverted: bool,
         mut display: Properties,
-        def_weight: FastFloat
+        def_weight: FastFloat,
     ) -> Box<dyn Node> {
         let weight = display.get("weight").get_or(def_weight);
         let mut node = CollectionNode::from_display(display, self);
@@ -616,7 +626,11 @@ impl CompileContext {
         node.extend(lhs);
         node.extend(rhs);
 
-        self.push_rule(UnrolledRule { kind, inverted, weight });
+        self.push_rule(UnrolledRule {
+            kind,
+            inverted,
+            weight,
+        });
 
         Box::new(node)
     }

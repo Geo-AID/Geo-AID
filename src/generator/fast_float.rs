@@ -22,8 +22,8 @@ use serde::Serialize;
 use std::iter::Sum;
 use std::ops::{Add, AddAssign, Div, Mul, MulAssign};
 
+use crate::script::parser::{FromProperty, Parse, PropertyValue};
 use crate::script::Error;
-use crate::script::parser::{FromProperty, PropertyValue, Parse};
 
 /// A floating point value for optimized operations with often use of values 1 and 0.
 #[derive(Debug, Clone, Copy, Serialize, Default)]
@@ -140,9 +140,11 @@ impl FromProperty for FastFloat {
                     Ok(FastFloat::Other(num.to_float()))
                 }
             }
-            PropertyValue::Ident(_)
-            | PropertyValue::RawString(_)
-            | PropertyValue::String(_) => Err(Error::NumberExpected { error_span: property.get_span() }),
+            PropertyValue::Ident(_) | PropertyValue::RawString(_) | PropertyValue::String(_) => {
+                Err(Error::NumberExpected {
+                    error_span: property.get_span(),
+                })
+            }
         }
     }
 }

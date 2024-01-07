@@ -38,7 +38,7 @@ fn pt_lies_on_circle(
     context: &mut CompileContext,
     display: Properties,
     inverted: bool,
-    weight: FastFloat
+    weight: FastFloat,
 ) -> CollectionNode {
     let mut node = CollectionNode::from_display(display, context);
     node.extend(lhs.node.take());
@@ -51,10 +51,10 @@ fn pt_lies_on_circle(
         context.push_rule(UnrolledRule {
             kind: UnrolledRuleKind::ScalarEq(
                 context.circle_radius(circle.clone_without_node()),
-                context.distance_pp(point, context.circle_center(circle))
+                context.distance_pp(point, context.circle_center(circle)),
             ),
             inverted: true,
-            weight
+            weight,
         });
     } else {
         context.point_on_circle(&point, &circle, weight);
@@ -69,7 +69,7 @@ fn pt_lies_on_line(
     context: &mut CompileContext,
     display: Properties,
     inverted: bool,
-    weight: FastFloat
+    weight: FastFloat,
 ) -> CollectionNode {
     let mut node = CollectionNode::from_display(display, context);
     node.extend(lhs.node.take());
@@ -80,12 +80,9 @@ fn pt_lies_on_line(
 
     if inverted {
         context.push_rule(UnrolledRule {
-            kind: UnrolledRuleKind::ScalarEq(
-                number!(=0.0),
-                context.distance_pl(point, line)
-            ),
+            kind: UnrolledRuleKind::ScalarEq(number!(=0.0), context.distance_pl(point, line)),
             inverted: true,
-            weight
+            weight,
         });
     } else {
         context.point_on_line(&point, &line, weight);
@@ -100,7 +97,7 @@ fn col_lies_on_circle(
     context: &mut CompileContext,
     display: Properties,
     inverted: bool,
-    weight: FastFloat
+    weight: FastFloat,
 ) -> CollectionNode {
     let len = lhs.data.length;
 
@@ -113,7 +110,7 @@ fn col_lies_on_circle(
             context,
             Properties::default(),
             inverted,
-            weight
+            weight,
         ));
     }
 
@@ -144,7 +141,7 @@ fn col_lies_on_circle(
                     number!(ANGLE 0.0),
                 ),
                 inverted: false,
-                weight
+                weight,
             });
         }
     }
@@ -158,7 +155,7 @@ fn pt_lies_on_segment(
     context: &mut CompileContext,
     display: Properties,
     inverted: bool,
-    weight: FastFloat
+    weight: FastFloat,
 ) -> CollectionNode {
     let mut node = CollectionNode::from_display(display, context);
     node.extend(lhs.node.take());
@@ -182,7 +179,7 @@ fn pt_lies_on_segment(
                         context.distance_pl(point, line),
                     ),
                     inverted: true,
-                    weight: FastFloat::One
+                    weight: FastFloat::One,
                 },
                 UnrolledRule {
                     kind: UnrolledRuleKind::ScalarEq(
@@ -199,11 +196,11 @@ fn pt_lies_on_segment(
                         ),
                     ),
                     inverted: true,
-                    weight: FastFloat::One
+                    weight: FastFloat::One,
                 },
             ]),
             inverted: false,
-            weight
+            weight,
         });
     } else {
         context.point_on_line(&point, &line, weight);
@@ -223,7 +220,7 @@ fn pt_lies_on_segment(
                 ),
             ),
             inverted: false,
-            weight
+            weight,
         });
     }
 

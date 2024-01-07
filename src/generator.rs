@@ -33,7 +33,10 @@ use serde::Serialize;
 
 use crate::script::Criteria;
 
-use self::{expression::{ExprCache, Value}, fast_float::FastFloat};
+use self::{
+    expression::{ExprCache, Value},
+    fast_float::FastFloat,
+};
 
 pub mod critic;
 pub mod expression;
@@ -462,10 +465,7 @@ impl Generator {
         // Send data to each worker
         for (i, sender) in self.senders.iter().enumerate() {
             sender
-                .send(Message::Generate(
-                    magnitudes[i],
-                    self.current_state.clone()
-                ))
+                .send(Message::Generate(magnitudes[i], self.current_state.clone()))
                 .unwrap();
         }
 

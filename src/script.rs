@@ -28,7 +28,7 @@ use std::{
 
 use serde::Serialize;
 
-use crate::generator::{fast_float::FastFloat, expression::Weights};
+use crate::generator::{expression::Weights, fast_float::FastFloat};
 use crate::{
     cli::{AnnotationKind, Change, DiagnosticData, Fix},
     generator::expression::{AnyExpr, Expression, PointExpr, ScalarExpr},
@@ -770,16 +770,12 @@ impl CriteriaKind {
     #[must_use]
     pub fn get_weights(&self) -> Weights {
         match self {
-            Self::EqualScalar(lhs, rhs)
-            | Self::Less(lhs, rhs)
-            | Self::Greater(lhs, rhs) => {
+            Self::EqualScalar(lhs, rhs) | Self::Less(lhs, rhs) | Self::Greater(lhs, rhs) => {
                 lhs.weights.clone() + &rhs.weights
             }
             Self::Inverse(v) => v.get_weights(),
             Self::Bias(v) => v.weights.clone(),
-            Self::EqualPoint(lhs, rhs) => {
-                lhs.weights.clone() + &rhs.weights
-            }
+            Self::EqualPoint(lhs, rhs) => lhs.weights.clone() + &rhs.weights,
             Self::Alternative(v) => {
                 let mut weights = Weights::empty();
 
@@ -797,7 +793,7 @@ impl CriteriaKind {
 #[derive(Debug)]
 pub struct Criteria {
     kind: CriteriaKind,
-    weights: Weights
+    weights: Weights,
 }
 
 impl Criteria {
@@ -805,10 +801,7 @@ impl Criteria {
     pub fn new(kind: CriteriaKind, weight: FastFloat) -> Self {
         let weights = kind.get_weights().normalize() * weight;
 
-        Self {
-            kind,
-            weights
-        }
+        Self { kind, weights }
     }
 
     #[must_use]

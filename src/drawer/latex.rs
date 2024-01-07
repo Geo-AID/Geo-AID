@@ -33,8 +33,8 @@ use crate::projector::{
 };
 use crate::script::HashableArc;
 
+use crate::script::figure::Style::{self, Bold, Dashed, Dotted, Solid};
 use crate::script::figure::{MathChar, MathIndex};
-use crate::script::figure::Style::{self, Bold, Dashed, Solid, Dotted};
 
 /// Function getting the point's name (if it exists, if not then it returns the point's coordinates).
 fn get_point_name(
@@ -83,23 +83,21 @@ fn points(point: &Rc<RenderedPoint>, scale: f64) -> String {
             MathChar::Special(c) => {
                 label += get_special_char_latex(c);
             }
-            MathChar::SetIndex(i) => {
-                match i {
-                    MathIndex::Normal => {
-                        if seen {
-                            label += "}";
-                        }
-
-                        lower_last = false;
+            MathChar::SetIndex(i) => match i {
+                MathIndex::Normal => {
+                    if seen {
+                        label += "}";
                     }
-                    MathIndex::Lower => {
-                        seen = true;
-                        label += "_{";
 
-                        lower_last = true;
-                    }
+                    lower_last = false;
                 }
-            }
+                MathIndex::Lower => {
+                    seen = true;
+                    label += "_{";
+
+                    lower_last = true;
+                }
+            },
             MathChar::Prime => {
                 label += "^{'}";
             }
@@ -109,13 +107,19 @@ fn points(point: &Rc<RenderedPoint>, scale: f64) -> String {
     if lower_last {
         label += "}";
     }
-    
+
     format!(
         r#"
             \coordinate ({}) at ({}, {}); \fill[black] ({}) circle (1pt);
             \node at ({}, {}) {{${}$}}; 
         "#,
-        point.uuid, position.real, position.imaginary, point.uuid, label_position.real, label_position.imaginary, label
+        point.uuid,
+        position.real,
+        position.imaginary,
+        point.uuid,
+        label_position.real,
+        label_position.imaginary,
+        label
     )
 }
 
@@ -251,7 +255,7 @@ pub fn draw(target: &Path, canvas_size: (usize, usize), output: &Output) {
     #[allow(clippy::cast_precision_loss)]
     let scale = f64::min(10.0 / canvas_size.0 as f64, 10.0 / canvas_size.1 as f64);
     let mut content = String::from(
-    r"
+        r"
         \documentclass{article}
         \usepackage{tikz}
         \usepackage{tkz-euclide}

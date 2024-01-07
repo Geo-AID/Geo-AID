@@ -45,8 +45,8 @@ use self::figure::FromExpr;
 
 use super::figure::{MathString, Style};
 use super::parser::{FromProperty, RefStatement};
-use super::token::Number;
 use super::token::number::CompFloat;
+use super::token::Number;
 use super::{
     builtins,
     parser::{
@@ -299,7 +299,8 @@ pub struct RuleOverload {
 }
 
 /// geoscript rule declaration
-type GeoRule = dyn Fn(AnyExpr, AnyExpr, &mut CompileContext, Properties, bool, FastFloat) -> Box<dyn Node>;
+type GeoRule =
+    dyn Fn(AnyExpr, AnyExpr, &mut CompileContext, Properties, bool, FastFloat) -> Box<dyn Node>;
 
 /// A function definition.
 pub struct RuleDefinition(pub Box<GeoRule>);
@@ -2492,7 +2493,7 @@ where
 pub struct UnrolledRule {
     pub kind: UnrolledRuleKind,
     pub inverted: bool,
-    pub weight: FastFloat
+    pub weight: FastFloat,
 }
 
 impl Display for UnrolledRule {
@@ -3365,13 +3366,7 @@ fn unroll_ref(
         let mut display = Properties::from(stat.display.clone());
         let weight = display.get("weight").get_or(FastFloat::Zero);
 
-        let mut expr = unroll_expression(
-            &stat.operand,
-            context,
-            library,
-            it_index,
-            display,
-        );
+        let mut expr = unroll_expression(&stat.operand, context, library, it_index, display);
 
         if let AnyExpr::PointCollection(pc) = &mut expr {
             if let Some(node) = pc.node.take() {
@@ -3380,12 +3375,12 @@ fn unroll_ref(
                 }
             }
 
-            context.push_error(Error::InvalidPC { error_span: expr.get_span() });
+            context.push_error(Error::InvalidPC {
+                error_span: expr.get_span(),
+            });
         }
 
-        let node = expr
-            .replace_node(None)
-            .map(AnyExprNode::as_dyn);
+        let node = expr.replace_node(None).map(AnyExprNode::as_dyn);
         nodes.extend(node);
 
         // If any weight is given, add a bias
@@ -3393,7 +3388,7 @@ fn unroll_ref(
             context.push_rule(UnrolledRule {
                 kind: UnrolledRuleKind::Bias(expr),
                 inverted: false,
-                weight
+                weight,
             });
         }
 
@@ -3787,20 +3782,22 @@ fn set_flag_bool(flag: &mut Flag, stmt: &FlagStatement) -> Result<(), Error> {
                 FlagSetting::Default(_) | FlagSetting::Unset => {
                     *s = FlagSetting::Set(
                         FlagValue::Bool(match num {
-                            Number::Integer(i) => {
-                                match i.parsed.parse::<u8>() {
-                                    Ok(0) => false,
-                                    Ok(1) => true,
-                                    _ => return Err(Error::BooleanExpected {
+                            Number::Integer(i) => match i.parsed.parse::<u8>() {
+                                Ok(0) => false,
+                                Ok(1) => true,
+                                _ => {
+                                    return Err(Error::BooleanExpected {
                                         error_span: stmt.get_span(),
                                     })
                                 }
                             },
-                            Number::Float(_) => return Err(Error::BooleanExpected {
-                                error_span: stmt.get_span(),
-                            }),
+                            Number::Float(_) => {
+                                return Err(Error::BooleanExpected {
+                                    error_span: stmt.get_span(),
+                                })
+                            }
                         }),
-                        stmt.get_span()
+                        stmt.get_span(),
                     );
                 }
                 FlagSetting::Set(_, sp) => {

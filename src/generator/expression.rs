@@ -1021,7 +1021,7 @@ impl Evaluate for AnyExpr {
             Self::Line(line) => line.evaluate(args).into(),
             Self::Point(point) => point.evaluate(args).into(),
             Self::Scalar(scalar) => scalar.evaluate(args).into(),
-            Self::Circle(circle) => circle.evaluate(args).into()
+            Self::Circle(circle) => circle.evaluate(args).into(),
         }
     }
 }

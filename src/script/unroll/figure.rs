@@ -703,7 +703,9 @@ impl Node for PointNode {
 
     fn build(self: Box<Self>, compiler: &mut Compiler, figure: &mut Figure) {
         if self.display.unwrap() {
-            if !self.display_label.unwrap() || (self.label.as_ref().is_empty() && self.default_label.is_empty()) {
+            if !self.display_label.unwrap()
+                || (self.label.as_ref().is_empty() && self.default_label.is_empty())
+            {
                 return;
             }
 

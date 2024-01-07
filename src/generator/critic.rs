@@ -22,7 +22,7 @@ use std::{cell::RefCell, collections::HashMap, sync::Arc};
 
 use crate::script::{Criteria, CriteriaKind};
 
-use super::{expression::ExprCache, Adjustable, Flags, fast_float::FastFloat};
+use super::{expression::ExprCache, fast_float::FastFloat, Adjustable, Flags};
 
 type AdjustableVec = Vec<(Adjustable, f64)>;
 
@@ -95,9 +95,9 @@ fn evaluate_single(
             let v1 = e1.evaluate(&args);
             let v2 = e2.evaluate(&args);
 
-                let diff = (v1 - v2).mangitude();
-                // Interestingly, it's easier to calculate the quality function for != and then invert it.
-                invert(smooth_0_inf(1130.0 * diff.powi(2)))
+            let diff = (v1 - v2).mangitude();
+            // Interestingly, it's easier to calculate the quality function for != and then invert it.
+            invert(smooth_0_inf(1130.0 * diff.powi(2)))
         }
         CriteriaKind::Less(e1, e2) => {
             let v1 = e1.evaluate(&args);
@@ -124,13 +124,11 @@ fn evaluate_single(
             invert(evaluate_single(kind, adjustables, generation, flags, cache))
         }
         CriteriaKind::Bias(_) => 1.0,
-        CriteriaKind::Alternative(rules) => {
-            rules
-                .iter()
-                .map(|crit| evaluate_single(crit, adjustables, generation, flags, cache))
-                .reduce(f64::max)
-                .unwrap()
-        }
+        CriteriaKind::Alternative(rules) => rules
+            .iter()
+            .map(|crit| evaluate_single(crit, adjustables, generation, flags, cache))
+            .reduce(f64::max)
+            .unwrap(),
     }
 }
 
@@ -152,8 +150,7 @@ pub fn evaluate(
 
     for (i, crit) in criteria.iter().enumerate() {
         // println!("Evaluating criteria {:#?}", crit);
-        let quality =
-            evaluate_single(crit.get_kind(), points, generation, flags, cache);
+        let quality = evaluate_single(crit.get_kind(), points, generation, flags, cache);
 
         for (adj, weights) in evaluation.iter_mut().zip(weights) {
             let weight = weights[i];
