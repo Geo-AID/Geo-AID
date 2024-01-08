@@ -26,8 +26,3 @@ pub mod generator;
 pub mod labels;
 pub mod projector;
 pub mod script;
-
-#[derive(Debug)]
-pub enum Error {
-    TypeMismatch(String, String),
-}

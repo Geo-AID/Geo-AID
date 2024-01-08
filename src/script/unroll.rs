@@ -19,6 +19,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
 use geo_aid_derive::{CloneWithNode, Definition};
+use num_traits::One;
 use std::fmt::Formatter;
 use std::mem;
 use std::{
@@ -45,7 +46,7 @@ use self::figure::FromExpr;
 
 use super::figure::{MathString, Style};
 use super::parser::{FromProperty, RefStatement};
-use super::token::number::CompFloat;
+use super::token::number::{CompFloat, CompExponent};
 use super::token::Number;
 use super::{
     builtins,
@@ -497,15 +498,15 @@ impl<const ITER: bool> From<&Expression<ITER>> for IterNode {
     fn from(value: &Expression<ITER>) -> Self {
         match value {
             Expression::ImplicitIterator(it) => IterNode::new(vec![it.into()]),
-            Expression::Single(expr) => expr.as_ref().into(),
+            Expression::Single(expr) => (&expr.kind).into(),
             Expression::Binop(binop) => Self::from2(binop.lhs.as_ref(), binop.rhs.as_ref()),
         }
     }
 }
 
-impl From<&SimpleExpression> for IterNode {
-    fn from(value: &SimpleExpression) -> Self {
-        match &value.kind {
+impl From<&SimpleExpressionKind> for IterNode {
+    fn from(value: &SimpleExpressionKind) -> Self {
+        match value {
             SimpleExpressionKind::Ident(_) | SimpleExpressionKind::Number(_) => {
                 IterNode::new(Vec::new())
             }
@@ -519,6 +520,7 @@ impl From<&SimpleExpression> for IterNode {
                 None => IterNode::new(Vec::new()),
             },
             SimpleExpressionKind::Unop(expr) => expr.rhs.as_ref().into(),
+            SimpleExpressionKind::Exponentiation(expr) => expr.base.as_ref().into(),
             SimpleExpressionKind::Parenthised(expr) => expr.content.as_ref().into(),
             SimpleExpressionKind::ExplicitIterator(it) => IterNode::new(vec![it.into()]),
             SimpleExpressionKind::PointCollection(col) => IterNode::new(
@@ -535,7 +537,7 @@ impl From<&ImplicitIterator> for IterTree {
     fn from(value: &ImplicitIterator) -> Self {
         Self {
             id: 0, // Implicit iterators have an id of 0.
-            variants: value.exprs.iter().map(IterNode::from).collect(),
+            variants: value.exprs.iter().map(|v| (&v.kind).into()).collect(),
             span: value.get_span(),
         }
     }
@@ -1363,6 +1365,7 @@ pub enum ScalarData {
     TwoLineAngle(Expr<Line>, Expr<Line>),
     Average(#[def(sequence)] ClonedVec<Expr<Scalar>>),
     CircleRadius(Expr<Circle>),
+    Pow(Expr<Scalar>, #[def(no_entity)] CompExponent)
 }
 
 impl Display for ScalarData {
@@ -1401,6 +1404,7 @@ impl Display for ScalarData {
             Self::CircleRadius(circle) => {
                 write!(f, "{circle}.radius")
             }
+            Self::Pow(base, exponent) => write!(f, "({base})^{exponent}")
         }
     }
 }
@@ -1586,6 +1590,15 @@ impl Expr<Scalar> {
                                     .map(|v| v.clone_without_node().convert_unit(unit, context))
                                     .collect::<Vec<_>>()
                                     .into(),
+                            )
+                        }
+                        ScalarData::Pow(base, exponent) => {
+                            ScalarData::Pow(
+                                base.clone_without_node().convert_unit(
+                                    unit.map(|x| x.pow(exponent.recip())),
+                                    context
+                                ),
+                                *exponent
                             )
                         }
                     },
@@ -2568,8 +2581,6 @@ fn fetch_variable(context: &CompileContext, name: &str, variable_span: Span) -> 
     var
 }
 
-/// Unrolls the given expression based on the given iterator index. The index is assumed valid and an out-of-bounds access leads to a panic!().
-#[allow(clippy::too_many_lines)]
 fn unroll_simple(
     expr: &SimpleExpression,
     context: &mut CompileContext,
@@ -2577,9 +2588,27 @@ fn unroll_simple(
     it_index: &HashMap<u8, usize>,
     external_display: Properties,
 ) -> AnyExpr {
-    let mut display = Properties::from(expr.display.clone()).merge_with(external_display);
+    let display = Properties::from(expr.display.clone()).merge_with(external_display);
 
-    match &expr.kind {
+    unroll_simple_kind(
+        &expr.kind,
+        context,
+        library,
+        it_index,
+        display
+    )
+}
+
+/// Unrolls the given expression based on the given iterator index. The index is assumed valid and an out-of-bounds access leads to a panic!().
+#[allow(clippy::too_many_lines)]
+fn unroll_simple_kind(
+    expr: &SimpleExpressionKind,
+    context: &mut CompileContext,
+    library: &Library,
+    it_index: &HashMap<u8, usize>,
+    mut display: Properties,
+) -> AnyExpr {
+    match expr {
         SimpleExpressionKind::Ident(i) => match i {
             Ident::Named(named) => {
                 // No options are expected, as var refs don't generate nodes.
@@ -2689,7 +2718,7 @@ fn unroll_simple(
         }
         SimpleExpressionKind::Unop(op) => {
             let mut unrolled: Expr<Scalar> =
-                unroll_simple(&op.rhs, context, library, it_index, display).convert(context);
+                unroll_simple_kind(&op.rhs, context, library, it_index, display).convert(context);
 
             let node = unrolled.node.take();
 
@@ -2699,6 +2728,30 @@ fn unroll_simple(
                 data: Rc::new(Scalar {
                     unit: unrolled.data.unit,
                     data: ScalarData::Negate(unrolled),
+                }),
+                node,
+            })
+        }
+        SimpleExpressionKind::Exponentiation(expr) => {
+            let mut unrolled: Expr<Scalar> =
+                unroll_simple_kind(&expr.base, context, library, it_index, display).convert(context);
+
+            let node = unrolled.node.take();
+
+            let exponent = match expr.exponent.into_comp() {
+                Ok(v) => v,
+                Err(err) => {
+                    context.push_error(err);
+                    CompExponent::one()
+                }
+            };
+
+            AnyExpr::Scalar(Expr {
+                weight: FastFloat::One,
+                span: expr.get_span(),
+                data: Rc::new(Scalar {
+                    unit: unrolled.data.unit.map(|v| v.pow(exponent)),
+                    data: ScalarData::Pow(unrolled, exponent),
                 }),
                 node,
             })
@@ -2788,8 +2841,8 @@ fn unroll_binop(
         lhs.convert::<Scalar>(context)
     } else {
         context.push_error(Error::InvalidOperandType {
-            error_span: full_span,
-            got: (lhs.get_type(), lhs.get_span()),
+            error_span: Box::new(full_span),
+            got: (lhs.get_type(), Box::new(lhs.get_span())),
             op: op.to_string(),
         });
 
@@ -2805,8 +2858,8 @@ fn unroll_binop(
         rhs.convert::<Scalar>(context)
     } else {
         context.push_error(Error::InvalidOperandType {
-            error_span: full_span,
-            got: (rhs.get_type(), rhs.get_span()),
+            error_span: Box::new(full_span),
+            got: (rhs.get_type(), Box::new(rhs.get_span())),
             op: op.to_string(),
         });
 
