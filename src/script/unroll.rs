@@ -2739,7 +2739,13 @@ fn unroll_simple_kind(
             let node = unrolled.node.take();
 
             let exponent = match expr.exponent.into_comp() {
-                Ok(v) => v,
+                Ok(v) => {
+                    if expr.minus.is_some() {
+                        -v
+                    } else {
+                        v
+                    }
+                },
                 Err(err) => {
                     context.push_error(err);
                     CompExponent::one()

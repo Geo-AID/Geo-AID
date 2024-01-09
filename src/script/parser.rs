@@ -284,14 +284,21 @@ impl Parse for RationalExponent {
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
             it: &mut Peekable<I>,
         ) -> Result<Self, Error> {
-        Ok(Self {
+        let parsed = Self {
             lparen: LParen::parse(it)?,
             nom: TokInteger::parse(it)?,
             slash: Slash::parse(it)?,
             denom: TokInteger::parse(it)?,
             rparen: RParen::parse(it)?
+        };
 
-        })
+        if parsed.denom.parsed.is_zero() {
+            return Err(Error::ZeroDenominator {
+                error_span: parsed.denom.span
+            });
+        }
+
+        Ok(parsed)
     }
 
     fn get_span(&self) -> Span {
@@ -352,6 +359,8 @@ pub struct Exponentiation {
     pub base: Box<SimpleExpressionKind>,
     /// Caret token
     pub caret: Caret,
+    /// Possible negation
+    pub minus: Option<Minus>,
     /// The exponent.
     pub exponent: Exponent
 }
@@ -363,6 +372,7 @@ impl Parse for Exponentiation {
         Ok(Self {
             base: Box::parse(it)?,
             caret: Caret::parse(it)?,
+            minus: Option::parse(it)?,
             exponent: Exponent::parse(it)?
         })
     }
@@ -1094,7 +1104,7 @@ impl Parse for SimpleExpressionKind {
     ) -> Result<Self, Error> {
         let next = it.peek().copied();
 
-        let expr = match next {
+        let mut expr = match next {
             Some(next) => match next {
                 Token::Number(_) => Self::Number(Number::parse(it)?),
                 Token::Minus(m) => {
@@ -1142,15 +1152,14 @@ impl Parse for SimpleExpressionKind {
         };
 
         let peeked = it.peek().copied();
-        let expr = if let Some(Token::Caret(_)) = peeked {
-            Self::Exponentiation(Exponentiation {
+        while let Some(Token::Caret(_)) = peeked {
+            expr = Self::Exponentiation(Exponentiation {
                 base: Box::new(expr),
                 caret: Caret::parse(it)?,
+                minus: Option::parse(it)?,
                 exponent: Exponent::parse(it)?
-            })
-        } else {
-            expr
-        };
+            });
+        }
 
         Ok(expr)
     }
@@ -1309,6 +1318,7 @@ impl_token_parse! {Dot}
 impl_token_parse! {Question}
 impl_token_parse! {Slash}
 impl_token_parse! {Caret}
+impl_token_parse! {Minus}
 
 impl Parse for Number {
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(

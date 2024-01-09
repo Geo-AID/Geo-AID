@@ -223,6 +223,9 @@ pub enum Error {
     InvalidPC {
         error_span: Span,
     },
+    ZeroDenominator {
+        error_span: Span
+    }
 }
 
 impl Error {
@@ -524,18 +527,22 @@ impl Error {
                     .add_span(error_span)
             }
             Self::UnexpectedDisplayOption { error_span, option, suggested } => {
-                let message = suggested.map(|v| format!("Did you mean: `{v}`?"));
+                let message = suggested.map(|v| format!("did you mean: `{v}`?"));
                 DiagnosticData::new(&format!("unexpected display option: `{option}`"))
                     .add_span(error_span)
                     .add_annotation_opt_msg(error_span, AnnotationKind::Help, message.as_ref())
             }
             Self::RepeatedDisplayOption { error_span, first_span, option } => {
-                DiagnosticData::new(&format!("repeated display option: `{option}`."))
+                DiagnosticData::new(&format!("repeated display option: `{option}`"))
                     .add_span(error_span)
-                    .add_annotation(first_span, AnnotationKind::Help, &"first defined here.")
+                    .add_annotation(first_span, AnnotationKind::Help, &"first defined here")
             }
             Self::InvalidPC { error_span } => {
-                DiagnosticData::new(&"point collections in this place are amgiuous and therefore not valid.")
+                DiagnosticData::new(&"point collections in this place are amgiuous and therefore not valid")
+                    .add_span(error_span)
+            }
+            Self::ZeroDenominator { error_span } => {
+                DiagnosticData::new(&"denominator in a fraction cannot be equal to zero")
                     .add_span(error_span)
             }
         }
