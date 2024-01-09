@@ -26,6 +26,7 @@ use std::{
     sync::{self, Arc},
 };
 
+use num_traits::{One, Zero};
 use serde::Serialize;
 
 use crate::generator::{expression::Weights, fast_float::FastFloat};
@@ -35,7 +36,7 @@ use crate::{
     span,
 };
 
-use self::token::{NamedIdent, Span, Token};
+use self::token::{number::CompExponent, NamedIdent, Span, Token};
 use self::{figure::SPECIAL_MATH, parser::Type};
 
 mod builtins;
@@ -57,7 +58,7 @@ pub enum Error {
     NewLineInString {
         error_span: Span,
     },
-    IteratorIdExceeds255 {
+    NumberTooLarge {
         error_span: Span,
     },
     SingleVariantExplicitIterator {
@@ -127,8 +128,8 @@ pub enum Error {
         to: Type,
     },
     InvalidOperandType {
-        error_span: Span,
-        got: (Type, Span),
+        error_span: Box<Span>,
+        got: (Type, Box<Span>),
         op: String,
     },
     LetStatUnexpectedIterator {
@@ -220,6 +221,9 @@ pub enum Error {
         option: String,
     },
     InvalidPC {
+        error_span: Span,
+    },
+    ZeroDenominator {
         error_span: Span,
     },
 }
@@ -365,8 +369,8 @@ impl Error {
                 op,
             } => {
                 DiagnosticData::new(&format!("invalid operand type `{}` for operator `{op}`", got.0))
-                    .add_span(error_span)
-                    .add_annotation(got.1, AnnotationKind::Note, "This is of invalid type.")
+                    .add_span(*error_span)
+                    .add_annotation(*got.1, AnnotationKind::Note, "this is of invalid type")
             }
             Self::LetStatUnexpectedIterator {
                 var_span,
@@ -374,32 +378,32 @@ impl Error {
             } => {
                 DiagnosticData::new(&"unexpected iterator in right-hand side of `let` statement")
                     .add_span(error_span)
-                    .add_annotation(var_span, AnnotationKind::Note, "There was no iterator of left-hand side, so the same is expected for the right.")
+                    .add_annotation(var_span, AnnotationKind::Note, "there was no iterator of left-hand side, so the same is expected for the right")
             }
             Self::IteratorWithSameIdIterator { error_span, parent_span, contained_span } => {
-                DiagnosticData::new(&"an iterator with an id of `x` must not contain an iterator with an id of `x`.")
+                DiagnosticData::new(&"an iterator with an id of `x` must not contain an iterator with an id of `x`")
                     .add_span(error_span)
-                    .add_annotation(parent_span, AnnotationKind::Note, "Parent iterator here.")
-                    .add_annotation(contained_span, AnnotationKind::Note, "Child iterator here.")
+                    .add_annotation(parent_span, AnnotationKind::Note, "parent iterator here")
+                    .add_annotation(contained_span, AnnotationKind::Note, "child iterator here")
             }
             Self::LetStatMoreThanOneIterator { error_span, first_span, second_span } => {
-                DiagnosticData::new(&"right hand side of a let statement must contain at most a single level of iteration.")
+                DiagnosticData::new(&"right hand side of a let statement must contain at most a single level of iteration")
                     .add_span(error_span)
-                    .add_annotation(first_span, AnnotationKind::Note, "First iterator here.")
-                    .add_annotation(second_span, AnnotationKind::Note, "Second iterator here.")
+                    .add_annotation(first_span, AnnotationKind::Note, "first iterator here")
+                    .add_annotation(second_span, AnnotationKind::Note, "second iterator here")
             }
-            Self::IteratorIdExceeds255 { error_span } => {
-                DiagnosticData::new(&"iterator id must be smaller than 256.")
+            Self::NumberTooLarge { error_span } => {
+                DiagnosticData::new(&"number too large")
                     .add_span(error_span)
             }
             Self::SingleVariantExplicitIterator { error_span } => {
-                DiagnosticData::new(&"explicit iterators must have at least two variants.")
+                DiagnosticData::new(&"explicit iterators must have at least two variants")
                     .add_span(error_span)
             }
             Self::NonPointInPointCollection { error_span, received } => {
-                DiagnosticData::new(&"all values in a point collection constructor must be points.")
+                DiagnosticData::new(&"all values in a point collection constructor must be points")
                     .add_span(error_span)
-                    .add_annotation(received.0, AnnotationKind::Note, &format!("Value should be a point, received {}.", received.1))
+                    .add_annotation(received.0, AnnotationKind::Note, &format!("value should be a point, received {}", received.1))
             }
             Self::FlagDoesNotExist { flag_name, flag_span, error_span, suggested } => {
                 let message = suggested.map(|v| format!("Did you mean: `{v}`?"));
@@ -523,18 +527,22 @@ impl Error {
                     .add_span(error_span)
             }
             Self::UnexpectedDisplayOption { error_span, option, suggested } => {
-                let message = suggested.map(|v| format!("Did you mean: `{v}`?"));
+                let message = suggested.map(|v| format!("did you mean: `{v}`?"));
                 DiagnosticData::new(&format!("unexpected display option: `{option}`"))
                     .add_span(error_span)
                     .add_annotation_opt_msg(error_span, AnnotationKind::Help, message.as_ref())
             }
             Self::RepeatedDisplayOption { error_span, first_span, option } => {
-                DiagnosticData::new(&format!("repeated display option: `{option}`."))
+                DiagnosticData::new(&format!("repeated display option: `{option}`"))
                     .add_span(error_span)
-                    .add_annotation(first_span, AnnotationKind::Help, &"first defined here.")
+                    .add_annotation(first_span, AnnotationKind::Help, &"first defined here")
             }
             Self::InvalidPC { error_span } => {
-                DiagnosticData::new(&"point collections in this place are amgiuous and therefore not valid.")
+                DiagnosticData::new(&"point collections in this place are amgiuous and therefore not valid")
+                    .add_span(error_span)
+            }
+            Self::ZeroDenominator { error_span } => {
+                DiagnosticData::new(&"denominator in a fraction cannot be equal to zero")
                     .add_span(error_span)
             }
         }
@@ -577,7 +585,7 @@ impl Mul for SimpleUnit {
 
 /// Defines a complex unit: a product of simple units.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize)]
-pub struct ComplexUnit([i8; SimpleUnit::Scalar as usize]);
+pub struct ComplexUnit([CompExponent; SimpleUnit::Scalar as usize]);
 
 pub mod unit {
     use super::{ComplexUnit, SimpleUnit};
@@ -612,14 +620,23 @@ pub mod ty {
 impl ComplexUnit {
     #[must_use]
     pub const fn new(simple: SimpleUnit) -> Self {
-        let mut arr = [0; SimpleUnit::Scalar as usize];
+        let mut arr = [CompExponent::new_raw(0, 1); SimpleUnit::Scalar as usize];
 
         match simple {
             SimpleUnit::Scalar => (),
-            _ => arr[simple as usize] = 1,
+            _ => arr[simple as usize] = CompExponent::new_raw(1, 1),
         }
 
         Self(arr)
+    }
+
+    #[must_use]
+    pub fn pow(mut self, exp: CompExponent) -> Self {
+        for v in &mut self.0 {
+            *v *= exp;
+        }
+
+        self
     }
 }
 
@@ -628,7 +645,7 @@ impl Display for ComplexUnit {
         let mut s = String::new();
 
         for i in 0..(SimpleUnit::Scalar as usize) {
-            if self.0[i] > 0 {
+            if !self.0[i].is_zero() {
                 let name = match i {
                     0 => "Distance",
                     1 => "Point",
@@ -637,7 +654,7 @@ impl Display for ComplexUnit {
                     _ => unreachable!(),
                 };
 
-                if self.0[i] == 1 {
+                if self.0[i].is_one() {
                     s += name;
                 } else {
                     s += &format!("{name}^{}", self.0[i]);
@@ -712,7 +729,7 @@ impl Div<&ComplexUnit> for ComplexUnit {
 }
 
 impl Deref for ComplexUnit {
-    type Target = [i8; SimpleUnit::Scalar as usize];
+    type Target = [CompExponent; SimpleUnit::Scalar as usize];
 
     fn deref(&self) -> &Self::Target {
         &self.0

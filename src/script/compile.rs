@@ -20,7 +20,9 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 use std::{cell::RefCell, collections::HashMap, rc::Rc, sync::Arc, unreachable};
 
-use crate::generator::expression::expr::PointOnLine;
+use num_traits::{One, ToPrimitive, Zero};
+
+use crate::generator::expression::expr::{PointOnLine, Pow};
 use crate::generator::fast_float::FastFloat;
 use crate::script::unit;
 use crate::script::unroll::{
@@ -44,6 +46,7 @@ use crate::{
     span,
 };
 
+use super::token::number::CompExponent;
 use super::unroll::{CloneWithNode, CollectionNode, Displayed, Node, UnrolledRule};
 use super::{
     figure::Figure,
@@ -385,36 +388,43 @@ impl Compile<Circle, CircleExpr> for Compiler {
 
 impl Compiler {
     #[must_use]
-    pub fn fix_distance(&self, expr: Expr<Scalar>, power: i8) -> Expr<Scalar> {
+    pub fn fix_distance(&self, expr: Expr<Scalar>, power: CompExponent) -> Expr<Scalar> {
         let sp = expr.span;
         let u = expr.data.unit;
 
-        match power.cmp(&0) {
-            std::cmp::Ordering::Less => Expr {
+        if power.is_zero() {
+            expr
+        } else if power.is_one() {
+            Expr {
                 weight: FastFloat::One,
                 data: Rc::new(Scalar {
                     unit: u,
-                    data: ScalarData::Divide(
-                        self.fix_distance(expr, power + 1),
-                        self.dst_var.clone_without_node(),
-                    ),
+                    data: ScalarData::Multiply(expr, self.dst_var.clone_without_node()),
                 }),
                 span: sp,
                 node: None,
-            },
-            std::cmp::Ordering::Equal => expr,
-            std::cmp::Ordering::Greater => Expr {
+            }
+        } else {
+            Expr {
                 weight: FastFloat::One,
                 data: Rc::new(Scalar {
                     unit: u,
                     data: ScalarData::Multiply(
-                        self.fix_distance(expr, power - 1),
-                        self.dst_var.clone_without_node(),
+                        expr,
+                        Expr {
+                            weight: FastFloat::One,
+                            data: Rc::new(Scalar {
+                                unit: u,
+                                data: ScalarData::Pow(self.dst_var.clone_without_node(), power),
+                            }),
+                            span: sp,
+                            node: None,
+                        },
                     ),
                 }),
                 span: sp,
                 node: None,
-            },
+            }
         }
     }
 
@@ -692,7 +702,7 @@ impl Compile<Scalar, ScalarExpr> for Compiler {
                 unit[SimpleUnit::Distance as usize]
                     - match expr.data.unit {
                         Some(unit) => unit[SimpleUnit::Distance as usize],
-                        None => 0,
+                        None => CompExponent::zero(),
                     },
             )),
             ScalarData::PointPointDistance(p1, p2) => Arc::new(Expression::new(
@@ -712,6 +722,13 @@ impl Compile<Scalar, ScalarExpr> for Compiler {
             ScalarData::Negate(expr) => Arc::new(Expression::new(
                 ScalarExpr::Negation(Negation {
                     value: self.compile(expr),
+                }),
+                expr.weight,
+            )),
+            ScalarData::Pow(expr, exponent) => Arc::new(Expression::new(
+                ScalarExpr::Pow(Pow {
+                    value: self.compile(expr),
+                    exponent: exponent.to_f64().unwrap(),
                 }),
                 expr.weight,
             )),

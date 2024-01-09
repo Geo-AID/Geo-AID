@@ -33,7 +33,7 @@ use self::expr::{
     AngleBisector, AngleLine, AnglePoint, AnglePointDir, Average, CenterRadius, CircleCenter,
     CircleRadius, Difference, FreePoint, LineLineIntersection, LinePoint, Literal, Negation,
     ParallelThrough, PerpendicularThrough, PointLineDistance, PointOnCircle, PointPointDistance,
-    PointX, PointY, Product, Quotient, Real, Sum,
+    PointX, PointY, Pow, Product, Quotient, Real, Sum,
 };
 
 use super::{critic::EvaluationArgs, Complex};
@@ -716,6 +716,26 @@ pub mod expr {
 
     #[derive(Debug, Clone, Serialize, Kind)]
     #[trivial]
+    /// v^exp.
+    pub struct Pow {
+        pub value: Arc<Expression<ScalarExpr>>,
+        #[weigh_with(|_| Weights::empty())]
+        #[skip_collecting]
+        pub exponent: f64,
+    }
+
+    impl Evaluate for Pow {
+        type Output = f64;
+
+        fn evaluate(&self, args: &EvaluationArgs) -> f64 {
+            let v = self.value.evaluate(args);
+
+            v.powf(self.exponent)
+        }
+    }
+
+    #[derive(Debug, Clone, Serialize, Kind)]
+    #[trivial]
     /// -v.
     pub struct Negation {
         pub value: Arc<Expression<ScalarExpr>>,
@@ -988,6 +1008,8 @@ pub enum ScalarExpr {
     Quotient(Quotient),
     /// Changes the sign
     Negation(Negation),
+    /// Raises to a power
+    Pow(Pow),
     /// An adjusted real value
     Real(Real),
     /// X coordinate of a point,

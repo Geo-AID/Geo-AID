@@ -1,5 +1,6 @@
 use std::{fmt::Display, mem};
 
+use num_rational::Rational64;
 use num_traits::{CheckedAdd, CheckedMul, FromPrimitive, ToPrimitive, Zero};
 
 #[derive(Debug)]
@@ -177,3 +178,6 @@ impl ParsedFloatBuilder {
 
 /// Number for computing
 pub type CompFloat = f64;
+
+/// Exponent type
+pub type CompExponent = Rational64;

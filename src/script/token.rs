@@ -177,6 +177,12 @@ pub struct Comma {
     pub span: Span,
 }
 
+/// A '^' token.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Caret {
+    pub span: Span,
+}
+
 /// A ':' token.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Colon {
@@ -291,6 +297,7 @@ pub enum Token {
     Semi(Semi),
     Eq(Eq),
     Comma(Comma),
+    Caret(Caret),
     Let(Let),
     Plus(Plus),
     Minus(Minus),
@@ -347,6 +354,7 @@ impl Display for Token {
             Self::RBrace(_) => write!(f, "}}"),
             Self::LSquare(_) => write!(f, "["),
             Self::RSquare(_) => write!(f, "]"),
+            Self::Caret(_) => write!(f, "^"),
             Self::Colon(_) => write!(f, ":"),
             Self::String(s) => write!(f, "\"{}\"", s.content),
             Self::Ident(ident) => write!(
@@ -372,6 +380,7 @@ impl Token {
             Self::Semi(v) => v.span,
             Self::Eq(v) => v.span,
             Self::Comma(v) => v.span,
+            Self::Caret(v) => v.span,
             Self::Let(v) => v.span,
             Self::Plus(v) => v.span,
             Self::Minus(v) => v.span,
@@ -886,6 +895,7 @@ fn tokenize_special<I: Iterator<Item = char>>(
             '&' => Token::Ampersant(Ampersant { span: sp }),
             '?' => Token::Question(Question { span: sp }),
             '@' => Token::At(At { span: sp }),
+            '^' => Token::Caret(Caret { span: sp }),
             '{' => Token::LBrace(LBrace { span: sp }),
             '}' => Token::RBrace(RBrace { span: sp }),
             '[' => Token::LSquare(LSquare { span: sp }),

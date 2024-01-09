@@ -18,6 +18,8 @@ WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use num_traits::Zero;
+
 use crate::script::builtins;
 use std::{
     fmt::{Debug, Display},
@@ -28,9 +30,10 @@ use crate::span;
 
 use super::{
     token::{
-        Ampersant, Asterisk, At, Colon, Comma, Dollar, Dot, Eq, Exclamation, Gt, Gteq, Ident,
-        LBrace, LParen, LSquare, Let, Lt, Lteq, Minus, NamedIdent, Number, Plus, Question, RBrace,
-        RParen, RSquare, Semi, Slash, Span, StrLit, TokInteger, Token, Vertical,
+        number::CompExponent, Ampersant, Asterisk, At, Caret, Colon, Comma, Dollar, Dot, Eq,
+        Exclamation, Gt, Gteq, Ident, LBrace, LParen, LSquare, Let, Lt, Lteq, Minus, NamedIdent,
+        Number, Plus, Question, RBrace, RParen, RSquare, Semi, Slash, Span, StrLit, TokInteger,
+        Token, Vertical,
     },
     unit, ComplexUnit, Error,
 };
@@ -225,12 +228,9 @@ impl Parse for ExplicitIterator {
             });
         }
 
-        let id = id_token
-            .parsed
-            .parse()
-            .map_err(|_| Error::IteratorIdExceeds255 {
-                error_span: id_token.get_span(),
-            })?;
+        let id = id_token.parsed.parse().map_err(|_| Error::NumberTooLarge {
+            error_span: id_token.get_span(),
+        })?;
 
         Ok(ExplicitIterator {
             exprs,
@@ -268,6 +268,127 @@ impl<const ITER: bool> Expression<ITER> {
     }
 }
 
+/// A rational exponent.
+#[derive(Debug)]
+pub struct RationalExponent {
+    pub lparen: LParen,
+    pub nom: TokInteger,
+    pub slash: Slash,
+    pub denom: TokInteger,
+    pub rparen: RParen,
+}
+
+impl Parse for RationalExponent {
+    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
+        it: &mut Peekable<I>,
+    ) -> Result<Self, Error> {
+        let parsed = Self {
+            lparen: LParen::parse(it)?,
+            nom: TokInteger::parse(it)?,
+            slash: Slash::parse(it)?,
+            denom: TokInteger::parse(it)?,
+            rparen: RParen::parse(it)?,
+        };
+
+        if parsed.denom.parsed.is_zero() {
+            return Err(Error::ZeroDenominator {
+                error_span: parsed.denom.span,
+            });
+        }
+
+        Ok(parsed)
+    }
+
+    fn get_span(&self) -> Span {
+        self.lparen.span.join(self.rparen.span)
+    }
+}
+
+/// An integer or a ratio.
+#[derive(Debug)]
+pub enum Exponent {
+    Simple(TokInteger),
+    Parenthised(RationalExponent),
+}
+
+impl Exponent {
+    /// # Errors
+    /// Returns an error if the numbers can't fit.
+    pub fn into_comp(&self) -> Result<CompExponent, Error> {
+        match self {
+            Self::Simple(i) => Ok(CompExponent::new(
+                i.parsed
+                    .parse()
+                    .map_err(|_| Error::NumberTooLarge { error_span: i.span })?,
+                1,
+            )),
+            Self::Parenthised(exp) => Ok(CompExponent::new(
+                exp.nom.parsed.parse().map_err(|_| Error::NumberTooLarge {
+                    error_span: exp.nom.span,
+                })?,
+                exp.denom
+                    .parsed
+                    .parse()
+                    .map_err(|_| Error::NumberTooLarge {
+                        error_span: exp.denom.span,
+                    })?,
+            )),
+        }
+    }
+}
+
+impl Parse for Exponent {
+    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
+        it: &mut Peekable<I>,
+    ) -> Result<Self, Error> {
+        let peeked = it.peek().copied();
+
+        Ok(match peeked {
+            Some(Token::Number(Number::Integer(_))) => Self::Simple(TokInteger::parse(it)?),
+            Some(Token::LParen(_)) => Self::Parenthised(RationalExponent::parse(it)?),
+            Some(t) => return Err(Error::InvalidToken { token: t.clone() }),
+            None => return Err(Error::EndOfInput),
+        })
+    }
+
+    fn get_span(&self) -> Span {
+        match self {
+            Self::Simple(v) => v.span,
+            Self::Parenthised(v) => v.get_span(),
+        }
+    }
+}
+
+/// A value being raised to a rational power.
+#[derive(Debug)]
+pub struct Exponentiation {
+    /// The raised value.
+    pub base: Box<SimpleExpressionKind>,
+    /// Caret token
+    pub caret: Caret,
+    /// Possible negation
+    pub minus: Option<Minus>,
+    /// The exponent.
+    pub exponent: Exponent,
+}
+
+impl Parse for Exponentiation {
+    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
+        it: &mut Peekable<I>,
+    ) -> Result<Self, Error> {
+        Ok(Self {
+            base: Box::parse(it)?,
+            caret: Caret::parse(it)?,
+            minus: Option::parse(it)?,
+            exponent: Exponent::parse(it)?,
+        })
+    }
+
+    fn get_span(&self) -> Span {
+        self.base.get_span().join(self.exponent.get_span())
+    }
+}
+
 /// A parsed simple expression.
 #[derive(Debug)]
 pub struct SimpleExpression {
@@ -294,6 +415,8 @@ pub enum SimpleExpressionKind {
     ExplicitIterator(ExplicitIterator),
     /// A point collection construction
     PointCollection(PointCollectionConstructor),
+    /// Exponentiation.
+    Exponentiation(Exponentiation),
 }
 
 impl SimpleExpressionKind {
@@ -337,7 +460,7 @@ pub struct ExprUnop {
     /// The operator.
     pub operator: UnaryOperator,
     /// The operand (right hand side).
-    pub rhs: Box<SimpleExpression>,
+    pub rhs: Box<SimpleExpressionKind>,
 }
 
 /// A parsed binary operator expression.
@@ -988,7 +1111,7 @@ impl Parse for SimpleExpressionKind {
     ) -> Result<Self, Error> {
         let next = it.peek().copied();
 
-        let expr = match next {
+        let mut expr = match next {
             Some(next) => match next {
                 Token::Number(_) => Self::Number(Number::parse(it)?),
                 Token::Minus(m) => {
@@ -996,7 +1119,7 @@ impl Parse for SimpleExpressionKind {
                     // negation
                     Self::Unop(ExprUnop {
                         operator: UnaryOperator::Neg(NegOp { minus: *m }),
-                        rhs: Box::new(SimpleExpression::parse(it)?),
+                        rhs: Box::new(SimpleExpressionKind::parse(it)?),
                     })
                 }
                 Token::Ident(ident) => {
@@ -1035,6 +1158,16 @@ impl Parse for SimpleExpressionKind {
             None => return Err(Error::EndOfInput),
         };
 
+        let peeked = it.peek().copied();
+        while let Some(Token::Caret(_)) = peeked {
+            expr = Self::Exponentiation(Exponentiation {
+                base: Box::new(expr),
+                caret: Caret::parse(it)?,
+                minus: Option::parse(it)?,
+                exponent: Exponent::parse(it)?,
+            });
+        }
+
         Ok(expr)
     }
 
@@ -1049,6 +1182,7 @@ impl Parse for SimpleExpressionKind {
             Self::Parenthised(v) => v.get_span(),
             Self::ExplicitIterator(v) => v.get_span(),
             Self::PointCollection(v) => v.get_span(),
+            Self::Exponentiation(v) => v.get_span(),
         }
     }
 }
@@ -1189,6 +1323,9 @@ impl_token_parse! {Colon}
 impl_token_parse! {Exclamation}
 impl_token_parse! {Dot}
 impl_token_parse! {Question}
+impl_token_parse! {Slash}
+impl_token_parse! {Caret}
+impl_token_parse! {Minus}
 
 impl Parse for Number {
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
@@ -1361,14 +1498,15 @@ impl Type {
             // A scalar with no defined unit can be cast into any other scalar, except angle.
             Type::Scalar(None) => match into {
                 Type::Scalar(unit) => match unit {
-                    Some(unit) => unit.0[1] == 0, // no angle
+                    Some(unit) => unit.0[1].is_zero(), // no angle
                     None => true,
                 },
                 _ => false,
             },
             Type::PointCollection(l) => match into {
                 Type::Point => *l == 1,
-                Type::Line | Type::Scalar(Some(unit::DISTANCE)) => *l == 2,
+                Type::Line => *l == 2,
+                Type::Scalar(Some(u)) => *u == unit::DISTANCE && *l == 2,
                 Type::PointCollection(v) => v == l || *v == 0,
                 _ => false,
             },
