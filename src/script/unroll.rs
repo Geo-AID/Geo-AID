@@ -37,15 +37,12 @@ use crate::span;
 use crate::generator::fast_float::FastFloat;
 use crate::script::builtins::macros::index;
 use crate::script::ty;
-pub use context::{
-    Circle as EntCircle, CompileContext, Definition, Entity, Line as EntLine, Point as EntPoint,
-    Scalar as EntScalar,
-};
 
-use self::figure::FromExpr;
+use self::context::{CompileContext, Definition};
+use self::figure::{Node, PointNode, CircleNode, LineNode, LineType, ScalarNode, HierarchyNode, PCNode, BundleNode, EmptyNode, AnyExprNode, FromExpr, MaybeUnset, CollectionNode};
 
 use super::figure::{MathString, Style};
-use super::parser::{FromProperty, RefStatement};
+use super::parser::{FromProperty, RefStatement, Name};
 use super::token::number::{CompExponent, CompFloat};
 use super::token::Number;
 use super::{
@@ -59,13 +56,19 @@ use super::{
     unit, ComplexUnit, Error,
 };
 
-mod context;
-mod figure;
+pub mod context;
+pub mod figure;
+pub mod flags;
 
-pub use figure::{
-    AnyExprNode, AssociatedData, BuildAssociated, BundleNode, CircleNode, CollectionNode,
-    EmptyNode, HierarchyNode, LineNode, LineType, MaybeUnset, Node, PCNode, PointNode, ScalarNode,
-};
+trait Unroll {
+    fn unroll(
+        &self,
+        context: &mut CompileContext,
+        library: &Library,
+        it_index: &HashMap<u8, usize>,
+        display: Properties,
+    ) -> AnyExpr;
+}
 
 /// A definition for a user-defined rule operator.
 #[derive(Debug)]
@@ -2556,7 +2559,7 @@ pub fn unroll_parameters(
     definition(params, context, display)
 }
 
-fn fetch_variable(context: &CompileContext, name: &str, variable_span: Span) -> AnyExpr {
+fn fetch_variable(context: &CompileContext, name: &str, variable_span: Span, weight: FastFloat) -> AnyExpr {
     let mut var = if let Some(var) = context.variables.get(name) {
         var.clone_without_node()
     } else {
@@ -2574,6 +2577,7 @@ fn fetch_variable(context: &CompileContext, name: &str, variable_span: Span) -> 
     };
 
     *var.get_span_mut() = variable_span;
+    *var.get_weight_mut() = weight;
     var
 }
 
@@ -2587,6 +2591,114 @@ fn unroll_simple(
     let display = Properties::from(expr.display.clone()).merge_with(external_display);
 
     unroll_simple_kind(&expr.kind, context, library, it_index, display)
+}
+
+impl Unroll for Ident {
+    fn unroll(
+            &self,
+            context: &mut CompileContext,
+            library: &Library,
+            it_index: &HashMap<u8, usize>,
+            mut display: Properties,
+        ) -> AnyExpr {
+            match i {
+                Ident::Named(named) => {
+                    let weight = display.get("weight").get_or(FastFloat::One);
+                    // No options are expected, as var refs don't generate nodes.
+                    display.finish(context);
+    
+                    fetch_variable(context, &named.ident, named.span, weight)
+                }
+                Ident::Collection(col) => {
+                    let mut display = display;
+                    let display_pc = display.get("display").maybe_unset(true);
+                    let weight = display.get("weight").get_or(FastFloat::One);
+    
+                    let mut pc_children = Vec::new();
+                    pc_children.resize_with(col.collection.len(), || None);
+    
+                    // No options are expected, as pcs don't generate nodes.
+                    AnyExpr::PointCollection(Expr {
+                        weight: FastFloat::One, // PCs always have weight of one.
+                        data: Rc::new(PointCollection {
+                            length: col.collection.len(),
+                            data: PointCollectionData::PointCollection(
+                                col.collection
+                                    .iter()
+                                    .map(|item| {
+                                        fetch_variable(context, &format!("{item}"), col.span)
+                                            .convert::<Point>(context)
+                                            .with_weight(weight)
+                                    })
+                                    .collect::<Vec<_>>()
+                                    .into(),
+                            ),
+                        }),
+                        span: col.span,
+                        node: Some(HierarchyNode::new(PCNode {
+                            display: display_pc,
+                            children: pc_children,
+                            props: Some(display),
+                        })),
+                    })
+                }
+            }
+    }
+}
+
+impl Unroll for Name {
+    fn unroll(
+            &self,
+            context: &mut CompileContext,
+            library: &Library,
+            it_index: &HashMap<u8, usize>,
+            mut display: Properties,
+        ) -> AnyExpr {
+            match self {
+                Name::Ident(i) => match i {
+                    Ident::Named(named) => {
+                        let weight = display.get("weight").get_or(FastFloat::One);
+                        // No options are expected, as var refs don't generate nodes.
+                        display.finish(context);
+        
+                        fetch_variable(context, &named.ident, named.span, weight)
+                    }
+                    Ident::Collection(col) => {
+                        let mut display = display;
+                        let display_pc = display.get("display").maybe_unset(true);
+                        let weight = display.get("weight").get_or(FastFloat::One);
+        
+                        let mut pc_children = Vec::new();
+                        pc_children.resize_with(col.collection.len(), || None);
+        
+                        // No options are expected, as pcs don't generate nodes.
+                        AnyExpr::PointCollection(Expr {
+                            weight: FastFloat::One, // PCs always have weight of one.
+                            data: Rc::new(PointCollection {
+                                length: col.collection.len(),
+                                data: PointCollectionData::PointCollection(
+                                    col.collection
+                                        .iter()
+                                        .map(|item| {
+                                            fetch_variable(context, &format!("{item}"), col.span)
+                                                .convert::<Point>(context)
+                                                .with_weight(weight)
+                                        })
+                                        .collect::<Vec<_>>()
+                                        .into(),
+                                ),
+                            }),
+                            span: col.span,
+                            node: Some(HierarchyNode::new(PCNode {
+                                display: display_pc,
+                                children: pc_children,
+                                props: Some(display),
+                            })),
+                        })
+                    }
+                }
+            }
+    }
 }
 
 /// Unrolls the given expression based on the given iterator index. The index is assumed valid and an out-of-bounds access leads to a panic!().

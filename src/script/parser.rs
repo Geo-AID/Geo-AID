@@ -389,6 +389,75 @@ impl Parse for Exponentiation {
     }
 }
 
+#[derive(Debug)]
+pub struct FieldIndex {
+    /// The indexed thing
+    pub name: Box<Name>,
+    /// The dot
+    pub dot: Dot,
+    /// The field
+    pub field: Ident
+}
+
+/// A name (field, method or variable).
+#[derive(Debug)]
+pub enum Name {
+    Ident(Ident),
+    FieldIndex(FieldIndex),
+    Call(ExprCall),
+    Expression(ExprParenthised)
+}
+
+impl Parse for Name {
+    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
+            it: &mut Peekable<I>,
+        ) -> Result<Self, Error> {
+        let mut peeked = it.peek().copied();
+        let mut name = match peeked {
+            Some(Token::Ident(_)) => Self::Ident(Ident::parse(it)?),
+            Some(Token::LParen(_)) => Self::Expression(ExprParenthised::parse(it)?),
+            Some(tok) => return Err(Error::InvalidToken { token: tok.clone() }),
+            None => return Err(Error::EndOfInput)
+        };
+
+        peeked = it.peek().copied();
+
+        while let Some(tok) = peeked {
+            match tok {
+                Token::Dot(_) => {
+                    name = Self::FieldIndex(FieldIndex {
+                        name: Box::new(name),
+                        dot: Dot::parse(it)?,
+                        field: Ident::parse(it)?
+                    });
+                },
+                Token::LParen(_) => {
+                    name = Self::Call(ExprCall {
+                        name: Box::new(name),
+                        lparen: LParen::parse(it)?,
+                        params: Option::parse(it)?,
+                        rparen: RParen::parse(it)?
+                    });
+                }
+                _ => break
+            }
+
+            peeked = it.peek().copied();
+        }
+
+        Ok(name)        
+    }
+
+    fn get_span(&self) -> Span {
+        match self {
+            Self::Call(v) => v.get_span(),
+            Self::Expression(v) => v.get_span(),
+            Self::FieldIndex(v) => v.name.get_span().join(v.field.get_span()),
+            Self::Ident(v) => v.get_span()
+        }
+    }
+}
+
 /// A parsed simple expression.
 #[derive(Debug)]
 pub struct SimpleExpression {
@@ -401,16 +470,12 @@ pub struct SimpleExpression {
 /// A parsed simple expression.
 #[derive(Debug)]
 pub enum SimpleExpressionKind {
-    /// An identifier (variable access, most likely)
-    Ident(Ident),
+    /// A named (variable, field or function call)
+    Name(Name),
     /// A raw number
     Number(Number),
-    /// A function call
-    Call(ExprCall),
     /// A unary operator expression
     Unop(ExprUnop),
-    /// An expression inside parentheses.
-    Parenthised(ExprParenthised),
     /// An explicit iterator.
     ExplicitIterator(ExplicitIterator),
     /// A point collection construction
@@ -419,22 +484,11 @@ pub enum SimpleExpressionKind {
     Exponentiation(Exponentiation),
 }
 
-impl SimpleExpressionKind {
-    #[must_use]
-    pub fn as_ident(&self) -> Option<&Ident> {
-        if let Self::Ident(v) = self {
-            Some(v)
-        } else {
-            None
-        }
-    }
-}
-
 /// A parsed function call
 #[derive(Debug)]
 pub struct ExprCall {
-    /// The ident of the function.
-    pub name: NamedIdent,
+    /// The called thing.
+    pub name: Box<Name>,
     /// The `(` token.
     pub lparen: LParen,
     /// The `)` token.
@@ -863,7 +917,7 @@ impl Parse for ExprCall {
 
     fn get_span(&self) -> Span {
         // From the ident to the ).
-        self.name.span.join(self.rparen.span)
+        self.name.get_span().join(self.rparen.span)
     }
 }
 
@@ -1122,33 +1176,8 @@ impl Parse for SimpleExpressionKind {
                         rhs: Box::new(SimpleExpressionKind::parse(it)?),
                     })
                 }
-                Token::Ident(ident) => {
-                    it.next();
-                    match ident {
-                        Ident::Named(name) => {
-                            let next = it.peek().copied();
-
-                            // Names can mean either function calls
-                            if let Some(Token::LParen(lparen)) = next {
-                                it.next();
-
-                                let params = Option::parse(it)?;
-
-                                Self::Call(ExprCall {
-                                    name: name.clone(),
-                                    lparen: *lparen,
-                                    rparen: RParen::parse(it)?,
-                                    params,
-                                })
-                            } else {
-                                // or variable access.
-                                Self::Ident(Ident::Named(name.clone()))
-                            }
-                        }
-                        Ident::Collection(c) => Self::Ident(Ident::Collection(c.clone())),
-                    }
-                }
-                Token::LParen(_) => Self::Parenthised(ExprParenthised::parse(it)?),
+                Token::Ident(_)
+                | Token::LParen(_) => Self::Name(Name::parse(it)?),
                 Token::Dollar(_) => Self::ExplicitIterator(ExplicitIterator::parse(it)?),
                 Token::Ampersant(_) => {
                     Self::PointCollection(PointCollectionConstructor::parse(it)?)
@@ -1173,13 +1202,11 @@ impl Parse for SimpleExpressionKind {
 
     fn get_span(&self) -> Span {
         match self {
-            Self::Ident(v) => v.get_span(),
+            Self::Name(v) => v.get_span(),
             Self::Number(v) => v.get_span(),
-            Self::Call(v) => v.name.span.join(v.rparen.get_span()),
             Self::Unop(v) => v.rhs.get_span().join(match &v.operator {
                 UnaryOperator::Neg(v) => v.minus.span,
             }),
-            Self::Parenthised(v) => v.get_span(),
             Self::ExplicitIterator(v) => v.get_span(),
             Self::PointCollection(v) => v.get_span(),
             Self::Exponentiation(v) => v.get_span(),
