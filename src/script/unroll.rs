@@ -46,7 +46,7 @@ use self::figure::FromExpr;
 
 use super::figure::{MathString, Style};
 use super::parser::{FromProperty, RefStatement};
-use super::token::number::{CompFloat, CompExponent};
+use super::token::number::{CompExponent, CompFloat};
 use super::token::Number;
 use super::{
     builtins,
@@ -1365,7 +1365,7 @@ pub enum ScalarData {
     TwoLineAngle(Expr<Line>, Expr<Line>),
     Average(#[def(sequence)] ClonedVec<Expr<Scalar>>),
     CircleRadius(Expr<Circle>),
-    Pow(Expr<Scalar>, #[def(no_entity)] CompExponent)
+    Pow(Expr<Scalar>, #[def(no_entity)] CompExponent),
 }
 
 impl Display for ScalarData {
@@ -1404,7 +1404,7 @@ impl Display for ScalarData {
             Self::CircleRadius(circle) => {
                 write!(f, "{circle}.radius")
             }
-            Self::Pow(base, exponent) => write!(f, "({base})^{exponent}")
+            Self::Pow(base, exponent) => write!(f, "({base})^{exponent}"),
         }
     }
 }
@@ -1592,15 +1592,11 @@ impl Expr<Scalar> {
                                     .into(),
                             )
                         }
-                        ScalarData::Pow(base, exponent) => {
-                            ScalarData::Pow(
-                                base.clone_without_node().convert_unit(
-                                    unit.map(|x| x.pow(exponent.recip())),
-                                    context
-                                ),
-                                *exponent
-                            )
-                        }
+                        ScalarData::Pow(base, exponent) => ScalarData::Pow(
+                            base.clone_without_node()
+                                .convert_unit(unit.map(|x| x.pow(exponent.recip())), context),
+                            *exponent,
+                        ),
                     },
                 }),
                 ..self
@@ -2590,13 +2586,7 @@ fn unroll_simple(
 ) -> AnyExpr {
     let display = Properties::from(expr.display.clone()).merge_with(external_display);
 
-    unroll_simple_kind(
-        &expr.kind,
-        context,
-        library,
-        it_index,
-        display
-    )
+    unroll_simple_kind(&expr.kind, context, library, it_index, display)
 }
 
 /// Unrolls the given expression based on the given iterator index. The index is assumed valid and an out-of-bounds access leads to a panic!().
@@ -2734,7 +2724,8 @@ fn unroll_simple_kind(
         }
         SimpleExpressionKind::Exponentiation(expr) => {
             let mut unrolled: Expr<Scalar> =
-                unroll_simple_kind(&expr.base, context, library, it_index, display).convert(context);
+                unroll_simple_kind(&expr.base, context, library, it_index, display)
+                    .convert(context);
 
             let node = unrolled.node.take();
 
@@ -2745,7 +2736,7 @@ fn unroll_simple_kind(
                     } else {
                         v
                     }
-                },
+                }
                 Err(err) => {
                     context.push_error(err);
                     CompExponent::one()

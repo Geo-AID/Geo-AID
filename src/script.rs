@@ -26,7 +26,7 @@ use std::{
     sync::{self, Arc},
 };
 
-use num_traits::{Zero, One};
+use num_traits::{One, Zero};
 use serde::Serialize;
 
 use crate::generator::{expression::Weights, fast_float::FastFloat};
@@ -36,7 +36,7 @@ use crate::{
     span,
 };
 
-use self::token::{NamedIdent, Span, Token, number::CompExponent};
+use self::token::{number::CompExponent, NamedIdent, Span, Token};
 use self::{figure::SPECIAL_MATH, parser::Type};
 
 mod builtins;
@@ -224,8 +224,8 @@ pub enum Error {
         error_span: Span,
     },
     ZeroDenominator {
-        error_span: Span
-    }
+        error_span: Span,
+    },
 }
 
 impl Error {

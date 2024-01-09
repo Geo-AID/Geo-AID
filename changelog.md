@@ -64,3 +64,7 @@
 - Rewrote the entire display system (deciding what is displayed and what is not, based on the script)
 - Added smart label positioning
 - Point collection variables are no longer valid.
+
+## Version 0.3.1
+- **GeoScript**: Added custom weighing
+- **GeoScript**: Added exponentiation support and rational unit powers

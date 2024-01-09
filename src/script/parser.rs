@@ -30,9 +30,10 @@ use crate::span;
 
 use super::{
     token::{
-        Ampersant, Asterisk, At, Colon, Comma, Dollar, Dot, Eq, Exclamation, Gt, Gteq, Ident,
-        LBrace, LParen, LSquare, Let, Lt, Lteq, Minus, NamedIdent, Number, Plus, Question, RBrace,
-        RParen, RSquare, Semi, Slash, Span, StrLit, TokInteger, Token, Vertical, number::CompExponent, Caret,
+        number::CompExponent, Ampersant, Asterisk, At, Caret, Colon, Comma, Dollar, Dot, Eq,
+        Exclamation, Gt, Gteq, Ident, LBrace, LParen, LSquare, Let, Lt, Lteq, Minus, NamedIdent,
+        Number, Plus, Question, RBrace, RParen, RSquare, Semi, Slash, Span, StrLit, TokInteger,
+        Token, Vertical,
     },
     unit, ComplexUnit, Error,
 };
@@ -227,12 +228,9 @@ impl Parse for ExplicitIterator {
             });
         }
 
-        let id = id_token
-            .parsed
-            .parse()
-            .map_err(|_| Error::NumberTooLarge {
-                error_span: id_token.get_span(),
-            })?;
+        let id = id_token.parsed.parse().map_err(|_| Error::NumberTooLarge {
+            error_span: id_token.get_span(),
+        })?;
 
         Ok(ExplicitIterator {
             exprs,
@@ -277,24 +275,24 @@ pub struct RationalExponent {
     pub nom: TokInteger,
     pub slash: Slash,
     pub denom: TokInteger,
-    pub rparen: RParen
+    pub rparen: RParen,
 }
 
 impl Parse for RationalExponent {
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-            it: &mut Peekable<I>,
-        ) -> Result<Self, Error> {
+        it: &mut Peekable<I>,
+    ) -> Result<Self, Error> {
         let parsed = Self {
             lparen: LParen::parse(it)?,
             nom: TokInteger::parse(it)?,
             slash: Slash::parse(it)?,
             denom: TokInteger::parse(it)?,
-            rparen: RParen::parse(it)?
+            rparen: RParen::parse(it)?,
         };
 
         if parsed.denom.parsed.is_zero() {
             return Err(Error::ZeroDenominator {
-                error_span: parsed.denom.span
+                error_span: parsed.denom.span,
             });
         }
 
@@ -310,7 +308,7 @@ impl Parse for RationalExponent {
 #[derive(Debug)]
 pub enum Exponent {
     Simple(TokInteger),
-    Parenthised(RationalExponent)
+    Parenthised(RationalExponent),
 }
 
 impl Exponent {
@@ -319,35 +317,44 @@ impl Exponent {
     pub fn into_comp(&self) -> Result<CompExponent, Error> {
         match self {
             Self::Simple(i) => Ok(CompExponent::new(
-                i.parsed.parse().map_err(|_| Error::NumberTooLarge { error_span: i.span })?,
-                1
+                i.parsed
+                    .parse()
+                    .map_err(|_| Error::NumberTooLarge { error_span: i.span })?,
+                1,
             )),
             Self::Parenthised(exp) => Ok(CompExponent::new(
-                exp.nom.parsed.parse().map_err(|_| Error::NumberTooLarge { error_span: exp.nom.span })?,
-                exp.denom.parsed.parse().map_err(|_| Error::NumberTooLarge { error_span: exp.denom.span })?,
-            ))
+                exp.nom.parsed.parse().map_err(|_| Error::NumberTooLarge {
+                    error_span: exp.nom.span,
+                })?,
+                exp.denom
+                    .parsed
+                    .parse()
+                    .map_err(|_| Error::NumberTooLarge {
+                        error_span: exp.denom.span,
+                    })?,
+            )),
         }
     }
 }
 
 impl Parse for Exponent {
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-            it: &mut Peekable<I>,
-        ) -> Result<Self, Error> {
-            let peeked = it.peek().copied();
+        it: &mut Peekable<I>,
+    ) -> Result<Self, Error> {
+        let peeked = it.peek().copied();
 
-            Ok(match peeked {
-                Some(Token::Number(Number::Integer(_))) => Self::Simple(TokInteger::parse(it)?),
-                Some(Token::LParen(_)) => Self::Parenthised(RationalExponent::parse(it)?),
-                Some(t) => return Err(Error::InvalidToken { token: t.clone() }),
-                None => return Err(Error::EndOfInput),
-            })
+        Ok(match peeked {
+            Some(Token::Number(Number::Integer(_))) => Self::Simple(TokInteger::parse(it)?),
+            Some(Token::LParen(_)) => Self::Parenthised(RationalExponent::parse(it)?),
+            Some(t) => return Err(Error::InvalidToken { token: t.clone() }),
+            None => return Err(Error::EndOfInput),
+        })
     }
 
     fn get_span(&self) -> Span {
         match self {
             Self::Simple(v) => v.span,
-            Self::Parenthised(v) => v.get_span()
+            Self::Parenthised(v) => v.get_span(),
         }
     }
 }
@@ -362,18 +369,18 @@ pub struct Exponentiation {
     /// Possible negation
     pub minus: Option<Minus>,
     /// The exponent.
-    pub exponent: Exponent
+    pub exponent: Exponent,
 }
 
 impl Parse for Exponentiation {
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-            it: &mut Peekable<I>,
-        ) -> Result<Self, Error> {
+        it: &mut Peekable<I>,
+    ) -> Result<Self, Error> {
         Ok(Self {
             base: Box::parse(it)?,
             caret: Caret::parse(it)?,
             minus: Option::parse(it)?,
-            exponent: Exponent::parse(it)?
+            exponent: Exponent::parse(it)?,
         })
     }
 
@@ -409,7 +416,7 @@ pub enum SimpleExpressionKind {
     /// A point collection construction
     PointCollection(PointCollectionConstructor),
     /// Exponentiation.
-    Exponentiation(Exponentiation)
+    Exponentiation(Exponentiation),
 }
 
 impl SimpleExpressionKind {
@@ -1157,7 +1164,7 @@ impl Parse for SimpleExpressionKind {
                 base: Box::new(expr),
                 caret: Caret::parse(it)?,
                 minus: Option::parse(it)?,
-                exponent: Exponent::parse(it)?
+                exponent: Exponent::parse(it)?,
             });
         }
 
@@ -1175,7 +1182,7 @@ impl Parse for SimpleExpressionKind {
             Self::Parenthised(v) => v.get_span(),
             Self::ExplicitIterator(v) => v.get_span(),
             Self::PointCollection(v) => v.get_span(),
-            Self::Exponentiation(v) => v.get_span()
+            Self::Exponentiation(v) => v.get_span(),
         }
     }
 }

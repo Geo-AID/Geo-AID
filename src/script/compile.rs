@@ -20,7 +20,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 use std::{cell::RefCell, collections::HashMap, rc::Rc, sync::Arc, unreachable};
 
-use num_traits::{Zero, One, ToPrimitive};
+use num_traits::{One, ToPrimitive, Zero};
 
 use crate::generator::expression::expr::{PointOnLine, Pow};
 use crate::generator::fast_float::FastFloat;
@@ -399,13 +399,10 @@ impl Compiler {
                 weight: FastFloat::One,
                 data: Rc::new(Scalar {
                     unit: u,
-                    data: ScalarData::Multiply(
-                        expr,
-                        self.dst_var.clone_without_node()
-                    )
+                    data: ScalarData::Multiply(expr, self.dst_var.clone_without_node()),
                 }),
                 span: sp,
-                node: None
+                node: None,
             }
         } else {
             Expr {
@@ -418,18 +415,15 @@ impl Compiler {
                             weight: FastFloat::One,
                             data: Rc::new(Scalar {
                                 unit: u,
-                                data: ScalarData::Pow(
-                                    self.dst_var.clone_without_node(),
-                                    power
-                                )
+                                data: ScalarData::Pow(self.dst_var.clone_without_node(), power),
                             }),
                             span: sp,
-                            node: None
-                        }
-                    )
+                            node: None,
+                        },
+                    ),
                 }),
                 span: sp,
-                node: None
+                node: None,
             }
         }
     }
@@ -734,9 +728,9 @@ impl Compile<Scalar, ScalarExpr> for Compiler {
             ScalarData::Pow(expr, exponent) => Arc::new(Expression::new(
                 ScalarExpr::Pow(Pow {
                     value: self.compile(expr),
-                    exponent: exponent.to_f64().unwrap()
+                    exponent: exponent.to_f64().unwrap(),
                 }),
-                expr.weight
+                expr.weight,
             )),
             ScalarData::Add(v1, v2) => Arc::new(Expression::new(
                 ScalarExpr::Sum(Sum {

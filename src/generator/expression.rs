@@ -33,7 +33,7 @@ use self::expr::{
     AngleBisector, AngleLine, AnglePoint, AnglePointDir, Average, CenterRadius, CircleCenter,
     CircleRadius, Difference, FreePoint, LineLineIntersection, LinePoint, Literal, Negation,
     ParallelThrough, PerpendicularThrough, PointLineDistance, PointOnCircle, PointPointDistance,
-    PointX, PointY, Product, Quotient, Real, Sum, Pow,
+    PointX, PointY, Pow, Product, Quotient, Real, Sum,
 };
 
 use super::{critic::EvaluationArgs, Complex};
@@ -721,7 +721,7 @@ pub mod expr {
         pub value: Arc<Expression<ScalarExpr>>,
         #[weigh_with(|_| Weights::empty())]
         #[skip_collecting]
-        pub exponent: f64
+        pub exponent: f64,
     }
 
     impl Evaluate for Pow {
