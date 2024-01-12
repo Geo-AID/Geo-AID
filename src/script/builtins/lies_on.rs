@@ -21,16 +21,8 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 use geo_aid_derive::overload;
 use std::rc::Rc;
 
+use super::prelude::*;
 use crate::generator::fast_float::FastFloat;
-use crate::script::builtins::macros::field;
-use crate::script::unroll::{
-    Bundle, Circle, CloneWithNode, CollectionNode, Line, Point, PointCollection, Simplify,
-    UnrolledRule, UnrolledRuleKind,
-};
-use crate::script::{
-    builtins::macros::{index, number},
-    unroll::{CompileContext, Expr, Library, Properties, Rule},
-};
 
 fn pt_lies_on_circle(
     mut lhs: Expr<Point>,

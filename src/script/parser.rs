@@ -62,7 +62,7 @@ macro_rules! impl_token_parse {
 #[derive(Debug)]
 pub enum UnaryOperator {
     /// A negation, as in `-x`.
-    Neg(NegOp),
+    Neg(Minus),
 }
 
 impl UnaryOperator {
@@ -83,52 +83,63 @@ impl UnaryOperator {
     }
 }
 
-/// A parsed unary `-` operator.
-#[derive(Debug)]
-pub struct NegOp {
-    /// The `-` token.
-    pub minus: Minus,
-}
+impl Parse for UnaryOperator {
+    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
+        it: &mut Peekable<I>,
+    ) -> Result<Self, Error> {
+        match it.next() {
+            Some(tok) => match tok {
+                Token::Minus(minus) => Ok(Self::Neg(*minus)),
+                t => Err(Error::InvalidToken { token: t.clone() }),
+            },
+            None => Err(Error::EndOfInput),
+        }
+    }
 
-/// A parsed `+` operator.
-#[derive(Debug)]
-pub struct AddOp {
-    //. The `+` token.
-    pub plus: Plus,
-}
-
-/// A parsed `-` operator.
-#[derive(Debug)]
-pub struct SubOp {
-    //. The `-` token.
-    pub minus: Minus,
-}
-
-/// A parsed `*` operator.
-#[derive(Debug)]
-pub struct MulOp {
-    //. The `*` token.
-    pub asterisk: Asterisk,
-}
-
-/// A parsed `/` operator.
-#[derive(Debug)]
-pub struct DivOp {
-    //. The `/` token.
-    pub slash: Slash,
+    fn get_span(&self) -> Span {
+        match self {
+            Self::Neg(v) => v.span,
+        }
+    }
 }
 
 /// A binary operator, like `+`, `-`, `*` or `/`.
 #[derive(Debug)]
 pub enum BinaryOperator {
     /// Addition
-    Add(AddOp),
+    Add(Plus),
     /// Subtraction
-    Sub(SubOp),
+    Sub(Minus),
     /// Multiplication
-    Mul(MulOp),
+    Mul(Asterisk),
     /// Division
-    Div(DivOp),
+    Div(Slash),
+}
+
+impl Parse for BinaryOperator {
+    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
+        it: &mut Peekable<I>,
+    ) -> Result<Self, Error> {
+        match it.next() {
+            Some(tok) => match tok {
+                Token::Asterisk(asterisk) => Ok(Self::Mul(*asterisk)),
+                Token::Plus(plus) => Ok(Self::Add(*plus)),
+                Token::Minus(minus) => Ok(Self::Sub(*minus)),
+                Token::Slash(slash) => Ok(Self::Div(*slash)),
+                t => Err(Error::InvalidToken { token: t.clone() }),
+            },
+            None => Err(Error::EndOfInput),
+        }
+    }
+
+    fn get_span(&self) -> Span {
+        match self {
+            Self::Add(v) => v.span,
+            Self::Sub(v) => v.span,
+            Self::Mul(v) => v.span,
+            Self::Div(v) => v.span,
+        }
+    }
 }
 
 impl ToString for BinaryOperator {
@@ -389,6 +400,91 @@ impl Parse for Exponentiation {
     }
 }
 
+#[derive(Debug)]
+pub struct FieldIndex {
+    /// The indexed thing
+    pub name: Box<Name>,
+    /// The dot
+    pub dot: Dot,
+    /// The field
+    pub field: Ident,
+}
+
+impl Parse for FieldIndex {
+    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
+        it: &mut Peekable<I>,
+    ) -> Result<Self, Error> {
+        Ok(Self {
+            name: Box::parse(it)?,
+            dot: Dot::parse(it)?,
+            field: Ident::parse(it)?,
+        })
+    }
+
+    fn get_span(&self) -> Span {
+        self.name.get_span().join(self.field.get_span())
+    }
+}
+
+/// A name (field, method or variable).
+#[derive(Debug)]
+pub enum Name {
+    Ident(Ident),
+    FieldIndex(FieldIndex),
+    Call(ExprCall),
+    Expression(ExprParenthised),
+}
+
+impl Parse for Name {
+    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
+        it: &mut Peekable<I>,
+    ) -> Result<Self, Error> {
+        let mut peeked = it.peek().copied();
+        let mut name = match peeked {
+            Some(Token::Ident(_)) => Self::Ident(Ident::parse(it)?),
+            Some(Token::LParen(_)) => Self::Expression(ExprParenthised::parse(it)?),
+            Some(tok) => return Err(Error::InvalidToken { token: tok.clone() }),
+            None => return Err(Error::EndOfInput),
+        };
+
+        peeked = it.peek().copied();
+
+        while let Some(tok) = peeked {
+            match tok {
+                Token::Dot(_) => {
+                    name = Self::FieldIndex(FieldIndex {
+                        name: Box::new(name),
+                        dot: Dot::parse(it)?,
+                        field: Ident::parse(it)?,
+                    });
+                }
+                Token::LParen(_) => {
+                    name = Self::Call(ExprCall {
+                        name: Box::new(name),
+                        lparen: LParen::parse(it)?,
+                        params: Option::parse(it)?,
+                        rparen: RParen::parse(it)?,
+                    });
+                }
+                _ => break,
+            }
+
+            peeked = it.peek().copied();
+        }
+
+        Ok(name)
+    }
+
+    fn get_span(&self) -> Span {
+        match self {
+            Self::Call(v) => v.get_span(),
+            Self::Expression(v) => v.get_span(),
+            Self::FieldIndex(v) => v.name.get_span().join(v.field.get_span()),
+            Self::Ident(v) => v.get_span(),
+        }
+    }
+}
+
 /// A parsed simple expression.
 #[derive(Debug)]
 pub struct SimpleExpression {
@@ -401,16 +497,12 @@ pub struct SimpleExpression {
 /// A parsed simple expression.
 #[derive(Debug)]
 pub enum SimpleExpressionKind {
-    /// An identifier (variable access, most likely)
-    Ident(Ident),
+    /// A named (variable, field or function call)
+    Name(Name),
     /// A raw number
     Number(Number),
-    /// A function call
-    Call(ExprCall),
     /// A unary operator expression
     Unop(ExprUnop),
-    /// An expression inside parentheses.
-    Parenthised(ExprParenthised),
     /// An explicit iterator.
     ExplicitIterator(ExplicitIterator),
     /// A point collection construction
@@ -419,22 +511,11 @@ pub enum SimpleExpressionKind {
     Exponentiation(Exponentiation),
 }
 
-impl SimpleExpressionKind {
-    #[must_use]
-    pub fn as_ident(&self) -> Option<&Ident> {
-        if let Self::Ident(v) = self {
-            Some(v)
-        } else {
-            None
-        }
-    }
-}
-
 /// A parsed function call
 #[derive(Debug)]
 pub struct ExprCall {
-    /// The ident of the function.
-    pub name: NamedIdent,
+    /// The called thing.
+    pub name: Box<Name>,
     /// The `(` token.
     pub lparen: LParen,
     /// The `)` token.
@@ -463,15 +544,46 @@ pub struct ExprUnop {
     pub rhs: Box<SimpleExpressionKind>,
 }
 
+impl Parse for ExprUnop {
+    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
+        it: &mut Peekable<I>,
+    ) -> Result<Self, Error> {
+        Ok(Self {
+            operator: UnaryOperator::parse(it)?,
+            rhs: Box::parse(it)?,
+        })
+    }
+
+    fn get_span(&self) -> Span {
+        self.operator.get_span().join(self.rhs.get_span())
+    }
+}
+
 /// A parsed binary operator expression.
 #[derive(Debug)]
 pub struct ExprBinop<const ITER: bool> {
-    /// The operator
-    pub operator: BinaryOperator,
     /// Left hand side
     pub lhs: Box<Expression<ITER>>,
+    /// The operator
+    pub operator: BinaryOperator,
     /// Right hand side.
     pub rhs: Box<Expression<ITER>>,
+}
+
+impl<const ITER: bool> Parse for ExprBinop<ITER> {
+    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
+        it: &mut Peekable<I>,
+    ) -> Result<Self, Error> {
+        Ok(Self {
+            lhs: Box::parse(it)?,
+            operator: BinaryOperator::parse(it)?,
+            rhs: Box::parse(it)?,
+        })
+    }
+
+    fn get_span(&self) -> Span {
+        self.lhs.get_span().join(self.rhs.get_span())
+    }
 }
 
 /// Floating point or an integer.
@@ -863,7 +975,7 @@ impl Parse for ExprCall {
 
     fn get_span(&self) -> Span {
         // From the ident to the ).
-        self.name.span.join(self.rparen.span)
+        self.name.get_span().join(self.rparen.span)
     }
 }
 
@@ -1003,12 +1115,10 @@ impl<const ITER: bool> Parse for Expression<ITER> {
 
             let op = match next {
                 Some(next) => match next {
-                    Token::Asterisk(asterisk) => BinaryOperator::Mul(MulOp {
-                        asterisk: *asterisk,
-                    }),
-                    Token::Plus(plus) => BinaryOperator::Add(AddOp { plus: *plus }),
-                    Token::Minus(minus) => BinaryOperator::Sub(SubOp { minus: *minus }),
-                    Token::Slash(slash) => BinaryOperator::Div(DivOp { slash: *slash }),
+                    Token::Asterisk(asterisk) => BinaryOperator::Mul(*asterisk),
+                    Token::Plus(plus) => BinaryOperator::Add(*plus),
+                    Token::Minus(minus) => BinaryOperator::Sub(*minus),
+                    Token::Slash(slash) => BinaryOperator::Div(*slash),
                     _ => break,
                 },
                 None => break,
@@ -1118,37 +1228,11 @@ impl Parse for SimpleExpressionKind {
                     it.next();
                     // negation
                     Self::Unop(ExprUnop {
-                        operator: UnaryOperator::Neg(NegOp { minus: *m }),
+                        operator: UnaryOperator::Neg(*m),
                         rhs: Box::new(SimpleExpressionKind::parse(it)?),
                     })
                 }
-                Token::Ident(ident) => {
-                    it.next();
-                    match ident {
-                        Ident::Named(name) => {
-                            let next = it.peek().copied();
-
-                            // Names can mean either function calls
-                            if let Some(Token::LParen(lparen)) = next {
-                                it.next();
-
-                                let params = Option::parse(it)?;
-
-                                Self::Call(ExprCall {
-                                    name: name.clone(),
-                                    lparen: *lparen,
-                                    rparen: RParen::parse(it)?,
-                                    params,
-                                })
-                            } else {
-                                // or variable access.
-                                Self::Ident(Ident::Named(name.clone()))
-                            }
-                        }
-                        Ident::Collection(c) => Self::Ident(Ident::Collection(c.clone())),
-                    }
-                }
-                Token::LParen(_) => Self::Parenthised(ExprParenthised::parse(it)?),
+                Token::Ident(_) | Token::LParen(_) => Self::Name(Name::parse(it)?),
                 Token::Dollar(_) => Self::ExplicitIterator(ExplicitIterator::parse(it)?),
                 Token::Ampersant(_) => {
                     Self::PointCollection(PointCollectionConstructor::parse(it)?)
@@ -1173,13 +1257,11 @@ impl Parse for SimpleExpressionKind {
 
     fn get_span(&self) -> Span {
         match self {
-            Self::Ident(v) => v.get_span(),
+            Self::Name(v) => v.get_span(),
             Self::Number(v) => v.get_span(),
-            Self::Call(v) => v.name.span.join(v.rparen.get_span()),
             Self::Unop(v) => v.rhs.get_span().join(match &v.operator {
-                UnaryOperator::Neg(v) => v.minus.span,
+                UnaryOperator::Neg(v) => v.span,
             }),
-            Self::Parenthised(v) => v.get_span(),
             Self::ExplicitIterator(v) => v.get_span(),
             Self::PointCollection(v) => v.get_span(),
             Self::Exponentiation(v) => v.get_span(),
@@ -1586,6 +1668,12 @@ pub trait FromProperty: Sized {
     /// # Errors
     /// Causes an error if the value is not properly convertible.
     fn from_property(property: PropertyValue) -> Result<Self, Error>;
+}
+
+impl<T: FromProperty> FromProperty for Result<T, Error> {
+    fn from_property(property: PropertyValue) -> Result<Self, Error> {
+        Ok(T::from_property(property))
+    }
 }
 
 impl FromProperty for bool {

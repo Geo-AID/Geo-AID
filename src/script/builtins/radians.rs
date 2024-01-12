@@ -18,16 +18,13 @@ WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use crate::script::unit;
-#[allow(unused_imports)]
-use crate::script::unroll::{CompileContext, Expr, Function, Library, Scalar};
+use super::prelude::*;
 use geo_aid_derive::overload;
 
 pub fn register(library: &mut Library) {
     library.functions.insert(
         String::from("radians"),
         Function {
-            name: String::from("radians"),
             overloads: vec![overload!((SCALAR) -> ANGLE {
                 |v: Expr<Scalar>, context: &CompileContext, display| context.set_unit_display(v, unit::ANGLE, display)
             })],

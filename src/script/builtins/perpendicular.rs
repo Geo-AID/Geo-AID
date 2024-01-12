@@ -18,11 +18,8 @@ WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use crate::script::unroll::{CompileContext, Expr, Function, Library, Line, Point, Properties};
+use super::prelude::*;
 use geo_aid_derive::overload;
-
-#[allow(unused_imports)]
-use super::macros::call;
 
 /// `perpendicular_through(line, point)` - returns a line perpendicular to the 1st argument going through point at 2nd argument.
 pub fn line_point(
@@ -38,7 +35,6 @@ pub fn register(library: &mut Library) {
     library.functions.insert(
         String::from("perpendicular_through"),
         Function {
-            name: String::from("perpendicular_through"),
             overloads: vec![
                 overload!((POINT, LINE) -> LINE {
                     |point: Expr<Point>, line: Expr<Line>, figure, _| {

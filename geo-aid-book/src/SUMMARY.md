@@ -15,6 +15,7 @@
         - [Flags](./reference/syntax/flags.md)
         - [Identifiers](./reference/syntax/identifiers.md)
         - [Iterators](./reference/syntax/iterators.md)
+        - [Names](./reference/syntax/names.md)
         - [Numbers](./reference/syntax/numbers.md)
         - [Properties](./reference/syntax/properties.md)
         - [Ref statements](./reference/syntax/refs.md)
@@ -27,3 +28,4 @@
     - [Functions](./reference/functions.md)
     - [Rule operators](./reference/rule-operators.md)
     - [Display system](./reference/display-system.md)
+    - [Weight system](./reference/weight-system.md)

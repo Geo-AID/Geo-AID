@@ -8,7 +8,7 @@ Point collections are simply ordered collections of points. It is never a sepera
 
 ## Named Bundles
 
-Named bundles are similar to structs in C. They have names and named fields of any type (not yet accessible). Denoted with their unique names different from the names of any other type.
+Named bundles are similar to structs in C. They have names and named fields of any type (accessible through [field indexing](../syntax/names.md)). Denoted with their unique names different from the names of any other type.
 
 ### Segment
 
@@ -20,3 +20,13 @@ Segment {
 ```
 
 `Segment`s have two fields denoting their ends.
+
+*Methods*
+
+* `len()`
+
+**Return type**: [Scalar (distance)](./types/bundle-types.md#segment)
+
+**Returns**: the distance `AB`.
+
+**Displays**: exactly what `dst` displays, except that the `draw_segment` property is `false` by default.

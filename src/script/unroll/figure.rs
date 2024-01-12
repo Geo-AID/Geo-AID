@@ -31,7 +31,7 @@ use crate::{
 };
 
 use super::{
-    AnyExpr, Bundle, Circle, CloneWithNode, CompileContext, Displayed, Expr, Line, Point,
+    AnyExpr, Bundle, Circle, CloneWithNode, CompileContext, Displayed, Dummy, Expr, Line, Point,
     PointCollection, Properties, Scalar, Unknown,
 };
 
@@ -440,6 +440,16 @@ impl PCNode {
     }
 }
 
+impl Dummy for PCNode {
+    fn dummy() -> Self {
+        Self::new()
+    }
+
+    fn is_dummy(&self) -> bool {
+        self.children.is_empty()
+    }
+}
+
 impl Node for PCNode {
     fn set_display(&mut self, display: bool) {
         self.display.set(display);
@@ -480,11 +490,12 @@ pub enum AnyExprNode {
 }
 
 impl_from_for_any! {Point}
-// impl_from_for_any! {Line}
-// impl_from_for_any! {Circle}
-// impl_from_for_any! {Scalar}
+impl_from_for_any! {Line}
+impl_from_for_any! {Circle}
+impl_from_for_any! {Scalar}
 impl_from_for_any! {PointCollection}
 impl_from_for_any! {Bundle}
+impl_from_for_any! {Unknown}
 
 impl AnyExprNode {
     #[must_use]
@@ -628,6 +639,16 @@ impl Default for BundleNode {
     }
 }
 
+impl Dummy for BundleNode {
+    fn dummy() -> Self {
+        Self::new()
+    }
+
+    fn is_dummy(&self) -> bool {
+        self.children.is_empty()
+    }
+}
+
 impl BundleNode {
     #[must_use]
     pub fn new() -> Self {
@@ -672,6 +693,16 @@ impl Node for BundleNode {
 #[derive(Debug)]
 pub struct EmptyNode;
 
+impl Dummy for EmptyNode {
+    fn dummy() -> Self {
+        Self
+    }
+
+    fn is_dummy(&self) -> bool {
+        true
+    }
+}
+
 impl Node for EmptyNode {
     fn get_display(&self) -> bool {
         false
@@ -692,6 +723,23 @@ pub struct PointNode {
     pub expr: Expr<Point>,
 }
 
+impl Dummy for PointNode {
+    fn dummy() -> Self {
+        Self {
+            display: MaybeUnset::new(true),
+            label: MaybeUnset::new(MathString::new(span!(0, 0, 0, 0))),
+            display_label: MaybeUnset::new(true),
+            display_dot: MaybeUnset::new(true),
+            default_label: MathString::new(span!(0, 0, 0, 0)),
+            expr: Expr::dummy(),
+        }
+    }
+
+    fn is_dummy(&self) -> bool {
+        self.expr.is_dummy()
+    }
+}
+
 impl Node for PointNode {
     fn get_display(&self) -> bool {
         self.display.get_copied()
@@ -702,7 +750,7 @@ impl Node for PointNode {
     }
 
     fn build(self: Box<Self>, compiler: &mut Compiler, figure: &mut Figure) {
-        if self.display.unwrap() {
+        if self.display.unwrap() && !self.is_dummy() {
             if !self.display_label.unwrap()
                 || (self.label.as_ref().is_empty() && self.default_label.is_empty())
             {
@@ -737,7 +785,7 @@ impl FromExpr<Point> for PointNode {
             display_dot: props.get("display_dot").maybe_unset(true),
             default_label: props
                 .get("default-label")
-                .get_or(MathString::new(span!(0, 0, 0, 0))),
+                .ok_or(MathString::new(span!(0, 0, 0, 0))),
             expr: expr.clone_without_node(),
         };
 
@@ -757,6 +805,23 @@ pub struct CircleNode {
     pub expr: Expr<Circle>,
 }
 
+impl Dummy for CircleNode {
+    fn dummy() -> Self {
+        Self {
+            display: MaybeUnset::new(true),
+            label: MaybeUnset::new(MathString::new(span!(0, 0, 0, 0))),
+            display_label: MaybeUnset::new(true),
+            default_label: MathString::new(span!(0, 0, 0, 0)),
+            style: MaybeUnset::new(Style::default()),
+            expr: Expr::dummy(),
+        }
+    }
+
+    fn is_dummy(&self) -> bool {
+        self.expr.is_dummy()
+    }
+}
+
 impl Node for CircleNode {
     fn get_display(&self) -> bool {
         self.display.get_copied()
@@ -767,7 +832,7 @@ impl Node for CircleNode {
     }
 
     fn build(self: Box<Self>, compiler: &mut Compiler, figure: &mut Figure) {
-        if self.display.unwrap() {
+        if self.display.unwrap() && !self.is_dummy() {
             figure.circles.push((
                 compiler.compile(&self.expr),
                 Style::Solid, // if self.display_label.unwrap() {
@@ -798,7 +863,7 @@ impl FromExpr<Circle> for CircleNode {
             display_label: props.get("display_label").maybe_unset(false),
             default_label: props
                 .get("default-label")
-                .get_or(MathString::new(span!(0, 0, 0, 0))),
+                .ok_or(MathString::new(span!(0, 0, 0, 0))),
             style: props.get("style").maybe_unset(Style::default()),
             expr: expr.clone_without_node(),
         };
@@ -875,9 +940,28 @@ pub struct LineNode {
     pub display: MaybeUnset<bool>,
     pub label: MaybeUnset<MathString>,
     pub display_label: MaybeUnset<bool>,
+    pub default_label: MathString,
     pub line_type: MaybeUnset<LineType>,
     pub style: MaybeUnset<Style>,
     pub expr: Expr<Line>,
+}
+
+impl Dummy for LineNode {
+    fn dummy() -> Self {
+        Self {
+            display: MaybeUnset::new(true),
+            label: MaybeUnset::new(MathString::new(span!(0, 0, 0, 0))),
+            display_label: MaybeUnset::new(true),
+            default_label: MathString::new(span!(0, 0, 0, 0)),
+            line_type: MaybeUnset::new(LineType::Line),
+            style: MaybeUnset::new(Style::default()),
+            expr: Expr::dummy(),
+        }
+    }
+
+    fn is_dummy(&self) -> bool {
+        self.expr.is_dummy()
+    }
 }
 
 impl Node for LineNode {
@@ -890,7 +974,7 @@ impl Node for LineNode {
     }
 
     fn build(self: Box<Self>, compiler: &mut Compiler, figure: &mut Figure) {
-        if self.display.unwrap() {
+        if self.display.unwrap() && !self.is_dummy() {
             // if self.display_label.unwrap() {
             //     let label = self.label.unwrap();
 
@@ -951,6 +1035,9 @@ impl FromExpr<Line> for LineNode {
                 .get("label")
                 .maybe_unset(MathString::new(span!(0, 0, 0, 0))),
             display_label: props.get("display_label").maybe_unset(false),
+            default_label: props
+                .get("default-label")
+                .ok_or(MathString::new(span!(0, 0, 0, 0))),
             line_type: MaybeUnset::new(LineType::Line),
             style: props.get("style").maybe_unset(Style::default()),
             expr: expr.clone_without_node(),
@@ -968,6 +1055,19 @@ pub struct ScalarNode {
     pub expr: Expr<Scalar>,
 }
 
+impl Dummy for ScalarNode {
+    fn dummy() -> Self {
+        Self {
+            display: MaybeUnset::new(true),
+            expr: Expr::dummy(),
+        }
+    }
+
+    fn is_dummy(&self) -> bool {
+        self.expr.is_dummy()
+    }
+}
+
 impl Node for ScalarNode {
     fn set_display(&mut self, display: bool) {
         self.display.set(display);
@@ -982,9 +1082,9 @@ impl Node for ScalarNode {
 
 impl FromExpr<Scalar> for ScalarNode {
     fn from_expr(expr: &Expr<Scalar>, mut props: Properties, context: &CompileContext) -> Self {
-        let _ = props.get::<MathString>("label");
-        let _ = props.get::<bool>("display_label");
-        let _ = props.get::<MathString>("default-label");
+        props.ignore("label");
+        props.ignore("display_label");
+        props.ignore("default-label");
 
         let node = Self {
             display: props.get("display").maybe_unset(true),

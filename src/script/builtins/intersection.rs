@@ -18,8 +18,7 @@ WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use crate::script::unroll::{BuildAssociated, Point, PointNode, Properties};
-use crate::script::unroll::{CompileContext, Expr, Function, Library, Line};
+use super::prelude::*;
 use geo_aid_derive::overload;
 
 fn intersection_function_line_line(
@@ -44,9 +43,9 @@ pub struct Associated;
 impl BuildAssociated<PointNode> for Associated {
     fn build_associated(
         self: Box<Self>,
-        _compiler: &mut crate::script::compile::Compiler,
-        _figure: &mut crate::script::figure::Figure,
-        associated: &mut crate::script::unroll::HierarchyNode<PointNode>,
+        _compiler: &mut Compiler,
+        _figure: &mut Figure,
+        associated: &mut HierarchyNode<PointNode>,
     ) {
         associated.root.display_dot.set_if_unset(false);
     }
@@ -56,7 +55,6 @@ pub fn register(library: &mut Library) {
     library.functions.insert(
         String::from("intersection"),
         Function {
-            name: String::from("intersection"),
             overloads: vec![overload!((LINE, LINE) -> POINT : intersection_function_line_line)],
         },
     );

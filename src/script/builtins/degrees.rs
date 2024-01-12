@@ -22,20 +22,12 @@ use geo_aid_derive::overload;
 #[allow(unused_imports)]
 use std::f64::consts::PI;
 
-#[allow(unused_imports)]
-use crate::script::{
-    unit,
-    unroll::{CompileContext, Expr, Function, Library, Properties, Scalar},
-};
-
-#[allow(unused_imports)]
-use super::macros::number;
+use super::prelude::*;
 
 pub fn register(library: &mut Library) {
     library.functions.insert(
         String::from("degrees"),
         Function {
-            name: String::from("degrees"),
             overloads: vec![overload!((SCALAR) -> ANGLE {
                 |v: Expr<Scalar>, context: &mut CompileContext, display| {
                     context.set_unit_display(context.mult(v, number!(PI / 180.0)), unit::ANGLE, display)

@@ -18,19 +18,8 @@ WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-#[allow(unused_imports)]
-use crate::script::unroll::{
-    CompileContext, Expr, Function, Library, Line, Point, PointCollection, Properties, Scalar,
-};
-use crate::script::{
-    compile::{Compile, Compiler},
-    figure::{Figure, Style},
-    unroll::{BuildAssociated, CloneWithNode, HierarchyNode, LineType, ScalarData, ScalarNode},
-};
+use super::prelude::*;
 use geo_aid_derive::overload;
-
-#[allow(unused_imports)]
-use super::macros::{call, index};
 
 /// angle(point, point, point) - angle depicted by 3 points.
 fn angle_function_point_point_point(
@@ -145,7 +134,6 @@ pub fn register(library: &mut Library) {
     library.functions.insert(
         String::from("angle"),
         Function {
-            name: String::from("angle"),
             overloads: vec![
                 overload!((3-P) -> ANGLE {
                     |mut col: Expr<PointCollection>, context, display| call!(context:angle_function_point_point_point(

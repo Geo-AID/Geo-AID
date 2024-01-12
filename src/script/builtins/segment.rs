@@ -18,19 +18,13 @@ WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-#[allow(unused_imports)]
-use crate::script::builtins::macros::{call, construct_bundle, index};
-use crate::script::{
-    compile::{Compile, Compiler},
-    figure::{Figure, Style},
-    unroll::{BuildAssociated, BundleNode, HierarchyNode},
+use crate::{
+    script::{parser::PropertyValue, token::StrLit},
+    span,
 };
-use geo_aid_derive::overload;
 
-#[allow(unused_imports)]
-use crate::script::unroll::{
-    Bundle, CompileContext, Expr, Function, Library, Point, PointCollection, Properties,
-};
+use super::prelude::*;
+use geo_aid_derive::overload;
 
 fn segment_function_point_point(
     mut a: Expr<Point>,
@@ -41,6 +35,7 @@ fn segment_function_point_point(
     let mut expr = construct_bundle!(Segment { A: a, B: b });
 
     if let Some(node) = &mut expr.node {
+        display.ignore("default-label");
         node.root.display = display.get("display").maybe_unset(true);
 
         let display_segment = display.get("display_segment").maybe_unset(true);
@@ -89,11 +84,28 @@ impl BuildAssociated<BundleNode> for Associated {
     }
 }
 
+#[allow(clippy::needless_pass_by_value)]
+fn len(segment: Expr<Bundle>, context: &CompileContext, mut display: Properties) -> Expr<Scalar> {
+    display.add_if_not_present(
+        "display_segment",
+        PropertyValue::String(StrLit {
+            span: span!(0, 0, 0, 0),
+            content: String::from("false"),
+        }),
+    );
+
+    super::dst::distance_function_pp(
+        field!(no-node POINT segment, A with context),
+        field!(no-node POINT segment, B with context),
+        context,
+        display,
+    )
+}
+
 pub fn register(library: &mut Library) {
     library.functions.insert(
         String::from("Segment"),
         Function {
-            name: String::from("Segment"),
             overloads: vec![
                 overload!((2-P) -> Segment {
                     |mut col: Expr<PointCollection>, context, display| call!(context:segment_function_point_point(
@@ -105,4 +117,13 @@ pub fn register(library: &mut Library) {
             ],
         },
     );
+
+    library.functions.insert(
+        String::from("[Segment]::len"),
+        Function {
+            overloads: vec![overload!((Segment) -> Scalar : len)],
+        },
+    );
+
+    library.bundles.insert("Segment", ["A", "B"].into());
 }

@@ -14,9 +14,13 @@ Note: A literal will never be coerced to an angle, since that would introduce un
 
 A point is defined as a point on a euclidean plane. Denoted as `Point`.
 
+Points have two fields: `x` and `y`, denoting the respective coordinate values. Use them carefully, though, as there are no guarantees as to what values they might be.
+
 ## Circle
 
 A circle is given a center and a radius. It is a set of points with the distance to its center equal to its radius. Denoted as `Circle`.
+
+Circles have two fields: `center` and `radius`, both of which are self-explanatory.
 
 ## Line
 

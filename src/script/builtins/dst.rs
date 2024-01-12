@@ -18,19 +18,8 @@ WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use crate::script::{
-    compile::Compile,
-    figure::Style,
-    unroll::{BuildAssociated, CloneWithNode, ScalarData, ScalarNode},
-};
-#[allow(unused_imports)]
-use crate::script::{
-    unit,
-    unroll::{CompileContext, Expr, Function, Library, Line, Point, Properties, Scalar},
-};
+use super::prelude::*;
 use geo_aid_derive::overload;
-
-use super::macros::call;
 
 pub fn distance_function_pp(
     a: Expr<Point>,
@@ -83,9 +72,9 @@ pub struct Associated;
 impl BuildAssociated<ScalarNode> for Associated {
     fn build_associated(
         self: Box<Self>,
-        compiler: &mut crate::script::compile::Compiler,
-        figure: &mut crate::script::figure::Figure,
-        associated: &mut crate::script::unroll::HierarchyNode<ScalarNode>,
+        compiler: &mut Compiler,
+        figure: &mut Figure,
+        associated: &mut HierarchyNode<ScalarNode>,
     ) {
         let display_segment = associated
             .get_data("display_segment")
@@ -129,7 +118,6 @@ pub fn register(library: &mut Library) {
     library.functions.insert(
         String::from("dst"),
         Function {
-            name: String::from("dst"),
             overloads: vec![
                 overload!((DISTANCE) -> DISTANCE {
                     |v: Expr<Scalar>, context: &CompileContext, display: Properties| {
