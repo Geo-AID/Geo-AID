@@ -18,7 +18,10 @@ WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use crate::{script::{parser::PropertyValue, token::StrLit}, span};
+use crate::{
+    script::{parser::PropertyValue, token::StrLit},
+    span,
+};
 
 use super::prelude::*;
 use geo_aid_derive::overload;
@@ -83,16 +86,19 @@ impl BuildAssociated<BundleNode> for Associated {
 
 #[allow(clippy::needless_pass_by_value)]
 fn len(segment: Expr<Bundle>, context: &CompileContext, mut display: Properties) -> Expr<Scalar> {
-    display.add_if_not_present("display_segment", PropertyValue::String(StrLit {
-        span: span!(0, 0, 0,0 ),
-        content: String::from("false")
-    }));
+    display.add_if_not_present(
+        "display_segment",
+        PropertyValue::String(StrLit {
+            span: span!(0, 0, 0, 0),
+            content: String::from("false"),
+        }),
+    );
 
     super::dst::distance_function_pp(
         field!(no-node POINT segment, A with context),
         field!(no-node POINT segment, B with context),
         context,
-        display
+        display,
     )
 }
 
@@ -115,8 +121,8 @@ pub fn register(library: &mut Library) {
     library.functions.insert(
         String::from("[Segment]::len"),
         Function {
-            overloads: vec![overload!((Segment) -> Scalar : len)]
-        }
+            overloads: vec![overload!((Segment) -> Scalar : len)],
+        },
     );
 
     library.bundles.insert("Segment", ["A", "B"].into());

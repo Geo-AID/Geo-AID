@@ -85,20 +85,20 @@ impl UnaryOperator {
 
 impl Parse for UnaryOperator {
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-            it: &mut Peekable<I>,
-        ) -> Result<Self, Error> {
+        it: &mut Peekable<I>,
+    ) -> Result<Self, Error> {
         match it.next() {
             Some(tok) => match tok {
                 Token::Minus(minus) => Ok(Self::Neg(*minus)),
                 t => Err(Error::InvalidToken { token: t.clone() }),
             },
-            None => Err(Error::EndOfInput)
+            None => Err(Error::EndOfInput),
         }
     }
 
     fn get_span(&self) -> Span {
         match self {
-            Self::Neg(v) => v.span
+            Self::Neg(v) => v.span,
         }
     }
 }
@@ -118,8 +118,8 @@ pub enum BinaryOperator {
 
 impl Parse for BinaryOperator {
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-            it: &mut Peekable<I>,
-        ) -> Result<Self, Error> {
+        it: &mut Peekable<I>,
+    ) -> Result<Self, Error> {
         match it.next() {
             Some(tok) => match tok {
                 Token::Asterisk(asterisk) => Ok(Self::Mul(*asterisk)),
@@ -128,7 +128,7 @@ impl Parse for BinaryOperator {
                 Token::Slash(slash) => Ok(Self::Div(*slash)),
                 t => Err(Error::InvalidToken { token: t.clone() }),
             },
-            None => Err(Error::EndOfInput)
+            None => Err(Error::EndOfInput),
         }
     }
 
@@ -407,17 +407,17 @@ pub struct FieldIndex {
     /// The dot
     pub dot: Dot,
     /// The field
-    pub field: Ident
+    pub field: Ident,
 }
 
 impl Parse for FieldIndex {
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-            it: &mut Peekable<I>,
-        ) -> Result<Self, Error> {
+        it: &mut Peekable<I>,
+    ) -> Result<Self, Error> {
         Ok(Self {
             name: Box::parse(it)?,
             dot: Dot::parse(it)?,
-            field: Ident::parse(it)?
+            field: Ident::parse(it)?,
         })
     }
 
@@ -432,19 +432,19 @@ pub enum Name {
     Ident(Ident),
     FieldIndex(FieldIndex),
     Call(ExprCall),
-    Expression(ExprParenthised)
+    Expression(ExprParenthised),
 }
 
 impl Parse for Name {
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-            it: &mut Peekable<I>,
-        ) -> Result<Self, Error> {
+        it: &mut Peekable<I>,
+    ) -> Result<Self, Error> {
         let mut peeked = it.peek().copied();
         let mut name = match peeked {
             Some(Token::Ident(_)) => Self::Ident(Ident::parse(it)?),
             Some(Token::LParen(_)) => Self::Expression(ExprParenthised::parse(it)?),
             Some(tok) => return Err(Error::InvalidToken { token: tok.clone() }),
-            None => return Err(Error::EndOfInput)
+            None => return Err(Error::EndOfInput),
         };
 
         peeked = it.peek().copied();
@@ -455,24 +455,24 @@ impl Parse for Name {
                     name = Self::FieldIndex(FieldIndex {
                         name: Box::new(name),
                         dot: Dot::parse(it)?,
-                        field: Ident::parse(it)?
+                        field: Ident::parse(it)?,
                     });
-                },
+                }
                 Token::LParen(_) => {
                     name = Self::Call(ExprCall {
                         name: Box::new(name),
                         lparen: LParen::parse(it)?,
                         params: Option::parse(it)?,
-                        rparen: RParen::parse(it)?
+                        rparen: RParen::parse(it)?,
                     });
                 }
-                _ => break
+                _ => break,
             }
 
             peeked = it.peek().copied();
         }
 
-        Ok(name)        
+        Ok(name)
     }
 
     fn get_span(&self) -> Span {
@@ -480,7 +480,7 @@ impl Parse for Name {
             Self::Call(v) => v.get_span(),
             Self::Expression(v) => v.get_span(),
             Self::FieldIndex(v) => v.name.get_span().join(v.field.get_span()),
-            Self::Ident(v) => v.get_span()
+            Self::Ident(v) => v.get_span(),
         }
     }
 }
@@ -546,11 +546,11 @@ pub struct ExprUnop {
 
 impl Parse for ExprUnop {
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-            it: &mut Peekable<I>,
-        ) -> Result<Self, Error> {
+        it: &mut Peekable<I>,
+    ) -> Result<Self, Error> {
         Ok(Self {
             operator: UnaryOperator::parse(it)?,
-            rhs: Box::parse(it)?
+            rhs: Box::parse(it)?,
         })
     }
 
@@ -572,12 +572,12 @@ pub struct ExprBinop<const ITER: bool> {
 
 impl<const ITER: bool> Parse for ExprBinop<ITER> {
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-            it: &mut Peekable<I>,
-        ) -> Result<Self, Error> {
+        it: &mut Peekable<I>,
+    ) -> Result<Self, Error> {
         Ok(Self {
             lhs: Box::parse(it)?,
             operator: BinaryOperator::parse(it)?,
-            rhs: Box::parse(it)?
+            rhs: Box::parse(it)?,
         })
     }
 
@@ -1232,8 +1232,7 @@ impl Parse for SimpleExpressionKind {
                         rhs: Box::new(SimpleExpressionKind::parse(it)?),
                     })
                 }
-                Token::Ident(_)
-                | Token::LParen(_) => Self::Name(Name::parse(it)?),
+                Token::Ident(_) | Token::LParen(_) => Self::Name(Name::parse(it)?),
                 Token::Dollar(_) => Self::ExplicitIterator(ExplicitIterator::parse(it)?),
                 Token::Ampersant(_) => {
                     Self::PointCollection(PointCollectionConstructor::parse(it)?)

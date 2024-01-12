@@ -31,8 +31,8 @@ use crate::{
 };
 
 use super::{
-    AnyExpr, Bundle, Circle, CloneWithNode, CompileContext, Displayed, Expr, Line, Point,
-    PointCollection, Properties, Scalar, Unknown, Dummy,
+    AnyExpr, Bundle, Circle, CloneWithNode, CompileContext, Displayed, Dummy, Expr, Line, Point,
+    PointCollection, Properties, Scalar, Unknown,
 };
 
 /// A node is a trait characterising objects meant to be parts of the figure's display tree.
@@ -731,7 +731,7 @@ impl Dummy for PointNode {
             display_label: MaybeUnset::new(true),
             display_dot: MaybeUnset::new(true),
             default_label: MathString::new(span!(0, 0, 0, 0)),
-            expr: Expr::dummy()
+            expr: Expr::dummy(),
         }
     }
 
@@ -813,7 +813,7 @@ impl Dummy for CircleNode {
             display_label: MaybeUnset::new(true),
             default_label: MathString::new(span!(0, 0, 0, 0)),
             style: MaybeUnset::new(Style::default()),
-            expr: Expr::dummy()
+            expr: Expr::dummy(),
         }
     }
 
@@ -955,7 +955,7 @@ impl Dummy for LineNode {
             default_label: MathString::new(span!(0, 0, 0, 0)),
             line_type: MaybeUnset::new(LineType::Line),
             style: MaybeUnset::new(Style::default()),
-            expr: Expr::dummy()
+            expr: Expr::dummy(),
         }
     }
 
@@ -1035,7 +1035,9 @@ impl FromExpr<Line> for LineNode {
                 .get("label")
                 .maybe_unset(MathString::new(span!(0, 0, 0, 0))),
             display_label: props.get("display_label").maybe_unset(false),
-            default_label: props.get("default-label").ok_or(MathString::new(span!(0, 0, 0, 0))),
+            default_label: props
+                .get("default-label")
+                .ok_or(MathString::new(span!(0, 0, 0, 0))),
             line_type: MaybeUnset::new(LineType::Line),
             style: props.get("style").maybe_unset(Style::default()),
             expr: expr.clone_without_node(),
@@ -1057,7 +1059,7 @@ impl Dummy for ScalarNode {
     fn dummy() -> Self {
         Self {
             display: MaybeUnset::new(true),
-            expr: Expr::dummy()
+            expr: Expr::dummy(),
         }
     }
 

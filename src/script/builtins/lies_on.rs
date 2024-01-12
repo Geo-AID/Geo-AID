@@ -21,8 +21,8 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 use geo_aid_derive::overload;
 use std::rc::Rc;
 
-use crate::generator::fast_float::FastFloat;
 use super::prelude::*;
+use crate::generator::fast_float::FastFloat;
 
 fn pt_lies_on_circle(
     mut lhs: Expr<Point>,

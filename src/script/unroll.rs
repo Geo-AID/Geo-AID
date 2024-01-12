@@ -40,10 +40,16 @@ use crate::script::builtins::macros::index;
 use crate::script::ty;
 
 use self::context::{CompileContext, Definition};
-use self::figure::{Node, PointNode, CircleNode, LineNode, LineType, ScalarNode, HierarchyNode, PCNode, BundleNode, EmptyNode, AnyExprNode, FromExpr, MaybeUnset, CollectionNode};
+use self::figure::{
+    AnyExprNode, BundleNode, CircleNode, CollectionNode, EmptyNode, FromExpr, HierarchyNode,
+    LineNode, LineType, MaybeUnset, Node, PCNode, PointNode, ScalarNode,
+};
 
 use super::figure::{MathString, Style};
-use super::parser::{FromProperty, RefStatement, Name, ExprCall, FieldIndex, ExprUnop, Exponentiation, PointCollectionConstructor, ExprBinop};
+use super::parser::{
+    Exponentiation, ExprBinop, ExprCall, ExprUnop, FieldIndex, FromProperty, Name,
+    PointCollectionConstructor, RefStatement,
+};
 use super::token::number::{CompExponent, CompFloat};
 use super::token::Number;
 use super::{
@@ -459,7 +465,7 @@ pub struct Library {
     /// The rule operators.
     pub rule_ops: HashMap<String, Rc<Rule>>,
     /// Bundle types.
-    pub bundles: HashMap<&'static str, HashSet<&'static str>>
+    pub bundles: HashMap<&'static str, HashSet<&'static str>>,
 }
 
 impl Library {
@@ -468,14 +474,14 @@ impl Library {
         Self {
             functions: HashMap::new(),
             rule_ops: HashMap::new(),
-            bundles: HashMap::new()
+            bundles: HashMap::new(),
         }
     }
 
     #[must_use]
     pub fn get_bundle(&self, name: &str) -> &HashSet<&'static str> {
         &self.bundles[name]
-    } 
+    }
 }
 
 /// Represents complicated iterator structures.
@@ -535,23 +541,20 @@ impl From<&SimpleExpressionKind> for IterNode {
 impl From<&Name> for IterNode {
     fn from(value: &Name) -> Self {
         match value {
-            Name::Ident(_) => {
-                IterNode::new(Vec::new())
-            }
+            Name::Ident(_) => IterNode::new(Vec::new()),
             Name::FieldIndex(f) => f.name.as_ref().into(),
-            Name::Call(expr) => {
-                IterNode::new(
-                    IterNode::from(expr.name.as_ref()).0
-                        .into_iter()
-                        .chain(expr.params.as_ref().into_iter().flat_map(|params| {
-                            params
-                                .iter()
-                                .flat_map(|v| IterNode::from(v).0)
-                        }))
-                        .collect()
-                )
-                
-            }
+            Name::Call(expr) => IterNode::new(
+                IterNode::from(expr.name.as_ref())
+                    .0
+                    .into_iter()
+                    .chain(
+                        expr.params
+                            .as_ref()
+                            .into_iter()
+                            .flat_map(|params| params.iter().flat_map(|v| IterNode::from(v).0)),
+                    )
+                    .collect(),
+            ),
             Name::Expression(expr) => expr.content.as_ref().into(),
         }
     }
@@ -1093,36 +1096,44 @@ impl Expr<Point> {
         }
     }
 
-
-
     #[must_use]
-    pub fn x(self, span: Span, weight: FastFloat, display: Properties, context: &CompileContext) -> Expr<Scalar> {
+    pub fn x(
+        self,
+        span: Span,
+        weight: FastFloat,
+        display: Properties,
+        context: &CompileContext,
+    ) -> Expr<Scalar> {
         let mut expr = Expr {
             span,
             weight,
             node: None,
             data: Rc::new(Scalar {
                 unit: Some(unit::SCALAR),
-                data: ScalarData::PointX(self)
-            })
+                data: ScalarData::PointX(self),
+            }),
         };
 
         expr.node = Some(HierarchyNode::from_expr(&expr, display, context));
         expr
     }
 
-
-
     #[must_use]
-    pub fn y(self, span: Span, weight: FastFloat, display: Properties, context: &CompileContext) -> Expr<Scalar> {
+    pub fn y(
+        self,
+        span: Span,
+        weight: FastFloat,
+        display: Properties,
+        context: &CompileContext,
+    ) -> Expr<Scalar> {
         let mut expr = Expr {
             span,
             weight,
             node: None,
             data: Rc::new(Scalar {
                 unit: Some(unit::SCALAR),
-                data: ScalarData::PointY(self)
-            })
+                data: ScalarData::PointY(self),
+            }),
         };
 
         expr.node = Some(HierarchyNode::from_expr(&expr, display, context));
@@ -1271,12 +1282,18 @@ impl Expr<Circle> {
     }
 
     #[must_use]
-    pub fn center(self, span: Span, weight: FastFloat, display: Properties, context: &CompileContext) -> Expr<Point> {
+    pub fn center(
+        self,
+        span: Span,
+        weight: FastFloat,
+        display: Properties,
+        context: &CompileContext,
+    ) -> Expr<Point> {
         let mut expr = Expr {
             span,
             weight,
             node: None,
-            data: Rc::new(Point::CircleCenter(self))
+            data: Rc::new(Point::CircleCenter(self)),
         };
 
         expr.node = Some(HierarchyNode::from_expr(&expr, display, context));
@@ -1284,15 +1301,21 @@ impl Expr<Circle> {
     }
 
     #[must_use]
-    pub fn radius(self, span: Span, weight: FastFloat, display: Properties, context: &CompileContext) -> Expr<Scalar> {
+    pub fn radius(
+        self,
+        span: Span,
+        weight: FastFloat,
+        display: Properties,
+        context: &CompileContext,
+    ) -> Expr<Scalar> {
         let mut expr = Expr {
             span,
             weight,
             node: None,
             data: Rc::new(Scalar {
                 unit: Some(unit::DISTANCE),
-                data: ScalarData::CircleRadius(self)
-            })
+                data: ScalarData::CircleRadius(self),
+            }),
         };
 
         expr.node = Some(HierarchyNode::from_expr(&expr, display, context));
@@ -1406,7 +1429,9 @@ impl ConvertFrom<Expr<PointCollection>> for Line {
                         ln_node.root.label = props
                             .get("label")
                             .maybe_unset(MathString::new(span!(0, 0, 0, 0)));
-                        ln_node.root.default_label = props.get("default-label").get_or(MathString::new(span!(0, 0, 0, 0)));
+                        ln_node.root.default_label = props
+                            .get("default-label")
+                            .get_or(MathString::new(span!(0, 0, 0, 0)));
                         ln_node.root.line_type = props.get("line_type").maybe_unset(LineType::Line);
                         ln_node.root.style = props.get("style").maybe_unset(Style::default());
                     }
@@ -1472,7 +1497,7 @@ pub enum ScalarData {
     CircleRadius(Expr<Circle>),
     Pow(Expr<Scalar>, #[def(no_entity)] CompExponent),
     PointX(Expr<Point>),
-    PointY(Expr<Point>)
+    PointY(Expr<Point>),
 }
 
 impl Display for ScalarData {
@@ -1513,7 +1538,7 @@ impl Display for ScalarData {
             }
             Self::Pow(base, exponent) => write!(f, "({base})^{exponent}"),
             Self::PointX(expr) => write!(f, "{expr}.x"),
-            Self::PointY(expr) => write!(f, "{expr}.y")
+            Self::PointY(expr) => write!(f, "{expr}.y"),
         }
     }
 }
@@ -1832,7 +1857,7 @@ impl Dummy for PointCollection {
     fn dummy() -> Self {
         Self {
             length: 0,
-            data: PointCollectionData::Generic(Generic::Dummy)
+            data: PointCollectionData::Generic(Generic::Dummy),
         }
     }
 
@@ -2070,37 +2095,37 @@ impl Expr<Bundle> {
                     let mut n = HierarchyNode::new(<Point as Displayed>::Node::dummy());
                     n.push_child(self_node);
                     n.into()
-                },
+                }
                 AnyExpr::Line(_) => {
                     let mut n = HierarchyNode::new(<Line as Displayed>::Node::dummy());
                     n.push_child(self_node);
                     n.into()
-                },
+                }
                 AnyExpr::Scalar(_) => {
                     let mut n = HierarchyNode::new(<Scalar as Displayed>::Node::dummy());
                     n.push_child(self_node);
                     n.into()
-                },
+                }
                 AnyExpr::Circle(_) => {
                     let mut n = HierarchyNode::new(<Circle as Displayed>::Node::dummy());
                     n.push_child(self_node);
                     n.into()
-                },
+                }
                 AnyExpr::PointCollection(_) => {
                     let mut n = HierarchyNode::new(<PointCollection as Displayed>::Node::dummy());
                     n.push_child(self_node);
                     n.into()
-                },
+                }
                 AnyExpr::Bundle(_) => {
                     let mut n = HierarchyNode::new(<Bundle as Displayed>::Node::dummy());
                     n.push_child(self_node);
                     n.into()
-                },
+                }
                 AnyExpr::Unknown(_) => {
                     let mut n = HierarchyNode::new(<Unknown as Displayed>::Node::dummy());
                     n.push_child(self_node);
                     n.into()
-                },
+                }
             };
 
             expr.replace_node(Some(node));
@@ -2467,7 +2492,6 @@ impl Dummy for AnyExpr {
             Self::PointCollection(v) => v.is_dummy(),
             Self::Bundle(v) => v.is_dummy(),
             Self::Unknown(v) => v.is_dummy(),
-            
         }
     }
 }
@@ -2759,7 +2783,12 @@ pub fn unroll_parameters(
     definition(params, context, display)
 }
 
-fn fetch_variable(context: &CompileContext, name: &str, variable_span: Span, weight: FastFloat) -> AnyExpr {
+fn fetch_variable(
+    context: &CompileContext,
+    name: &str,
+    variable_span: Span,
+    weight: FastFloat,
+) -> AnyExpr {
     let mut var = if let Some(var) = context.variables.get(name) {
         var.clone_without_node()
     } else {
@@ -2783,12 +2812,12 @@ fn fetch_variable(context: &CompileContext, name: &str, variable_span: Span, wei
 
 impl Unroll for SimpleExpression {
     fn unroll(
-            &self,
-            context: &mut CompileContext,
-            library: &Library,
-            it_index: &HashMap<u8, usize>,
-            display: Properties,
-        ) -> AnyExpr {
+        &self,
+        context: &mut CompileContext,
+        library: &Library,
+        it_index: &HashMap<u8, usize>,
+        display: Properties,
+    ) -> AnyExpr {
         let display = Properties::from(self.display.clone()).merge_with(display);
 
         self.kind.unroll(context, library, it_index, display)
@@ -2799,75 +2828,77 @@ impl Unroll for SimpleExpression {
 pub enum FuncRef {
     Function(String),
     Method(String, AnyExpr),
-    Invalid
+    Invalid,
 }
 
 impl Unroll for Ident {
     fn unroll(
-            &self,
-            context: &mut CompileContext,
-            _library: &Library,
-            _it_index: &HashMap<u8, usize>,
-            mut display: Properties,
-        ) -> AnyExpr {
-            match self {
-                Ident::Named(named) => {
-                    let weight = display.get("weight").get_or(FastFloat::One);
-                    // No options are expected, as var refs don't generate nodes.
-                    display.finish(context);
-    
-                    fetch_variable(context, &named.ident, named.span, weight)
-                }
-                Ident::Collection(col) => {
-                    let mut display = display;
-                    let display_pc = display.get("display").maybe_unset(true);
-                    let weight = display.get("weight").get_or(FastFloat::One);
-    
-                    let mut pc_children = Vec::new();
-                    pc_children.resize_with(col.collection.len(), || None);
-    
-                    // No options are expected, as pcs don't generate nodes.
-                    AnyExpr::PointCollection(Expr {
-                        weight: FastFloat::One, // PCs always have weight of one.
-                        data: Rc::new(PointCollection {
-                            length: col.collection.len(),
-                            data: PointCollectionData::PointCollection(
-                                col.collection
-                                    .iter()
-                                    .map(|item| {
-                                        fetch_variable(context, &format!("{item}"), col.span, weight)
-                                            .convert::<Point>(context)
-                                    })
-                                    .collect::<Vec<_>>()
-                                    .into(),
-                            ),
-                        }),
-                        span: col.span,
-                        node: Some(HierarchyNode::new(PCNode {
-                            display: display_pc,
-                            children: pc_children,
-                            props: Some(display),
-                        })),
-                    })
-                }
+        &self,
+        context: &mut CompileContext,
+        _library: &Library,
+        _it_index: &HashMap<u8, usize>,
+        mut display: Properties,
+    ) -> AnyExpr {
+        match self {
+            Ident::Named(named) => {
+                let weight = display.get("weight").get_or(FastFloat::One);
+                // No options are expected, as var refs don't generate nodes.
+                display.finish(context);
+
+                fetch_variable(context, &named.ident, named.span, weight)
             }
+            Ident::Collection(col) => {
+                let mut display = display;
+                let display_pc = display.get("display").maybe_unset(true);
+                let weight = display.get("weight").get_or(FastFloat::One);
+
+                let mut pc_children = Vec::new();
+                pc_children.resize_with(col.collection.len(), || None);
+
+                // No options are expected, as pcs don't generate nodes.
+                AnyExpr::PointCollection(Expr {
+                    weight: FastFloat::One, // PCs always have weight of one.
+                    data: Rc::new(PointCollection {
+                        length: col.collection.len(),
+                        data: PointCollectionData::PointCollection(
+                            col.collection
+                                .iter()
+                                .map(|item| {
+                                    fetch_variable(context, &format!("{item}"), col.span, weight)
+                                        .convert::<Point>(context)
+                                })
+                                .collect::<Vec<_>>()
+                                .into(),
+                        ),
+                    }),
+                    span: col.span,
+                    node: Some(HierarchyNode::new(PCNode {
+                        display: display_pc,
+                        children: pc_children,
+                        props: Some(display),
+                    })),
+                })
+            }
+        }
     }
 }
 
 impl Unroll for ExprCall {
     fn unroll(
-            &self,
-            context: &mut CompileContext,
-            library: &Library,
-            it_index: &HashMap<u8, usize>,
-            mut display: Properties,
-        ) -> AnyExpr {
-        let name = self.name.unroll(context, library, it_index, Properties::default());
+        &self,
+        context: &mut CompileContext,
+        library: &Library,
+        it_index: &HashMap<u8, usize>,
+        mut display: Properties,
+    ) -> AnyExpr {
+        let name = self
+            .name
+            .unroll(context, library, it_index, Properties::default());
 
         let (func_name, self_param) = match name {
             FuncRef::Function(x) => (x, None),
             FuncRef::Method(x, y) => (x, Some(y)),
-            FuncRef::Invalid => return AnyExpr::Unknown(Expr::new_spanless(Unknown::dummy()))
+            FuncRef::Invalid => return AnyExpr::Unknown(Expr::new_spanless(Unknown::dummy())),
         };
 
         let self_type = self_param.as_ref().map(AnyExpr::get_type);
@@ -2916,12 +2947,13 @@ impl Unroll for ExprCall {
                 let self_type_name = format!("[{self_type}]::");
 
                 let suggested = most_similar(
-                    library.functions.keys()
+                    library
+                        .functions
+                        .keys()
                         .filter(|v| v.starts_with(&self_type_name)),
-                    &func_name
-                ).map(|name| {
-                    name[self_type_name.len()..].to_string()
-                });
+                    &func_name,
+                )
+                .map(|name| name[self_type_name.len()..].to_string());
 
                 context.push_error(Error::UndefinedMethod {
                     error_span: self.name.get_span(),
@@ -2946,84 +2978,82 @@ impl Unroll for ExprCall {
 
 impl Unroll for FieldIndex {
     fn unroll(
-            &self,
-            context: &mut CompileContext,
-            library: &Library,
-            it_index: &HashMap<u8, usize>,
-            mut display: Properties,
-        ) -> AnyExpr {
+        &self,
+        context: &mut CompileContext,
+        library: &Library,
+        it_index: &HashMap<u8, usize>,
+        mut display: Properties,
+    ) -> AnyExpr {
         let weight = display.get("weight").get_or(FastFloat::One);
-        let name = self.name.unroll(context, library, it_index, Properties::default());
+        let name = self
+            .name
+            .unroll(context, library, it_index, Properties::default());
 
         match name {
-            AnyExpr::Circle(circle) => {
-                match &self.field {
-                    Ident::Named(named) => {
-                        match named.ident.as_str() {
-                            "center" => circle.center(self.get_span(), weight, display, context).into(),
-                            "radius" => circle.radius(self.get_span(), weight, display, context).into(),
-                            x => {
-                                display.finish(context);
-
-                                context.push_error(Error::UndefinedField {
-                                    error_span: self.get_span(),
-                                    field: x.to_string(),
-                                    on_type: ty::CIRCLE,
-                                    suggested: most_similar(["center", "radius"], x),
-                                });
-
-                                AnyExpr::dummy()
-                            }
-                        }
-                    }
-                    Ident::Collection(x) => {
+            AnyExpr::Circle(circle) => match &self.field {
+                Ident::Named(named) => match named.ident.as_str() {
+                    "center" => circle
+                        .center(self.get_span(), weight, display, context)
+                        .into(),
+                    "radius" => circle
+                        .radius(self.get_span(), weight, display, context)
+                        .into(),
+                    x => {
                         display.finish(context);
 
                         context.push_error(Error::UndefinedField {
                             error_span: self.get_span(),
                             field: x.to_string(),
                             on_type: ty::CIRCLE,
-                            suggested: most_similar(["center", "radius"], &x.to_string()),
+                            suggested: most_similar(["center", "radius"], x),
                         });
 
                         AnyExpr::dummy()
                     }
+                },
+                Ident::Collection(x) => {
+                    display.finish(context);
+
+                    context.push_error(Error::UndefinedField {
+                        error_span: self.get_span(),
+                        field: x.to_string(),
+                        on_type: ty::CIRCLE,
+                        suggested: most_similar(["center", "radius"], &x.to_string()),
+                    });
+
+                    AnyExpr::dummy()
                 }
             },
-            AnyExpr::Point(point) => {
-                match &self.field {
-                    Ident::Named(named) => {
-                        match named.ident.as_str() {
-                            "x" => point.x(self.get_span(), weight, display, context).into(),
-                            "y" => point.y(self.get_span(), weight, display, context).into(),
-                            x => {
-                                display.finish(context);
-
-                                context.push_error(Error::UndefinedField {
-                                    error_span: self.get_span(),
-                                    field: x.to_string(),
-                                    on_type: ty::CIRCLE,
-                                    suggested: most_similar(["x", "y"], x),
-                                });
-
-                                AnyExpr::dummy()
-                            }
-                        }
-                    }
-                    Ident::Collection(x) => {
-                                display.finish(context);
+            AnyExpr::Point(point) => match &self.field {
+                Ident::Named(named) => match named.ident.as_str() {
+                    "x" => point.x(self.get_span(), weight, display, context).into(),
+                    "y" => point.y(self.get_span(), weight, display, context).into(),
+                    x => {
+                        display.finish(context);
 
                         context.push_error(Error::UndefinedField {
                             error_span: self.get_span(),
                             field: x.to_string(),
-                            on_type: ty::POINT,
-                            suggested: most_similar(["x", "y"], &x.to_string()),
+                            on_type: ty::CIRCLE,
+                            suggested: most_similar(["x", "y"], x),
                         });
 
                         AnyExpr::dummy()
                     }
+                },
+                Ident::Collection(x) => {
+                    display.finish(context);
+
+                    context.push_error(Error::UndefinedField {
+                        error_span: self.get_span(),
+                        field: x.to_string(),
+                        on_type: ty::POINT,
+                        suggested: most_similar(["x", "y"], &x.to_string()),
+                    });
+
+                    AnyExpr::dummy()
                 }
-            }
+            },
             AnyExpr::Bundle(mut bundle) => {
                 let weight = display.get("weight").get_or(FastFloat::One);
                 display.finish(context);
@@ -3031,7 +3061,9 @@ impl Unroll for FieldIndex {
                 let bundle_fields = library.get_bundle(bundle.data.name);
 
                 if bundle_fields.contains(field_name.as_str()) {
-                    bundle.index_with_node(&self.field.to_string()).boxed(weight, self.get_span())
+                    bundle
+                        .index_with_node(&self.field.to_string())
+                        .boxed(weight, self.get_span())
                 } else {
                     let suggested = most_similar(bundle_fields.iter(), &field_name);
 
@@ -3048,12 +3080,8 @@ impl Unroll for FieldIndex {
             AnyExpr::Unknown(_) => {
                 display.finish(context);
                 AnyExpr::dummy()
-            },
-            v @ (
-                AnyExpr::Scalar(_)
-                | AnyExpr::Line(_)
-                | AnyExpr::PointCollection(_)
-            ) => {
+            }
+            v @ (AnyExpr::Scalar(_) | AnyExpr::Line(_) | AnyExpr::PointCollection(_)) => {
                 display.finish(context);
 
                 context.push_error(Error::NoFieldsOnType {
@@ -3069,44 +3097,44 @@ impl Unroll for FieldIndex {
 
 impl Unroll for Name {
     fn unroll(
-            &self,
-            context: &mut CompileContext,
-            library: &Library,
-            it_index: &HashMap<u8, usize>,
-            display: Properties,
-        ) -> AnyExpr {
-            match self {
-                Self::Ident(i) => i.unroll(context, library, it_index, display),
-                Self::Call(expr) => expr.unroll(context, library, it_index, display),
-                Self::Expression(v) => v.content.unroll(context, library, it_index, display),
-                Self::FieldIndex(v) => v.unroll(context, library, it_index, display)
-            }
+        &self,
+        context: &mut CompileContext,
+        library: &Library,
+        it_index: &HashMap<u8, usize>,
+        display: Properties,
+    ) -> AnyExpr {
+        match self {
+            Self::Ident(i) => i.unroll(context, library, it_index, display),
+            Self::Call(expr) => expr.unroll(context, library, it_index, display),
+            Self::Expression(v) => v.content.unroll(context, library, it_index, display),
+            Self::FieldIndex(v) => v.unroll(context, library, it_index, display),
+        }
     }
 }
 
 impl Unroll<FuncRef> for Name {
     fn unroll(
-            &self,
-            context: &mut CompileContext,
-            library: &Library,
-            it_index: &HashMap<u8, usize>,
-            display: Properties,
-        ) -> FuncRef {
+        &self,
+        context: &mut CompileContext,
+        library: &Library,
+        it_index: &HashMap<u8, usize>,
+        display: Properties,
+    ) -> FuncRef {
         display.finish(context);
 
         match self {
-            Self::Ident(Ident::Named(n)) => {
-                FuncRef::Function(n.ident.clone())
-            },
+            Self::Ident(Ident::Named(n)) => FuncRef::Function(n.ident.clone()),
             Self::FieldIndex(f) => {
-                let self_param: AnyExpr = f.name.unroll(context, library, it_index, Properties::default());
+                let self_param: AnyExpr =
+                    f.name
+                        .unroll(context, library, it_index, Properties::default());
                 let name = match &f.field {
                     Ident::Named(n) => n.ident.clone(),
                     Ident::Collection(_) => {
                         context.push_error(Error::ExpectedFunction {
-                            error_span: self.get_span()
+                            error_span: self.get_span(),
                         });
-        
+
                         return FuncRef::Invalid;
                     }
                 };
@@ -3114,32 +3142,29 @@ impl Unroll<FuncRef> for Name {
                 match self_param {
                     AnyExpr::Unknown(_) => FuncRef::Invalid,
                     self_param => {
-                        FuncRef::Method(
-                            format!("[{}]::{name}", self_param.get_type()),
-                            self_param
-                        )
+                        FuncRef::Method(format!("[{}]::{name}", self_param.get_type()), self_param)
                     }
                 }
-            },
+            }
             _ => {
                 context.push_error(Error::ExpectedFunction {
-                    error_span: self.get_span()
+                    error_span: self.get_span(),
                 });
 
                 FuncRef::Invalid
-            },
+            }
         }
     }
 }
 
 impl Unroll for Number {
     fn unroll(
-            &self,
-            context: &mut CompileContext,
-            _library: &Library,
-            _it_index: &HashMap<u8, usize>,
-            display: Properties,
-        ) -> AnyExpr {
+        &self,
+        context: &mut CompileContext,
+        _library: &Library,
+        _it_index: &HashMap<u8, usize>,
+        display: Properties,
+    ) -> AnyExpr {
         display.finish(context);
 
         AnyExpr::Scalar(Expr {
@@ -3156,14 +3181,16 @@ impl Unroll for Number {
 
 impl Unroll for ExprUnop {
     fn unroll(
-            &self,
-            context: &mut CompileContext,
-            library: &Library,
-            it_index: &HashMap<u8, usize>,
-            display: Properties,
-        ) -> AnyExpr {
-        let mut unrolled: Expr<Scalar> =
-            self.rhs.unroll(context, library, it_index, display).convert(context);
+        &self,
+        context: &mut CompileContext,
+        library: &Library,
+        it_index: &HashMap<u8, usize>,
+        display: Properties,
+    ) -> AnyExpr {
+        let mut unrolled: Expr<Scalar> = self
+            .rhs
+            .unroll(context, library, it_index, display)
+            .convert(context);
 
         let node = unrolled.node.take();
 
@@ -3181,15 +3208,16 @@ impl Unroll for ExprUnop {
 
 impl Unroll for Exponentiation {
     fn unroll(
-            &self,
-            context: &mut CompileContext,
-            library: &Library,
-            it_index: &HashMap<u8, usize>,
-            display: Properties,
-        ) -> AnyExpr {
-        let mut unrolled: Expr<Scalar> =
-            self.base.unroll(context, library, it_index, display)
-                .convert(context);
+        &self,
+        context: &mut CompileContext,
+        library: &Library,
+        it_index: &HashMap<u8, usize>,
+        display: Properties,
+    ) -> AnyExpr {
+        let mut unrolled: Expr<Scalar> = self
+            .base
+            .unroll(context, library, it_index, display)
+            .convert(context);
 
         let node = unrolled.node.take();
 
@@ -3221,29 +3249,26 @@ impl Unroll for Exponentiation {
 
 impl Unroll for ExplicitIterator {
     fn unroll(
-            &self,
-            context: &mut CompileContext,
-            library: &Library,
-            it_index: &HashMap<u8, usize>,
-            display: Properties,
-        ) -> AnyExpr {
-        self.get(it_index[&self.id]).unwrap().unroll(
-            context,
-            library,
-            it_index,
-            display,
-        )
+        &self,
+        context: &mut CompileContext,
+        library: &Library,
+        it_index: &HashMap<u8, usize>,
+        display: Properties,
+    ) -> AnyExpr {
+        self.get(it_index[&self.id])
+            .unwrap()
+            .unroll(context, library, it_index, display)
     }
 }
 
 impl Unroll for PointCollectionConstructor {
     fn unroll(
-            &self,
-            context: &mut CompileContext,
-            library: &Library,
-            it_index: &HashMap<u8, usize>,
-            mut display: Properties,
-        ) -> AnyExpr {
+        &self,
+        context: &mut CompileContext,
+        library: &Library,
+        it_index: &HashMap<u8, usize>,
+        mut display: Properties,
+    ) -> AnyExpr {
         let display_pc = display.get("display").maybe_unset(true);
         let weight_pc = display.get("weight").get_or(FastFloat::One);
 
@@ -3259,12 +3284,8 @@ impl Unroll for PointCollectionConstructor {
                     let mut points = Vec::new();
 
                     for expr in self.points.iter() {
-                        let mut unrolled = expr.unroll(
-                            context,
-                            library,
-                            it_index,
-                            Properties::default(),
-                        );
+                        let mut unrolled =
+                            expr.unroll(context, library, it_index, Properties::default());
 
                         *unrolled.get_weight_mut() *= weight_pc;
 
@@ -3304,35 +3325,37 @@ impl Unroll for PointCollectionConstructor {
 
 impl Unroll for SimpleExpressionKind {
     fn unroll(
-            &self,
-            context: &mut CompileContext,
-            library: &Library,
-            it_index: &HashMap<u8, usize>,
-            display: Properties,
-        ) -> AnyExpr {
+        &self,
+        context: &mut CompileContext,
+        library: &Library,
+        it_index: &HashMap<u8, usize>,
+        display: Properties,
+    ) -> AnyExpr {
         match self {
             Self::Name(name) => name.unroll(context, library, it_index, display),
             Self::Number(num) => num.unroll(context, library, it_index, display),
             Self::Unop(op) => op.unroll(context, library, it_index, display),
             Self::Exponentiation(expr) => expr.unroll(context, library, it_index, display),
             Self::ExplicitIterator(it) => it.unroll(context, library, it_index, display),
-            Self::PointCollection(col) => col.unroll(context, library, it_index, display)
+            Self::PointCollection(col) => col.unroll(context, library, it_index, display),
         }
     }
 }
 
 impl<const ITER: bool> Unroll for ExprBinop<ITER> {
     fn unroll(
-            &self,
-            context: &mut CompileContext,
-            library: &Library,
-            it_index: &HashMap<u8, usize>,
-            mut display: Properties,
-        ) -> AnyExpr {
-        let lhs =
-            self.lhs.unroll(context, library, it_index, Properties::default());
-        let rhs =
-            self.rhs.unroll(context, library, it_index, Properties::default());
+        &self,
+        context: &mut CompileContext,
+        library: &Library,
+        it_index: &HashMap<u8, usize>,
+        mut display: Properties,
+    ) -> AnyExpr {
+        let lhs = self
+            .lhs
+            .unroll(context, library, it_index, Properties::default());
+        let rhs = self
+            .rhs
+            .unroll(context, library, it_index, Properties::default());
 
         let mut lhs = if lhs.can_convert_to(ty::SCALAR_UNKNOWN) {
             lhs.convert::<Scalar>(context)
@@ -3342,7 +3365,7 @@ impl<const ITER: bool> Unroll for ExprBinop<ITER> {
                 got: (lhs.get_type(), Box::new(lhs.get_span())),
                 op: self.operator.to_string(),
             });
-    
+
             Expr {
                 weight: FastFloat::One,
                 span: lhs.get_span(),
@@ -3350,7 +3373,7 @@ impl<const ITER: bool> Unroll for ExprBinop<ITER> {
                 node: None,
             }
         };
-    
+
         let mut rhs = if rhs.can_convert_to(ty::SCALAR_UNKNOWN) {
             rhs.convert::<Scalar>(context)
         } else {
@@ -3359,7 +3382,7 @@ impl<const ITER: bool> Unroll for ExprBinop<ITER> {
                 got: (rhs.get_type(), Box::new(rhs.get_span())),
                 op: self.operator.to_string(),
             });
-    
+
             Expr {
                 weight: FastFloat::One,
                 span: rhs.get_span(),
@@ -3367,13 +3390,13 @@ impl<const ITER: bool> Unroll for ExprBinop<ITER> {
                 node: None,
             }
         };
-    
+
         // Binary operators generate collection nodes for the lhs and rhs nodes.
         let lhs_node = lhs.take_node();
         let rhs_node = rhs.take_node();
-    
+
         let weight = display.get("weight").get_or(FastFloat::One);
-    
+
         match &self.operator {
             BinaryOperator::Add(_) | BinaryOperator::Sub(_) => {
                 let lhs = if lhs.data.unit.is_none() {
@@ -3381,7 +3404,7 @@ impl<const ITER: bool> Unroll for ExprBinop<ITER> {
                 } else {
                     lhs
                 };
-    
+
                 let rhs = rhs.convert_unit(lhs.data.unit, context);
                 let mut expr = Expr {
                     weight,
@@ -3396,18 +3419,18 @@ impl<const ITER: bool> Unroll for ExprBinop<ITER> {
                     }),
                     node: None,
                 };
-    
+
                 let mut node = HierarchyNode::new(ScalarNode::from_expr(&expr, display, context));
                 node.extend_children(lhs_node);
                 node.extend_children(rhs_node);
-    
+
                 expr.node = Some(node);
-    
+
                 AnyExpr::Scalar(expr)
             }
             BinaryOperator::Mul(_) | BinaryOperator::Div(_) => {
                 let lhs = lhs.specify_unit(context);
-    
+
                 let rhs = rhs.specify_unit(context);
                 let mut expr = Expr {
                     weight,
@@ -3422,13 +3445,13 @@ impl<const ITER: bool> Unroll for ExprBinop<ITER> {
                     }),
                     node: None,
                 };
-    
+
                 let mut node = HierarchyNode::new(ScalarNode::from_expr(&expr, display, context));
                 node.extend_children(lhs_node);
                 node.extend_children(rhs_node);
-    
+
                 expr.node = Some(node);
-    
+
                 AnyExpr::Scalar(expr)
             }
         }
@@ -3437,19 +3460,16 @@ impl<const ITER: bool> Unroll for ExprBinop<ITER> {
 
 impl Unroll for ImplicitIterator {
     fn unroll(
-            &self,
-            context: &mut CompileContext,
-            library: &Library,
-            it_index: &HashMap<u8, usize>,
-            display: Properties,
-        ) -> AnyExpr {
+        &self,
+        context: &mut CompileContext,
+        library: &Library,
+        it_index: &HashMap<u8, usize>,
+        display: Properties,
+    ) -> AnyExpr {
         // Implicits always have id=0
-        self.get(it_index[&0]).unwrap().unroll(
-            context,
-            library,
-            it_index,
-            display
-        )
+        self.get(it_index[&0])
+            .unwrap()
+            .unroll(context, library, it_index, display)
     }
 }
 
@@ -3462,19 +3482,9 @@ impl<const ITER: bool> Unroll for Expression<ITER> {
         display: Properties,
     ) -> AnyExpr {
         match self {
-            Expression::Single(simple) => simple.unroll(
-                context,
-                library,
-                it_index,
-                display,
-            ),
-            Expression::ImplicitIterator(it) => it.unroll(
-                context,
-                library,
-                it_index,
-                display,
-            ),
-            Expression::Binop(op) => op.unroll(context, library, it_index, display)
+            Expression::Single(simple) => simple.unroll(context, library, it_index, display),
+            Expression::ImplicitIterator(it) => it.unroll(context, library, it_index, display),
+            Expression::Binop(op) => op.unroll(context, library, it_index, display),
         }
     }
 }
@@ -3690,9 +3700,7 @@ impl<T> Property<T> {
 impl<T> Property<Result<T, Error>> {
     #[must_use]
     pub fn ok_or(self, default: T) -> T {
-        self.value
-            .and_then(Result::ok)
-            .unwrap_or(default)
+        self.value.and_then(Result::ok).unwrap_or(default)
     }
 }
 
@@ -4286,9 +4294,11 @@ fn unroll_rulestat(
     while let Some(index) = it_index.get_currents() {
         nodes.push(unroll_rule(
             (
-                rule.lhs.unroll(context, library, index, Properties::default()),
+                rule.lhs
+                    .unroll(context, library, index, Properties::default()),
                 &rule.op,
-                rule.rhs.unroll(context, library, index, Properties::default()),
+                rule.rhs
+                    .unroll(context, library, index, Properties::default()),
             ),
             context,
             library,

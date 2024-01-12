@@ -38,15 +38,17 @@ pub mod segment;
 pub mod prelude {
     pub(crate) use crate::script::{
         builtins::macros::*,
-        compile::{Compiler, Compile},
+        compile::{Compile, Compiler},
         figure::{Figure, Style},
         unit,
         unroll::{
-            Expr, Point, Scalar, Line, Circle, PointCollection, ScalarData, Bundle,
-            Properties, Library, Function, CloneWithNode, UnrolledRule, UnrolledRuleKind, Rule,
-            Simplify,
             context::CompileContext,
-            figure::{BuildAssociated, HierarchyNode, LineNode, LineType, ScalarNode, PointNode, CollectionNode, BundleNode}
+            figure::{
+                BuildAssociated, BundleNode, CollectionNode, HierarchyNode, LineNode, LineType,
+                PointNode, ScalarNode,
+            },
+            Bundle, Circle, CloneWithNode, Expr, Function, Library, Line, Point, PointCollection,
+            Properties, Rule, Scalar, ScalarData, Simplify, UnrolledRule, UnrolledRuleKind,
         },
     };
 }

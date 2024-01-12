@@ -108,17 +108,17 @@ pub enum Error {
         error_span: Span,
         function_name: String,
         suggested: Option<String>,
-        on_type: Type
+        on_type: Type,
     },
     UndefinedField {
         error_span: Span,
         field: String,
         on_type: Type,
-        suggested: Option<String>
+        suggested: Option<String>,
     },
     NoFieldsOnType {
         error_span: Span,
-        on_type: Type
+        on_type: Type,
     },
     FeatureNotSupported {
         error_span: Span,
@@ -243,8 +243,8 @@ pub enum Error {
         error_span: Span,
     },
     ExpectedFunction {
-        error_span: Span
-    }
+        error_span: Span,
+    },
 }
 
 impl Error {
