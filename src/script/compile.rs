@@ -26,7 +26,7 @@ use crate::generator::expression::expr::{PointOnLine, Pow};
 use crate::generator::fast_float::FastFloat;
 use crate::script::unit;
 use crate::script::unroll::{
-    AnyExpr as UnrolledAny, Circle, ConvertFrom, Definition, Generic, Line, Point, Scalar,
+    AnyExpr as UnrolledAny, Circle, ConvertFrom, context::Definition, Generic, Line, Point, Scalar,
     ScalarData,
 };
 use crate::{
@@ -47,11 +47,11 @@ use crate::{
 };
 
 use super::token::number::CompExponent;
-use super::unroll::{CloneWithNode, CollectionNode, Displayed, Node, UnrolledRule};
+use super::unroll::{CloneWithNode, Displayed, figure::{CollectionNode, Node}, UnrolledRule};
 use super::{
     figure::Figure,
     unroll::{
-        self, CompileContext, EntCircle, EntLine, EntPoint, EntScalar, Entity, Expr, Flag,
+        self, context::{CompileContext, Circle as EntCircle, Line as EntLine, Point as EntPoint, Scalar as EntScalar, Entity}, Expr, Flag,
         UnrolledRuleKind, Variable,
     },
     Criteria, CriteriaKind, Error, HashableRc, SimpleUnit,
@@ -691,6 +691,12 @@ impl Compile<Scalar, ScalarExpr> for Compiler {
         // Otherwise we compile.
         let compiled = match &expr.data.data {
             ScalarData::Generic(generic) => self.compile_generic(generic),
+            ScalarData::PointX(v) => Arc::new(Expression::new(
+                ScalarExpr::PointX(PointX { point: self.compile(v) }), v.weight
+            )),
+            ScalarData::PointY(v) => Arc::new(Expression::new(
+                ScalarExpr::PointY(PointY { point: self.compile(v) }), v.weight
+            )),
             ScalarData::Number(v) => self.compile_number(expr, *v),
             ScalarData::DstLiteral(v) => Arc::new(Expression::new(
                 ScalarExpr::Literal(Literal { value: *v }),

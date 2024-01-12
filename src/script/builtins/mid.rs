@@ -18,7 +18,7 @@ WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use crate::script::unroll::{CompileContext, Expr, Function, Library, Point, Properties, Scalar};
+use super::prelude::*;
 use geo_aid_derive::overload;
 
 pub fn function_point(
@@ -41,7 +41,6 @@ pub fn register(library: &mut Library) {
     library.functions.insert(
         String::from("mid"),
         Function {
-            name: String::from("mid"),
             overloads: vec![
                 overload!((...ANGLE) -> ANGLE : function_scalar),
                 overload!((...DISTANCE) -> DISTANCE : function_scalar),

@@ -104,6 +104,22 @@ pub enum Error {
         function_name: String,
         suggested: Option<String>,
     },
+    UndefinedMethod {
+        error_span: Span,
+        function_name: String,
+        suggested: Option<String>,
+        on_type: Type
+    },
+    UndefinedField {
+        error_span: Span,
+        field: String,
+        on_type: Type,
+        suggested: Option<String>
+    },
+    NoFieldsOnType {
+        error_span: Span,
+        on_type: Type
+    },
     FeatureNotSupported {
         error_span: Span,
         feature_name: &'static str,
@@ -226,6 +242,9 @@ pub enum Error {
     ZeroDenominator {
         error_span: Span,
     },
+    ExpectedFunction {
+        error_span: Span
+    }
 }
 
 impl Error {
@@ -313,7 +332,7 @@ impl Error {
                 variable_name,
                 suggested
             } => {
-                let message = suggested.map(|v| format!("Did you mean: `{v}`?"));
+                let message = suggested.map(|v| format!("did you mean: `{v}`?"));
                 DiagnosticData::new(&format!("undefined variable: `{variable_name}`"))
                     .add_span(error_span)
                     .add_annotation_opt_msg(error_span, AnnotationKind::Help, message.as_ref())
@@ -323,10 +342,39 @@ impl Error {
                 function_name,
                 suggested
             } => {
-                let message = suggested.map(|v| format!("Did you mean: `{v}`?"));
-                DiagnosticData::new(&format!("undefined function: `{function_name}`"))
+                let message = suggested.map(|v| format!("did you mean: `{v}`?"));
+                DiagnosticData::new(&format!("function `{function_name}` not found"))
                     .add_span(error_span)
                     .add_annotation_opt_msg(error_span, AnnotationKind::Help, message.as_ref())
+            }
+            Self::UndefinedMethod {
+                error_span,
+                function_name,
+                suggested,
+                on_type
+            } => {
+                let message = suggested.map(|v| format!("did you mean: `{v}`?"));
+                DiagnosticData::new(&format!("method `{function_name}` not found on type {on_type}"))
+                    .add_span(error_span)
+                    .add_annotation_opt_msg(error_span, AnnotationKind::Help, message.as_ref())
+            }
+            Self::UndefinedField {
+                error_span,
+                field,
+                on_type,
+                suggested
+            } => {
+                let message = suggested.map(|v| format!("did you mean: `{v}`?"));
+                DiagnosticData::new(&format!("field `{field}` not found on type {on_type}"))
+                    .add_span(error_span)
+                    .add_annotation_opt_msg(error_span, AnnotationKind::Help, message.as_ref())
+            }
+            Self::NoFieldsOnType {
+                error_span,
+                on_type,
+            } => {
+                DiagnosticData::new(&format!("there are no fields on type {on_type}"))
+                    .add_span(error_span)
             }
             Self::FeatureNotSupported {
                 error_span,
@@ -543,6 +591,10 @@ impl Error {
             }
             Self::ZeroDenominator { error_span } => {
                 DiagnosticData::new(&"denominator in a fraction cannot be equal to zero")
+                    .add_span(error_span)
+            }
+            Self::ExpectedFunction { error_span } => {
+                DiagnosticData::new(&"expected function, found, value")
                     .add_span(error_span)
             }
         }

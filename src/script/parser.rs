@@ -62,7 +62,7 @@ macro_rules! impl_token_parse {
 #[derive(Debug)]
 pub enum UnaryOperator {
     /// A negation, as in `-x`.
-    Neg(NegOp),
+    Neg(Minus),
 }
 
 impl UnaryOperator {
@@ -83,52 +83,63 @@ impl UnaryOperator {
     }
 }
 
-/// A parsed unary `-` operator.
-#[derive(Debug)]
-pub struct NegOp {
-    /// The `-` token.
-    pub minus: Minus,
-}
+impl Parse for UnaryOperator {
+    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
+            it: &mut Peekable<I>,
+        ) -> Result<Self, Error> {
+        match it.next() {
+            Some(tok) => match tok {
+                Token::Minus(minus) => Ok(Self::Neg(*minus)),
+                t => Err(Error::InvalidToken { token: t.clone() }),
+            },
+            None => Err(Error::EndOfInput)
+        }
+    }
 
-/// A parsed `+` operator.
-#[derive(Debug)]
-pub struct AddOp {
-    //. The `+` token.
-    pub plus: Plus,
-}
-
-/// A parsed `-` operator.
-#[derive(Debug)]
-pub struct SubOp {
-    //. The `-` token.
-    pub minus: Minus,
-}
-
-/// A parsed `*` operator.
-#[derive(Debug)]
-pub struct MulOp {
-    //. The `*` token.
-    pub asterisk: Asterisk,
-}
-
-/// A parsed `/` operator.
-#[derive(Debug)]
-pub struct DivOp {
-    //. The `/` token.
-    pub slash: Slash,
+    fn get_span(&self) -> Span {
+        match self {
+            Self::Neg(v) => v.span
+        }
+    }
 }
 
 /// A binary operator, like `+`, `-`, `*` or `/`.
 #[derive(Debug)]
 pub enum BinaryOperator {
     /// Addition
-    Add(AddOp),
+    Add(Plus),
     /// Subtraction
-    Sub(SubOp),
+    Sub(Minus),
     /// Multiplication
-    Mul(MulOp),
+    Mul(Asterisk),
     /// Division
-    Div(DivOp),
+    Div(Slash),
+}
+
+impl Parse for BinaryOperator {
+    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
+            it: &mut Peekable<I>,
+        ) -> Result<Self, Error> {
+        match it.next() {
+            Some(tok) => match tok {
+                Token::Asterisk(asterisk) => Ok(Self::Mul(*asterisk)),
+                Token::Plus(plus) => Ok(Self::Add(*plus)),
+                Token::Minus(minus) => Ok(Self::Sub(*minus)),
+                Token::Slash(slash) => Ok(Self::Div(*slash)),
+                t => Err(Error::InvalidToken { token: t.clone() }),
+            },
+            None => Err(Error::EndOfInput)
+        }
+    }
+
+    fn get_span(&self) -> Span {
+        match self {
+            Self::Add(v) => v.span,
+            Self::Sub(v) => v.span,
+            Self::Mul(v) => v.span,
+            Self::Div(v) => v.span,
+        }
+    }
 }
 
 impl ToString for BinaryOperator {
@@ -399,6 +410,22 @@ pub struct FieldIndex {
     pub field: Ident
 }
 
+impl Parse for FieldIndex {
+    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
+            it: &mut Peekable<I>,
+        ) -> Result<Self, Error> {
+        Ok(Self {
+            name: Box::parse(it)?,
+            dot: Dot::parse(it)?,
+            field: Ident::parse(it)?
+        })
+    }
+
+    fn get_span(&self) -> Span {
+        self.name.get_span().join(self.field.get_span())
+    }
+}
+
 /// A name (field, method or variable).
 #[derive(Debug)]
 pub enum Name {
@@ -517,15 +544,46 @@ pub struct ExprUnop {
     pub rhs: Box<SimpleExpressionKind>,
 }
 
+impl Parse for ExprUnop {
+    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
+            it: &mut Peekable<I>,
+        ) -> Result<Self, Error> {
+        Ok(Self {
+            operator: UnaryOperator::parse(it)?,
+            rhs: Box::parse(it)?
+        })
+    }
+
+    fn get_span(&self) -> Span {
+        self.operator.get_span().join(self.rhs.get_span())
+    }
+}
+
 /// A parsed binary operator expression.
 #[derive(Debug)]
 pub struct ExprBinop<const ITER: bool> {
-    /// The operator
-    pub operator: BinaryOperator,
     /// Left hand side
     pub lhs: Box<Expression<ITER>>,
+    /// The operator
+    pub operator: BinaryOperator,
     /// Right hand side.
     pub rhs: Box<Expression<ITER>>,
+}
+
+impl<const ITER: bool> Parse for ExprBinop<ITER> {
+    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
+            it: &mut Peekable<I>,
+        ) -> Result<Self, Error> {
+        Ok(Self {
+            lhs: Box::parse(it)?,
+            operator: BinaryOperator::parse(it)?,
+            rhs: Box::parse(it)?
+        })
+    }
+
+    fn get_span(&self) -> Span {
+        self.lhs.get_span().join(self.rhs.get_span())
+    }
 }
 
 /// Floating point or an integer.
@@ -1057,12 +1115,10 @@ impl<const ITER: bool> Parse for Expression<ITER> {
 
             let op = match next {
                 Some(next) => match next {
-                    Token::Asterisk(asterisk) => BinaryOperator::Mul(MulOp {
-                        asterisk: *asterisk,
-                    }),
-                    Token::Plus(plus) => BinaryOperator::Add(AddOp { plus: *plus }),
-                    Token::Minus(minus) => BinaryOperator::Sub(SubOp { minus: *minus }),
-                    Token::Slash(slash) => BinaryOperator::Div(DivOp { slash: *slash }),
+                    Token::Asterisk(asterisk) => BinaryOperator::Mul(*asterisk),
+                    Token::Plus(plus) => BinaryOperator::Add(*plus),
+                    Token::Minus(minus) => BinaryOperator::Sub(*minus),
+                    Token::Slash(slash) => BinaryOperator::Div(*slash),
                     _ => break,
                 },
                 None => break,
@@ -1172,7 +1228,7 @@ impl Parse for SimpleExpressionKind {
                     it.next();
                     // negation
                     Self::Unop(ExprUnop {
-                        operator: UnaryOperator::Neg(NegOp { minus: *m }),
+                        operator: UnaryOperator::Neg(*m),
                         rhs: Box::new(SimpleExpressionKind::parse(it)?),
                     })
                 }
@@ -1205,7 +1261,7 @@ impl Parse for SimpleExpressionKind {
             Self::Name(v) => v.get_span(),
             Self::Number(v) => v.get_span(),
             Self::Unop(v) => v.rhs.get_span().join(match &v.operator {
-                UnaryOperator::Neg(v) => v.minus.span,
+                UnaryOperator::Neg(v) => v.span,
             }),
             Self::ExplicitIterator(v) => v.get_span(),
             Self::PointCollection(v) => v.get_span(),
@@ -1613,6 +1669,12 @@ pub trait FromProperty: Sized {
     /// # Errors
     /// Causes an error if the value is not properly convertible.
     fn from_property(property: PropertyValue) -> Result<Self, Error>;
+}
+
+impl<T: FromProperty> FromProperty for Result<T, Error> {
+    fn from_property(property: PropertyValue) -> Result<Self, Error> {
+        Ok(T::from_property(property))
+    }
 }
 
 impl FromProperty for bool {

@@ -18,15 +18,13 @@ WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-#[allow(unused_imports)]
-use crate::script::unroll::{CompileContext, Function, Library, Point};
+use super::prelude::*;
 use geo_aid_derive::overload;
 
 pub fn register(library: &mut Library) {
     library.functions.insert(
         String::from("Point"),
         Function {
-            name: String::from("Point"),
             overloads: vec![overload!(() -> POINT {
                 |context: &mut CompileContext, props| {
                     let pt = context.add_point();

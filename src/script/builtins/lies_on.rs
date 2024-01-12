@@ -22,15 +22,7 @@ use geo_aid_derive::overload;
 use std::rc::Rc;
 
 use crate::generator::fast_float::FastFloat;
-use crate::script::builtins::macros::field;
-use crate::script::unroll::{
-    Bundle, Circle, CloneWithNode, CollectionNode, Line, Point, PointCollection, Simplify,
-    UnrolledRule, UnrolledRuleKind,
-};
-use crate::script::{
-    builtins::macros::{index, number},
-    unroll::{CompileContext, Expr, Library, Properties, Rule},
-};
+use super::prelude::*;
 
 fn pt_lies_on_circle(
     mut lhs: Expr<Point>,

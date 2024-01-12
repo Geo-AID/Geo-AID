@@ -34,6 +34,23 @@ pub mod point;
 pub mod radians;
 pub mod segment;
 
+/// A prelude for builtin functions.
+pub mod prelude {
+    pub(crate) use crate::script::{
+        builtins::macros::*,
+        compile::{Compiler, Compile},
+        figure::{Figure, Style},
+        unit,
+        unroll::{
+            Expr, Point, Scalar, Line, Circle, PointCollection, ScalarData, Bundle,
+            Properties, Library, Function, CloneWithNode, UnrolledRule, UnrolledRuleKind, Rule,
+            Simplify,
+            context::CompileContext,
+            figure::{BuildAssociated, HierarchyNode, LineNode, LineType, ScalarNode, PointNode, CollectionNode, BundleNode}
+        },
+    };
+}
+
 /// Returns what size of point collection can the given bundle type be cast onto.
 pub const fn get_bundle_pc(_name: &'static str) -> usize {
     0
@@ -139,7 +156,7 @@ pub mod macros {
     macro_rules! construct_bundle {
         ($t:ident { $($field:ident : $value:expr),* $(,)? }) => {{
             let mut fields = std::collections::HashMap::new();
-            let mut node = $crate::script::unroll::BundleNode::new();
+            let mut node = $crate::script::unroll::figure::BundleNode::new();
 
             $(
                 let mut v = $crate::script::unroll::CloneWithNode::clone_with_node(&mut $value);
@@ -154,7 +171,7 @@ pub mod macros {
                     name: stringify!($t),
                     data: $crate::script::unroll::BundleData::ConstructBundle(fields.into())
                 }),
-                node: Some($crate::script::unroll::HierarchyNode::new(node))
+                node: Some($crate::script::unroll::figure::HierarchyNode::new(node))
             }
         }};
     }

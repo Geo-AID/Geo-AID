@@ -18,19 +18,8 @@ WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-#[allow(unused_imports)]
-use crate::script::unroll::{
-    CompileContext, Expr, Function, Library, Line, Point, PointCollection, Properties,
-};
-use crate::script::{
-    compile::{Compile, Compiler},
-    figure::{Figure, Style},
-    unroll::{BuildAssociated, CloneWithNode, HierarchyNode, LineNode, LineType},
-};
+use super::prelude::*;
 use geo_aid_derive::overload;
-
-#[allow(unused_imports)]
-use super::macros::{call, index};
 
 /// bisector(point, point, point) - angle bisector.
 pub fn point_point_point(
@@ -162,7 +151,6 @@ pub fn register(library: &mut Library) {
     library.functions.insert(
         String::from("bisector"),
         Function {
-            name: String::from("bisector"),
             overloads: vec![
                 overload!((3-P) -> LINE {
                     |mut col: Expr<PointCollection>, context, display| call!(context:point_point_point(

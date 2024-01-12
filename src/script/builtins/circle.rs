@@ -18,34 +18,23 @@ WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use crate::{
-    script::{
-        unit,
-        unroll::{Circle, CompileContext, Expr, Function, Library, Point, Properties, Scalar},
-    },
-    take_nodes,
-};
+use super::prelude::*;
 use geo_aid_derive::overload;
-
-#[allow(unused_imports)]
-use super::macros::call;
 
 /// Circle constructor. Creates a circle based off of its center and radius.
 fn circle_function(
-    mut center: Expr<Point>,
-    mut radius: Expr<Scalar>,
+    center: Expr<Point>,
+    radius: Expr<Scalar>,
     context: &CompileContext,
     display: Properties,
 ) -> Expr<Circle> {
-    let nodes = take_nodes!(center, radius);
-    context.expr_with(Circle::Circle(center, radius), display, nodes)
+    context.circle_display(center, radius, display)
 }
 
 pub fn register(library: &mut Library) {
     library.functions.insert(
         String::from("Circle"),
         Function {
-            name: String::from("Circle"),
             overloads: vec![
                 overload!((POINT, DISTANCE) -> CIRCLE : circle_function),
                 overload!((DISTANCE, POINT) -> CIRCLE {
