@@ -47,8 +47,8 @@ use self::figure::{
 
 use super::figure::{MathString, Style};
 use super::parser::{
-    ExprBinop, ExprCall, FieldIndex, FromProperty, Name,
-    PointCollectionConstructor, RefStatement, InputStream,
+    ExprBinop, ExprCall, FieldIndex, FromProperty, InputStream, Name, PointCollectionConstructor,
+    RefStatement,
 };
 use super::token::number::{CompExponent, CompFloat};
 use super::token::Number;
@@ -3456,7 +3456,8 @@ impl<const ITER: bool> Unroll for ImplicitIterator<ITER> {
         } else {
             // Implicits always have id=0
             self.get(it_index[&0]).unwrap()
-        }.unroll(context, library, it_index, display)
+        }
+        .unroll(context, library, it_index, display)
     }
 }
 
@@ -4078,7 +4079,7 @@ fn unroll_eq(
                     node: None,
                 })
                 .convert_to(lhs_type, context),
-                lhs_type
+                lhs_type,
             )
         };
 

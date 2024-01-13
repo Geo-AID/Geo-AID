@@ -18,24 +18,24 @@ WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use num_traits::Zero;
 use geo_aid_derive::Parse;
+use num_traits::Zero;
 
 use crate::script::builtins;
 use std::{
     fmt::{Debug, Display},
-    iter::Peekable, marker::PhantomData
+    iter::Peekable,
+    marker::PhantomData,
 };
 
 use crate::span;
-
 
 use super::{
     token::{
         number::CompExponent, Ampersant, Asterisk, At, Caret, Colon, Comma, Dollar, Dot, Eq,
         Exclamation, Gt, Gteq, Ident, LBrace, LParen, LSquare, Let, Lt, Lteq, Minus, NamedIdent,
         Number, Plus, Question, RBrace, RParen, RSquare, Semi, Slash, Span, StrLit, TokInteger,
-        Token
+        Token,
     },
     unit, ComplexUnit, Error,
 };
@@ -45,17 +45,25 @@ pub trait Parse {
 
     /// # Errors
     /// Returns an error if parsing was unsuccessful.
-    fn parse<'t, I: Iterator<Item = &'t Token> + Clone>(input: &mut InputStream<'t, I>) -> Result<Self, Error> where Self: Sized;
+    fn parse<'t, I: Iterator<Item = &'t Token> + Clone>(
+        input: &mut InputStream<'t, I>,
+    ) -> Result<Self, Error>
+    where
+        Self: Sized;
 
     fn get_span(&self) -> Span;
 }
 
 pub trait CheckParses {
-    fn check_parses<'t, I: Iterator<Item = &'t Token> + Clone>(input: &InputStream<'t, I>) -> Option<bool>;
+    fn check_parses<'t, I: Iterator<Item = &'t Token> + Clone>(
+        input: &InputStream<'t, I>,
+    ) -> Option<bool>;
 }
 
 impl<T: Parse> CheckParses for T {
-    fn check_parses<'t, I: Iterator<Item = &'t Token> + Clone>(input: &InputStream<'t, I>) -> Option<bool> {
+    fn check_parses<'t, I: Iterator<Item = &'t Token> + Clone>(
+        input: &InputStream<'t, I>,
+    ) -> Option<bool> {
         Some(input.clone().parse::<Self>().is_ok())
     }
 }
@@ -63,22 +71,26 @@ impl<T: Parse> CheckParses for T {
 #[derive(Debug)]
 pub struct TokenOr<T, U> {
     phantom_t: PhantomData<T>,
-    phantom_u: PhantomData<U>
+    phantom_u: PhantomData<U>,
 }
 
 impl<T: CheckParses, U: CheckParses> CheckParses for TokenOr<T, U> {
-    fn check_parses<'t, I: Iterator<Item = &'t Token> + Clone>(input: &InputStream<'t, I>) -> Option<bool> {
+    fn check_parses<'t, I: Iterator<Item = &'t Token> + Clone>(
+        input: &InputStream<'t, I>,
+    ) -> Option<bool> {
         T::check_parses(input).or_else(|| U::check_parses(input))
     }
 }
 
 #[derive(Debug)]
 pub struct Maybe<T> {
-    phantom_t: PhantomData<T>
+    phantom_t: PhantomData<T>,
 }
 
 impl<T: CheckParses> CheckParses for Maybe<T> {
-    fn check_parses<'t, I: Iterator<Item = &'t Token> + Clone>(input: &InputStream<'t, I>) -> Option<bool> {
+    fn check_parses<'t, I: Iterator<Item = &'t Token> + Clone>(
+        input: &InputStream<'t, I>,
+    ) -> Option<bool> {
         T::check_parses(input).and_then(|x| if x { Some(x) } else { None })
     }
 }
@@ -86,7 +98,12 @@ impl<T: CheckParses> CheckParses for Maybe<T> {
 impl<T: Parse> Parse for Vec<T> {
     type FirstToken = Maybe<T::FirstToken>;
 
-    fn parse<'t, I: Iterator<Item = &'t Token> + Clone>(input: &mut InputStream<'t, I>) -> Result<Self, Error> where Self: Sized {
+    fn parse<'t, I: Iterator<Item = &'t Token> + Clone>(
+        input: &mut InputStream<'t, I>,
+    ) -> Result<Self, Error>
+    where
+        Self: Sized,
+    {
         let mut parsed = Self::new();
 
         while let Ok(Some(v)) = input.parse() {
@@ -97,15 +114,21 @@ impl<T: Parse> Parse for Vec<T> {
     }
 
     fn get_span(&self) -> Span {
-        self.first()
-            .map_or(Span::empty(), |x| x.get_span().join(self.last().unwrap().get_span()))
+        self.first().map_or(Span::empty(), |x| {
+            x.get_span().join(self.last().unwrap().get_span())
+        })
     }
 }
 
 impl<T: Parse, U: Parse> Parse for (T, U) {
     type FirstToken = T::FirstToken;
 
-    fn parse<'t, I: Iterator<Item = &'t Token> + Clone>(input: &mut InputStream<'t, I>) -> Result<Self, Error> where Self: Sized {
+    fn parse<'t, I: Iterator<Item = &'t Token> + Clone>(
+        input: &mut InputStream<'t, I>,
+    ) -> Result<Self, Error>
+    where
+        Self: Sized,
+    {
         Ok((input.parse()?, input.parse()?))
     }
 
@@ -117,7 +140,12 @@ impl<T: Parse, U: Parse> Parse for (T, U) {
 impl<T: Parse> Parse for Option<T> {
     type FirstToken = Maybe<T::FirstToken>;
 
-    fn parse<'t, I: Iterator<Item = &'t Token> + Clone>(input: &mut InputStream<'t, I>) -> Result<Self, Error> where Self: Sized {
+    fn parse<'t, I: Iterator<Item = &'t Token> + Clone>(
+        input: &mut InputStream<'t, I>,
+    ) -> Result<Self, Error>
+    where
+        Self: Sized,
+    {
         if T::FirstToken::check_parses(input) == Some(false) {
             Ok(None)
         } else {
@@ -135,14 +163,14 @@ impl<T: Parse> Parse for Option<T> {
 
 #[derive(Debug, Clone)]
 pub struct InputStream<'t, I: Iterator<Item = &'t Token> + Clone> {
-    it: Peekable<I>
+    it: Peekable<I>,
 }
 
 impl<'t, I: Iterator<Item = &'t Token> + Clone> InputStream<'t, I> {
     #[must_use]
     pub fn new<It: IntoIterator<IntoIter = I>>(it: It) -> Self {
         Self {
-            it: it.into_iter().peekable()
+            it: it.into_iter().peekable(),
         }
     }
 
@@ -227,17 +255,22 @@ impl<const ITER: bool> ImplicitIterator<ITER> {
 impl<const ITER: bool> Parse for ImplicitIterator<ITER> {
     type FirstToken = <SimpleExpression as Parse>::FirstToken;
 
-    fn parse<'t, I: Iterator<Item = &'t Token> + Clone>(input: &mut InputStream<'t, I>) -> Result<Self, Error> where Self: Sized {
+    fn parse<'t, I: Iterator<Item = &'t Token> + Clone>(
+        input: &mut InputStream<'t, I>,
+    ) -> Result<Self, Error>
+    where
+        Self: Sized,
+    {
         if ITER {
             Ok(Self {
-                exprs: input.parse()?
+                exprs: input.parse()?,
             })
         } else {
             Ok(Self {
                 exprs: Punctuated {
                     first: input.parse()?,
-                    collection: Vec::new()
-                }
+                    collection: Vec::new(),
+                },
             })
         }
     }
@@ -280,9 +313,13 @@ impl Parse for ExplicitIterator {
             right_paren: input.parse()?,
         };
 
-        parsed.id = parsed.id_token.parsed.parse().map_err(|_| Error::NumberTooLarge {
-            error_span: parsed.id_token.get_span(),
-        })?;
+        parsed.id = parsed
+            .id_token
+            .parsed
+            .parse()
+            .map_err(|_| Error::NumberTooLarge {
+                error_span: parsed.id_token.get_span(),
+            })?;
 
         if parsed.exprs.len() == 1 {
             return Err(Error::SingleVariantExplicitIterator {
@@ -437,7 +474,12 @@ pub enum Name {
 impl Parse for Name {
     type FirstToken = TokenOr<Maybe<Ident>, LParen>;
 
-    fn parse<'t, I: Iterator<Item = &'t Token> + Clone>(input: &mut InputStream<'t, I>) -> Result<Self, Error> where Self: Sized {
+    fn parse<'t, I: Iterator<Item = &'t Token> + Clone>(
+        input: &mut InputStream<'t, I>,
+    ) -> Result<Self, Error>
+    where
+        Self: Sized,
+    {
         let mut name = if let Some(expr) = input.parse()? {
             Self::Expression(expr)
         } else {
@@ -449,14 +491,14 @@ impl Parse for Name {
                 Self::FieldIndex(FieldIndex {
                     name: Box::new(name),
                     dot,
-                    field: input.parse()?
+                    field: input.parse()?,
                 })
             } else if let Some(lparen) = input.parse::<Option<LParen>>()? {
                 Self::Call(ExprCall {
                     name: Box::new(name),
                     lparen,
                     params: input.parse()?,
-                    rparen: input.parse()?
+                    rparen: input.parse()?,
                 })
             } else {
                 break Ok(name);
@@ -469,7 +511,7 @@ impl Parse for Name {
             Self::Call(v) => v.get_span(),
             Self::FieldIndex(v) => v.get_span(),
             Self::Expression(v) => v.get_span(),
-            Self::Ident(v) => v.get_span()
+            Self::Ident(v) => v.get_span(),
         }
     }
 }
@@ -552,13 +594,11 @@ fn dispatch_order<const ITER: bool>(
 ) -> Expression<ITER> {
     match lhs {
         // if lhs is simple, there is no order to consider.
-        lhs @ Expression::ImplicitIterator(_) => {
-            Expression::Binop(ExprBinop {
-                lhs: Box::new(lhs),
-                operator: op,
-                rhs: Box::new(rhs),
-            })
-        }
+        lhs @ Expression::ImplicitIterator(_) => Expression::Binop(ExprBinop {
+            lhs: Box::new(lhs),
+            operator: op,
+            rhs: Box::new(rhs),
+        }),
         // Otherwise we compare indices of the operators and act accordingly.
         Expression::Binop(lhs) => {
             if op.index() > lhs.operator.index() {
@@ -789,7 +829,7 @@ impl Parse for TokInteger {
     ) -> Result<Self, Error> {
         match input.get_token()? {
             Token::Number(Number::Integer(tok)) => Ok(tok.clone()),
-            t => Err(Error::InvalidToken { token: t.clone() })
+            t => Err(Error::InvalidToken { token: t.clone() }),
         }
     }
 
@@ -806,7 +846,7 @@ impl Parse for NamedIdent {
     ) -> Result<Self, Error> {
         match input.get_token()? {
             Token::Ident(Ident::Named(named)) => Ok(named.clone()),
-            t => Err(Error::InvalidToken { token: t.clone() })
+            t => Err(Error::InvalidToken { token: t.clone() }),
         }
     }
 

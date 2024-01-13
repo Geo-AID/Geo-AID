@@ -69,7 +69,13 @@ fn distance_convert_pc(
     display: Properties,
 ) -> Expr<Scalar> {
     if let Some(node) = pc.node.as_mut() {
-        node.root.props = Some(node.root.props.take().unwrap_or_default().merge_with(display));
+        node.root.props = Some(
+            node.root
+                .props
+                .take()
+                .unwrap_or_default()
+                .merge_with(display),
+        );
     }
 
     pc.convert(context)

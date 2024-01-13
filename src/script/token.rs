@@ -24,8 +24,8 @@ use serde::Serialize;
 
 use self::number::{ParsedFloat, ParsedInt, ParsedIntBuilder};
 
-use geo_aid_derive::Parse;
 use super::{parser::Parse, Error};
+use geo_aid_derive::Parse;
 
 /// Re-exports and zero-cost abstractions of number types used by geo-aid.
 pub mod number;
@@ -81,14 +81,8 @@ impl Span {
     #[must_use]
     pub const fn empty() -> Self {
         Span {
-            start: Position {
-                line: 0,
-                column: 0,
-            },
-            end: Position {
-                line: 0,
-                column: 0,
-            },
+            start: Position { line: 0, column: 0 },
+            end: Position { line: 0, column: 0 },
         }
     }
 
@@ -600,7 +594,7 @@ impl Display for Number {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Integer(v) => write!(f, "{v}"),
-            Self::Float(v) => write!(f, "{v}")
+            Self::Float(v) => write!(f, "{v}"),
         }
     }
 }
