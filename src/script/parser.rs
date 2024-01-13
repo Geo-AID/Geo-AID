@@ -18,12 +18,14 @@ WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use geo_aid_derive::Parse;
 use num_traits::Zero;
 
 use crate::script::builtins;
 use std::{
     fmt::{Debug, Display},
     iter::Peekable,
+    marker::PhantomData,
 };
 
 use crate::span;
@@ -33,78 +35,175 @@ use super::{
         number::CompExponent, Ampersant, Asterisk, At, Caret, Colon, Comma, Dollar, Dot, Eq,
         Exclamation, Gt, Gteq, Ident, LBrace, LParen, LSquare, Let, Lt, Lteq, Minus, NamedIdent,
         Number, Plus, Question, RBrace, RParen, RSquare, Semi, Slash, Span, StrLit, TokInteger,
-        Token, Vertical,
+        Token,
     },
     unit, ComplexUnit, Error,
 };
 
-macro_rules! impl_token_parse {
-    ($token:ident) => {
-        impl Parse for $token {
-            fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-                it: &mut Peekable<I>,
-            ) -> Result<Self, Error> {
-                match it.next() {
-                    Some(Token::$token(tok)) => Ok(*tok),
-                    Some(t) => Err(Error::InvalidToken { token: t.clone() }),
-                    None => Err(Error::EndOfInput),
-                }
-            }
+pub trait Parse {
+    type FirstToken: CheckParses;
 
-            fn get_span(&self) -> Span {
-                self.span
-            }
-        }
-    };
+    /// # Errors
+    /// Returns an error if parsing was unsuccessful.
+    fn parse<'t, I: Iterator<Item = &'t Token> + Clone>(
+        input: &mut InputStream<'t, I>,
+    ) -> Result<Self, Error>
+    where
+        Self: Sized;
+
+    fn get_span(&self) -> Span;
 }
 
-/// A unary operator, like `-`.
-#[derive(Debug)]
-pub enum UnaryOperator {
-    /// A negation, as in `-x`.
-    Neg(Minus),
+pub trait CheckParses {
+    fn check_parses<'t, I: Iterator<Item = &'t Token> + Clone>(
+        input: &InputStream<'t, I>,
+    ) -> Option<bool>;
 }
 
-impl UnaryOperator {
-    /// Gets the type that this operator returns.
-    #[must_use]
-    pub fn get_returned(&self, param: &Type) -> Type {
-        match self {
-            UnaryOperator::Neg(_) => match param {
-                Type::Point
-                | Type::Line
-                | Type::Circle
-                | Type::Unknown
-                | Type::Bundle(_)
-                | Type::PointCollection(_) => Type::Unknown,
-                t @ Type::Scalar(_) => *t,
-            },
-        }
+impl<T: Parse> CheckParses for T {
+    fn check_parses<'t, I: Iterator<Item = &'t Token> + Clone>(
+        input: &InputStream<'t, I>,
+    ) -> Option<bool> {
+        Some(input.clone().parse::<Self>().is_ok())
     }
 }
 
-impl Parse for UnaryOperator {
-    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-        it: &mut Peekable<I>,
-    ) -> Result<Self, Error> {
-        match it.next() {
-            Some(tok) => match tok {
-                Token::Minus(minus) => Ok(Self::Neg(*minus)),
-                t => Err(Error::InvalidToken { token: t.clone() }),
-            },
-            None => Err(Error::EndOfInput),
+#[derive(Debug)]
+pub struct TokenOr<T, U> {
+    phantom_t: PhantomData<T>,
+    phantom_u: PhantomData<U>,
+}
+
+impl<T: CheckParses, U: CheckParses> CheckParses for TokenOr<T, U> {
+    fn check_parses<'t, I: Iterator<Item = &'t Token> + Clone>(
+        input: &InputStream<'t, I>,
+    ) -> Option<bool> {
+        T::check_parses(input).or_else(|| U::check_parses(input))
+    }
+}
+
+#[derive(Debug)]
+pub struct Maybe<T> {
+    phantom_t: PhantomData<T>,
+}
+
+impl<T: CheckParses> CheckParses for Maybe<T> {
+    fn check_parses<'t, I: Iterator<Item = &'t Token> + Clone>(
+        input: &InputStream<'t, I>,
+    ) -> Option<bool> {
+        T::check_parses(input).and_then(|x| if x { Some(x) } else { None })
+    }
+}
+
+impl<T: Parse> Parse for Vec<T> {
+    type FirstToken = Maybe<T::FirstToken>;
+
+    fn parse<'t, I: Iterator<Item = &'t Token> + Clone>(
+        input: &mut InputStream<'t, I>,
+    ) -> Result<Self, Error>
+    where
+        Self: Sized,
+    {
+        let mut parsed = Self::new();
+
+        while let Ok(Some(v)) = input.parse() {
+            parsed.push(v);
+        }
+
+        Ok(parsed)
+    }
+
+    fn get_span(&self) -> Span {
+        self.first().map_or(Span::empty(), |x| {
+            x.get_span().join(self.last().unwrap().get_span())
+        })
+    }
+}
+
+impl<T: Parse, U: Parse> Parse for (T, U) {
+    type FirstToken = T::FirstToken;
+
+    fn parse<'t, I: Iterator<Item = &'t Token> + Clone>(
+        input: &mut InputStream<'t, I>,
+    ) -> Result<Self, Error>
+    where
+        Self: Sized,
+    {
+        Ok((input.parse()?, input.parse()?))
+    }
+
+    fn get_span(&self) -> Span {
+        self.0.get_span().join(self.1.get_span())
+    }
+}
+
+impl<T: Parse> Parse for Option<T> {
+    type FirstToken = Maybe<T::FirstToken>;
+
+    fn parse<'t, I: Iterator<Item = &'t Token> + Clone>(
+        input: &mut InputStream<'t, I>,
+    ) -> Result<Self, Error>
+    where
+        Self: Sized,
+    {
+        if T::FirstToken::check_parses(input) == Some(false) {
+            Ok(None)
+        } else {
+            Ok(Some(input.parse()?))
         }
     }
 
     fn get_span(&self) -> Span {
         match self {
-            Self::Neg(v) => v.span,
+            Some(v) => v.get_span(),
+            None => span!(0, 0, 0, 0),
         }
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct InputStream<'t, I: Iterator<Item = &'t Token> + Clone> {
+    it: Peekable<I>,
+}
+
+impl<'t, I: Iterator<Item = &'t Token> + Clone> InputStream<'t, I> {
+    #[must_use]
+    pub fn new<It: IntoIterator<IntoIter = I>>(it: It) -> Self {
+        Self {
+            it: it.into_iter().peekable(),
+        }
+    }
+
+    /// # Errors
+    /// Returns an error if failed to parse
+    pub fn parse<P: Parse>(&mut self) -> Result<P, Error> {
+        P::parse(self)
+    }
+
+    /// # Errors
+    /// Returns an EOF error if there is no next token.
+    pub fn get_token(&mut self) -> Result<&'t Token, Error> {
+        self.it.next().ok_or(Error::EndOfInput)
+    }
+
+    /// # Errors
+    /// Returns an EOF error if there is no next token. Does not advance the inner iterator.
+    pub fn expect_token(&mut self) -> Result<(), Error> {
+        if self.eof() {
+            Err(Error::EndOfInput)
+        } else {
+            Ok(())
+        }
+    }
+
+    #[must_use]
+    pub fn eof(&mut self) -> bool {
+        self.it.peek().is_none()
+    }
+}
+
 /// A binary operator, like `+`, `-`, `*` or `/`.
-#[derive(Debug)]
+#[derive(Debug, Parse)]
 pub enum BinaryOperator {
     /// Addition
     Add(Plus),
@@ -114,32 +213,6 @@ pub enum BinaryOperator {
     Mul(Asterisk),
     /// Division
     Div(Slash),
-}
-
-impl Parse for BinaryOperator {
-    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-        it: &mut Peekable<I>,
-    ) -> Result<Self, Error> {
-        match it.next() {
-            Some(tok) => match tok {
-                Token::Asterisk(asterisk) => Ok(Self::Mul(*asterisk)),
-                Token::Plus(plus) => Ok(Self::Add(*plus)),
-                Token::Minus(minus) => Ok(Self::Sub(*minus)),
-                Token::Slash(slash) => Ok(Self::Div(*slash)),
-                t => Err(Error::InvalidToken { token: t.clone() }),
-            },
-            None => Err(Error::EndOfInput),
-        }
-    }
-
-    fn get_span(&self) -> Span {
-        match self {
-            Self::Add(v) => v.span,
-            Self::Sub(v) => v.span,
-            Self::Mul(v) => v.span,
-            Self::Div(v) => v.span,
-        }
-    }
 }
 
 impl ToString for BinaryOperator {
@@ -153,7 +226,8 @@ impl ToString for BinaryOperator {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Parse)]
+#[parse(first_token = Ampersant)]
 pub struct PointCollectionConstructor {
     pub ampersant: Ampersant,
     pub left_paren: LParen,
@@ -161,44 +235,59 @@ pub struct PointCollectionConstructor {
     pub right_paren: RParen,
 }
 
-impl Parse for PointCollectionConstructor {
-    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-        it: &mut Peekable<I>,
-    ) -> Result<Self, Error> {
-        Ok(Self {
-            ampersant: Ampersant::parse(it)?,
-            left_paren: LParen::parse(it)?,
-            points: Punctuated::parse(it)?,
-            right_paren: RParen::parse(it)?,
-        })
-    }
-
-    fn get_span(&self) -> Span {
-        self.ampersant.span.join(self.right_paren.span)
-    }
-}
-
 /// Punctuated expressions.
 #[derive(Debug)]
-pub struct ImplicitIterator {
+pub struct ImplicitIterator<const ITER: bool> {
     pub exprs: Punctuated<SimpleExpression, Comma>,
 }
 
-impl ImplicitIterator {
+impl<const ITER: bool> ImplicitIterator<ITER> {
     #[must_use]
     pub fn get(&self, index: usize) -> Option<&SimpleExpression> {
-        self.exprs.get(index)
+        if ITER {
+            self.exprs.get(index)
+        } else {
+            Some(&self.exprs.first)
+        }
+    }
+}
+
+impl<const ITER: bool> Parse for ImplicitIterator<ITER> {
+    type FirstToken = <SimpleExpression as Parse>::FirstToken;
+
+    fn parse<'t, I: Iterator<Item = &'t Token> + Clone>(
+        input: &mut InputStream<'t, I>,
+    ) -> Result<Self, Error>
+    where
+        Self: Sized,
+    {
+        if ITER {
+            Ok(Self {
+                exprs: input.parse()?,
+            })
+        } else {
+            Ok(Self {
+                exprs: Punctuated {
+                    first: input.parse()?,
+                    collection: Vec::new(),
+                },
+            })
+        }
+    }
+
+    fn get_span(&self) -> Span {
+        self.exprs.get_span()
     }
 }
 
 /// $id(a, b, ...).
 #[derive(Debug)]
 pub struct ExplicitIterator {
-    pub exprs: Punctuated<Expression<false>, Comma>,
+    pub dollar: Dollar,
     pub id_token: TokInteger,
     pub id: u8,
-    pub dollar: Dollar,
     pub left_paren: LParen,
+    pub exprs: Punctuated<Expression<false>, Comma>,
     pub right_paren: RParen,
 }
 
@@ -209,48 +298,36 @@ impl ExplicitIterator {
     }
 }
 
-impl Parse for ImplicitIterator {
-    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-        it: &mut Peekable<I>,
-    ) -> Result<Self, Error> {
-        Ok(ImplicitIterator {
-            exprs: Punctuated::parse(it)?,
-        })
-    }
-
-    fn get_span(&self) -> Span {
-        self.exprs.get_span()
-    }
-}
-
 impl Parse for ExplicitIterator {
-    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-        it: &mut Peekable<I>,
-    ) -> Result<Self, Error> {
-        let dollar = Dollar::parse(it)?;
-        let id_token = TokInteger::parse(it)?;
-        let left_paren = LParen::parse(it)?;
-        let exprs = Punctuated::parse(it)?;
-        let right_paren = RParen::parse(it)?;
+    type FirstToken = Dollar;
 
-        if exprs.len() == 1 {
+    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
+        input: &mut InputStream<'r, I>,
+    ) -> Result<Self, Error> {
+        let mut parsed = Self {
+            dollar: input.parse()?,
+            id_token: input.parse()?,
+            id: 0,
+            left_paren: input.parse()?,
+            exprs: input.parse()?,
+            right_paren: input.parse()?,
+        };
+
+        parsed.id = parsed
+            .id_token
+            .parsed
+            .parse()
+            .map_err(|_| Error::NumberTooLarge {
+                error_span: parsed.id_token.get_span(),
+            })?;
+
+        if parsed.exprs.len() == 1 {
             return Err(Error::SingleVariantExplicitIterator {
-                error_span: dollar.span.join(right_paren.span),
+                error_span: parsed.dollar.span.join(parsed.right_paren.span),
             });
         }
 
-        let id = id_token.parsed.parse().map_err(|_| Error::NumberTooLarge {
-            error_span: id_token.get_span(),
-        })?;
-
-        Ok(ExplicitIterator {
-            exprs,
-            id_token,
-            id,
-            dollar,
-            left_paren,
-            right_paren,
-        })
+        Ok(parsed)
     }
 
     fn get_span(&self) -> Span {
@@ -262,20 +339,33 @@ impl Parse for ExplicitIterator {
 #[derive(Debug)]
 pub enum Expression<const ITER: bool> {
     /// Simple values separated by a comma.
-    ImplicitIterator(ImplicitIterator),
-    /// A single simple expression
-    Single(Box<SimpleExpression>),
+    ImplicitIterator(ImplicitIterator<ITER>),
     /// A binary operator expression.
     Binop(ExprBinop<ITER>),
 }
 
-impl<const ITER: bool> Expression<ITER> {
-    /// Returns `true` if the expression is [`Single`].
-    ///
-    /// [`Single`]: Expression::Single
-    #[must_use]
-    pub fn is_single(&self) -> bool {
-        matches!(self, Self::Single(..))
+impl<const ITER: bool> Parse for Expression<ITER> {
+    type FirstToken = <SimpleExpression as Parse>::FirstToken;
+
+    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
+        input: &mut InputStream<'r, I>,
+    ) -> Result<Self, Error> {
+        let mut expr = Expression::ImplicitIterator(input.parse()?);
+
+        while let Ok(Some(op)) = input.parse() {
+            let rhs = Expression::ImplicitIterator(input.parse()?);
+
+            expr = dispatch_order(expr, op, rhs);
+        }
+
+        Ok(expr)
+    }
+
+    fn get_span(&self) -> Span {
+        match self {
+            Expression::ImplicitIterator(it) => it.get_span(),
+            Expression::Binop(e) => e.lhs.get_span().join(e.rhs.get_span()),
+        }
     }
 }
 
@@ -290,15 +380,17 @@ pub struct RationalExponent {
 }
 
 impl Parse for RationalExponent {
+    type FirstToken = LParen;
+
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-        it: &mut Peekable<I>,
+        input: &mut InputStream<'r, I>,
     ) -> Result<Self, Error> {
         let parsed = Self {
-            lparen: LParen::parse(it)?,
-            nom: TokInteger::parse(it)?,
-            slash: Slash::parse(it)?,
-            denom: TokInteger::parse(it)?,
-            rparen: RParen::parse(it)?,
+            lparen: input.parse()?,
+            nom: input.parse()?,
+            slash: input.parse()?,
+            denom: input.parse()?,
+            rparen: input.parse()?,
         };
 
         if parsed.denom.parsed.is_zero() {
@@ -316,7 +408,7 @@ impl Parse for RationalExponent {
 }
 
 /// An integer or a ratio.
-#[derive(Debug)]
+#[derive(Debug, Parse)]
 pub enum Exponent {
     Simple(TokInteger),
     Parenthised(RationalExponent),
@@ -348,33 +440,9 @@ impl Exponent {
     }
 }
 
-impl Parse for Exponent {
-    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-        it: &mut Peekable<I>,
-    ) -> Result<Self, Error> {
-        let peeked = it.peek().copied();
-
-        Ok(match peeked {
-            Some(Token::Number(Number::Integer(_))) => Self::Simple(TokInteger::parse(it)?),
-            Some(Token::LParen(_)) => Self::Parenthised(RationalExponent::parse(it)?),
-            Some(t) => return Err(Error::InvalidToken { token: t.clone() }),
-            None => return Err(Error::EndOfInput),
-        })
-    }
-
-    fn get_span(&self) -> Span {
-        match self {
-            Self::Simple(v) => v.span,
-            Self::Parenthised(v) => v.get_span(),
-        }
-    }
-}
-
 /// A value being raised to a rational power.
-#[derive(Debug)]
+#[derive(Debug, Parse)]
 pub struct Exponentiation {
-    /// The raised value.
-    pub base: Box<SimpleExpressionKind>,
     /// Caret token
     pub caret: Caret,
     /// Possible negation
@@ -383,24 +451,7 @@ pub struct Exponentiation {
     pub exponent: Exponent,
 }
 
-impl Parse for Exponentiation {
-    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-        it: &mut Peekable<I>,
-    ) -> Result<Self, Error> {
-        Ok(Self {
-            base: Box::parse(it)?,
-            caret: Caret::parse(it)?,
-            minus: Option::parse(it)?,
-            exponent: Exponent::parse(it)?,
-        })
-    }
-
-    fn get_span(&self) -> Span {
-        self.base.get_span().join(self.exponent.get_span())
-    }
-}
-
-#[derive(Debug)]
+#[derive(Debug, Parse)]
 pub struct FieldIndex {
     /// The indexed thing
     pub name: Box<Name>,
@@ -410,157 +461,113 @@ pub struct FieldIndex {
     pub field: Ident,
 }
 
-impl Parse for FieldIndex {
-    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-        it: &mut Peekable<I>,
-    ) -> Result<Self, Error> {
-        Ok(Self {
-            name: Box::parse(it)?,
-            dot: Dot::parse(it)?,
-            field: Ident::parse(it)?,
-        })
-    }
-
-    fn get_span(&self) -> Span {
-        self.name.get_span().join(self.field.get_span())
-    }
-}
-
 /// A name (field, method or variable).
 #[derive(Debug)]
 pub enum Name {
-    Ident(Ident),
-    FieldIndex(FieldIndex),
+    // Variant order matters, as it defines the parsing priority
     Call(ExprCall),
+    FieldIndex(FieldIndex),
+    Ident(Ident),
     Expression(ExprParenthised),
 }
 
 impl Parse for Name {
-    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-        it: &mut Peekable<I>,
-    ) -> Result<Self, Error> {
-        let mut peeked = it.peek().copied();
-        let mut name = match peeked {
-            Some(Token::Ident(_)) => Self::Ident(Ident::parse(it)?),
-            Some(Token::LParen(_)) => Self::Expression(ExprParenthised::parse(it)?),
-            Some(tok) => return Err(Error::InvalidToken { token: tok.clone() }),
-            None => return Err(Error::EndOfInput),
+    type FirstToken = TokenOr<Maybe<Ident>, LParen>;
+
+    fn parse<'t, I: Iterator<Item = &'t Token> + Clone>(
+        input: &mut InputStream<'t, I>,
+    ) -> Result<Self, Error>
+    where
+        Self: Sized,
+    {
+        let mut name = if let Some(expr) = input.parse()? {
+            Self::Expression(expr)
+        } else {
+            Self::Ident(input.parse()?)
         };
 
-        peeked = it.peek().copied();
-
-        while let Some(tok) = peeked {
-            match tok {
-                Token::Dot(_) => {
-                    name = Self::FieldIndex(FieldIndex {
-                        name: Box::new(name),
-                        dot: Dot::parse(it)?,
-                        field: Ident::parse(it)?,
-                    });
-                }
-                Token::LParen(_) => {
-                    name = Self::Call(ExprCall {
-                        name: Box::new(name),
-                        lparen: LParen::parse(it)?,
-                        params: Option::parse(it)?,
-                        rparen: RParen::parse(it)?,
-                    });
-                }
-                _ => break,
-            }
-
-            peeked = it.peek().copied();
+        loop {
+            name = if let Some(dot) = input.parse::<Option<Dot>>()? {
+                Self::FieldIndex(FieldIndex {
+                    name: Box::new(name),
+                    dot,
+                    field: input.parse()?,
+                })
+            } else if let Some(lparen) = input.parse::<Option<LParen>>()? {
+                Self::Call(ExprCall {
+                    name: Box::new(name),
+                    lparen,
+                    params: input.parse()?,
+                    rparen: input.parse()?,
+                })
+            } else {
+                break Ok(name);
+            };
         }
-
-        Ok(name)
     }
 
     fn get_span(&self) -> Span {
         match self {
             Self::Call(v) => v.get_span(),
+            Self::FieldIndex(v) => v.get_span(),
             Self::Expression(v) => v.get_span(),
-            Self::FieldIndex(v) => v.name.get_span().join(v.field.get_span()),
             Self::Ident(v) => v.get_span(),
         }
     }
 }
 
 /// A parsed simple expression.
-#[derive(Debug)]
+#[derive(Debug, Parse)]
 pub struct SimpleExpression {
+    /// Possible minus for negation.
+    pub minus: Option<Minus>,
     /// The kind of the expression.
     pub kind: SimpleExpressionKind,
+    /// Possible exponentiation.
+    pub exponent: Option<Exponentiation>,
     /// The additional display information.
     pub display: Option<DisplayProperties>,
 }
 
 /// A parsed simple expression.
-#[derive(Debug)]
+#[derive(Debug, Parse)]
 pub enum SimpleExpressionKind {
     /// A named (variable, field or function call)
     Name(Name),
     /// A raw number
     Number(Number),
-    /// A unary operator expression
-    Unop(ExprUnop),
     /// An explicit iterator.
     ExplicitIterator(ExplicitIterator),
     /// A point collection construction
     PointCollection(PointCollectionConstructor),
-    /// Exponentiation.
-    Exponentiation(Exponentiation),
 }
 
 /// A parsed function call
-#[derive(Debug)]
+#[derive(Debug, Parse)]
 pub struct ExprCall {
     /// The called thing.
     pub name: Box<Name>,
     /// The `(` token.
     pub lparen: LParen,
-    /// The `)` token.
-    pub rparen: RParen,
     /// Punctuated params. `None` if no params are given.
     pub params: Option<Punctuated<Expression<false>, Comma>>,
+    /// The `)` token.
+    pub rparen: RParen,
 }
 
 /// A parsed parenthesed expression
-#[derive(Debug)]
+#[derive(Debug, Parse)]
 pub struct ExprParenthised {
     /// The `(` token.
     pub lparen: LParen,
-    /// The `)` token.
-    pub rparen: RParen,
     /// The contained `Expression`.
     pub content: Box<Expression<true>>,
-}
-
-/// A parsed unary operator expression.
-#[derive(Debug)]
-pub struct ExprUnop {
-    /// The operator.
-    pub operator: UnaryOperator,
-    /// The operand (right hand side).
-    pub rhs: Box<SimpleExpressionKind>,
-}
-
-impl Parse for ExprUnop {
-    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-        it: &mut Peekable<I>,
-    ) -> Result<Self, Error> {
-        Ok(Self {
-            operator: UnaryOperator::parse(it)?,
-            rhs: Box::parse(it)?,
-        })
-    }
-
-    fn get_span(&self) -> Span {
-        self.operator.get_span().join(self.rhs.get_span())
-    }
+    /// The `)` token.
+    pub rparen: RParen,
 }
 
 /// A parsed binary operator expression.
-#[derive(Debug)]
+#[derive(Debug, Parse)]
 pub struct ExprBinop<const ITER: bool> {
     /// Left hand side
     pub lhs: Box<Expression<ITER>>,
@@ -570,118 +577,74 @@ pub struct ExprBinop<const ITER: bool> {
     pub rhs: Box<Expression<ITER>>,
 }
 
-impl<const ITER: bool> Parse for ExprBinop<ITER> {
-    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-        it: &mut Peekable<I>,
-    ) -> Result<Self, Error> {
-        Ok(Self {
-            lhs: Box::parse(it)?,
-            operator: BinaryOperator::parse(it)?,
-            rhs: Box::parse(it)?,
-        })
-    }
-
-    fn get_span(&self) -> Span {
-        self.lhs.get_span().join(self.rhs.get_span())
-    }
-}
-
-/// Floating point or an integer.
-#[derive(Debug, Clone, Copy)]
-pub enum FloatOrInteger {
-    /// Integer version.
-    Integer(i64),
-    /// Floating point.
-    Float(f64),
-}
-
-impl FloatOrInteger {
-    /// Returns float if is float, converts if integer.
-    #[must_use]
-    pub fn to_float(self) -> f64 {
+impl BinaryOperator {
+    fn index(&self) -> u8 {
         match self {
-            #[allow(clippy::cast_precision_loss)]
-            FloatOrInteger::Integer(i) => i as f64,
-            FloatOrInteger::Float(f) => f,
+            BinaryOperator::Add(_) | BinaryOperator::Sub(_) => 1,
+            BinaryOperator::Mul(_) | BinaryOperator::Div(_) => 2,
         }
     }
 }
 
-/// A no-operation statement - a single semicolon.
-#[derive(Debug)]
-pub struct Noop {
-    /// The `;` token.
-    pub semi: Semi,
-}
-
-/// A `=` rule operator.
-#[derive(Debug)]
-pub struct EqOp {
-    /// The `=` token.
-    pub eq: Eq,
-}
-
-/// A `<` rule operator.
-#[derive(Debug)]
-pub struct LtOp {
-    /// The `=` token.
-    pub lt: Lt,
-}
-
-/// A `>` rule operator.
-#[derive(Debug)]
-pub struct GtOp {
-    /// The `>` token.
-    pub gt: Gt,
-}
-
-/// A `<=` rule operator.
-#[derive(Debug)]
-pub struct LteqOp {
-    /// The `<=` token.
-    pub lteq: Lteq,
-}
-
-/// A `>=` rule operator.
-#[derive(Debug)]
-pub struct GteqOp {
-    /// The `>=` token.
-    pub gteq: Gteq,
-}
-
-/// A user-defined rule operator.
-#[derive(Debug)]
-pub struct DefinedRuleOperator {
-    /// The ident.
-    pub ident: NamedIdent,
+/// Inserts an operator with an rhs into a operator series, considering the order of operations.
+fn dispatch_order<const ITER: bool>(
+    lhs: Expression<ITER>,
+    op: BinaryOperator,
+    rhs: Expression<ITER>, // We have to trust, that it is a valid expression.
+) -> Expression<ITER> {
+    match lhs {
+        // if lhs is simple, there is no order to consider.
+        lhs @ Expression::ImplicitIterator(_) => Expression::Binop(ExprBinop {
+            lhs: Box::new(lhs),
+            operator: op,
+            rhs: Box::new(rhs),
+        }),
+        // Otherwise we compare indices of the operators and act accordingly.
+        Expression::Binop(lhs) => {
+            if op.index() > lhs.operator.index() {
+                Expression::Binop(ExprBinop {
+                    lhs: lhs.lhs,
+                    operator: lhs.operator,
+                    rhs: Box::new(dispatch_order(*lhs.rhs, op, rhs)),
+                })
+            } else {
+                Expression::Binop(ExprBinop {
+                    lhs: Box::new(Expression::Binop(lhs)),
+                    operator: op,
+                    rhs: Box::new(rhs),
+                })
+            }
+        }
+    }
 }
 
 /// A builtin rule operator
-#[derive(Debug)]
+#[derive(Debug, Parse)]
 pub enum PredefinedRuleOperator {
     /// Equality
-    Eq(EqOp),
+    Eq(Eq),
     /// Less than
-    Lt(LtOp),
+    Lt(Lt),
     /// Greater than
-    Gt(GtOp),
+    Gt(Gt),
     /// Less than or equal
-    Lteq(LteqOp),
+    Lteq(Lteq),
     /// Greater than or equal
-    Gteq(GteqOp),
+    Gteq(Gteq),
 }
 
 /// A rule operator.
-#[derive(Debug)]
+#[derive(Debug, Parse)]
 pub enum RuleOperator {
-    Predefined(PredefinedRuleOperator),
-    Defined(DefinedRuleOperator),
     /// A inverted rule operator (!op)
     Inverted(InvertedRuleOperator),
+    Predefined(PredefinedRuleOperator),
+    Defined(NamedIdent),
 }
 
 /// An inverted rule operator.
-#[derive(Debug)]
+#[derive(Debug, Parse)]
+#[parse(first_token = Exclamation)]
 pub struct InvertedRuleOperator {
     /// The `!` token
     pub exlamation: Exclamation,
@@ -690,117 +653,39 @@ pub struct InvertedRuleOperator {
 }
 
 /// Defines the first half of a flag statement.
-#[derive(Debug)]
+#[derive(Debug, Parse)]
 pub struct FlagName {
     pub at: At,
     pub name: Punctuated<NamedIdent, Dot>,
     pub colon: Colon,
 }
 
-impl Parse for FlagName {
-    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-        it: &mut Peekable<I>,
-    ) -> Result<Self, Error> {
-        Ok(Self {
-            at: At::parse(it)?,
-            name: Punctuated::parse(it)?,
-            colon: Colon::parse(it)?,
-        })
-    }
-
-    fn get_span(&self) -> Span {
-        self.at.span.join(self.colon.span)
-    }
-}
-
 /// A set of flags.
-#[derive(Debug)]
+#[derive(Debug, Parse)]
+#[parse(first_token = LBrace)]
 pub struct FlagSet {
     pub lbrace: LBrace,
     pub flags: Vec<FlagStatement>,
     pub rbrace: RBrace,
 }
 
-impl Parse for FlagSet {
-    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-        it: &mut Peekable<I>,
-    ) -> Result<Self, Error> {
-        let mut flags = Vec::new();
-
-        let lbrace = LBrace::parse(it)?;
-
-        while let Some(Token::At(_)) = it.peek().copied() {
-            flags.push(FlagStatement::parse(it)?);
-        }
-
-        Ok(Self {
-            lbrace,
-            flags,
-            rbrace: RBrace::parse(it)?,
-        })
-    }
-
-    fn get_span(&self) -> Span {
-        self.lbrace.span.join(self.rbrace.span)
-    }
-}
-
 /// Defines the second half of a flag statement.
-#[derive(Debug)]
+#[derive(Debug, Parse)]
 pub enum FlagValue {
     Ident(NamedIdent),
     Set(FlagSet),
     Number(Number),
 }
 
-impl Parse for FlagValue {
-    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-        it: &mut Peekable<I>,
-    ) -> Result<Self, Error> {
-        let peeked = it.peek().copied();
-
-        Ok(match peeked {
-            Some(Token::Ident(Ident::Named(_))) => FlagValue::Ident(NamedIdent::parse(it)?),
-            Some(Token::LBrace(_)) => FlagValue::Set(FlagSet::parse(it)?),
-            Some(Token::Number(_)) => FlagValue::Number(Number::parse(it)?),
-            Some(t) => return Err(Error::InvalidToken { token: t.clone() }),
-            None => return Err(Error::EndOfInput),
-        })
-    }
-
-    fn get_span(&self) -> Span {
-        match self {
-            FlagValue::Ident(v) => v.span,
-            FlagValue::Set(v) => v.get_span(),
-            FlagValue::Number(v) => v.get_span(),
-        }
-    }
-}
-
 /// Defines a compiler flag or flagset.
-#[derive(Debug)]
+#[derive(Debug, Parse)]
 pub struct FlagStatement {
     pub name: FlagName,
     pub value: FlagValue,
 }
 
-impl Parse for FlagStatement {
-    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-        it: &mut Peekable<I>,
-    ) -> Result<Self, Error> {
-        Ok(Self {
-            name: FlagName::parse(it)?,
-            value: FlagValue::parse(it)?,
-        })
-    }
-
-    fn get_span(&self) -> Span {
-        self.name.get_span().join(self.value.get_span())
-    }
-}
-
 /// A single variable definition. Contains its name and optional display properties
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Parse)]
 pub struct VariableDefinition {
     /// Name of the variable.
     pub name: Ident,
@@ -810,7 +695,7 @@ pub struct VariableDefinition {
 
 /// `let <something> = <something else>`.
 /// Defines variables and possibly adds rules to them.
-#[derive(Debug)]
+#[derive(Debug, Parse)]
 pub struct LetStatement {
     /// The `let` token.
     pub let_token: Let,
@@ -828,7 +713,7 @@ pub struct LetStatement {
 
 /// `lhs ruleop rhs`.
 /// Defines a rule.
-#[derive(Debug)]
+#[derive(Debug, Parse)]
 pub struct RuleStatement {
     /// Display properties.
     pub display: Option<DisplayProperties>,
@@ -843,7 +728,7 @@ pub struct RuleStatement {
 }
 
 /// `?expr`
-#[derive(Debug)]
+#[derive(Debug, Parse)]
 pub struct RefStatement {
     /// Display properties.
     pub display: Option<DisplayProperties>,
@@ -855,36 +740,19 @@ pub struct RefStatement {
     pub semi: Semi,
 }
 
-impl Parse for RefStatement {
-    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-        it: &mut Peekable<I>,
-    ) -> Result<Self, Error> {
-        Ok(Self {
-            display: Option::parse(it)?,
-            question: Question::parse(it)?,
-            operand: Expression::parse(it)?,
-            semi: Semi::parse(it)?,
-        })
-    }
-
-    fn get_span(&self) -> Span {
-        self.question.span.join(self.semi.span)
-    }
-}
-
 /// A general statement.
-#[derive(Debug)]
+#[derive(Debug, Parse)]
 pub enum Statement {
     /// No operation
-    Noop(Noop),
+    Noop(Semi),
     /// let
     Let(LetStatement),
-    /// rule
-    Rule(RuleStatement),
     /// Flag
     Flag(FlagStatement),
     /// Reference
     Ref(RefStatement),
+    /// rule
+    Rule(RuleStatement),
 }
 
 impl Statement {
@@ -899,15 +767,15 @@ impl Statement {
 }
 
 /// A utility struct for collections of parsed items with punctuators between them.
-#[derive(Debug, Clone)]
-pub struct Punctuated<T, P> {
+#[derive(Debug, Clone, Parse)]
+pub struct Punctuated<T: Parse, P: Parse> {
     /// The first parsed item.
     pub first: Box<T>,
     /// The next items with punctuators.
     pub collection: Vec<(P, T)>,
 }
 
-impl<T, P> Punctuated<T, P> {
+impl<T: Parse, P: Parse> Punctuated<T, P> {
     /// Creates a new instance of `Punctuated`.
     #[must_use]
     pub fn new(first: T) -> Punctuated<T, P> {
@@ -953,505 +821,15 @@ impl<T, P> Punctuated<T, P> {
     }
 }
 
-pub trait Parse: Sized {
-    /// Tries to parse input tokens into Self.
-    ///
-    /// # Errors
-    /// Errors originate from invalid scripts.
-    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-        it: &mut Peekable<I>,
-    ) -> Result<Self, Error>;
-
-    /// Gets the parsed item's span.
-    fn get_span(&self) -> Span;
-}
-
-impl Parse for ExprCall {
-    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-        _it: &mut Peekable<I>,
-    ) -> Result<Self, Error> {
-        unreachable!("ExprCall::parse should never be called.")
-    }
-
-    fn get_span(&self) -> Span {
-        // From the ident to the ).
-        self.name.get_span().join(self.rparen.span)
-    }
-}
-
-impl Parse for Statement {
-    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-        it: &mut Peekable<I>,
-    ) -> Result<Self, Error> {
-        let tok = it.peek().unwrap();
-        Ok(match tok {
-            Token::Let(_) => Statement::Let(LetStatement::parse(it)?),
-            Token::Semi(_) => Statement::Noop(Noop::parse(it)?),
-            Token::At(_) => Statement::Flag(FlagStatement::parse(it)?),
-            Token::Question(_) => Statement::Ref(RefStatement::parse(it)?),
-            _ => Statement::Rule(RuleStatement::parse(it)?),
-        })
-    }
-
-    fn get_span(&self) -> Span {
-        match self {
-            Statement::Noop(v) => v.get_span(),
-            Statement::Let(v) => v.get_span(),
-            Statement::Rule(v) => v.get_span(),
-            Statement::Flag(v) => v.get_span(),
-            Self::Ref(v) => v.get_span(),
-        }
-    }
-}
-
-impl Parse for Noop {
-    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-        it: &mut Peekable<I>,
-    ) -> Result<Self, Error> {
-        Ok(Noop {
-            semi: Semi::parse(it)?,
-        })
-    }
-
-    fn get_span(&self) -> Span {
-        self.semi.get_span()
-    }
-}
-
-impl Parse for RuleStatement {
-    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-        it: &mut Peekable<I>,
-    ) -> Result<Self, Error> {
-        Ok(RuleStatement {
-            display: Option::parse(it)?,
-            lhs: Expression::parse(it)?,
-            op: RuleOperator::parse(it)?,
-            rhs: Expression::parse(it)?,
-            semi: Semi::parse(it)?,
-        })
-    }
-
-    fn get_span(&self) -> Span {
-        self.lhs.get_span().join(self.semi.span)
-    }
-}
-
-impl Parse for VariableDefinition {
-    fn get_span(&self) -> Span {
-        self.display_properties.as_ref().map_or_else(
-            || self.name.get_span(),
-            |v| self.name.get_span().join(v.get_span()),
-        )
-    }
-
-    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-        it: &mut Peekable<I>,
-    ) -> Result<Self, Error> {
-        Ok(Self {
-            name: Ident::parse(it)?,
-            display_properties: match it.peek().copied() {
-                Some(Token::LSquare(_)) => Some(DisplayProperties::parse(it)?),
-                _ => None,
-            },
-        })
-    }
-}
-
-impl Parse for LetStatement {
-    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-        it: &mut Peekable<I>,
-    ) -> Result<Self, Error> {
-        let let_token = Let::parse(it)?;
-        let ident = Punctuated::parse(it)?;
-        let eq = Eq::parse(it)?;
-        let expr = Expression::parse(it)?;
-        let mut rules = Vec::new();
-
-        // After the defining expression there can be rules.
-        loop {
-            let next = it.peek().copied();
-
-            match next {
-                Some(Token::Semi(_)) => break,
-                Some(_) => rules.push((RuleOperator::parse(it)?, Expression::parse(it)?)),
-                None => return Err(Error::EndOfInput),
-            };
-        }
-
-        Ok(LetStatement {
-            let_token,
-            ident,
-            eq,
-            expr,
-            rules,
-            semi: Semi::parse(it)?,
-        })
-    }
-
-    fn get_span(&self) -> Span {
-        self.let_token.span.join(self.semi.span)
-    }
-}
-
-impl<const ITER: bool> Parse for Expression<ITER> {
-    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-        it: &mut Peekable<I>,
-    ) -> Result<Self, Error> {
-        let mut expr = if ITER {
-            let punct = Punctuated::parse(it)?;
-            if punct.len() == 1 {
-                Expression::Single(punct.first)
-            } else {
-                // Implicit iterators have id of 0.
-                Expression::ImplicitIterator(ImplicitIterator { exprs: punct })
-            }
-        } else {
-            // We can only parse one expression.
-            Expression::Single(Box::new(SimpleExpression::parse(it)?))
-        };
-
-        loop {
-            let next = it.peek().copied();
-
-            let op = match next {
-                Some(next) => match next {
-                    Token::Asterisk(asterisk) => BinaryOperator::Mul(*asterisk),
-                    Token::Plus(plus) => BinaryOperator::Add(*plus),
-                    Token::Minus(minus) => BinaryOperator::Sub(*minus),
-                    Token::Slash(slash) => BinaryOperator::Div(*slash),
-                    _ => break,
-                },
-                None => break,
-            };
-
-            it.next();
-
-            let rhs = {
-                let punct = Punctuated::parse(it)?;
-                if punct.len() == 1 {
-                    Expression::Single(punct.first)
-                } else {
-                    // Implicit iterators have id of 0.
-                    Expression::ImplicitIterator(ImplicitIterator { exprs: punct })
-                }
-            };
-
-            expr = dispatch_order(expr, op, rhs);
-        }
-
-        Ok(expr)
-    }
-
-    fn get_span(&self) -> Span {
-        match self {
-            Expression::ImplicitIterator(it) => it.get_span(),
-            Expression::Single(expr) => expr.get_span(),
-            Expression::Binop(e) => e.lhs.get_span().join(e.rhs.get_span()),
-        }
-    }
-}
-
-impl BinaryOperator {
-    fn index(&self) -> u8 {
-        match self {
-            BinaryOperator::Add(_) | BinaryOperator::Sub(_) => 1,
-            BinaryOperator::Mul(_) | BinaryOperator::Div(_) => 2,
-        }
-    }
-}
-
-/// Inserts an operator with an rhs into a operator series, considering the order of operations.
-fn dispatch_order<const ITER: bool>(
-    lhs: Expression<ITER>,
-    op: BinaryOperator,
-    rhs: Expression<ITER>, // We have to trust, that it is a valid expression.
-) -> Expression<ITER> {
-    assert!(ITER || rhs.is_single());
-
-    match lhs {
-        // if lhs is simple, there is no order to consider.
-        lhs @ (Expression::ImplicitIterator(_) | Expression::Single(_)) => {
-            Expression::Binop(ExprBinop {
-                lhs: Box::new(lhs),
-                operator: op,
-                rhs: Box::new(rhs),
-            })
-        }
-        // Otherwise we compare indices of the operators and act accordingly.
-        Expression::Binop(lhs) => {
-            if op.index() > lhs.operator.index() {
-                Expression::Binop(ExprBinop {
-                    lhs: lhs.lhs,
-                    operator: lhs.operator,
-                    rhs: Box::new(dispatch_order(*lhs.rhs, op, rhs)),
-                })
-            } else {
-                Expression::Binop(ExprBinop {
-                    lhs: Box::new(Expression::Binop(lhs)),
-                    operator: op,
-                    rhs: Box::new(rhs),
-                })
-            }
-        }
-    }
-}
-
-impl Parse for SimpleExpression {
-    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-        it: &mut Peekable<I>,
-    ) -> Result<Self, Error> {
-        Ok(Self {
-            kind: SimpleExpressionKind::parse(it)?,
-            display: Option::parse(it)?,
-        })
-    }
-
-    fn get_span(&self) -> Span {
-        if let Some(display) = self.display.as_ref() {
-            self.kind.get_span().join(display.get_span())
-        } else {
-            self.kind.get_span()
-        }
-    }
-}
-
-impl Parse for SimpleExpressionKind {
-    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-        it: &mut Peekable<I>,
-    ) -> Result<Self, Error> {
-        let next = it.peek().copied();
-
-        let mut expr = match next {
-            Some(next) => match next {
-                Token::Number(_) => Self::Number(Number::parse(it)?),
-                Token::Minus(m) => {
-                    it.next();
-                    // negation
-                    Self::Unop(ExprUnop {
-                        operator: UnaryOperator::Neg(*m),
-                        rhs: Box::new(SimpleExpressionKind::parse(it)?),
-                    })
-                }
-                Token::Ident(_) | Token::LParen(_) => Self::Name(Name::parse(it)?),
-                Token::Dollar(_) => Self::ExplicitIterator(ExplicitIterator::parse(it)?),
-                Token::Ampersant(_) => {
-                    Self::PointCollection(PointCollectionConstructor::parse(it)?)
-                }
-                tok => return Err(Error::InvalidToken { token: tok.clone() }),
-            },
-            None => return Err(Error::EndOfInput),
-        };
-
-        let peeked = it.peek().copied();
-        while let Some(Token::Caret(_)) = peeked {
-            expr = Self::Exponentiation(Exponentiation {
-                base: Box::new(expr),
-                caret: Caret::parse(it)?,
-                minus: Option::parse(it)?,
-                exponent: Exponent::parse(it)?,
-            });
-        }
-
-        Ok(expr)
-    }
-
-    fn get_span(&self) -> Span {
-        match self {
-            Self::Name(v) => v.get_span(),
-            Self::Number(v) => v.get_span(),
-            Self::Unop(v) => v.rhs.get_span().join(match &v.operator {
-                UnaryOperator::Neg(v) => v.span,
-            }),
-            Self::ExplicitIterator(v) => v.get_span(),
-            Self::PointCollection(v) => v.get_span(),
-            Self::Exponentiation(v) => v.get_span(),
-        }
-    }
-}
-
-impl<T: Parse, U: Parse> Parse for Punctuated<T, U> {
-    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-        it: &mut Peekable<I>,
-    ) -> Result<Self, Error> {
-        let mut collection = Vec::new();
-
-        let first = Box::parse(it)?;
-
-        while let Some(punct) = Option::<U>::parse(it).unwrap() {
-            collection.push((punct, T::parse(it)?));
-        }
-
-        Ok(Punctuated { first, collection })
-    }
-
-    fn get_span(&self) -> Span {
-        match self.collection.last() {
-            Some(v) => self.first.get_span().join(v.1.get_span()),
-            None => self.first.get_span(),
-        }
-    }
-}
-
-impl<T: Parse> Parse for Option<T> {
-    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-        it: &mut Peekable<I>,
-    ) -> Result<Self, Error> {
-        let mut it_cloned = it.clone();
-
-        Ok(match T::parse(&mut it_cloned) {
-            Ok(res) => {
-                *it = it_cloned;
-                Some(res)
-            }
-            Err(_) => None,
-        })
-    }
-
-    fn get_span(&self) -> Span {
-        match self {
-            Some(v) => v.get_span(),
-            None => span!(0, 0, 0, 0),
-        }
-    }
-}
-
-impl Parse for ExprParenthised {
-    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-        it: &mut Peekable<I>,
-    ) -> Result<Self, Error> {
-        Ok(Self {
-            lparen: LParen::parse(it)?,
-            content: Box::parse(it)?,
-            rparen: RParen::parse(it)?,
-        })
-    }
-
-    fn get_span(&self) -> Span {
-        self.lparen.span.join(self.rparen.span)
-    }
-}
-
-impl Parse for RuleOperator {
-    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-        it: &mut Peekable<I>,
-    ) -> Result<Self, Error> {
-        let next = it.next();
-        match next {
-            Some(t) => match t {
-                Token::Lt(lt) => Ok(RuleOperator::Predefined(PredefinedRuleOperator::Lt(LtOp {
-                    lt: *lt,
-                }))),
-                Token::Gt(gt) => Ok(RuleOperator::Predefined(PredefinedRuleOperator::Gt(GtOp {
-                    gt: *gt,
-                }))),
-                Token::Lteq(lteq) => Ok(RuleOperator::Predefined(PredefinedRuleOperator::Lteq(
-                    LteqOp { lteq: *lteq },
-                ))),
-                Token::Gteq(gteq) => Ok(RuleOperator::Predefined(PredefinedRuleOperator::Gteq(
-                    GteqOp { gteq: *gteq },
-                ))),
-                Token::Eq(eq) => Ok(RuleOperator::Predefined(PredefinedRuleOperator::Eq(EqOp {
-                    eq: *eq,
-                }))),
-                Token::Ident(Ident::Named(name)) => {
-                    Ok(RuleOperator::Defined(DefinedRuleOperator {
-                        ident: name.clone(),
-                    }))
-                }
-                Token::Exclamation(excl) => Ok(RuleOperator::Inverted(InvertedRuleOperator {
-                    exlamation: *excl,
-                    operator: Box::new(RuleOperator::parse(it)?),
-                })),
-                t => Err(Error::InvalidToken { token: t.clone() }),
-            },
-            None => Err(Error::EndOfInput),
-        }
-    }
-
-    fn get_span(&self) -> Span {
-        match self {
-            RuleOperator::Predefined(pre) => match pre {
-                PredefinedRuleOperator::Eq(v) => v.eq.span,
-                PredefinedRuleOperator::Lt(v) => v.lt.span,
-                PredefinedRuleOperator::Gt(v) => v.gt.span,
-                PredefinedRuleOperator::Lteq(v) => v.lteq.span,
-                PredefinedRuleOperator::Gteq(v) => v.gteq.span,
-            },
-            RuleOperator::Defined(def) => def.ident.span,
-            RuleOperator::Inverted(inv) => inv.exlamation.get_span().join(inv.operator.get_span()),
-        }
-    }
-}
-
-impl_token_parse! {At}
-impl_token_parse! {LBrace}
-impl_token_parse! {RBrace}
-impl_token_parse! {LSquare}
-impl_token_parse! {RSquare}
-impl_token_parse! {Dollar}
-impl_token_parse! {Vertical}
-impl_token_parse! {Semi}
-impl_token_parse! {Comma}
-impl_token_parse! {Ampersant}
-impl_token_parse! {Lt}
-impl_token_parse! {Gt}
-impl_token_parse! {Lteq}
-impl_token_parse! {Gteq}
-impl_token_parse! {Eq}
-impl_token_parse! {LParen}
-impl_token_parse! {RParen}
-impl_token_parse! {Let}
-impl_token_parse! {Colon}
-impl_token_parse! {Exclamation}
-impl_token_parse! {Dot}
-impl_token_parse! {Question}
-impl_token_parse! {Slash}
-impl_token_parse! {Caret}
-impl_token_parse! {Minus}
-
-impl Parse for Number {
-    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-        it: &mut Peekable<I>,
-    ) -> Result<Self, Error> {
-        match it.next() {
-            Some(Token::Number(tok)) => Ok(tok.clone()),
-            Some(t) => Err(Error::InvalidToken { token: t.clone() }),
-            None => Err(Error::EndOfInput),
-        }
-    }
-
-    fn get_span(&self) -> Span {
-        match self {
-            Self::Float(f) => f.span,
-            Self::Integer(i) => i.span,
-        }
-    }
-}
-
 impl Parse for TokInteger {
-    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-        it: &mut Peekable<I>,
-    ) -> Result<Self, Error> {
-        match it.next() {
-            Some(Token::Number(Number::Integer(tok))) => Ok(tok.clone()),
-            Some(t) => Err(Error::InvalidToken { token: t.clone() }),
-            None => Err(Error::EndOfInput),
-        }
-    }
+    type FirstToken = Number;
 
-    fn get_span(&self) -> Span {
-        self.span
-    }
-}
-
-impl Parse for StrLit {
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-        it: &mut Peekable<I>,
+        input: &mut InputStream<'r, I>,
     ) -> Result<Self, Error> {
-        match it.next() {
-            Some(Token::String(s)) => Ok(s.clone()),
-            Some(t) => Err(Error::InvalidToken { token: t.clone() }),
-            None => Err(Error::EndOfInput),
+        match input.get_token()? {
+            Token::Number(Number::Integer(tok)) => Ok(tok.clone()),
+            t => Err(Error::InvalidToken { token: t.clone() }),
         }
     }
 
@@ -1461,13 +839,14 @@ impl Parse for StrLit {
 }
 
 impl Parse for NamedIdent {
+    type FirstToken = Ident;
+
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-        it: &mut Peekable<I>,
+        input: &mut InputStream<'r, I>,
     ) -> Result<Self, Error> {
-        match it.next() {
-            Some(Token::Ident(Ident::Named(named))) => Ok(named.clone()),
-            Some(t) => Err(Error::InvalidToken { token: t.clone() }),
-            None => Err(Error::EndOfInput),
+        match input.get_token()? {
+            Token::Ident(Ident::Named(named)) => Ok(named.clone()),
+            t => Err(Error::InvalidToken { token: t.clone() }),
         }
     }
 
@@ -1476,30 +855,13 @@ impl Parse for NamedIdent {
     }
 }
 
-impl Parse for Ident {
-    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-        it: &mut Peekable<I>,
-    ) -> Result<Self, Error> {
-        match it.next() {
-            Some(Token::Ident(ident)) => Ok(ident.clone()),
-            Some(t) => Err(Error::InvalidToken { token: t.clone() }),
-            None => Err(Error::EndOfInput),
-        }
-    }
-
-    fn get_span(&self) -> Span {
-        match self {
-            Ident::Named(n) => n.span,
-            Ident::Collection(c) => c.span,
-        }
-    }
-}
-
 impl<T: Parse> Parse for Box<T> {
+    type FirstToken = T::FirstToken;
+
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-        it: &mut Peekable<I>,
+        input: &mut InputStream<'r, I>,
     ) -> Result<Self, Error> {
-        Ok(Box::new(T::parse(it)?))
+        Ok(Box::new(input.parse()?))
     }
 
     fn get_span(&self) -> Span {
@@ -1608,7 +970,7 @@ impl Type {
 }
 
 /// A property
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Parse)]
 pub struct Property {
     /// Property name.
     pub name: NamedIdent,
@@ -1618,24 +980,8 @@ pub struct Property {
     pub value: PropertyValue,
 }
 
-impl Parse for Property {
-    fn get_span(&self) -> Span {
-        self.name.span.join(self.value.get_span())
-    }
-
-    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-        it: &mut Peekable<I>,
-    ) -> Result<Self, Error> {
-        Ok(Self {
-            name: NamedIdent::parse(it)?,
-            eq: Eq::parse(it)?,
-            value: PropertyValue::parse(it)?,
-        })
-    }
-}
-
 /// A property's value
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Parse)]
 pub enum PropertyValue {
     Number(Number),
     Ident(Ident),
@@ -1643,25 +989,21 @@ pub enum PropertyValue {
     String(StrLit),
 }
 
-#[derive(Debug, Clone)]
+impl Display for PropertyValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Number(n) => write!(f, "{n}"),
+            Self::Ident(i) => write!(f, "{i}"),
+            Self::RawString(s) => write!(f, "!{}", s.lit),
+            Self::String(s) => write!(f, "{s}"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Parse)]
 pub struct RawString {
     pub excl: Exclamation,
     pub lit: StrLit,
-}
-
-impl Parse for RawString {
-    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-        it: &mut Peekable<I>,
-    ) -> Result<Self, Error> {
-        Ok(Self {
-            excl: Exclamation::parse(it)?,
-            lit: StrLit::parse(it)?,
-        })
-    }
-
-    fn get_span(&self) -> Span {
-        self.excl.span.join(self.lit.span)
-    }
 }
 
 pub trait FromProperty: Sized {
@@ -1726,34 +1068,8 @@ impl FromProperty for String {
     }
 }
 
-impl Parse for PropertyValue {
-    fn get_span(&self) -> Span {
-        match self {
-            Self::Number(n) => n.get_span(),
-            Self::Ident(i) => i.get_span(),
-            Self::String(s) => s.get_span(),
-            Self::RawString(s) => s.get_span(),
-        }
-    }
-
-    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-        it: &mut Peekable<I>,
-    ) -> Result<Self, Error> {
-        let peeked = it.peek().copied();
-
-        match peeked {
-            Some(Token::Ident(_)) => Ok(Self::Ident(Ident::parse(it)?)),
-            Some(Token::Number(_)) => Ok(Self::Number(Number::parse(it)?)),
-            Some(Token::Exclamation(_)) => Ok(Self::RawString(RawString::parse(it)?)),
-            Some(Token::String(_)) => Ok(Self::String(StrLit::parse(it)?)),
-            Some(t) => Err(Error::InvalidToken { token: t.clone() }),
-            None => Err(Error::EndOfInput),
-        }
-    }
-}
-
 /// Properties related to displaying things.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Parse)]
 pub struct DisplayProperties {
     /// '['
     pub lsquare: LSquare,
@@ -1761,20 +1077,4 @@ pub struct DisplayProperties {
     pub properties: Punctuated<Property, Semi>,
     /// ']'
     pub rsquare: RSquare,
-}
-
-impl Parse for DisplayProperties {
-    fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
-        it: &mut Peekable<I>,
-    ) -> Result<Self, Error> {
-        Ok(Self {
-            lsquare: LSquare::parse(it)?,
-            properties: Punctuated::parse(it)?,
-            rsquare: RSquare::parse(it)?,
-        })
-    }
-
-    fn get_span(&self) -> Span {
-        self.lsquare.span.join(self.rsquare.span)
-    }
 }

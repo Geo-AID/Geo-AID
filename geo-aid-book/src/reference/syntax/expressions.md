@@ -10,13 +10,11 @@
 > &nbsp;&nbsp; `+` | `-` | `*` | `/`\
 > \
 > *SimpleExpression* :\
-> &nbsp;&nbsp; *SimpleExpressionKind* *[Properties](properties.md)*<sup>?</sup>\
+> &nbsp;&nbsp; `-`<sup>?</sup> *SimpleExpressionKind* (`^` *Exponent*)<sup>?</sup> *[Properties](properties.md)*<sup>?</sup>\
 > \
 > *SimpleExpressionKind* :\
 > &nbsp;&nbsp; &nbsp;&nbsp; [NAMES](names.md)\
 > &nbsp;&nbsp; | [NUMBER](numbers.md)\
-> &nbsp;&nbsp; | *UnOp* *SimpleExpressionKind*\
-> &nbsp;&nbsp; | *Exponentiation*\
 > &nbsp;&nbsp; | *[ExplicitIterator](iterators.md)*\
 > &nbsp;&nbsp; | *PointCollectionConstructor*\
 >\
@@ -40,6 +38,7 @@ Expressions represent all values in GeoScript. A simple example of an expression
 Names can also be used as expressions. See [here](names.md) for more details.
 
 ## Operators
+
 Binary operators all have the standard mathematical operation order. Unary operators always precede binary operators and implicit iterators always precede all operators. You can define your own order with parenthesis.
 
 Currently, Geo-AID supports only addition, subtraction, multiplication and division as binary operators and negation as unary.

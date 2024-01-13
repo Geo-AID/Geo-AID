@@ -69,3 +69,4 @@
 - **GeoScript**: Added custom weighing
 - **GeoScript**: Added exponentiation support and rational unit powers
 - **GeoScript**: Added fields and methods to the language
+- **GeoScript**: Modified the syntax of negation and exponentiation
