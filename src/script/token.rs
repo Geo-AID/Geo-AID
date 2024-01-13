@@ -24,31 +24,17 @@ use serde::Serialize;
 
 use self::number::{ParsedFloat, ParsedInt, ParsedIntBuilder};
 
+use geo_aid_derive::Parse;
 use super::{parser::Parse, Error};
 
 /// Re-exports and zero-cost abstractions of number types used by geo-aid.
 pub mod number;
 
 /// Defines a position in the script.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize)]
 pub struct Position {
     pub line: usize,
     pub column: usize,
-}
-
-impl PartialOrd for Position {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Ord for Position {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        match self.line.cmp(&other.line) {
-            std::cmp::Ordering::Equal => self.column.cmp(&other.column),
-            v => v,
-        }
-    }
 }
 
 /// Defines a span in the script.
@@ -61,17 +47,23 @@ pub struct Span {
 impl Span {
     #[must_use]
     pub fn join(self, other: Span) -> Self {
-        Self {
-            start: if self.start < other.start {
-                self.start
-            } else {
-                other.start
-            },
-            end: if self.end > other.end {
-                self.end
-            } else {
-                other.end
-            },
+        if self.is_empty() {
+            other
+        } else if other.is_empty() {
+            self
+        } else {
+            Self {
+                start: if self.start < other.start {
+                    self.start
+                } else {
+                    other.start
+                },
+                end: if self.end > other.end {
+                    self.end
+                } else {
+                    other.end
+                },
+            }
         }
     }
 
@@ -82,8 +74,22 @@ impl Span {
     }
 
     #[must_use]
-    pub fn is_singleline(&self) -> bool {
+    pub const fn is_singleline(&self) -> bool {
         self.start.line == self.end.line
+    }
+
+    #[must_use]
+    pub const fn empty() -> Self {
+        Span {
+            start: Position {
+                line: 0,
+                column: 0,
+            },
+            end: Position {
+                line: 0,
+                column: 0,
+            },
+        }
     }
 
     #[must_use]
@@ -124,170 +130,204 @@ macro_rules! span {
 }
 
 /// A ';' token.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Parse)]
+#[parse(token)]
 pub struct Semi {
     pub span: Span,
 }
 
 /// A '=' token.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Parse)]
+#[parse(token)]
 pub struct Eq {
     pub span: Span,
 }
 
 /// A '(' token.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Parse)]
+#[parse(token)]
 pub struct LParen {
     pub span: Span,
 }
 
 /// A ')' token.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Parse)]
+#[parse(token)]
 pub struct RParen {
     pub span: Span,
 }
 
 /// A '{' token.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Parse)]
+#[parse(token)]
 pub struct LBrace {
     pub span: Span,
 }
 
 /// A '}' token.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Parse)]
+#[parse(token)]
 pub struct RBrace {
     pub span: Span,
 }
 
 /// A '[' token.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Parse)]
+#[parse(token)]
 pub struct LSquare {
     pub span: Span,
 }
 
 /// A ']' token.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Parse)]
+#[parse(token)]
 pub struct RSquare {
     pub span: Span,
 }
 
 /// A ',' token.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Parse)]
+#[parse(token)]
 pub struct Comma {
     pub span: Span,
 }
 
 /// A '^' token.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Parse)]
+#[parse(token)]
 pub struct Caret {
     pub span: Span,
 }
 
 /// A ':' token.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Parse)]
+#[parse(token)]
 pub struct Colon {
     pub span: Span,
 }
 
 /// A '$' token.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Parse)]
+#[parse(token)]
 pub struct Dollar {
     pub span: Span,
 }
 
 /// A '@' token.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Parse)]
+#[parse(token)]
 pub struct At {
     pub span: Span,
 }
 
 /// A 'let' token.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Parse)]
+#[parse(token)]
 pub struct Let {
     pub span: Span,
 }
 
 /// A '+' token.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Parse)]
+#[parse(token)]
 pub struct Plus {
     pub span: Span,
 }
 
 /// A '-' token.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Parse)]
+#[parse(token)]
 pub struct Minus {
     pub span: Span,
 }
 
 /// A '*' token.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Parse)]
+#[parse(token)]
 pub struct Asterisk {
     pub span: Span,
 }
 
 /// A '|' token.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Parse)]
+#[parse(token)]
 pub struct Vertical {
     pub span: Span,
 }
 
 /// A '/' token.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Parse)]
+#[parse(token)]
 pub struct Slash {
     pub span: Span,
 }
 
 /// A '<' token.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Parse)]
+#[parse(token)]
 pub struct Lt {
     pub span: Span,
 }
 
 /// A '>' token.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Parse)]
+#[parse(token)]
 pub struct Gt {
     pub span: Span,
 }
 
 /// A '<=' token.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Parse)]
+#[parse(token)]
 pub struct Lteq {
     pub span: Span,
 }
 
 /// A '.' token.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Parse)]
+#[parse(token)]
 pub struct Dot {
     pub span: Span,
 }
 
 /// A '>=' token.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Parse)]
+#[parse(token)]
 pub struct Gteq {
     pub span: Span,
 }
 
 /// A '!' token.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Parse)]
+#[parse(token)]
 pub struct Exclamation {
     pub span: Span,
 }
 
 /// A string, delimited by quotation marks.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Parse)]
+#[parse(token)]
 pub struct StrLit {
     pub span: Span,
     pub content: String,
 }
 
+impl Display for StrLit {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.content)
+    }
+}
+
 /// A '&' token.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Parse)]
+#[parse(token)]
 pub struct Ampersant {
     pub span: Span,
 }
 
 /// A '?' token.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Parse)]
+#[parse(token)]
 pub struct Question {
     pub span: Span,
 }
@@ -322,7 +362,7 @@ pub enum Token {
     At(At),
     Colon(Colon),
     Dot(Dot),
-    String(StrLit),
+    StrLit(StrLit),
     Question(Question),
 }
 
@@ -356,7 +396,7 @@ impl Display for Token {
             Self::RSquare(_) => write!(f, "]"),
             Self::Caret(_) => write!(f, "^"),
             Self::Colon(_) => write!(f, ":"),
-            Self::String(s) => write!(f, "\"{}\"", s.content),
+            Self::StrLit(s) => write!(f, "\"{}\"", s.content),
             Self::Ident(ident) => write!(
                 f,
                 "{}",
@@ -406,7 +446,7 @@ impl Token {
             Self::Question(v) => v.span,
             Self::Colon(v) => v.span,
             Self::Dot(v) => v.span,
-            Self::String(s) => s.span,
+            Self::StrLit(s) => s.span,
         }
     }
 }
@@ -486,7 +526,8 @@ impl Display for PointCollection {
 }
 
 /// An identifier. Either a point collection or a name.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Parse)]
+#[parse(token)]
 pub enum Ident {
     Named(NamedIdent),
     Collection(PointCollection),
@@ -522,7 +563,8 @@ impl Display for Ident {
 }
 
 /// A number.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Parse)]
+#[parse(token)]
 pub enum Number {
     Integer(TokInteger),
     Float(TokFloat),
@@ -554,11 +596,26 @@ impl Number {
     }
 }
 
+impl Display for Number {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Integer(v) => write!(f, "{v}"),
+            Self::Float(v) => write!(f, "{v}")
+        }
+    }
+}
+
 /// An integer.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TokInteger {
     pub span: Span,
     pub parsed: ParsedInt,
+}
+
+impl Display for TokInteger {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.parsed)
+    }
 }
 
 /// The floating-point part of a number
@@ -567,6 +624,12 @@ pub struct TokFloat {
     pub span: Span,
     pub dot: Dot,
     pub parsed: ParsedFloat,
+}
+
+impl Display for TokFloat {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.parsed)
+    }
 }
 
 fn is_identifier_character(c: char) -> bool {
@@ -957,7 +1020,7 @@ pub fn tokenize(input: &str) -> Result<Vec<Token>, Error> {
                 } else if c == '"' {
                     let s = read_string(&mut it, &mut position)?;
 
-                    tokens.push(Token::String(s));
+                    tokens.push(Token::StrLit(s));
                 } else {
                     tokenize_special(&mut position, &mut tokens, c, &mut it)?;
                 }

@@ -18,6 +18,8 @@ WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use crate::script::unroll::Convert;
+
 use super::prelude::*;
 use geo_aid_derive::overload;
 
@@ -59,6 +61,18 @@ fn distance_function_pl(
     }
 
     expr
+}
+
+fn distance_convert_pc(
+    mut pc: Expr<PointCollection>,
+    context: &CompileContext,
+    display: Properties,
+) -> Expr<Scalar> {
+    if let Some(node) = pc.node.as_mut() {
+        node.root.props = Some(node.root.props.take().unwrap_or_default().merge_with(display));
+    }
+
+    pc.convert(context)
 }
 
 /// ```
@@ -119,6 +133,7 @@ pub fn register(library: &mut Library) {
         String::from("dst"),
         Function {
             overloads: vec![
+                overload!((2-P) -> DISTANCE : distance_convert_pc),
                 overload!((DISTANCE) -> DISTANCE {
                     |v: Expr<Scalar>, context: &CompileContext, display: Properties| {
                         display.finish(context);

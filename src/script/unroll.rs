@@ -47,8 +47,8 @@ use self::figure::{
 
 use super::figure::{MathString, Style};
 use super::parser::{
-    Exponentiation, ExprBinop, ExprCall, ExprUnop, FieldIndex, FromProperty, Name,
-    PointCollectionConstructor, RefStatement,
+    ExprBinop, ExprCall, FieldIndex, FromProperty, Name,
+    PointCollectionConstructor, RefStatement, InputStream,
 };
 use super::token::number::{CompExponent, CompFloat};
 use super::token::Number;
@@ -513,8 +513,7 @@ impl DerefMut for IterNode {
 impl<const ITER: bool> From<&Expression<ITER>> for IterNode {
     fn from(value: &Expression<ITER>) -> Self {
         match value {
-            Expression::ImplicitIterator(it) => IterNode::new(vec![it.into()]),
-            Expression::Single(expr) => (&expr.kind).into(),
+            Expression::ImplicitIterator(it) => it.into(),
             Expression::Binop(binop) => Self::from2(binop.lhs.as_ref(), binop.rhs.as_ref()),
         }
     }
@@ -525,8 +524,6 @@ impl From<&SimpleExpressionKind> for IterNode {
         match value {
             SimpleExpressionKind::Number(_) => IterNode::new(Vec::new()),
             SimpleExpressionKind::Name(name) => name.into(),
-            SimpleExpressionKind::Unop(expr) => expr.rhs.as_ref().into(),
-            SimpleExpressionKind::Exponentiation(expr) => expr.base.as_ref().into(),
             SimpleExpressionKind::ExplicitIterator(it) => IterNode::new(vec![it.into()]),
             SimpleExpressionKind::PointCollection(col) => IterNode::new(
                 col.points
@@ -560,8 +557,18 @@ impl From<&Name> for IterNode {
     }
 }
 
-impl From<&ImplicitIterator> for IterTree {
-    fn from(value: &ImplicitIterator) -> Self {
+impl<const ITER: bool> From<&ImplicitIterator<ITER>> for IterNode {
+    fn from(value: &ImplicitIterator<ITER>) -> Self {
+        if value.exprs.collection.is_empty() {
+            (&value.exprs.first.as_ref().kind).into()
+        } else {
+            IterNode::new(vec![value.into()])
+        }
+    }
+}
+
+impl<const ITER: bool> From<&ImplicitIterator<ITER>> for IterTree {
+    fn from(value: &ImplicitIterator<ITER>) -> Self {
         Self {
             id: 0, // Implicit iterators have an id of 0.
             variants: value.exprs.iter().map(|v| (&v.kind).into()).collect(),
@@ -2820,7 +2827,55 @@ impl Unroll for SimpleExpression {
     ) -> AnyExpr {
         let display = Properties::from(self.display.clone()).merge_with(display);
 
-        self.kind.unroll(context, library, it_index, display)
+        let unrolled = self.kind.unroll(context, library, it_index, display);
+
+        let unrolled = if let Some(exponent) = &self.exponent {
+            let mut unrolled: Expr<Scalar> = unrolled.convert(context);
+            let node = unrolled.node.take();
+
+            let exponent = match exponent.exponent.into_comp() {
+                Ok(v) => {
+                    if self.minus.is_some() {
+                        -v
+                    } else {
+                        v
+                    }
+                }
+                Err(err) => {
+                    context.push_error(err);
+                    CompExponent::one()
+                }
+            };
+
+            AnyExpr::Scalar(Expr {
+                weight: FastFloat::One,
+                span: self.get_span(),
+                data: Rc::new(Scalar {
+                    unit: unrolled.data.unit.map(|v| v.pow(exponent)),
+                    data: ScalarData::Pow(unrolled, exponent),
+                }),
+                node,
+            })
+        } else {
+            unrolled
+        };
+
+        if self.minus.is_some() {
+            let mut unrolled: Expr<Scalar> = unrolled.convert(context);
+            let node = unrolled.node.take();
+
+            AnyExpr::Scalar(Expr {
+                weight: FastFloat::One,
+                span: self.get_span(),
+                data: Rc::new(Scalar {
+                    unit: unrolled.data.unit,
+                    data: ScalarData::Negate(unrolled),
+                }),
+                node,
+            })
+        } else {
+            unrolled
+        }
     }
 }
 
@@ -3179,74 +3234,6 @@ impl Unroll for Number {
     }
 }
 
-impl Unroll for ExprUnop {
-    fn unroll(
-        &self,
-        context: &mut CompileContext,
-        library: &Library,
-        it_index: &HashMap<u8, usize>,
-        display: Properties,
-    ) -> AnyExpr {
-        let mut unrolled: Expr<Scalar> = self
-            .rhs
-            .unroll(context, library, it_index, display)
-            .convert(context);
-
-        let node = unrolled.node.take();
-
-        AnyExpr::Scalar(Expr {
-            weight: FastFloat::One,
-            span: self.get_span(),
-            data: Rc::new(Scalar {
-                unit: unrolled.data.unit,
-                data: ScalarData::Negate(unrolled),
-            }),
-            node,
-        })
-    }
-}
-
-impl Unroll for Exponentiation {
-    fn unroll(
-        &self,
-        context: &mut CompileContext,
-        library: &Library,
-        it_index: &HashMap<u8, usize>,
-        display: Properties,
-    ) -> AnyExpr {
-        let mut unrolled: Expr<Scalar> = self
-            .base
-            .unroll(context, library, it_index, display)
-            .convert(context);
-
-        let node = unrolled.node.take();
-
-        let exponent = match self.exponent.into_comp() {
-            Ok(v) => {
-                if self.minus.is_some() {
-                    -v
-                } else {
-                    v
-                }
-            }
-            Err(err) => {
-                context.push_error(err);
-                CompExponent::one()
-            }
-        };
-
-        AnyExpr::Scalar(Expr {
-            weight: FastFloat::One,
-            span: self.get_span(),
-            data: Rc::new(Scalar {
-                unit: unrolled.data.unit.map(|v| v.pow(exponent)),
-                data: ScalarData::Pow(unrolled, exponent),
-            }),
-            node,
-        })
-    }
-}
-
 impl Unroll for ExplicitIterator {
     fn unroll(
         &self,
@@ -3334,8 +3321,6 @@ impl Unroll for SimpleExpressionKind {
         match self {
             Self::Name(name) => name.unroll(context, library, it_index, display),
             Self::Number(num) => num.unroll(context, library, it_index, display),
-            Self::Unop(op) => op.unroll(context, library, it_index, display),
-            Self::Exponentiation(expr) => expr.unroll(context, library, it_index, display),
             Self::ExplicitIterator(it) => it.unroll(context, library, it_index, display),
             Self::PointCollection(col) => col.unroll(context, library, it_index, display),
         }
@@ -3458,7 +3443,7 @@ impl<const ITER: bool> Unroll for ExprBinop<ITER> {
     }
 }
 
-impl Unroll for ImplicitIterator {
+impl<const ITER: bool> Unroll for ImplicitIterator<ITER> {
     fn unroll(
         &self,
         context: &mut CompileContext,
@@ -3466,10 +3451,12 @@ impl Unroll for ImplicitIterator {
         it_index: &HashMap<u8, usize>,
         display: Properties,
     ) -> AnyExpr {
-        // Implicits always have id=0
-        self.get(it_index[&0])
-            .unwrap()
-            .unroll(context, library, it_index, display)
+        if self.exprs.collection.is_empty() {
+            self.exprs.first.as_ref()
+        } else {
+            // Implicits always have id=0
+            self.get(it_index[&0]).unwrap()
+        }.unroll(context, library, it_index, display)
     }
 }
 
@@ -3482,7 +3469,6 @@ impl<const ITER: bool> Unroll for Expression<ITER> {
         display: Properties,
     ) -> AnyExpr {
         match self {
-            Expression::Single(simple) => simple.unroll(context, library, it_index, display),
             Expression::ImplicitIterator(it) => it.unroll(context, library, it_index, display),
             Expression::Binop(op) => op.unroll(context, library, it_index, display),
         }
@@ -3536,6 +3522,18 @@ pub struct Properties {
     finished: bool,
     errors: Vec<Error>,
     expected: Vec<&'static str>,
+}
+
+impl Display for Properties {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "[")?;
+
+        for (k, v) in &self.props {
+            write!(f, "{k} = {v}, ")?;
+        }
+
+        write!(f, "]")
+    }
 }
 
 impl Clone for Properties {
@@ -3974,7 +3972,9 @@ fn unroll_let(
     let lhs: Expression<true> = Expression::ImplicitIterator(ImplicitIterator {
         exprs: Punctuated {
             first: Box::new(SimpleExpression {
+                minus: None,
                 kind: SimpleExpressionKind::Name(Name::Ident(stat.ident.first.name.clone())),
+                exponent: None,
                 display: None,
             }),
             collection: stat
@@ -3985,7 +3985,9 @@ fn unroll_let(
                     (
                         *p,
                         SimpleExpression {
+                            minus: None,
                             kind: SimpleExpressionKind::Name(Name::Ident(i.name.clone())),
+                            exponent: None,
                             display: None,
                         },
                     )
@@ -4055,10 +4057,10 @@ fn unroll_eq(
         context.scalar_eq_display(lhs, rhs, inverted, display)
     } else {
         // If any of the two types can be cast onto the other, cast and compare.
-        let (lhs, rhs) = if rhs.can_convert_to(lhs_type) {
-            (lhs, rhs.convert_to(lhs_type, context))
+        let (lhs, rhs, new_type) = if rhs.can_convert_to(lhs_type) {
+            (lhs, rhs.convert_to(lhs_type, context), lhs_type)
         } else if lhs.can_convert_to(rhs_type) {
-            (lhs.convert_to(rhs_type, context), rhs)
+            (lhs.convert_to(rhs_type, context), rhs, rhs_type)
         } else {
             context.push_error(Error::InconsistentTypes {
                 expected: (lhs_type, Box::new(lhs.get_span())),
@@ -4069,17 +4071,18 @@ fn unroll_eq(
             // "Cast" rhs to lhs.
             (
                 lhs,
-                AnyExpr::Point(Expr {
+                AnyExpr::Unknown(Expr {
                     span: rhs.get_span(),
                     weight: FastFloat::One,
-                    data: Rc::new(Point::dummy()),
+                    data: Rc::new(Unknown::dummy()),
                     node: None,
                 })
                 .convert_to(lhs_type, context),
+                lhs_type
             )
         };
 
-        match rhs_type {
+        match new_type {
             Type::Point => {
                 let lhs = lhs.convert(context);
                 let rhs = rhs.convert(context);
@@ -4235,7 +4238,7 @@ fn unroll_rule(
         RuleOperator::Defined(op) => {
             let weight = display.get("weight").get_or(FastFloat::One);
 
-            let (def, lhs, rhs) = if let Some(func) = library.rule_ops.get(&op.ident.ident) {
+            let (def, lhs, rhs) = if let Some(func) = library.rule_ops.get(&op.ident) {
                 if let Some(overload) = func.get_overload((&lhs.get_type(), &rhs.get_type())) {
                     let lhs = lhs.convert_to(overload.params.0, context);
                     let rhs = rhs.convert_to(overload.params.1, context);
@@ -4243,8 +4246,8 @@ fn unroll_rule(
                     (&overload.definition, lhs, rhs)
                 } else {
                     context.push_error(Error::OverloadNotFound {
-                        error_span: op.ident.span,
-                        function_name: op.ident.ident.clone(),
+                        error_span: op.span,
+                        function_name: op.ident.clone(),
                         params: vec![lhs.get_type(), rhs.get_type()],
                     });
 
@@ -4253,11 +4256,11 @@ fn unroll_rule(
                     return Box::new(EmptyNode);
                 }
             } else {
-                let suggested = most_similar(library.rule_ops.keys(), &op.ident.ident);
+                let suggested = most_similar(library.rule_ops.keys(), &op.ident);
 
                 context.push_error(Error::UndefinedFunction {
-                    error_span: op.ident.span,
-                    function_name: op.ident.ident.clone(),
+                    error_span: op.span,
+                    function_name: op.ident.clone(),
                     suggested,
                 });
 
@@ -4483,12 +4486,12 @@ pub fn unroll(input: &str) -> Result<(CompileContext, CollectionNode), Vec<Error
         Ok(v) => v,
         Err(err) => return Err(vec![err]),
     };
-    let mut it = tokens.iter().peekable();
+    let mut input = InputStream::new(&tokens);
 
     let mut statements = Vec::new();
 
-    while it.peek().is_some() {
-        statements.push(match Statement::parse(&mut it) {
+    while !input.eof() {
+        statements.push(match input.parse() {
             Ok(v) => v,
             Err(err) => return Err(vec![err]),
         });
