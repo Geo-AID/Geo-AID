@@ -19,29 +19,23 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
 use std::{
-    cell::RefCell,
-    collections::{HashMap, VecDeque},
+    collections::VecDeque,
     fmt::Display,
     mem,
-    ops::{Add, AddAssign, Div, Mul, Neg, Sub, SubAssign},
+    ops::{Add, AddAssign, Div, Mul, Neg, Sub, SubAssign, MulAssign},
     sync::{mpsc, Arc},
     thread::{self, JoinHandle},
-    time::{Duration, Instant},
+    time::{Duration, Instant}, iter::{Sum, Product}, pin::Pin,
 };
 
 use serde::Serialize;
 
-use crate::script::Criteria;
-
-use self::{
-    expression::{ExprCache, Value},
-    fast_float::FastFloat,
-};
+use self::{program::Value, critic::EvaluateProgram};
 
 pub mod critic;
-pub mod expression;
 pub mod fast_float;
 pub mod geometry;
+pub mod program;
 mod magic_box;
 
 /// Represents a complex number located on a "unit" plane.
@@ -55,12 +49,19 @@ pub struct Complex {
 
 impl Complex {
     #[must_use]
-    pub fn new(real: f64, imaginary: f64) -> Self {
+    #[inline]
+    pub const fn new(real: f64, imaginary: f64) -> Self {
         Self { real, imaginary }
     }
 
     #[must_use]
-    pub fn zero() -> Self {
+    pub const fn real(real: f64) -> Self {
+        Self::new(real, 0.0)
+    }
+
+    #[must_use]
+    #[inline]
+    pub const fn zero() -> Self {
         Self::new(0.0, 0.0)
     }
 
@@ -76,7 +77,7 @@ impl Complex {
     }
 
     #[must_use]
-    pub fn mangitude(self) -> f64 {
+    pub fn magnitude(self) -> f64 {
         f64::sqrt(self.real.powi(2) + self.imaginary.powi(2))
     }
 
@@ -102,7 +103,13 @@ impl Complex {
 
     #[must_use]
     pub fn normalize(self) -> Complex {
-        self / self.mangitude()
+        self / self.magnitude()
+    }
+
+    /// Number-theoretical norm. Simply a^2 + b^2 with self = a + bi
+    #[must_use]
+    pub fn len_squared(self) -> f64 {
+        self.real * self.real + self.imaginary * self.imaginary
     }
 
     #[must_use]
@@ -111,7 +118,7 @@ impl Complex {
         // If the real part is negative, we simply negate it to get a positive part and then multiply the result by i.
         if self.real > 0.0 {
             // Use the generic formula (https://math.stackexchange.com/questions/44406/how-do-i-get-the-square-root-of-a-complex-number)
-            let r = self.mangitude();
+            let r = self.magnitude();
 
             r.sqrt() * (self + r).normalize()
         } else {
@@ -126,13 +133,19 @@ impl Complex {
         // If the real part is negative, we simply negate it to get a positive part and then multiply the result by i.
         if self.real > 0.0 {
             // Use the generic formula (https://math.stackexchange.com/questions/44406/how-do-i-get-the-square-root-of-a-complex-number)
-            let r = self.mangitude();
+            let r = self.magnitude();
 
             // We simply don't multiply by the square root of r.
             (self + r).normalize()
         } else {
             (-self).sqrt_norm().mul_i() // Normalization isn't lost here.
         }
+    }
+
+    /// Inverse of the number.
+    #[must_use]
+    pub fn inverse(self) -> Self {
+        self.conjugate() / self.len_squared()
     }
 }
 
@@ -223,6 +236,12 @@ impl AddAssign for Complex {
     }
 }
 
+impl MulAssign for Complex {
+    fn mul_assign(&mut self, rhs: Self) {
+        *self = *self * rhs;
+    }
+}
+
 impl Display for Complex {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{} + {}i", self.real, self.imaginary)
@@ -243,6 +262,30 @@ impl Default for Complex {
             real: 0.0,
             imaginary: 0.0,
         }
+    }
+}
+
+impl Sum for Complex {
+    fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
+        let mut v = Complex::zero();
+
+        for x in iter {
+            v += x;
+        }
+
+        v
+    }
+}
+
+impl Product for Complex {
+    fn product<I: Iterator<Item = Self>>(iter: I) -> Self {
+        let mut v = Complex::zero();
+
+        for x in iter {
+            v *= x;
+        }
+
+        v
     }
 }
 
@@ -286,109 +329,93 @@ impl Adjustable {
 }
 
 pub enum Message {
-    Generate(f64, Vec<(Adjustable, f64)>),
+    Generate(f64),
     Terminate,
 }
 
-#[derive(Debug, Clone)]
-pub struct GenerationArgs {
-    pub criteria: Arc<Vec<Criteria>>,
-    pub point_count: usize,
+#[derive(Debug)]
+struct SendPtr<T: ?Sized>(*const T);
+
+impl<T: ?Sized> Clone for SendPtr<T> {
+    fn clone(&self) -> Self {
+        Self(self.0)
+    }
 }
 
-fn generation_cycle(
-    receiver: &mpsc::Receiver<Message>,
-    sender: &mpsc::Sender<Vec<(Adjustable, f64)>>,
-    args: &GenerationArgs,
-    flags: &Arc<Flags>,
+impl<T: ?Sized> Copy for SendPtr<T> {}
+
+unsafe impl<T: ?Sized> Send for SendPtr<T> {}
+
+unsafe fn generation_cycle(
+    receiver: mpsc::Receiver<Message>,
+    sender: mpsc::Sender<CycleState>,
+    program: Arc<EvaluateProgram>,
+    flags: Arc<Flags>,
+    current_state: SendPtr<State>
 ) {
-    // Create the expression record
-    let mut record = HashMap::new();
+    let mut memory = program.setup();
+    let mut qualities = Vec::new();
+    qualities.reserve_exact(program.adjustables.len());
+    qualities.resize(program.adjustables.len(), 0.0);
 
-    if flags.optimizations.identical_expressions {
-        for crit in args.criteria.as_ref() {
-            let mut exprs = Vec::new();
-            crit.get_kind().collect(&mut exprs);
-
-            for expr in exprs {
-                // We use weak to not mess with the strong count.
-                record.entry(expr).or_insert(ExprCache {
-                    value: Value::scalar(0.0),
-                    generation: 0,
-                });
-            }
-        }
-    }
-
-    let mut generation = 1;
-    let record = RefCell::new(record);
-
-    let mut point_evaluation = Vec::new();
-    point_evaluation.resize(args.point_count, Vec::new());
-
-    let weights: Vec<Vec<FastFloat>> = (0..args.point_count)
-        .map(|i| {
-            let mut ws = Vec::new();
-            let mut sum = FastFloat::Zero;
-
-            for crit in args.criteria.iter() {
-                let v = crit.get_weights().0.get(i).copied().unwrap_or_default();
-                ws.push(v);
-                sum += v;
-            }
-
-            ws.into_iter().map(|v| v / sum).collect()
-        })
-        .collect();
-
-    // println!("{:#?}", args.criteria);
-
-    // for ws in &weights {
-    //     println!("{ws:?}");
-    // }
+    // A complete cycle is the following.
+    // 1. Receive adjustment information.
+    // 2. Adjust the current state onto the thread state.
+    // 3. Evaluate adjustables' qualities.
+    // 4. Send back thread's state.
 
     loop {
         match receiver.recv().unwrap() {
-            Message::Generate(adjustment, points) => {
-                let points = magic_box::adjust(points, adjustment);
-                let points = critic::evaluate(
-                    &points,
-                    &args.criteria,
-                    generation,
-                    flags,
-                    Some(&record),
-                    &weights,
-                    &mut point_evaluation,
-                );
+            Message::Generate(adjustment_magnitude) => {
+                {
+                    magic_box::adjust(&*current_state.0, &mut memory[0..program.adjustables.len()], adjustment_magnitude);
+                }
 
-                // println!("Adjustment + critic = {:#?}", points);
+                program.evaluate(&mut memory, &mut qualities);
 
-                sender.send(points).unwrap();
+                #[allow(clippy::cast_precision_loss)]
+                let total_quality = qualities.iter().copied().sum::<f64>() / qualities.len() as f64;
+
+                sender.send(CycleState {
+                    adjustables: SendPtr(memory.as_slice()),
+                    qualities: SendPtr(qualities.as_slice()),
+                    total_quality
+                }).unwrap();
             }
             Message::Terminate => return,
         }
-
-        generation += 1;
     }
+}
+
+#[derive(Debug, Clone)]
+struct State {
+    pub adjustables: Vec<Adjustable>,
+    pub qualities: Vec<f64>,
+    pub total_quality: f64
+}
+
+#[derive(Clone, Copy)]
+struct CycleState {
+    pub adjustables: SendPtr<[Value]>,
+    pub qualities: SendPtr<[f64]>,
+    pub total_quality: f64
 }
 
 /// A structure responsible of generating a figure based on criteria and given points.
 pub struct Generator {
-    /// Current point positions
-    current_state: Vec<(Adjustable, f64)>,
+    /// Current values of all adjustables.
+    current_state: Pin<Box<State>>,
     /// All the workers (generation cycles).
     workers: Vec<JoinHandle<()>>,
     /// Senders for the workers
     senders: Vec<mpsc::Sender<Message>>,
     /// The receiver for adjusted points from each generation cycle.
-    receiver: mpsc::Receiver<Vec<(Adjustable, f64)>>,
-    /// Total quality of the points - the arithmetic mean of their qualities.
-    total_quality: f64,
+    receiver: mpsc::Receiver<CycleState>,
     /// A delta of the qualities in comparison to previous generation.
     delta: f64,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub enum AdjustableTemplate {
     Point,
     PointOnCircle,
@@ -407,50 +434,63 @@ impl AdjustableTemplate {
 }
 
 impl Generator {
+    /// # Safety
+    /// The `program` MUST be safe.
     #[must_use]
-    pub fn new(
-        template: &[AdjustableTemplate],
-        cycles_per_generation: usize,
-        args: &GenerationArgs,
+    pub unsafe fn new(
+        workers: usize,
+        program: EvaluateProgram,
         flags: &Arc<Flags>,
     ) -> Self {
         let (input_senders, input_receivers): (
             Vec<mpsc::Sender<Message>>,
             Vec<mpsc::Receiver<Message>>,
-        ) = (0..cycles_per_generation).map(|_| mpsc::channel()).unzip();
+        ) = (0..workers).map(|_| mpsc::channel()).unzip();
 
         let (output_sender, output_receiver) = mpsc::channel();
 
-        Self {
-            current_state: template
+        let current_state = State {
+            adjustables: program.adjustables
                 .iter()
                 .map(|temp| {
-                    (
-                        match temp {
-                            AdjustableTemplate::Point => {
-                                Adjustable::Point(Complex::new(rand::random(), rand::random()))
-                            }
-                            AdjustableTemplate::PointOnCircle | AdjustableTemplate::PointOnLine => {
-                                Adjustable::Clip1D(rand::random())
-                            }
-                            AdjustableTemplate::Real => Adjustable::Real(rand::random()),
-                        },
-                        0.0,
-                    )
+                    match temp {
+                        AdjustableTemplate::Point => {
+                            Adjustable::Point(Complex::new(rand::random(), rand::random()))
+                        }
+                        AdjustableTemplate::PointOnCircle | AdjustableTemplate::PointOnLine => {
+                            Adjustable::Clip1D(rand::random())
+                        }
+                        AdjustableTemplate::Real => Adjustable::Real(rand::random()),
+                    }
                 })
                 .collect(),
+            qualities: {
+                let mut v = Vec::new();
+                v.reserve_exact(program.adjustables.len());
+                v.resize(program.adjustables.len(), 0.0);
+                v
+            },
+            total_quality: 0.0
+        };
+        let current_state = Box::pin(current_state);
+        let state_ptr: &State = &current_state;
+        let state_ptr = SendPtr(state_ptr);
+
+        let program = Arc::new(program);
+
+        Self {
+            current_state,
             workers: input_receivers
                 .into_iter()
                 .map(|rec| {
                     let sender = mpsc::Sender::clone(&output_sender);
                     let flags = Arc::clone(flags);
-                    let args = args.clone();
-                    thread::spawn(move || generation_cycle(&rec, &sender, &args, &flags))
+                    let program = Arc::clone(&program);
+                    thread::spawn(move || unsafe { generation_cycle(rec, sender, program, flags, state_ptr) })
                 })
                 .collect(),
             senders: input_senders,
             receiver: output_receiver,
-            total_quality: 0.0,
             delta: 0.0,
         }
     }
@@ -465,23 +505,37 @@ impl Generator {
         // Send data to each worker
         for (i, sender) in self.senders.iter().enumerate() {
             sender
-                .send(Message::Generate(magnitudes[i], self.current_state.clone()))
+                .send(Message::Generate(magnitudes[i]))
                 .unwrap();
         }
 
+        let first_state = self.receiver.recv().unwrap();
+        let mut best = first_state;
+
         // Wait for each handle to finish and consider its outcome
-        for _ in 0..self.workers.len() {
+        for _ in 0..(self.workers.len() - 1) {
             // If the total quality is larger than the current total, replace the points.
-            let points = self.receiver.recv().unwrap();
-            #[allow(clippy::cast_precision_loss)]
-            let total_quality =
-                points.iter().map(|x| x.1).sum::<f64>() / self.current_state.len() as f64;
+            let state = self.receiver.recv().unwrap();
 
-            // println!("Total quality: {total_quality}, points: {:#?}", points);
+            if state.total_quality > best.total_quality {
+                best = state;
+            }
+        }
 
-            if total_quality > self.total_quality {
-                self.current_state = points;
-                self.total_quality = total_quality;
+        if best.total_quality > self.get_total_quality() {
+            unsafe {
+                let mut_ref = self.current_state.as_mut().get_unchecked_mut();
+                mut_ref.qualities.clone_from_slice(&*best.qualities.0);
+
+                for (adj, value) in mut_ref.adjustables.iter_mut().zip(&*best.adjustables.0) {
+                    match adj {
+                        Adjustable::Point(x) => *x = value.complex,
+                        Adjustable::Real(x) => *x = value.complex.real,
+                        Adjustable::Clip1D(x) => *x = value.complex.real,
+                    }
+                }
+
+                mut_ref.total_quality = best.total_quality;
             }
         }
 
@@ -503,11 +557,11 @@ impl Generator {
     }
 
     pub fn single_cycle(&mut self, maximum_adjustment: f64) {
-        let current_quality = self.total_quality;
+        let current_quality = self.get_total_quality();
 
         self.cycle_prebaked(&self.bake_magnitudes(maximum_adjustment));
 
-        self.delta = self.total_quality - current_quality;
+        self.delta = self.get_total_quality();
     }
 
     /// Performs generation cycles until the mean delta from the last `mean_count` deltas becomes less or equal to `max_mean`.
@@ -541,8 +595,8 @@ impl Generator {
         while mean_delta > max_mean {
             duration += self.cycle_prebaked(&magnitudes);
 
-            self.delta = self.total_quality - current_quality;
-            current_quality = self.total_quality;
+            self.delta = self.get_total_quality() - current_quality;
+            current_quality = self.get_total_quality();
             let dropped_delta = last_deltas.pop_front().unwrap();
             mean_delta = (mean_delta * mean_count_f - dropped_delta + self.delta) / mean_count_f;
             last_deltas.push_back(self.delta);
@@ -554,7 +608,7 @@ impl Generator {
     }
 
     #[must_use]
-    pub fn get_state(&self) -> &Vec<(Adjustable, f64)> {
+    pub fn get_state(&self) -> &State {
         &self.current_state
     }
 
@@ -565,7 +619,7 @@ impl Generator {
 
     #[must_use]
     pub fn get_total_quality(&self) -> f64 {
-        self.total_quality
+        self.current_state.total_quality
     }
 }
 
@@ -584,9 +638,7 @@ impl Drop for Generator {
 }
 
 #[derive(Debug)]
-pub struct Optimizations {
-    pub identical_expressions: bool,
-}
+pub struct Optimizations {}
 
 #[derive(Debug)]
 pub struct Flags {
@@ -597,9 +649,7 @@ pub struct Flags {
 impl Default for Flags {
     fn default() -> Self {
         Self {
-            optimizations: Optimizations {
-                identical_expressions: true,
-            },
+            optimizations: Optimizations {},
             point_bounds: false,
         }
     }

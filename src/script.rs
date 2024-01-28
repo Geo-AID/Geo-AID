@@ -29,10 +29,9 @@ use std::{
 use num_traits::{One, Zero};
 use serde::Serialize;
 
-use crate::generator::{expression::Weights, fast_float::FastFloat};
+use crate::generator::fast_float::FastFloat;
 use crate::{
     cli::{AnnotationKind, Change, DiagnosticData, Fix},
-    generator::expression::{AnyExpr, Expression, PointExpr, ScalarExpr},
     span,
 };
 
@@ -791,96 +790,6 @@ impl Deref for ComplexUnit {
 impl DerefMut for ComplexUnit {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
-    }
-}
-
-/// Defines the kind and information about criteria the figure must obey.
-#[derive(Debug)]
-pub enum CriteriaKind {
-    /// Equality. Quality rises quickly as two values approach each other, drops quickly as their difference grows.
-    EqualScalar(Arc<Expression<ScalarExpr>>, Arc<Expression<ScalarExpr>>),
-    /// Equality. Quality rises quickly as two values approach each other, drops quickly as their difference grows.
-    EqualPoint(Arc<Expression<PointExpr>>, Arc<Expression<PointExpr>>),
-    /// Less. Quality starts rising on equality.
-    Less(Arc<Expression<ScalarExpr>>, Arc<Expression<ScalarExpr>>),
-    /// Greater. Quality starts rising on equality.
-    Greater(Arc<Expression<ScalarExpr>>, Arc<Expression<ScalarExpr>>),
-    /// Inverts the criteria. The quality is calculated as 1 - the quality of the inverted criteria.
-    Inverse(Box<CriteriaKind>),
-    /// Bias. Always evaluates to 1.0. Artificially raises quality for everything contained  in the arc.
-    Bias(Arc<Expression<AnyExpr>>),
-    /// Maximal quality of the given rules.
-    Alternative(Vec<CriteriaKind>),
-}
-
-impl CriteriaKind {
-    pub fn collect(&self, exprs: &mut Vec<usize>) {
-        match self {
-            CriteriaKind::EqualScalar(lhs, rhs)
-            | CriteriaKind::Less(lhs, rhs)
-            | CriteriaKind::Greater(lhs, rhs) => {
-                lhs.collect(exprs);
-                rhs.collect(exprs);
-            }
-            CriteriaKind::Inverse(v) => v.collect(exprs),
-            CriteriaKind::Bias(v) => v.collect(exprs),
-            CriteriaKind::EqualPoint(lhs, rhs) => {
-                lhs.collect(exprs);
-                rhs.collect(exprs);
-            }
-            CriteriaKind::Alternative(v) => {
-                for crit in v {
-                    crit.collect(exprs);
-                }
-            }
-        }
-    }
-
-    #[must_use]
-    pub fn get_weights(&self) -> Weights {
-        match self {
-            Self::EqualScalar(lhs, rhs) | Self::Less(lhs, rhs) | Self::Greater(lhs, rhs) => {
-                lhs.weights.clone() + &rhs.weights
-            }
-            Self::Inverse(v) => v.get_weights(),
-            Self::Bias(v) => v.weights.clone(),
-            Self::EqualPoint(lhs, rhs) => lhs.weights.clone() + &rhs.weights,
-            Self::Alternative(v) => {
-                let mut weights = Weights::empty();
-
-                for crit in v {
-                    weights += &crit.get_weights();
-                }
-
-                weights
-            }
-        }
-    }
-}
-
-/// Defines a weighed piece of criteria the figure must obey.
-#[derive(Debug)]
-pub struct Criteria {
-    kind: CriteriaKind,
-    weights: Weights,
-}
-
-impl Criteria {
-    #[must_use]
-    pub fn new(kind: CriteriaKind, weight: FastFloat) -> Self {
-        let weights = kind.get_weights().normalize() * weight;
-
-        Self { kind, weights }
-    }
-
-    #[must_use]
-    pub const fn get_kind(&self) -> &CriteriaKind {
-        &self.kind
-    }
-
-    #[must_use]
-    pub const fn get_weights(&self) -> &Weights {
-        &self.weights
     }
 }
 

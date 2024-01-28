@@ -920,7 +920,6 @@ macro_rules! convert_err {
 
         Expr {
             span: v.span,
-            weight: FastFloat::One,
             data: Rc::new($to::dummy()),
             node: None,
         }
@@ -947,7 +946,6 @@ macro_rules! impl_from_unknown {
             fn convert_from(value: Expr<Unknown>, _context: &CompileContext) -> Expr<Self> {
                 Expr {
                     span: value.span,
-                    weight: FastFloat::One,
                     data: Rc::new($what::dummy()),
                     node: None
                 }
@@ -969,7 +967,6 @@ macro_rules! impl_make_variable {
 
                 Expr {
                     span: sp,
-                    weight: FastFloat::One,
                     data: Rc::new($what::Generic(Generic::VariableAccess(Rc::new(
                         RefCell::new(Variable {
                             name,
@@ -990,7 +987,6 @@ macro_rules! impl_make_variable {
 
                 Expr {
                     span: sp,
-                    weight: FastFloat::One,
                     data: Rc::new($what {
                         $other: self.data.$other,
                         data: $data::Generic(Generic::VariableAccess(Rc::new(RefCell::new(
@@ -1096,7 +1092,6 @@ impl Expr<Point> {
         let node = self.node.take();
 
         Self {
-            weight,
             span,
             data: Rc::new(Point::Generic(Generic::Boxed(self))),
             node,
@@ -1113,7 +1108,6 @@ impl Expr<Point> {
     ) -> Expr<Scalar> {
         let mut expr = Expr {
             span,
-            weight,
             node: None,
             data: Rc::new(Scalar {
                 unit: Some(unit::SCALAR),
@@ -1135,7 +1129,6 @@ impl Expr<Point> {
     ) -> Expr<Scalar> {
         let mut expr = Expr {
             span,
-            weight,
             node: None,
             data: Rc::new(Scalar {
                 unit: Some(unit::SCALAR),
@@ -1281,7 +1274,6 @@ impl Expr<Circle> {
         let node = self.node.take();
 
         Self {
-            weight,
             span,
             data: Rc::new(Circle::Generic(Generic::Boxed(self))),
             node,
@@ -1298,7 +1290,6 @@ impl Expr<Circle> {
     ) -> Expr<Point> {
         let mut expr = Expr {
             span,
-            weight,
             node: None,
             data: Rc::new(Point::CircleCenter(self)),
         };
@@ -1317,7 +1308,6 @@ impl Expr<Circle> {
     ) -> Expr<Scalar> {
         let mut expr = Expr {
             span,
-            weight,
             node: None,
             data: Rc::new(Scalar {
                 unit: Some(unit::DISTANCE),
@@ -1402,7 +1392,6 @@ impl Expr<Line> {
         let node = self.node.take();
 
         Self {
-            weight,
             span,
             data: Rc::new(Line::Generic(Generic::Boxed(self))),
             node,
@@ -1634,7 +1623,6 @@ impl Expr<Scalar> {
         let node = self.node.take();
 
         Self {
-            weight,
             span,
             data: Rc::new(Scalar {
                 unit: self.data.unit,
@@ -1664,7 +1652,6 @@ impl Expr<Scalar> {
             // And pretend the conversion is valid.
             Expr {
                 span: self.span,
-                weight: FastFloat::One,
                 data: Rc::new(Scalar {
                     unit,
                     data: self.data.data.clone_without_node(),
@@ -1879,7 +1866,6 @@ impl ConvertFrom<Expr<Point>> for PointCollection {
         node.push(value.node.take());
 
         Expr {
-            weight: FastFloat::One,
             span: value.span,
             data: Rc::new(PointCollection {
                 length: 1,
@@ -1923,7 +1909,6 @@ impl Expr<PointCollection> {
         let node = self.node.take();
 
         Self {
-            weight,
             span,
             data: Rc::new(PointCollection {
                 length: self.data.length,
@@ -2075,7 +2060,6 @@ impl Expr<Bundle> {
         let node = self.node.take();
 
         Self {
-            weight,
             span,
             data: Rc::new(Bundle {
                 name: self.data.name,
@@ -2216,7 +2200,6 @@ impl Expr<Unknown> {
         let node = self.take_node();
 
         Self {
-            weight,
             data: Rc::new(Unknown::Generic(Generic::Boxed(self))),
             span,
             node,
@@ -2268,32 +2251,6 @@ impl AnyExpr {
             Self::PointCollection(v) => v.span,
             Self::Bundle(v) => v.span,
             Self::Unknown(v) => v.span,
-        }
-    }
-
-    #[must_use]
-    pub const fn get_weight(&self) -> FastFloat {
-        match self {
-            Self::Point(v) => v.weight,
-            Self::Line(v) => v.weight,
-            Self::Scalar(v) => v.weight,
-            Self::Circle(v) => v.weight,
-            Self::PointCollection(v) => v.weight,
-            Self::Bundle(v) => v.weight,
-            Self::Unknown(v) => v.weight,
-        }
-    }
-
-    #[must_use]
-    pub fn get_weight_mut(&mut self) -> &mut FastFloat {
-        match self {
-            Self::Point(v) => &mut v.weight,
-            Self::Line(v) => &mut v.weight,
-            Self::Scalar(v) => &mut v.weight,
-            Self::Circle(v) => &mut v.weight,
-            Self::PointCollection(v) => &mut v.weight,
-            Self::Bundle(v) => &mut v.weight,
-            Self::Unknown(v) => &mut v.weight,
         }
     }
 
@@ -2638,7 +2595,6 @@ impl<K: Hash + CloneWithNode + Eq, V: CloneWithNode> CloneWithNode for ClonedMap
 pub struct Expr<T: ?Sized + Displayed> {
     pub data: Rc<T>,
     pub span: Span,
-    pub weight: FastFloat, // Assigned weight.
     pub node: Option<HierarchyNode<T::Node>>,
 }
 
@@ -2647,7 +2603,6 @@ impl<T: ?Sized + Displayed> CloneWithNode for Expr<T> {
         Self {
             data: Rc::clone(&self.data),
             span: self.span,
-            weight: self.weight,
             node: self.node.take(),
         }
     }
@@ -2656,7 +2611,6 @@ impl<T: ?Sized + Displayed> CloneWithNode for Expr<T> {
         Self {
             data: Rc::clone(&self.data),
             span: self.span,
-            weight: self.weight,
             node: None,
         }
     }
@@ -2691,15 +2645,8 @@ impl<T: CloneWithNode + Displayed> Expr<T> {
         Self {
             span: span!(0, 0, 0, 0),
             data: Rc::new(data),
-            weight: FastFloat::One,
             node: None,
         }
-    }
-
-    #[must_use]
-    pub fn with_weight(mut self, weight: FastFloat) -> Self {
-        self.weight = weight;
-        self
     }
 
     pub fn take_node(&mut self) -> Option<HierarchyNode<T::Node>> {
@@ -2813,7 +2760,6 @@ fn fetch_variable(
     };
 
     *var.get_span_mut() = variable_span;
-    *var.get_weight_mut() = weight;
     var
 }
 
@@ -2848,7 +2794,6 @@ impl Unroll for SimpleExpression {
             };
 
             AnyExpr::Scalar(Expr {
-                weight: FastFloat::One,
                 span: self.get_span(),
                 data: Rc::new(Scalar {
                     unit: unrolled.data.unit.map(|v| v.pow(exponent)),
@@ -2865,7 +2810,6 @@ impl Unroll for SimpleExpression {
             let node = unrolled.node.take();
 
             AnyExpr::Scalar(Expr {
-                weight: FastFloat::One,
                 span: self.get_span(),
                 data: Rc::new(Scalar {
                     unit: unrolled.data.unit,
@@ -2912,7 +2856,6 @@ impl Unroll for Ident {
 
                 // No options are expected, as pcs don't generate nodes.
                 AnyExpr::PointCollection(Expr {
-                    weight: FastFloat::One, // PCs always have weight of one.
                     data: Rc::new(PointCollection {
                         length: col.collection.len(),
                         data: PointCollectionData::PointCollection(
@@ -3223,7 +3166,6 @@ impl Unroll for Number {
         display.finish(context);
 
         AnyExpr::Scalar(Expr {
-            weight: FastFloat::Zero, // Always zero.
             data: Rc::new(Scalar {
                 unit: None,
                 data: ScalarData::Number(self.to_float()),
@@ -3263,7 +3205,6 @@ impl Unroll for PointCollectionConstructor {
         pc_children.resize_with(self.points.len(), || None);
 
         AnyExpr::PointCollection(Expr {
-            weight: FastFloat::One, // PCs always have a weight of one.
             span: self.get_span(),
             data: Rc::new(PointCollection {
                 length: self.points.len(),
@@ -3273,8 +3214,6 @@ impl Unroll for PointCollectionConstructor {
                     for expr in self.points.iter() {
                         let mut unrolled =
                             expr.unroll(context, library, it_index, Properties::default());
-
-                        *unrolled.get_weight_mut() *= weight_pc;
 
                         if unrolled.can_convert_to(ty::POINT) {
                             points.push(unrolled.convert(context));
@@ -3286,7 +3225,6 @@ impl Unroll for PointCollectionConstructor {
 
                             // Pretend the point is valid.
                             points.push(Expr {
-                                weight: FastFloat::One,
                                 span: unrolled.get_span(),
                                 data: Rc::new(Point::dummy()),
                                 node: unrolled.replace_node(None).map(AnyExprNode::as_point),
@@ -3352,7 +3290,6 @@ impl<const ITER: bool> Unroll for ExprBinop<ITER> {
             });
 
             Expr {
-                weight: FastFloat::One,
                 span: lhs.get_span(),
                 data: Rc::new(Scalar::dummy()),
                 node: None,
@@ -3369,7 +3306,6 @@ impl<const ITER: bool> Unroll for ExprBinop<ITER> {
             });
 
             Expr {
-                weight: FastFloat::One,
                 span: rhs.get_span(),
                 data: Rc::new(Scalar::dummy()),
                 node: None,
@@ -3392,7 +3328,6 @@ impl<const ITER: bool> Unroll for ExprBinop<ITER> {
 
                 let rhs = rhs.convert_unit(lhs.data.unit, context);
                 let mut expr = Expr {
-                    weight,
                     span: self.get_span(),
                     data: Rc::new(Scalar {
                         unit: rhs.data.unit,
@@ -3418,7 +3353,6 @@ impl<const ITER: bool> Unroll for ExprBinop<ITER> {
 
                 let rhs = rhs.specify_unit(context);
                 let mut expr = Expr {
-                    weight,
                     span: self.get_span(),
                     data: Rc::new(Scalar {
                         unit: Some(lhs.data.unit.unwrap() * rhs.data.unit.as_ref().unwrap()),
@@ -4074,7 +4008,6 @@ fn unroll_eq(
                 lhs,
                 AnyExpr::Unknown(Expr {
                     span: rhs.get_span(),
-                    weight: FastFloat::One,
                     data: Rc::new(Unknown::dummy()),
                     node: None,
                 })
@@ -4134,7 +4067,6 @@ fn unroll_gt(
 
             Expr {
                 span: rhs.span,
-                weight: FastFloat::One,
                 node: rhs.node,
                 data: Rc::new(Scalar::dummy()),
             }
@@ -4172,7 +4104,6 @@ fn unroll_lt(
 
             Expr {
                 span: rhs.span,
-                weight: FastFloat::One,
                 node: rhs.node,
                 data: Rc::new(Scalar::dummy()),
             }
