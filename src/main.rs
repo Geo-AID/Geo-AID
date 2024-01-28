@@ -32,11 +32,7 @@ use clap::{Parser, ValueEnum};
 use crossterm::{cursor, terminal, ExecutableCommand, QueueableCommand};
 use geo_aid::{
     cli::{Diagnostic, DiagnosticKind},
-    drawer::{json, raw},
-    generator::GenerationArgs,
-};
-use geo_aid::{
-    drawer::{latex, svg},
+    drawer::{json, raw, latex, svg},
     generator::Generator,
     projector,
     script::compile,
@@ -130,15 +126,11 @@ fn main() {
     };
 
     let flags = Arc::new(compiled.flags);
-    let mut gen = Generator::new(
-        &compiled.template,
+    let mut gen = unsafe { Generator::new(
         args.count_of_workers,
-        &GenerationArgs {
-            criteria: Arc::new(compiled.criteria),
-            point_count: compiled.template.len(),
-        },
+        compiled,
         &flags,
-    );
+    )};
 
     let mut stdout = io::stdout();
 

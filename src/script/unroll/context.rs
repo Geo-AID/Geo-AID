@@ -367,7 +367,6 @@ impl CompileContext {
                 Point::OnLine(k) => {
                     *point = Point::Bind(Expr {
                         span: span!(0, 0, 0, 0),
-                        weight: FastFloat::One,
                         node: None,
                         data: Rc::new(UnrolledPoint::LineLineIntersection(
                             k.clone_without_node(),
@@ -466,7 +465,6 @@ impl CompileContext {
         T::Node: FromExpr<T>,
     {
         let mut expr = Expr {
-            weight: display.get("weight").get_or(FastFloat::One),
             span: span!(0, 0, 0, 0),
             data: Rc::new(content),
             node: None,

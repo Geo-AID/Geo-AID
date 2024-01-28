@@ -131,7 +131,6 @@ pub mod macros {
         };
         (=$v:expr) => {
             $crate::script::unroll::Expr {
-                weight: $crate::generator::fast_float::FastFloat::One,
                 span: $crate::span!(0, 0, 0, 0),
                 data: std::rc::Rc::new($crate::script::unroll::Scalar {
                     unit: Some($crate::script::unit::DISTANCE),
@@ -144,7 +143,6 @@ pub mod macros {
         };
         ($t:ident $v:expr) => {
             $crate::script::unroll::Expr {
-                weight: $crate::generator::fast_float::FastFloat::One,
                 span: $crate::span!(0, 0, 0, 0),
                 data: std::rc::Rc::new($crate::script::unroll::Scalar {
                     unit: Some($crate::script::unit::$t),
@@ -167,7 +165,6 @@ pub mod macros {
             )*
 
             $crate::script::unroll::Expr {
-                weight: $crate::generator::fast_float::FastFloat::One,
                 span: $crate::span!(0, 0, 0, 0),
                 data: std::rc::Rc::new($crate::script::unroll::Bundle {
                     name: stringify!($t),
