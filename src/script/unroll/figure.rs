@@ -22,7 +22,6 @@ use std::{collections::HashMap, fmt::Debug, ops::Deref};
 
 use crate::{
     script::{
-        compile::{Compile, Compiler},
         figure::{Figure, MathString, Style},
         parser::{FromProperty, Parse, PropertyValue},
         Error,
