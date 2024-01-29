@@ -34,7 +34,6 @@ use crate::script::HashableArc;
 
 use crate::script::figure::Style::{self, Bold, Dashed, Dotted, Solid};
 use crate::script::figure::{MathChar, MathIndex};
-use crate::script::figure::Style::{self, Bold, Dashed, Solid, Dotted};
 use crate::drawer::{Draw, Latex};
 
 impl Draw for Latex {
