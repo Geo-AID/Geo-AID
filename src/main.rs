@@ -32,11 +32,10 @@ use clap::{Parser, ValueEnum};
 use crossterm::{cursor, terminal, ExecutableCommand, QueueableCommand};
 use geo_aid::{
     cli::{Diagnostic, DiagnosticKind},
-    drawer::{json, raw},
+    drawer::{Draw, Latex, Svg, Json, Raw},
     generator::GenerationArgs,
 };
 use geo_aid::{
-    drawer::{latex, svg},
     generator::Generator,
     projector,
     script::compile,
@@ -166,11 +165,35 @@ fn main() {
 
     let rendered = projector::project(&compiled.figure, gen.get_state(), &flags);
 
+    #[allow(clippy::cast_precision_loss)]
+    let mut latex = Latex {
+        content: String::default(),
+        canvas_size,
+        scale: f64::min(10.0/canvas_size.0 as f64, 10.0/canvas_size.1 as f64),
+    };
+
+    let mut svg = Svg {
+        content: String::default(),
+        canvas_size,
+    };
+
+    let mut json = Json {
+        content: String::default(),
+        canvas_size,
+    };
+
+    let mut raw = Raw {
+        content: String::default(),
+        canvas_size,
+    };
+    
     match args.renderer {
-        Renderer::Latex => latex::draw(&args.output, canvas_size, &rendered),
-        Renderer::Svg => svg::draw(&args.output, canvas_size, &rendered),
-        Renderer::Json => json::draw(&args.output, canvas_size, &rendered),
-        Renderer::Raw => raw::draw(&args.output, canvas_size, &rendered),
+        Renderer::Latex => latex.draw(&args.output, &rendered).unwrap(),
+        Renderer::Json => json.draw(&args.output, &rendered).unwrap(),
+        Renderer::Svg => svg.draw(&args.output, &rendered).unwrap(),
+        Renderer::Raw => raw.draw(&args.output, &rendered).unwrap(),
+        //Renderer::Latex => latex::draw(&args.output, canvas_size, &rendered),
+        //Renderer::Json => json::draw(&args.output, canvas_size, &rendered),
     }
 
     // for i in 1..=200 {

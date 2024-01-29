@@ -21,20 +21,223 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 use std::rc::Rc;
 use std::string::String;
 use std::sync::Arc;
-use std::{fs::File, io::Write, path::Path};
 
 use crate::generator::expression::expr::AnglePoint;
 use crate::generator::expression::{Expression, PointExpr, ScalarExpr};
 use crate::generator::Complex;
 use crate::labels::get_special_char_latex;
 use crate::projector::{
-    Output, Rendered, RenderedAngle, RenderedCircle, RenderedLine, RenderedPoint, RenderedRay,
+    Output, RenderedAngle, RenderedCircle, RenderedLine, RenderedPoint, RenderedRay,
     RenderedSegment,
 };
 use crate::script::HashableArc;
 
 use crate::script::figure::Style::{self, Bold, Dashed, Dotted, Solid};
 use crate::script::figure::{MathChar, MathIndex};
+use crate::drawer::{Draw, Latex};
+
+impl Draw for Latex {
+    fn begin(&mut self) {
+        self.content = String::from(
+            r"
+                \documentclass{article}
+                \usepackage{tikz}
+                \usepackage{tkz-euclide}
+                \usetikzlibrary {angles,calc,quotes}
+                \begin{document}
+                \begin{tikzpicture}
+            ",
+        );
+    }
+
+    fn draw_point(&mut self, point: &Rc<RenderedPoint>) {
+        let position = point.position * self.scale;
+        let label_position = point.label_position * self.scale;
+
+        let mut label: String = String::default();
+        let mut seen = false;
+        let mut lower = 0;
+        let mut upper = 0;
+
+        for char in &point.math_string.chars {
+            match char {
+                MathChar::Ascii(c) => {
+                    label += &c.to_string();
+                }
+                MathChar::Special(c) => {
+                    label += get_special_char_latex(c);
+                }
+                MathChar::SetIndex(i) => {
+                    match i {
+                        MathIndex::Normal => {
+                            if seen {
+                                label += "}";
+                            }
+
+                            upper += 1;
+                        }
+                        MathIndex::Lower => {
+                            seen = true;
+                            label += "_{";
+
+                            lower += 1;
+                        }
+                    }
+                }
+                MathChar::Prime => {
+                    label += "^{'}";
+                }
+            }
+        }
+
+        let times = lower - upper;
+
+        if times > 0 {
+            for _ in 0..times {
+                label += "}";
+            }
+        }
+        self.content += &format!(
+            r#"
+                \coordinate ({}) at ({}, {}); \fill[black] ({}) circle (1pt);
+                \node at ({}, {}) {{${}$}}; 
+            "#,
+            point.uuid, position.real, position.imaginary, point.uuid, label_position.real, label_position.imaginary, label
+        );
+    }
+
+    fn draw_line(&mut self, line: &RenderedLine) {
+        let pos1 = line.points.0 * self.scale;
+        let pos2 = line.points.1 * self.scale;
+        
+        self.content += &format!(
+            r#"
+                \begin{{scope}}
+                    \coordinate (A) at ({},{});
+                    \coordinate (B) at ({},{});
+                    \tkzDrawSegment[{}](A,B)
+                \end{{scope}}
+            "#,
+            pos1.real,
+            pos1.imaginary,
+            pos2.real,
+            pos2.imaginary,
+            styling(line.style)
+        );
+    }
+
+    fn draw_angle(&mut self, angle: &RenderedAngle, output: &Output) {
+        let no_arcs = String::from("l"); // Requires a change later! It has to be based on info from the script
+        
+        self.content += &match &angle.expr.kind {
+            ScalarExpr::AnglePoint(AnglePoint { arm1, origin, arm2 }) => {
+                format!(
+                    r#"
+                    \begin{{scope}}
+                        \coordinate (A) at {};
+                        \coordinate (B) at {};
+                        \coordinate (C) at {};
+                            \tkzMarkAngle[size = 0.5,mark = none,arc={no_arcs},mkcolor = black, {}](A,B,C)
+                    \end{{scope}}
+                    "#,
+                    get_point_name(arm1, output, angle.points.0, self.scale),
+                    get_point_name(origin, output, angle.points.1, self.scale),
+                    get_point_name(arm2, output, angle.points.2, self.scale),
+                    styling(angle.style)
+                )
+            }
+            // There are hard coded values in \coordinate, it is intentional, every point has it's label marked by Rendered::Point sequence above
+            ScalarExpr::AngleLine(_) => {
+                format!(
+                    r#"
+                    \begin{{scope}}
+                        \coordinate (A) at ({}, {});
+                        \coordinate (B) at ({}, {});
+                        \coordinate (C) at ({}, {});
+                            \tkzMarkAngle[size = 2,mark = none,arc={no_arcs},mkcolor = black, {}](A,B,C)
+                    \end{{scope}}
+                    "#,
+                    angle.points.0.real,
+                    angle.points.0.imaginary,
+                    angle.points.1.real,
+                    angle.points.1.imaginary,
+                    angle.points.2.real,
+                    angle.points.2.imaginary,
+                    styling(angle.style)
+                )
+            }
+            _ => unreachable!(),
+        };
+    }
+
+    fn draw_ray(&mut self, ray: &RenderedRay) {
+        let pos1 = ray.points.0 * self.scale;
+        let pos2 = ray.points.1 * self.scale;
+        
+        self.content += &format!(
+            r#"
+            \begin{{scope}}
+                \coordinate (A) at ({}, {});
+                \coordinate (B) at ({}, {});
+                    \tkzDrawSegment[{}](A,B)
+            \end{{scope}}
+            "#,
+            pos1.real,
+            pos1.imaginary,
+            pos2.real,
+            pos2.imaginary,
+            styling(ray.style)
+        );
+    }
+
+    fn draw_segment(&mut self, segment: &RenderedSegment) {
+        let pos1 = segment.points.0 * self.scale;
+        let pos2 = segment.points.1 * self.scale;
+        
+        self.content += &format!(
+            r#"
+            \begin{{scope}}
+                \coordinate (A) at ({}, {});
+                \coordinate (B) at ({}, {});
+                    \tkzDrawSegment[{}](A,B)
+            \end{{scope}}
+            "#,
+            pos1.real,
+            pos1.imaginary,
+            pos2.real,
+            pos2.imaginary,
+            styling(segment.style)
+        );
+    }
+
+    fn draw_circle(&mut self, circle: &RenderedCircle) {
+        let pos1 = circle.center * self.scale;
+        let pos2 = circle.draw_point * self.scale;
+        
+        self.content += &format!(
+            r#"
+            \begin{{scope}}
+                \coordinate (A) at ({}, {});
+                \coordinate (B) at ({}, {});
+                    \tkzDrawCircle[{}](A,B)
+            \end{{scope}}
+            "#,
+            pos1.real,
+            pos1.imaginary,
+            pos2.real,
+            pos2.imaginary,
+            styling(circle.style)
+        );
+    }
+
+    fn close_draw(&mut self) {
+        self.content += "\\end{tikzpicture} \\end{document}";
+    }
+
+    fn end(&self) -> &String {
+        &self.content
+    }
+}
 
 /// Function getting the point's name (if it exists, if not then it returns the point's coordinates).
 fn get_point_name(
@@ -54,20 +257,17 @@ fn get_point_name(
 }
 
 /// Function that assigns the styling.
-fn styling(rendered: &Rendered, mode: Style) -> String {
-    match rendered {
-        Rendered::Point(_) => unreachable!(),
-        _ => match mode {
-            Dotted => "dotted".to_string(),
-            Dashed => "dashed".to_string(),
-            Bold => "ultra thick".to_string(),
-            Solid => "thin".to_string(),
-        },
+fn styling(mode: Style) -> String {
+    match mode {
+        Dotted => "dotted".to_string(),
+        Dashed => "dashed".to_string(),
+        Bold => "ultra thick".to_string(),
+        Solid => "thin".to_string(),
     }
 }
 
-/// Function that handles the points.
-fn points(point: &Rc<RenderedPoint>, scale: f64) -> String {
+// Function that handles the points.
+/*fn points(point: &Rc<RenderedPoint>, scale: f64) -> String {
     let position = point.position * scale;
     let label_position = point.label_position * scale;
 
@@ -163,7 +363,7 @@ fn angles(angle: &RenderedAngle, scale: f64, output: &Output, rendered: &Rendere
                 styling(rendered, angle.style)
             )
         }
-        // There are hard coded values in \coordinate, it is intentional, every point has it label marked by Rendered::Point sequence above
+        // There are hard coded values in \coordinate, it is intentional, every point has it's label marked by Rendered::Point sequence above
         ScalarExpr::AngleLine(_) => {
             format!(
                 r#"
@@ -278,4 +478,4 @@ pub fn draw(target: &Path, canvas_size: (usize, usize), output: &Output) {
 
     let mut file = File::create(target).unwrap();
     file.write_all(content.as_bytes()).unwrap();
-}
+}*/
