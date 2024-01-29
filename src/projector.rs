@@ -28,6 +28,7 @@ use uuid::Uuid;
 use crate::generator::expression::expr::{AngleLine, AnglePoint};
 use crate::generator::expression::{LineExpr, PointExpr, ScalarExpr};
 use crate::generator::geometry::get_line;
+use crate::generator::program::ValueEnum;
 use crate::labels::point_label_position;
 use crate::script::figure::{MathString, Style};
 use crate::{
@@ -561,7 +562,7 @@ fn circles(
 /// Returns an error if there is a problem with evaluating constructs (e. g. intersection of two parallel lines).
 pub fn project(
     figure: &Figure,
-    generated_points: &[(Adjustable, f64)],
+    generated_points: &[ValueEnum],
     flags: &Arc<Flags>,
 ) -> Output {
     let args = EvaluationArgs {

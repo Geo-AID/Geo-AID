@@ -41,6 +41,7 @@ use self::{figure::SPECIAL_MATH, parser::Type};
 mod builtins;
 pub mod compile;
 pub mod figure;
+pub mod math;
 pub mod parser;
 pub mod token;
 pub mod unroll;

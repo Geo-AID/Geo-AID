@@ -18,25 +18,23 @@ WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use std::{fmt::Display, str::FromStr, sync::Arc};
+use std::{fmt::Display, str::FromStr};
 
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 use serde::Serialize;
 
 use crate::{
-    generator::expression::{CircleExpr, Expression, LineExpr, PointExpr, ScalarExpr},
     span,
 };
 
 use super::{
+    math::AnyExpr,
     parser::{FromProperty, Parse, PropertyValue},
     token::{Ident, PointCollectionItem, Span},
     unroll::most_similar,
     Error,
 };
-
-type Point = Arc<Expression<PointExpr>>;
 
 pub const SPECIAL_MATH: [&str; 49] = [
     "alpha", "Alpha", "beta", "Beta", "gamma", "Gamma", "delta", "Delta", "epsilon", "Epsilon",
@@ -60,17 +58,7 @@ pub enum Style {
 #[derive(Debug, Default)]
 pub struct Figure {
     /// Points to be displayed
-    pub points: Vec<(Arc<Expression<PointExpr>>, MathString)>,
-    /// Lines to be displayed
-    pub lines: Vec<(Arc<Expression<LineExpr>>, Style)>,
-    /// Angles to be displayed
-    pub angles: Vec<(Arc<Expression<ScalarExpr>>, u8, Style)>, // This u8 refers to number of arcs in an angle!
-    /// Segments to be displayed
-    pub segments: Vec<(Point, Point, Style)>,
-    /// Rays to be displayed
-    pub rays: Vec<(Point, Point, Style)>,
-    /// Circles to be displayed
-    pub circles: Vec<(Arc<Expression<CircleExpr>>, Style)>,
+    pub items: Vec<AnyExpr<usize>>,
     /// The canvas size.
     pub canvas_size: (usize, usize),
 }
