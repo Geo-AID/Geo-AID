@@ -171,7 +171,7 @@ fn get_label_pos(vec_associated: &Vec<Complex>, point: Complex) -> Complex {
         label_pos = Complex::new(point.real + 2.0, point.imaginary + 2.0);
     } else if vec_associated.len() == 1 {
         // Only one vector which is associated with the given point.
-        label_pos = point - 2.0 * *vec_associated.first().unwrap();
+        label_pos = point - 4.0 * vec_associated.first().unwrap().normalize();
     } else {
         // If there is more than one associated vector.
         for vec in vec_associated {

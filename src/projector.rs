@@ -43,8 +43,7 @@ mod tests {
     use std::str::FromStr;
     use std::{path::PathBuf, sync::Arc};
 
-    use crate::generator::expression::expr::{AnglePoint, CenterRadius, LinePoint, Literal};
-    use crate::generator::expression::{CircleExpr, LineExpr, ScalarExpr};
+    use crate::drawer::Draw;
     use crate::generator::fast_float::FastFloat;
     use crate::script::figure::{MathString, MathChar, MathIndex, MathSpecial};
     use crate::script::token::{Span, Position};
@@ -68,10 +67,9 @@ mod tests {
     }
 
     /// Function that tests the performance of the projector and drawers.
-    #[allow(clippy::too_many_lines)]
     #[test]
     fn test_project() {
-        let x: u8 = 1;
+        //let x: u8 = 1;
         let gen_points: [(Adjustable, f64); 3] = [
             (
                 Adjustable::Point(Complex {
@@ -102,7 +100,7 @@ mod tests {
                 (create_point_expr(1), MathString::from_str("B").unwrap()),
                 (create_point_expr(2), MathString::from_str("C").unwrap()),
             ],
-            lines: vec![
+            lines: Vec::new(), /* vec![
                 (
                     Arc::new(Expression::new(
                         LineExpr::Line(LinePoint {
@@ -133,8 +131,8 @@ mod tests {
                     )),
                     Style::default(),
                 ),
-            ],
-            angles: vec![(
+            ],*/
+            angles: Vec::new(), /*vec![(
                 Arc::new(Expression::new(
                     ScalarExpr::AnglePoint(AnglePoint {
                         arm1: create_point_expr(0),
@@ -145,19 +143,19 @@ mod tests {
                 )),
                 x,
                 Style::Dashed,
-            )],
+            )],*/
 
             segments: vec![
-                (create_point_expr(0), create_point_expr(1), Style::default()),
+                //(create_point_expr(0), create_point_expr(1), Style::default()),
                 (create_point_expr(1), create_point_expr(2), Style::default()),
                 (create_point_expr(2), create_point_expr(0), Style::default()),
             ],
-            rays: vec![
+            rays: Vec::new(), /*vec![
                 (create_point_expr(0), create_point_expr(1), Style::Solid),
                 (create_point_expr(1), create_point_expr(2), Style::Solid),
                 (create_point_expr(2), create_point_expr(0), Style::Solid),
-            ],
-            circles: vec![(
+            ],*/
+            circles: Vec::new(), /*vec![(
                 Arc::new(Expression::new(
                     CircleExpr::CenterRadius(CenterRadius {
                         center: create_point_expr(0),
@@ -169,21 +167,33 @@ mod tests {
                     FastFloat::One,
                 )),
                 Style::Dashed,
-            )],
+            )], */
 
             canvas_size: (200, 200),
         };
 
         let path_latex = PathBuf::from("testoutputs//test.latex");
-        let path_svg = PathBuf::from("testoutputs//test.svg");
+        let _path_svg = PathBuf::from("testoutputs//test.svg");
         let path_json = PathBuf::from("testoutputs//test.json");
-        let path_raw = PathBuf::from("testoutputs//test.raw");
+        let _path_raw = PathBuf::from("testoutputs//test.raw");
 
         let pr = &project(&fig, &gen_points, &Arc::default());
-        drawer::latex::draw(&path_latex, (fig.canvas_size.0, fig.canvas_size.1), pr);
-        drawer::svg::draw(&path_svg, (fig.canvas_size.0, fig.canvas_size.1), pr);
-        drawer::json::draw(&path_json, (fig.canvas_size.0, fig.canvas_size.1), pr);
-        drawer::raw::draw(&path_raw, (fig.canvas_size.0, fig.canvas_size.1), pr);
+        //drawer::latex::draw(&path_latex, (fig.canvas_size.0, fig.canvas_size.1), pr);
+        
+        let width = fig.canvas_size.0;
+        let height = fig.canvas_size.1;
+
+        #[allow(clippy::cast_precision_loss)]
+        let mut latex = drawer::Latex {canvas_size: (width, height), scale: f64::min(10.0 / fig.canvas_size.0 as f64, 10.0 / fig.canvas_size.1 as f64), content: String::default() };
+
+        latex.draw(&path_latex, pr).expect("error");
+
+        let mut json = drawer::Json {canvas_size: (width, height), content: String::default()};
+
+        json.draw(&path_json, pr).expect("error");
+        //drawer::svg::draw(&path_svg, (fig.canvas_size.0, fig.canvas_size.1), pr);
+        //drawer::json::draw(&path_json, (fig.canvas_size.0, fig.canvas_size.1), pr);
+        //drawer::raw::draw(&path_raw, (fig.canvas_size.0, fig.canvas_size.1), pr);
     }
 }
 

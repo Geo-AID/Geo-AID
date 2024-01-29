@@ -18,22 +18,49 @@ WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+
 use std::{fs::File, io::Write, path::Path};
 
 use serde::Serialize;
 
 use crate::projector::{Output, Rendered};
 
+use crate::drawer::Json;
+
+/// Data to be serialized.
 #[derive(Serialize)]
-struct Data<'r> {
+pub struct Data<'r> {
     pub width: usize,
     pub height: usize,
     pub rendered: &'r Vec<Rendered>,
 }
 
-/// # Panics
-/// Panics whenever there is a filesystem problem
-pub fn draw(target: &Path, canvas_size: (usize, usize), output: &Output) {
+impl Json {
+    /// # Errors
+    /// Returns an error when there was a problem with creating the output file.
+    /// # Panics
+    /// Possibly panics during serialization.
+    pub fn draw(&mut self, target: &Path, output: &Output) -> Result<(), std::io::Error> {
+        let data = Data {
+            width: self.canvas_size.0,
+            height: self.canvas_size.1,
+            rendered: &output.vec_rendered,
+        };
+
+        self.content += (serde_json::to_string(&data).unwrap()).as_str();
+
+        let file = File::create(target);
+        
+        match file {
+            Ok(mut file) => file.write_all(self.content.as_bytes()),
+            Err(error) => Err(error),
+        }
+    }
+}
+
+// # Panics
+// Panics whenever there is a filesystem problem
+/*pub fn draw(target: &Path, canvas_size: (usize, usize), output: &Output) {
     let mut content = String::new();
     let data = Data {
         width: canvas_size.0,
@@ -44,4 +71,4 @@ pub fn draw(target: &Path, canvas_size: (usize, usize), output: &Output) {
 
     let mut file = File::create(target).unwrap();
     file.write_all(content.as_bytes()).unwrap();
-}
+}*/
