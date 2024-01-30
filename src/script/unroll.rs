@@ -1616,8 +1616,8 @@ impl Expr<Scalar> {
                         v @ ScalarData::Number(_) => {
                             v.clone_without_node()
                         }
-                        v @ ScalarData::Free => {
-                            todo!()
+                        ScalarData::Free => {
+                            ScalarData::SetUnit(self.clone_without_node(), unit.unwrap())
                         }
                         ScalarData::DstLiteral(_)
                         | ScalarData::PointPointDistance(_, _)
