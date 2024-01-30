@@ -38,7 +38,6 @@ pub mod segment;
 pub mod prelude {
     pub(crate) use crate::script::{
         builtins::macros::*,
-        compile::{Compile, Compiler},
         figure::{Figure, Style},
         unit,
         unroll::{
@@ -48,7 +47,7 @@ pub mod prelude {
                 PointNode, ScalarNode,
             },
             Bundle, Circle, CloneWithNode, Expr, Function, Library, Line, Point, PointCollection,
-            Properties, Rule, Scalar, ScalarData, Simplify, UnrolledRule, UnrolledRuleKind,
+            Properties, Rule, Scalar, ScalarData, UnrolledRule, UnrolledRuleKind,
         },
     };
 }

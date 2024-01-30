@@ -1,20 +1,20 @@
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub enum Point<M> {
+pub enum Number<M> {
     LineLineIntersection(LineExpr<M>, LineExpr<M>)
 }
 
-pub type PointExpr<M> = Expr<Point<M>, M>;
+pub type NumberExpr<M> = Expr<Number<M>, M>;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Line<M> {
-    PointPoint(PointExpr<M>, PointExpr<M>)
+    PointPoint(NumberExpr<M>, NumberExpr<M>)
 }
 
 pub type LineExpr<M> = Expr<Line<M>, M>;
 
 #[derive(Debug, Clone)]
 pub enum Any<M> {
-    Point(Point<M>),
+    Number(Number<M>),
     Line(Line<M>)
 }
 

@@ -24,9 +24,7 @@ use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 use serde::Serialize;
 
-use crate::{
-    span,
-};
+use crate::span;
 
 use super::{
     math::AnyExpr,

@@ -18,7 +18,7 @@ WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use geo_aid_derive::{CloneWithNode, Definition};
+use geo_aid_derive::CloneWithNode;
 use num_traits::One;
 use std::collections::HashSet;
 use std::fmt::Formatter;
@@ -39,7 +39,7 @@ use crate::generator::fast_float::FastFloat;
 use crate::script::builtins::macros::index;
 use crate::script::ty;
 
-use self::context::{CompileContext, Definition};
+use self::context::CompileContext;
 use self::figure::{
     AnyExprNode, BundleNode, CircleNode, CollectionNode, EmptyNode, FromExpr, HierarchyNode,
     LineNode, LineType, MaybeUnset, Node, PCNode, PointNode, ScalarNode,
@@ -858,12 +858,6 @@ pub trait GetValueType {
     fn get_value_type(&self) -> Type;
 }
 
-pub trait Simplify {
-    /// Simlpifies the expression. WARNING: DOES NOT PRESERVE NODE.
-    #[must_use]
-    fn simplify(&self, context: &CompileContext) -> Self;
-}
-
 macro_rules! impl_x_from_x {
     ($what:ident) => {
         impl ConvertFrom<Expr<$what>> for $what {
@@ -1014,19 +1008,19 @@ macro_rules! impl_any_from_x {
     };
 }
 
-#[derive(Debug, Definition, CloneWithNode)]
+#[derive(Debug, CloneWithNode)]
 pub enum Generic<T>
 where
-    T: Definition + Displayed,
+    T: Displayed,
 {
-    VariableAccess(#[def(variable)] Rc<RefCell<Variable<T>>>),
+    VariableAccess(Rc<RefCell<Variable<T>>>),
     Boxed(Expr<T>),
     /// Dummy is a value specifically for continued unrolling after error occurence.
     /// It should never show up in compilation step.
     Dummy,
 }
 
-impl<T: Display + Definition + Displayed> Display for Generic<T> {
+impl<T: Display + Displayed> Display for Generic<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::VariableAccess(name) => write!(f, "{}", name.borrow().name),
@@ -1038,13 +1032,13 @@ impl<T: Display + Definition + Displayed> Display for Generic<T> {
     }
 }
 
-#[derive(Debug, Definition, CloneWithNode)]
+#[derive(Debug, CloneWithNode)]
 pub enum Point {
     Generic(Generic<Self>),
-    Entity(#[def(entity)] usize),
-    Average(#[def(sequence)] ClonedVec<Expr<Point>>),
+    Average(ClonedVec<Expr<Point>>),
     LineLineIntersection(Expr<Line>, Expr<Line>),
     CircleCenter(Expr<Circle>),
+    Free
 }
 
 impl Point {
@@ -1066,24 +1060,6 @@ impl Dummy for Point {
 
 impl Displayed for Point {
     type Node = PointNode;
-}
-
-impl Simplify for Expr<Point> {
-    fn simplify(&self, context: &CompileContext) -> Expr<Point> {
-        match self.data.as_ref() {
-            Point::Generic(generic) => match generic {
-                Generic::VariableAccess(var) => var.borrow().definition.simplify(context),
-                Generic::Boxed(expr) => expr.simplify(context),
-                Generic::Dummy => self.clone_without_node(),
-            },
-            Point::Entity(index) => context.get_point_by_index(*index),
-            Point::CircleCenter(circ) => match circ.simplify(context).data.as_ref() {
-                Circle::Circle(center, _) => center.simplify(context),
-                _ => unreachable!(),
-            },
-            Point::Average(_) | Point::LineLineIntersection(_, _) => self.clone_without_node(),
-        }
-    }
 }
 
 impl Expr<Point> {
@@ -1160,13 +1136,13 @@ impl Display for Point {
                     .collect::<Vec<String>>()
                     .join(", ")
             ),
-            Self::Entity(i) => write!(f, "Point {i}"),
             Self::LineLineIntersection(l1, l2) => {
                 write!(f, "intersection({l1}, {l2})")
             }
             Self::CircleCenter(circle) => {
                 write!(f, "{circle}.center")
             }
+            Self::Free => write!(f, "Free point")
         }
     }
 }
@@ -1214,10 +1190,9 @@ impl ConvertFrom<Expr<PointCollection>> for Point {
     }
 }
 
-#[derive(Debug, CloneWithNode, Definition)]
+#[derive(Debug, CloneWithNode)]
 pub enum Circle {
     Generic(Generic<Self>),
-    Entity(#[def(entity)] usize),
     Circle(Expr<Point>, Expr<Scalar>), // Center, radius
 }
 
@@ -1252,20 +1227,6 @@ impl Dummy for Circle {
 
 impl Displayed for Circle {
     type Node = CircleNode;
-}
-
-impl Simplify for Expr<Circle> {
-    fn simplify(&self, context: &CompileContext) -> Self {
-        match self.data.as_ref() {
-            Circle::Generic(generic) => match generic {
-                Generic::VariableAccess(var) => var.borrow().definition.simplify(context),
-                Generic::Boxed(expr) => expr.simplify(context),
-                Generic::Dummy => self.clone_without_node(),
-            },
-            Circle::Entity(index) => context.get_circle_by_index(*index),
-            Circle::Circle(_, _) => self.clone_without_node(),
-        }
-    }
 }
 
 impl Expr<Circle> {
@@ -1330,7 +1291,6 @@ impl Display for Circle {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Generic(v) => write!(f, "{v}"),
-            Self::Entity(i) => write!(f, "Entity {i}"),
             Self::Circle(center, radius) => {
                 write!(f, "circle({center}, {radius})")
             }
@@ -1338,10 +1298,10 @@ impl Display for Circle {
     }
 }
 
-#[derive(Debug, CloneWithNode, Definition)]
+#[derive(Debug, CloneWithNode)]
 pub enum Line {
     Generic(Generic<Self>),
-    Entity(#[def(entity)] usize),
+    Entity(usize),
     LineFromPoints(Expr<Point>, Expr<Point>),
     AngleBisector(Expr<Point>, Expr<Point>, Expr<Point>),
     PerpendicularThrough(Expr<Line>, Expr<Point>), // Line, Point
@@ -1367,23 +1327,6 @@ impl Dummy for Line {
 
 impl Displayed for Line {
     type Node = LineNode;
-}
-
-impl Simplify for Expr<Line> {
-    fn simplify(&self, context: &CompileContext) -> Expr<Line> {
-        match self.data.as_ref() {
-            Line::Generic(generic) => match generic {
-                Generic::VariableAccess(var) => var.borrow().definition.simplify(context),
-                Generic::Boxed(expr) => expr.simplify(context),
-                Generic::Dummy => self.clone_without_node(),
-            },
-            Line::Entity(index) => context.get_line_by_index(*index),
-            Line::LineFromPoints(_, _)
-            | Line::AngleBisector(_, _, _)
-            | Line::PerpendicularThrough(_, _)
-            | Line::ParallelThrough(_, _) => self.clone_without_node(),
-        }
-    }
 }
 
 impl Expr<Line> {
@@ -1472,13 +1415,12 @@ impl Display for Line {
     }
 }
 
-#[derive(Debug, CloneWithNode, Definition)]
+#[derive(Debug, CloneWithNode)]
 pub enum ScalarData {
     Generic(Generic<Scalar>),
-    Entity(#[def(entity)] usize),
-    Number(#[def(no_entity)] CompFloat),
-    DstLiteral(#[def(no_entity)] CompFloat),
-    SetUnit(Expr<Scalar>, #[def(no_entity)] ComplexUnit),
+    Number(CompFloat),
+    DstLiteral(CompFloat),
+    SetUnit(Expr<Scalar>, ComplexUnit),
     PointPointDistance(Expr<Point>, Expr<Point>),
     PointLineDistance(Expr<Point>, Expr<Line>),
     Negate(Expr<Scalar>),
@@ -1489,11 +1431,12 @@ pub enum ScalarData {
     ThreePointAngle(Expr<Point>, Expr<Point>, Expr<Point>),
     ThreePointAngleDir(Expr<Point>, Expr<Point>, Expr<Point>), // Directed angle
     TwoLineAngle(Expr<Line>, Expr<Line>),
-    Average(#[def(sequence)] ClonedVec<Expr<Scalar>>),
+    Average(ClonedVec<Expr<Scalar>>),
     CircleRadius(Expr<Circle>),
-    Pow(Expr<Scalar>, #[def(no_entity)] CompExponent),
+    Pow(Expr<Scalar>, CompExponent),
     PointX(Expr<Point>),
     PointY(Expr<Point>),
+    Free
 }
 
 impl Display for ScalarData {
@@ -1511,7 +1454,6 @@ impl Display for ScalarData {
             ),
             Self::Number(num) => write!(f, "{num}"),
             Self::DstLiteral(num) => write!(f, "lit {num}"),
-            Self::Entity(i) => write!(f, "Entity {i}"),
             Self::SetUnit(expr, _) => {
                 write!(f, "{expr}")
             }
@@ -1535,14 +1477,14 @@ impl Display for ScalarData {
             Self::Pow(base, exponent) => write!(f, "({base})^{exponent}"),
             Self::PointX(expr) => write!(f, "{expr}.x"),
             Self::PointY(expr) => write!(f, "{expr}.y"),
+            Self::Free => write!(f, "Free scalar")
         }
     }
 }
 
-#[derive(Debug, CloneWithNode, Definition)]
+#[derive(Debug, CloneWithNode)]
 pub struct Scalar {
     pub unit: Option<ComplexUnit>,
-    #[def(entity)]
     pub data: ScalarData,
 }
 
@@ -1671,8 +1613,11 @@ impl Expr<Scalar> {
                             )),
                             Generic::Dummy => ScalarData::Generic(Generic::Dummy),
                         },
-                        v @ (ScalarData::Entity(_) | ScalarData::Number(_)) => {
+                        v @ ScalarData::Number(_) => {
                             v.clone_without_node()
+                        }
+                        v @ ScalarData::Free => {
+                            todo!()
                         }
                         ScalarData::DstLiteral(_)
                         | ScalarData::PointPointDistance(_, _)
@@ -1769,10 +1714,10 @@ impl Display for Scalar {
     }
 }
 
-#[derive(Debug, CloneWithNode, Definition)]
+#[derive(Debug, CloneWithNode)]
 pub enum PointCollectionData {
     Generic(Generic<PointCollection>),
-    PointCollection(#[def(sequence)] ClonedVec<Expr<Point>>),
+    PointCollection(ClonedVec<Expr<Point>>),
 }
 
 impl PointCollectionData {
@@ -1826,10 +1771,9 @@ impl Display for PointCollectionData {
     }
 }
 
-#[derive(Debug, CloneWithNode, Definition)]
+#[derive(Debug, CloneWithNode)]
 pub struct PointCollection {
     pub length: usize,
-    #[def(entity)]
     pub data: PointCollectionData,
 }
 
@@ -1971,10 +1915,10 @@ impl Display for PointCollection {
     }
 }
 
-#[derive(Debug, CloneWithNode, Definition)]
+#[derive(Debug, CloneWithNode)]
 pub enum BundleData {
     Generic(Generic<Bundle>),
-    ConstructBundle(#[def(map)] ClonedMap<String, AnyExpr>),
+    ConstructBundle(ClonedMap<String, AnyExpr>),
 }
 
 impl Display for BundleData {
@@ -1996,10 +1940,9 @@ impl Display for BundleData {
     }
 }
 
-#[derive(Debug, CloneWithNode, Definition)]
+#[derive(Debug, CloneWithNode)]
 pub struct Bundle {
     pub name: &'static str,
-    #[def(entity)]
     pub data: BundleData,
 }
 
@@ -2158,9 +2101,8 @@ impl Display for Bundle {
     }
 }
 
-#[derive(Debug, CloneWithNode, Definition)]
+#[derive(Debug, CloneWithNode)]
 pub enum Unknown {
-    #[def(no_entity)]
     Generic(Generic<Unknown>),
 }
 
@@ -2207,7 +2149,7 @@ impl Expr<Unknown> {
     }
 }
 
-#[derive(Debug, CloneWithNode, Definition)]
+#[derive(Debug, CloneWithNode)]
 pub enum AnyExpr {
     Point(Expr<Point>),
     Line(Expr<Line>),
@@ -2622,16 +2564,6 @@ impl<T: GetValueType + Displayed> GetValueType for Expr<T> {
     }
 }
 
-impl<T: Definition + Displayed> Definition for Expr<T> {
-    fn order(&self, context: &CompileContext) -> usize {
-        self.data.order(context)
-    }
-
-    fn contains_entity(&self, entity: usize, context: &CompileContext) -> bool {
-        self.data.contains_entity(entity, context)
-    }
-}
-
 impl<T: Display + Displayed> Display for Expr<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.data)
@@ -2661,21 +2593,6 @@ impl<T: CloneWithNode + Displayed + Dummy> Dummy for Expr<T> {
 
     fn is_dummy(&self) -> bool {
         self.data.is_dummy()
-    }
-}
-
-impl<T: CloneWithNode + Displayed> Expr<T>
-where
-    Expr<T>: Simplify,
-{
-    #[must_use]
-    pub fn simplify_with_node(&mut self, context: &CompileContext) -> Self {
-        let node = self.node.take();
-
-        let mut expr = self.simplify(context);
-
-        expr.node = node;
-        expr
     }
 }
 
