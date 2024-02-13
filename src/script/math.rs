@@ -4,7 +4,7 @@ use crate::generator::AdjustableTemplate;
 
 use super::{
     figure::Figure,
-    unroll::{self, Displayed, Expr as Unrolled, context::CompileContext, UnrolledRule, UnrolledRuleKind, Point as UnrolledPoint, Line as UnrolledLine, Circle as UnrolledCircle, Generic},
+    unroll::{self, Displayed, Expr as Unrolled, context::CompileContext, UnrolledRule, UnrolledRuleKind, Point as UnrolledPoint, Line as UnrolledLine, Circle as UnrolledCircle},
     Error
 };
 
@@ -47,7 +47,7 @@ impl<Dst, T: MapMeta<Dst>> MapMeta<Dst> for Box<T> {
 }
 
 trait FromUnrolled<T: Displayed> {
-    fn load(expr: &Unrolled<T>, math: &mut Expand<()>) -> Self;
+    fn load(expr: &Unrolled<T>, math: &mut Expand) -> Self;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -60,10 +60,13 @@ pub enum Number<M> {
         l: LineExpr<M>
     },
     Average {
-        items: NumberExpr<M>
+        items: Vec<NumberExpr<M>>
     },
     CircleCenter {
         circle: CircleExpr<M>
+    },
+    Entity {
+        id: usize
     }
 }
 
@@ -71,29 +74,28 @@ pub type NumberExpr<M> = Expr<Number<M>, M>;
 
 impl<M> Var for Number<M> {
     fn var(id: usize) -> Self {
-        Self::Var(id)
+        Self::Var { id }
     }
 }
 
 impl FromUnrolled<UnrolledPoint> for NumberExpr<()> {
-    fn load(expr: &Unrolled<UnrolledPoint>, math: &mut Expand<()>) -> Self {
-        let kind = match expr.data.as_ref() {
-            UnrolledPoint::LineLineIntersection(a, b) => Number::LineLineIntersection(
-                math.load(a),
-                math.load(b)
-            ),
-            UnrolledPoint::Average(exprs) => Number::Average(
-                exprs.iter().map(|x| math.load(x)).collect()
-            ),
+    fn load(expr: &Unrolled<UnrolledPoint>, math: &mut Expand) -> Self {
+        let kind = match expr.get_data() {
+            UnrolledPoint::LineLineIntersection(a, b) => Number::LineLineIntersection {
+                k: math.load(a),
+                l: math.load(b)
+            },
+            UnrolledPoint::Average(exprs) => Number::Average {
+                items: exprs.iter().map(|x| math.load(x)).collect()
+            },
             UnrolledPoint::CircleCenter(circle) => {
-                match circle.data.as_ref() {
-                    UnrolledCircle::Generic(generic) => match generic {
-                        Generic::Boxed(v) => return math.load(v),
-                        Generic::VariableAccess(v) => return math.load(&v.borrow().definition)
-                    },
+                match circle.get_data() {
                     UnrolledCircle::Circle(center, _) => return math.load(center),
+                    _ => unreachable!()
                 }
-            }
+            },
+            UnrolledPoint::Free => Number::Entity { id: math.add_point() },
+            _ => unreachable!()
         };
 
         Self {
@@ -111,6 +113,19 @@ pub enum Line<M> {
     PointPoint {
         p: NumberExpr<M>,
         q: NumberExpr<M>
+    },
+    AngleBisector {
+        a: NumberExpr<M>,
+        b: NumberExpr<M>,
+        c: NumberExpr<M>
+    },
+    ParallelThrough {
+        point: NumberExpr<M>,
+        line: LineExpr<M>
+    },
+    PerpendicularThrough {
+        point: NumberExpr<M>,
+        line: LineExpr<M>
     }
 }
 
@@ -118,18 +133,70 @@ pub type LineExpr<M> = Expr<Line<M>, M>;
 
 impl<M> Var for Line<M> {
     fn var(id: usize) -> Self {
-        Self::Var(id)
+        Self::Var { id }
     }
 }
 
-impl FromUnrolled<UnrolledLine> for Line<()> {
-    fn load(expr: &Unrolled<UnrolledLine>, math: &mut Expand<()>) -> Self {
-        match expr.data.as_ref() {
-            UnrolledLine::LineFromPoints(a, b) => Self::PointPoint(
-                math.load(a),
-                math.load(b)
-            ),
-            _ => todo!()
+impl FromUnrolled<UnrolledLine> for LineExpr<()> {
+    fn load(expr: &Unrolled<UnrolledLine>, math: &mut Expand) -> Self {
+        let kind = match expr.get_data() {
+            UnrolledLine::LineFromPoints(a, b) => Self::PointPoint {
+                p: math.load(a),
+                q: math.load(b)
+            },
+            UnrolledLine::AngleBisector(a, b, c) => Self::AngleBisector {
+                a: math.load(expr),
+                b: math.load(expr),
+                c: math.load(expr),
+            },
+            UnrolledLine::PerpendicularThrough(k, p) => {
+                // Remove unnecessary intermediates
+                match k.get_data() {
+                    UnrolledLine::PerpendicularThrough(l, _) => {
+                        Line::ParallelThrough {
+                            point: math.load(p),
+                            line: math.load(l)
+                        }
+                    },
+                    UnrolledLine::ParallelThrough(l, _) => {
+                        Line::PerpendicularThrough {
+                            point: math.load(p),
+                            line: math.load(l)
+                        }
+                    },
+                    _ => Line::PerpendicularThrough {
+                        point: math.load(p),
+                        line: math.load(k)
+                    }
+                }
+            }
+            UnrolledLine::ParallelThrough(k, p) => {
+                // Remove unnecessary intermediates
+                match k.get_data() {
+                    UnrolledLine::PerpendicularThrough(l, _) => {
+                        Line::PerpendicularThrough {
+                            point: math.load(p),
+                            line: math.load(l)
+                        }
+                    },
+                    UnrolledLine::ParallelThrough(l, _) => {
+                        Line::ParallelThrough {
+                            point: math.load(p),
+                            line: math.load(l)
+                        }
+                    },
+                    _ => Line::ParallelThrough {
+                        point: math.load(p),
+                        line: math.load(k)
+                    }
+                }
+            },
+            _ => unreachable!()
+        };
+
+        Self {
+            kind,
+            meta: ()
         }
     }
 }
@@ -173,6 +240,15 @@ pub struct Expr<T, M> {
     pub meta: M
 }
 
+impl<T: Var> Var for Expr<T, ()> {
+    fn var(id: usize) -> Self {
+        Self {
+            kind: Box::new(T::var(id)),
+            meta: ()
+        }
+    }
+}
+
 impl<T, M> HasMeta for Expr<T, M> {
     type Meta = M;
 }
@@ -205,7 +281,7 @@ pub enum Rule<M> {
 }
 
 impl Rule<()> {
-    fn load(rule: &UnrolledRule, math: &mut Expand<()>) -> Self {
+    fn load(rule: &UnrolledRule, math: &mut Expand) -> Self {
         let mathed = match &rule.kind {
             UnrolledRuleKind::PointEq(a, b) => Rule::Eq(
                 math.load(a),
@@ -240,21 +316,21 @@ pub struct Intermediate {
 }
 
 #[derive(Debug, Clone)]
-pub struct Entry<M> {
-    pub expr: AnyExpr<M>,
+pub struct Entry {
+    pub expr: AnyExpr<()>,
     pub uses: usize
 }
 
 #[derive(Debug)]
-pub struct Expand<M> {
+pub struct Expand {
     /// All mathed expressions are stored here.
-    pub record: Vec<Entry<M>>,
+    pub record: Vec<Entry>,
     /// Expressions are mapped to the record entries.
     pub expr_map: HashMap<usize, usize>
 }
 
-impl Expand<()> {
-    pub fn load<T: Displayed, U: Var + FromUnrolled<T>>(&mut self, expr: &Unrolled<T>) -> Expr<U, ()> where Any<()>: From<U> {
+impl Expand {
+    pub fn load<T: Displayed, U: Var + FromUnrolled<T>>(&mut self, expr: &Unrolled<T>) -> U where Any<()>: From<U> {
         let key = (expr.data.as_ref() as *const _) as usize;
         let l = self.expr_map.len();
         let id = self.expr_map.get_mut(&key).copied();
@@ -275,7 +351,7 @@ impl Expand<()> {
             id
         };
 
-        Expr::new(U::var(id))
+        U::var(id)
     }
 }
 

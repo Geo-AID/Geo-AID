@@ -24,7 +24,6 @@ use std::collections::HashSet;
 use std::fmt::Formatter;
 use std::mem;
 use std::{
-    cell::RefCell,
     collections::{hash_map::Entry, HashMap},
     fmt::{Debug, Display},
     hash::Hash,
@@ -962,11 +961,11 @@ macro_rules! impl_make_variable {
                 Expr {
                     span: sp,
                     data: Rc::new($what::Generic(Generic::VariableAccess(Rc::new(
-                        RefCell::new(Variable {
+                        Variable {
                             name,
                             definition: self,
                             definition_span: sp,
-                        }),
+                        },
                     )))),
                     node: None, // Variable references are NEVER displayed
                 }
@@ -983,13 +982,13 @@ macro_rules! impl_make_variable {
                     span: sp,
                     data: Rc::new($what {
                         $other: self.data.$other,
-                        data: $data::Generic(Generic::VariableAccess(Rc::new(RefCell::new(
+                        data: $data::Generic(Generic::VariableAccess(Rc::new(
                             Variable {
                                 name,
                                 definition: self,
                                 definition_span: sp,
                             },
-                        )))),
+                        ))),
                     }),
                     node: None, // Variable references are NEVER displayed
                 }
@@ -1013,7 +1012,7 @@ pub enum Generic<T>
 where
     T: Displayed,
 {
-    VariableAccess(Rc<RefCell<Variable<T>>>),
+    VariableAccess(Rc<Variable<T>>),
     Boxed(Expr<T>),
     /// Dummy is a value specifically for continued unrolling after error occurence.
     /// It should never show up in compilation step.
@@ -1023,7 +1022,7 @@ where
 impl<T: Display + Displayed> Display for Generic<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::VariableAccess(name) => write!(f, "{}", name.borrow().name),
+            Self::VariableAccess(name) => write!(f, "{}", name.name),
             Self::Boxed(expr) => {
                 write!(f, "{expr}")
             }
@@ -1063,6 +1062,18 @@ impl Displayed for Point {
 }
 
 impl Expr<Point> {
+    #[must_use]
+    pub fn get_data(&self) -> &Point {
+        match self.data.as_ref() {
+            Point::Generic(v) => match v {
+                Generic::Boxed(v) => v.get_data(),
+                Generic::VariableAccess(v) => v.definition.get_data(),
+                Generic::Dummy => self.data.as_ref()
+            },
+            v => v
+        }
+    }
+
     #[must_use]
     pub fn boxed(mut self, weight: FastFloat, span: Span) -> Self {
         let node = self.node.take();
@@ -1231,6 +1242,18 @@ impl Displayed for Circle {
 
 impl Expr<Circle> {
     #[must_use]
+    pub fn get_data(&self) -> &Circle {
+        match self.data.as_ref() {
+            Circle::Generic(v) => match v {
+                Generic::Boxed(v) => v.get_data(),
+                Generic::VariableAccess(v) => v.definition.get_data(),
+                Generic::Dummy => self.data.as_ref()
+            },
+            v => v
+        }
+    }
+
+    #[must_use]
     pub fn boxed(mut self, weight: FastFloat, span: Span) -> Self {
         let node = self.node.take();
 
@@ -1301,7 +1324,6 @@ impl Display for Circle {
 #[derive(Debug, CloneWithNode)]
 pub enum Line {
     Generic(Generic<Self>),
-    Entity(usize),
     LineFromPoints(Expr<Point>, Expr<Point>),
     AngleBisector(Expr<Point>, Expr<Point>, Expr<Point>),
     PerpendicularThrough(Expr<Line>, Expr<Point>), // Line, Point
@@ -1330,6 +1352,18 @@ impl Displayed for Line {
 }
 
 impl Expr<Line> {
+    #[must_use]
+    pub fn get_data(&self) -> &Line {
+        match self.data.as_ref() {
+            Line::Generic(v) => match v {
+                Generic::Boxed(v) => v.get_data(),
+                Generic::VariableAccess(v) => v.definition.get_data(),
+                Generic::Dummy => self.data.as_ref()
+            },
+            v => v
+        }
+    }
+
     #[must_use]
     pub fn boxed(mut self, weight: FastFloat, span: Span) -> Self {
         let node = self.node.take();
@@ -1400,7 +1434,6 @@ impl Display for Line {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Generic(v) => write!(f, "{v}"),
-            Self::Entity(i) => write!(f, "Entity {i}"),
             Self::LineFromPoints(e1, e2) => write!(f, "line({e1}, {e2})"),
             Self::AngleBisector(e1, e2, e3) => {
                 write!(f, "angle-bisector({e1}, {e2}, {e3})")
@@ -1743,7 +1776,7 @@ impl PointCollectionData {
     pub fn index(&self, index: usize) -> Expr<Point> {
         match self {
             PointCollectionData::Generic(generic) => match generic {
-                Generic::VariableAccess(var) => var.borrow().definition.index_without_node(index),
+                Generic::VariableAccess(var) => var.definition.index_without_node(index),
                 Generic::Boxed(expr) => expr.index_without_node(index),
                 Generic::Dummy => Expr::new_spanless(Point::Generic(Generic::Dummy)),
             },
@@ -1968,7 +2001,7 @@ impl Bundle {
     pub fn index(&self, field: &str) -> AnyExpr {
         match &self.data {
             BundleData::Generic(generic) => match &generic {
-                Generic::VariableAccess(var) => var.borrow().definition.index_without_node(field),
+                Generic::VariableAccess(var) => var.definition.index_without_node(field),
                 Generic::Boxed(expr) => expr.index_without_node(field),
                 Generic::Dummy => AnyExpr::Unknown(Expr::new_spanless(Unknown::dummy())),
             },
@@ -2338,33 +2371,33 @@ impl AnyExpr {
     pub fn get_variable_span(&self) -> Span {
         match self {
             Self::Point(v) => match v.data.as_ref() {
-                Point::Generic(Generic::VariableAccess(var)) => var.borrow().definition_span,
+                Point::Generic(Generic::VariableAccess(var)) => var.definition_span,
                 _ => panic!("not a variable"),
             },
             Self::Line(v) => match v.data.as_ref() {
-                Line::Generic(Generic::VariableAccess(var)) => var.borrow().definition_span,
+                Line::Generic(Generic::VariableAccess(var)) => var.definition_span,
                 _ => panic!("not a variable"),
             },
             Self::Scalar(v) => match &v.data.data {
-                ScalarData::Generic(Generic::VariableAccess(var)) => var.borrow().definition_span,
+                ScalarData::Generic(Generic::VariableAccess(var)) => var.definition_span,
                 _ => panic!("not a variable"),
             },
             Self::Circle(v) => match v.data.as_ref() {
-                Circle::Generic(Generic::VariableAccess(var)) => var.borrow().definition_span,
+                Circle::Generic(Generic::VariableAccess(var)) => var.definition_span,
                 _ => panic!("not a variable"),
             },
             Self::PointCollection(v) => match &v.data.data {
                 PointCollectionData::Generic(Generic::VariableAccess(var)) => {
-                    var.borrow().definition_span
+                    var.definition_span
                 }
                 _ => panic!("not a variable"),
             },
             Self::Bundle(v) => match &v.data.data {
-                BundleData::Generic(Generic::VariableAccess(var)) => var.borrow().definition_span,
+                BundleData::Generic(Generic::VariableAccess(var)) => var.definition_span,
                 _ => panic!("not a variable"),
             },
             Self::Unknown(v) => match v.data.as_ref() {
-                Unknown::Generic(Generic::VariableAccess(var)) => var.borrow().definition_span,
+                Unknown::Generic(Generic::VariableAccess(var)) => var.definition_span,
                 Unknown::Generic(_) => panic!("not a variable"),
             },
         }
