@@ -1594,6 +1594,18 @@ impl Scalar {
 
 impl Expr<Scalar> {
     #[must_use]
+    pub fn get_data(&self) -> &ScalarData {
+        match &self.data.data {
+            ScalarData::Generic(v) => match v {
+                Generic::Boxed(v) => v.get_data(),
+                Generic::VariableAccess(v) => v.definition.get_data(),
+                Generic::Dummy => &self.data.data
+            },
+            v => v
+        }
+    }
+
+    #[must_use]
     pub fn boxed(mut self, weight: FastFloat, span: Span) -> Self {
         let node = self.node.take();
 

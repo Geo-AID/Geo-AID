@@ -4,7 +4,8 @@ use crate::generator::AdjustableTemplate;
 
 use super::{
     figure::Figure,
-    unroll::{self, Displayed, Expr as Unrolled, context::CompileContext, UnrolledRule, UnrolledRuleKind, Point as UnrolledPoint, Line as UnrolledLine, Circle as UnrolledCircle},
+    unroll::{self, Displayed, Expr as Unrolled, context::CompileContext, UnrolledRule, UnrolledRuleKind,
+        Point as UnrolledPoint, Line as UnrolledLine, Circle as UnrolledCircle, ScalarData as UnrolledScalar},
     Error
 };
 
@@ -67,6 +68,14 @@ pub enum Number<M> {
     },
     Entity {
         id: usize
+    },
+    Sum {
+        plus: Vec<NumberExpr<M>>,
+        minus: Vec<NumberExpr<M>>
+    },
+    Product {
+        times: Vec<NumberExpr<M>>,
+        by: Vec<NumberExpr<M>>
     }
 }
 
@@ -99,7 +108,45 @@ impl FromUnrolled<UnrolledPoint> for NumberExpr<()> {
         };
 
         Self {
-            kind,
+            kind: Box::new(kind),
+            meta: ()
+        }
+    }
+}
+
+impl FromUnrolled<unroll::Scalar> for NumberExpr<()> {
+    fn load(expr: &Unrolled<unroll::Scalar>, math: &mut Expand) -> Self {
+        let kind = match expr.get_data() {
+            UnrolledScalar::Add(a, b) => Number::Sum {
+                plus: vec![math.load(a), math.load(b)],
+                minus: Vec::new()
+            },
+            UnrolledScalar::Subtract(a, b) => Number::Sum {
+                plus: vec![math.load(a)],
+                minus: vec![math.load(b)]
+            },
+            UnrolledScalar::Multiply(a, b) => Number::Product {
+                times: vec![math.load(a), math.load(b)],
+                by: Vec::new()
+            },
+            UnrolledScalar::Divide(a, b) => Number::Product {
+                times: vec![math.load(a)],
+                by: vec![math.load(b)]
+            },
+            UnrolledScalar::Average(exprs) => Number::Average {
+                items: exprs.iter().map(|x| math.load(x)).collect()
+            },
+            UnrolledScalar::CircleRadius(circle) => {
+                match circle.get_data() {
+                    UnrolledCircle::Circle(_, radius) => math.load(radius),
+                    _ => unreachable!()
+                }
+            }
+            UnrolledScalar::Free => Number::Entity { id: math.add_real() }
+        };
+
+        Self {
+            kind: Box::new(kind),
             meta: ()
         }
     }
@@ -140,14 +187,14 @@ impl<M> Var for Line<M> {
 impl FromUnrolled<UnrolledLine> for LineExpr<()> {
     fn load(expr: &Unrolled<UnrolledLine>, math: &mut Expand) -> Self {
         let kind = match expr.get_data() {
-            UnrolledLine::LineFromPoints(a, b) => Self::PointPoint {
+            UnrolledLine::LineFromPoints(a, b) => Line::PointPoint {
                 p: math.load(a),
                 q: math.load(b)
             },
-            UnrolledLine::AngleBisector(a, b, c) => Self::AngleBisector {
-                a: math.load(expr),
-                b: math.load(expr),
-                c: math.load(expr),
+            UnrolledLine::AngleBisector(a, b, c) => Line::AngleBisector {
+                a: math.load(a),
+                b: math.load(b),
+                c: math.load(c),
             },
             UnrolledLine::PerpendicularThrough(k, p) => {
                 // Remove unnecessary intermediates
@@ -195,7 +242,7 @@ impl FromUnrolled<UnrolledLine> for LineExpr<()> {
         };
 
         Self {
-            kind,
+            kind: Box::new(kind),
             meta: ()
         }
     }
@@ -231,6 +278,15 @@ impl<M> From<Number<M>> for Any<M> {
 impl<M> From<Line<M>> for Any<M> {
     fn from(value: Line<M>) -> Self {
         Self::Line(value)
+    }
+}
+
+impl<M> AnyExpr<M> {
+    fn from_expr<T: Into<Any<M>>>(value: Expr<T, M>) -> Self {
+        Self {
+            meta: value.meta,
+            kind: Box::new((*value.kind).into())
+        }
     }
 }
 
@@ -277,7 +333,11 @@ impl<T> Expr<T, ()> {
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Rule<M> {
     Eq(NumberExpr<M>, NumberExpr<M>),
-    Invert(Box<Rule<M>>)
+    Lt(NumberExpr<M>, NumberExpr<M>),
+    Gt(NumberExpr<M>, NumberExpr<M>),
+    Alternative(Vec<Rule<M>>),
+    Invert(Box<Rule<M>>),
+    Bias
 }
 
 impl Rule<()> {
@@ -287,7 +347,22 @@ impl Rule<()> {
                 math.load(a),
                 math.load(b)
             ),
-            _ => todo!()
+            UnrolledRuleKind::ScalarEq(a, b) => Rule::Eq(
+                math.load(a),
+                math.load(b)
+            ),
+            UnrolledRuleKind::Gt(a, b) => Rule::Gt(
+                math.load(a),
+                math.load(b)
+            ),
+            UnrolledRuleKind::Lt(a, b) => Rule::Lt(
+                math.load(a),
+                math.load(b)
+            ),
+            UnrolledRuleKind::Alternative(rules) => Rule::Alternative(
+                rules.iter().map(|x| Self::load(x, math)).collect()
+            ),
+            UnrolledRuleKind::Bias(_) => Rule::Bias
         };
 
         if rule.inverted {
@@ -322,7 +397,15 @@ pub struct Entry {
 }
 
 #[derive(Debug)]
+pub enum Entity {
+    FreePoint,
+    FreeReal
+}
+
+#[derive(Debug)]
 pub struct Expand {
+    /// Entity expressions
+    pub entities: Vec<Entity>,
     /// All mathed expressions are stored here.
     pub record: Vec<Entry>,
     /// Expressions are mapped to the record entries.
@@ -330,7 +413,8 @@ pub struct Expand {
 }
 
 impl Expand {
-    pub fn load<T: Displayed, U: Var + FromUnrolled<T>>(&mut self, expr: &Unrolled<T>) -> U where Any<()>: From<U> {
+    pub fn load<T: Displayed, U: Var>(&mut self, expr: &Unrolled<T>) -> Expr<U, ()>
+    where Expr<U, ()>: FromUnrolled<T>, Any<()>: From<U> {
         let key = (expr.data.as_ref() as *const _) as usize;
         let l = self.expr_map.len();
         let id = self.expr_map.get_mut(&key).copied();
@@ -341,7 +425,7 @@ impl Expand {
         } else {
             // If expression has not been mathed yet, math it and put it into the record.
             self.record.push(Entry {
-                expr: Expr::new(Any::from(U::load(expr, self))),
+                expr: AnyExpr::from_expr(Expr::load(expr, self)),
                 uses: 1
             });
 
@@ -351,13 +435,24 @@ impl Expand {
             id
         };
 
-        U::var(id)
+        Expr { kind: Box::new(U::var(id)), meta: () }
+    }
+
+    pub fn add_point(&mut self) -> usize {
+        self.entities.push(Entity::FreePoint);
+        self.entities.len() - 1
+    }
+
+    pub fn add_real(&mut self) -> usize {
+        self.entities.push(Entity::FreeReal);
+        self.entities.len() - 1
     }
 }
 
 fn load_adjusted(mut unrolled: CompileContext) -> Adjusted {
     // First, all expressions are expanded: mapped by Rc addresses and split into atoms.
-    let mut expansion: Expand<()> = Expand {
+    let mut expansion = Expand {
+        entities: Vec::new(),
         record: Vec::new(),
         expr_map: HashMap::new()
     };
