@@ -52,13 +52,83 @@ pub enum Style {
     Solid,
 }
 
+#[derive(Debug, Clone)]
+pub struct PointItem {
+    pub id: usize,
+    pub label: MathString,
+    pub display_dot: bool
+}
+
+impl From<PointItem> for Item {
+    fn from(value: PointItem) -> Self {
+        Self::Point(value)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct CircleItem {
+    pub id: usize,
+    pub label: MathString,
+    pub style: Style
+}
+
+impl From<CircleItem> for Item {
+    fn from(value: CircleItem) -> Self {
+        Self::Circle(value)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct LineItem {
+    pub id: usize,
+    pub label: MathString,
+    pub style: Style
+}
+
+impl From<LineItem> for Item {
+    fn from(value: LineItem) -> Self {
+        Self::Line(value)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct RayItem {
+    pub p_id: usize,
+    pub q_id: usize,
+    pub label: MathString,
+    pub style: Style
+}
+
+impl From<RayItem> for Item {
+    fn from(value: RayItem) -> Self {
+        Self::Ray(value)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct SegmentItem {
+    pub p_id: usize,
+    pub q_id: usize,
+    pub label: MathString,
+    pub style: Style
+}
+
+#[derive(Debug, Clone)]
+pub enum Item {
+    Point(PointItem),
+    Circle(CircleItem),
+    Line(LineItem),
+    Ray(RayItem),
+    Segment(SegmentItem)
+}
+
 /// Defines the visual data of the figure.
 #[derive(Debug, Default)]
 pub struct Figure {
-    /// Points to be displayed
-    pub items: Vec<AnyExpr<usize>>,
-    /// The canvas size.
-    pub canvas_size: (usize, usize),
+    /// Variables used by the figure
+    pub variables: Vec<AnyExpr<usize>>,
+    /// Drawn items with meta
+    pub items: Vec<Item>
 }
 
 /// Normal/lower index in math text.

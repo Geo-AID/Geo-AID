@@ -635,9 +635,13 @@ impl Mul for SimpleUnit {
     }
 }
 
+const fn unit_count() -> usize {
+    SimpleUnit::Scalar as usize
+}
+
 /// Defines a complex unit: a product of simple units.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize)]
-pub struct ComplexUnit([CompExponent; SimpleUnit::Scalar as usize]);
+pub struct ComplexUnit([CompExponent; unit_count()]);
 
 pub mod unit {
     use super::{ComplexUnit, SimpleUnit};
@@ -672,7 +676,7 @@ pub mod ty {
 impl ComplexUnit {
     #[must_use]
     pub const fn new(simple: SimpleUnit) -> Self {
-        let mut arr = [CompExponent::new_raw(0, 1); SimpleUnit::Scalar as usize];
+        let mut arr = [CompExponent::new_raw(0, 1); unit_count()];
 
         match simple {
             SimpleUnit::Scalar => (),
@@ -781,7 +785,7 @@ impl Div<&ComplexUnit> for ComplexUnit {
 }
 
 impl Deref for ComplexUnit {
-    type Target = [CompExponent; SimpleUnit::Scalar as usize];
+    type Target = [CompExponent; unit_count()];
 
     fn deref(&self) -> &Self::Target {
         &self.0

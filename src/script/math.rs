@@ -1,13 +1,15 @@
+use std::cell::OnceCell;
 use std::collections::HashMap;
+use std::mem;
+use num_traits::Zero;
 
 use crate::generator::AdjustableTemplate;
+use crate::script::figure::Item;
+use crate::script::token::number::{CompExponent, ProcNum};
+use crate::script::unroll::figure::Node;
 
-use super::{
-    figure::Figure,
-    unroll::{self, Displayed, Expr as Unrolled, context::CompileContext, UnrolledRule, UnrolledRuleKind,
-        Point as UnrolledPoint, Line as UnrolledLine, Circle as UnrolledCircle, ScalarData as UnrolledScalar},
-    Error
-};
+use super::{figure::Figure, unroll::{self, Displayed, Expr as Unrolled, UnrolledRule, UnrolledRuleKind,
+                                     Point as UnrolledPoint, Line as UnrolledLine, Circle as UnrolledCircle, ScalarData as UnrolledScalar}, Error, ComplexUnit, SimpleUnit};
 
 trait Var {
     fn var(id: usize) -> Self;
@@ -51,6 +53,22 @@ trait FromUnrolled<T: Displayed> {
     fn load(expr: &Unrolled<T>, math: &mut Expand) -> Self;
 }
 
+pub trait LoadsTo {
+    type Output;
+}
+
+impl LoadsTo for UnrolledPoint {
+    type Output = NumberExpr<()>;
+}
+
+impl LoadsTo for UnrolledLine {
+    type Output = LineExpr<()>;
+}
+
+impl LoadsTo for UnrolledCircle {
+    type Output = CircleExpr<()>;
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Number<M> {
     Var {
@@ -76,6 +94,41 @@ pub enum Number<M> {
     Product {
         times: Vec<NumberExpr<M>>,
         by: Vec<NumberExpr<M>>
+    },
+    Const {
+        value: ProcNum
+    },
+    Power {
+        value: NumberExpr<M>,
+        exponent: CompExponent
+    },
+    PointPointDistance {
+        p: NumberExpr<M>,
+        q: NumberExpr<M>
+    },
+    PointLineDistance {
+        p: NumberExpr<M>,
+        k: LineExpr<M>
+    },
+    ThreePointAngle {
+        p: NumberExpr<M>,
+        q: NumberExpr<M>,
+        r: NumberExpr<M>
+    },
+    ThreePointAngleDir {
+        p: NumberExpr<M>,
+        q: NumberExpr<M>,
+        r: NumberExpr<M>
+    },
+    TwoLineAngle {
+        k: LineExpr<M>,
+        l: LineExpr<M>
+    },
+    PointX {
+        point: NumberExpr<M>
+    },
+    PointY {
+        point: NumberExpr<M>
     }
 }
 
@@ -114,9 +167,28 @@ impl FromUnrolled<UnrolledPoint> for NumberExpr<()> {
     }
 }
 
+fn fix_dst(expr: NumberExpr<()>, unit: Option<ComplexUnit>, math: &mut Expand) -> NumberExpr<()> {
+    match unit {
+        None => expr,
+        Some(unit) => {
+            if unit.0[SimpleUnit::Distance as usize].is_zero() {
+                expr
+            } else {
+                Expr::new(Number::Product {
+                    times: vec![expr, Expr::new(Number::Power {
+                        value: math.get_dst_var(),
+                        exponent: unit.0[SimpleUnit::Distance as usize]
+                    })],
+                    by: Vec::new()
+                })
+            }
+        }
+    }
+}
+
 impl FromUnrolled<unroll::Scalar> for NumberExpr<()> {
     fn load(expr: &Unrolled<unroll::Scalar>, math: &mut Expand) -> Self {
-        let kind = match expr.get_data() {
+        let mut kind = match expr.get_data() {
             UnrolledScalar::Add(a, b) => Number::Sum {
                 plus: vec![math.load(a), math.load(b)],
                 minus: Vec::new()
@@ -138,12 +210,75 @@ impl FromUnrolled<unroll::Scalar> for NumberExpr<()> {
             },
             UnrolledScalar::CircleRadius(circle) => {
                 match circle.get_data() {
-                    UnrolledCircle::Circle(_, radius) => math.load(radius),
+                    UnrolledCircle::Circle(_, radius) => return math.load(radius),
                     _ => unreachable!()
                 }
             }
-            UnrolledScalar::Free => Number::Entity { id: math.add_real() }
+            UnrolledScalar::Free => Number::Entity { id: math.add_real() },
+            UnrolledScalar::Number(x) => return fix_dst(Expr::new(Number::Const { value: x.clone() }), expr.data.unit, math),
+            UnrolledScalar::DstLiteral(x) => Number::Const { value: x.clone() },
+            UnrolledScalar::SetUnit(x, unit) => return fix_dst(math.load(x), Some(*unit), math),
+            UnrolledScalar::PointPointDistance(p, q) => Number::PointPointDistance {
+                p: math.load(p),
+                q: math.load(q)
+            },
+            UnrolledScalar::PointLineDistance(p, k) => Number::PointLineDistance {
+                p: math.load(p),
+                k: math.load(k)
+            },
+            UnrolledScalar::Negate(x) => Number::Sum {
+                plus: Vec::new(),
+                minus: vec![math.load(x)]
+            },
+            UnrolledScalar::ThreePointAngle(p, q, r) => Number::ThreePointAngle {
+                p: math.load(p),
+                q: math.load(q),
+                r: math.load(r)
+            },
+            UnrolledScalar::ThreePointAngleDir(p, q, r) => Number::ThreePointAngleDir {
+                p: math.load(p),
+                q: math.load(q),
+                r: math.load(r)
+            },
+            UnrolledScalar::TwoLineAngle(k, l) => Number::TwoLineAngle {
+                k: math.load(k),
+                l: math.load(l)
+            },
+            UnrolledScalar::Pow(base, exponent) => Number::Power {
+                value: math.load(base),
+                exponent: exponent.clone()
+            },
+            UnrolledScalar::PointX(point) => Number::PointX {
+                point: math.load(point)
+            },
+            UnrolledScalar::PointY(point) => Number::PointY {
+                point: math.load(point)
+            },
+            _ => unreachable!()
         };
+
+        match &mut kind {
+            Number::Var { .. }
+            | Number::CircleCenter { .. }
+            | Number::Entity { .. } => (),
+            Number::LineLineIntersection { k, l } => {
+                if k > l {
+                    mem::swap(k, l);
+                }
+            }
+            Number::Average { items } => items.sort(),
+            Number::Sum { .. } => {}
+            Number::Product { .. } => {}
+            Number::Const { .. } => {}
+            Number::Power { .. } => {}
+            Number::PointPointDistance { .. } => {}
+            Number::PointLineDistance { .. } => {}
+            Number::ThreePointAngle { .. } => {}
+            Number::ThreePointAngleDir { .. } => {}
+            Number::TwoLineAngle { .. } => {}
+            Number::PointX { .. } => {}
+            Number::PointY { .. } => {}
+        }
 
         Self {
             kind: Box::new(kind),
@@ -152,24 +287,31 @@ impl FromUnrolled<unroll::Scalar> for NumberExpr<()> {
     }
 }
 
+/// Beyond their specific conditions, all variants are
+/// only normalized if their operands are normalized.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Line<M> {
+    /// Always normalized
     Var {
         id: usize
     },
+    /// Normalized iff `p` and `q` are in ascending order
     PointPoint {
         p: NumberExpr<M>,
         q: NumberExpr<M>
     },
+    /// Normalized iff `a` and `c` are in ascending order (`b` must stay in the middle)
     AngleBisector {
         a: NumberExpr<M>,
         b: NumberExpr<M>,
         c: NumberExpr<M>
     },
+    /// Always normalized
     ParallelThrough {
         point: NumberExpr<M>,
         line: LineExpr<M>
     },
+    /// Always normalized
     PerpendicularThrough {
         point: NumberExpr<M>,
         line: LineExpr<M>
@@ -186,7 +328,7 @@ impl<M> Var for Line<M> {
 
 impl FromUnrolled<UnrolledLine> for LineExpr<()> {
     fn load(expr: &Unrolled<UnrolledLine>, math: &mut Expand) -> Self {
-        let kind = match expr.get_data() {
+        let mut kind = match expr.get_data() {
             UnrolledLine::LineFromPoints(a, b) => Line::PointPoint {
                 p: math.load(a),
                 q: math.load(b)
@@ -241,6 +383,21 @@ impl FromUnrolled<UnrolledLine> for LineExpr<()> {
             _ => unreachable!()
         };
 
+        // Normalize
+        match &mut kind {
+            // Normalized at the point of construction
+            Line::ParallelThrough { .. }
+            | Line::PerpendicularThrough { .. }
+            | Line::Var { .. } => (),
+            // Reorder if necessary
+            Line::PointPoint { p, q }
+            | Line::AngleBisector { a: p, b: _, c: q } => {
+                if p > q {
+                    mem::swap(p, q);
+                }
+            }
+        }
+
         Self {
             kind: Box::new(kind),
             meta: ()
@@ -278,15 +435,6 @@ impl<M> From<Number<M>> for Any<M> {
 impl<M> From<Line<M>> for Any<M> {
     fn from(value: Line<M>) -> Self {
         Self::Line(value)
-    }
-}
-
-impl<M> AnyExpr<M> {
-    fn from_expr<T: Into<Any<M>>>(value: Expr<T, M>) -> Self {
-        Self {
-            meta: value.meta,
-            kind: Box::new((*value.kind).into())
-        }
     }
 }
 
@@ -330,6 +478,20 @@ impl<T> Expr<T, ()> {
     }
 }
 
+impl<T, M> Expr<T, M> where Any<M>: From<T> {
+    #[must_use]
+    pub fn into_any(self) -> AnyExpr<M> {
+        AnyExpr {
+            kind: Box::new((*self.kind).into()),
+            meta: self.meta
+        }
+    }
+}
+
+/// Represents a rule of the figure.
+/// Rules are normalized iff:
+/// * their operands are normalized
+/// * their operands are sorted in ascending order
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Rule<M> {
     Eq(NumberExpr<M>, NumberExpr<M>),
@@ -341,29 +503,45 @@ pub enum Rule<M> {
 }
 
 impl Rule<()> {
+    /// # Returns
+    /// A normalized rule.
     fn load(rule: &UnrolledRule, math: &mut Expand) -> Self {
-        let mathed = match &rule.kind {
-            UnrolledRuleKind::PointEq(a, b) => Rule::Eq(
+        let mut mathed = match &rule.kind {
+            UnrolledRuleKind::PointEq(a, b) => Self::Eq(
                 math.load(a),
                 math.load(b)
             ),
-            UnrolledRuleKind::ScalarEq(a, b) => Rule::Eq(
+            UnrolledRuleKind::ScalarEq(a, b) => Self::Eq(
                 math.load(a),
                 math.load(b)
             ),
-            UnrolledRuleKind::Gt(a, b) => Rule::Gt(
+            UnrolledRuleKind::Gt(a, b) => Self::Gt(
                 math.load(a),
                 math.load(b)
             ),
-            UnrolledRuleKind::Lt(a, b) => Rule::Lt(
+            UnrolledRuleKind::Lt(a, b) => Self::Lt(
                 math.load(a),
                 math.load(b)
             ),
-            UnrolledRuleKind::Alternative(rules) => Rule::Alternative(
+            UnrolledRuleKind::Alternative(rules) => Self::Alternative(
                 rules.iter().map(|x| Self::load(x, math)).collect()
             ),
-            UnrolledRuleKind::Bias(_) => Rule::Bias
+            UnrolledRuleKind::Bias(_) => Self::Bias
         };
+
+        // Normalize
+        match &mut mathed {
+            | Self::Eq(a, b)
+            | Self::Gt(a, b)
+            | Self::Lt(a, b) => {
+                if a > b {
+                    mem::swap(a, b);
+                }
+            }
+            Self::Alternative(v) => v.sort(),
+            Self::Bias => (),
+            Self::Invert(_) => unreachable!()
+        }
 
         if rule.inverted {
             Self::Invert(Box::new(mathed))
@@ -373,14 +551,11 @@ impl Rule<()> {
     }
 }
 
-/// A binding to an entity (templated).
-pub type EntityBinding = Option<usize>;
-
 #[derive(Debug)]
 pub struct Adjusted {
     pub template: Vec<AdjustableTemplate>,
-    pub items: Vec<AnyExpr<EntityBinding>>,
-    pub rules: Vec<Rule<EntityBinding>>
+    pub items: Vec<AnyExpr<()>>,
+    pub rules: Vec<Rule<()>>
 }
 
 #[derive(Debug)]
@@ -402,93 +577,112 @@ pub enum Entity {
     FreeReal
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Default)]
 pub struct Expand {
-    /// Entity expressions
-    pub entities: Vec<Entity>,
-    /// All mathed expressions are stored here.
-    pub record: Vec<Entry>,
     /// Expressions are mapped to the record entries.
-    pub expr_map: HashMap<usize, usize>
+    pub expr_map: HashMap<usize, AnyExpr<()>>,
+    /// All found entities
+    pub entities: Vec<Entity>,
+    /// Dst variable
+    pub dst_var: OnceCell<NumberExpr<()>>
 }
 
 impl Expand {
-    pub fn load<T: Displayed, U: Var>(&mut self, expr: &Unrolled<T>) -> Expr<U, ()>
-    where Expr<U, ()>: FromUnrolled<T>, Any<()>: From<U> {
+    pub fn load<T: Displayed, U>(&mut self, expr: &Unrolled<T>) -> Expr<U, ()>
+        where Any<()>: From<U>, Expr<U, ()>: FromUnrolled<T> {
         let key = (expr.data.as_ref() as *const _) as usize;
-        let l = self.expr_map.len();
-        let id = self.expr_map.get_mut(&key).copied();
+        let loaded = self.expr_map.get_mut(&key).cloned();
 
-        let id = if let Some(id) = id {
-            self.record[id].uses += 1;
-            id
+        if let Some(loaded) = loaded {
+            loaded.try_into().unwrap()
         } else {
             // If expression has not been mathed yet, math it and put it into the record.
-            self.record.push(Entry {
-                expr: AnyExpr::from_expr(Expr::load(expr, self)),
-                uses: 1
-            });
+            let loaded = Expr::load(expr, self);
+            self.expr_map.insert( key, loaded.clone().into_any());
+            loaded
+        }
+    }
 
-            let id = self.record.len() - 1;
-            self.expr_map.insert(key, id);
+    #[must_use]
+    pub fn get_dst_var(&mut self) -> NumberExpr<()> {
+        self.dst_var.get_or_init(|| Expr::new(Number::Entity { id: self.add_real() })).clone()
+    }
 
-            id
-        };
-
-        Expr { kind: Box::new(U::var(id)), meta: () }
+    fn add_entity(&mut self, entity: Entity) -> usize {
+        self.entities.push(entity);
+        self.entities.len() - 1
     }
 
     pub fn add_point(&mut self) -> usize {
-        self.entities.push(Entity::FreePoint);
-        self.entities.len() - 1
+        self.add_entity(Entity::FreePoint)
     }
 
     pub fn add_real(&mut self) -> usize {
-        self.entities.push(Entity::FreeReal);
-        self.entities.len() - 1
+        self.add_entity(Entity::FreeReal)
     }
 }
 
-fn load_adjusted(mut unrolled: CompileContext) -> Adjusted {
-    // First, all expressions are expanded: mapped by Rc addresses and split into atoms.
-    let mut expansion = Expand {
-        entities: Vec::new(),
-        record: Vec::new(),
-        expr_map: HashMap::new()
-    };
+#[derive(Debug, Clone, Default)]
+pub struct Build {
+    expand: Expand,
+    id_map: HashMap<usize, usize>,
+    loaded: Vec<AnyExpr<()>>,
+    items: Vec<Item>
+}
 
+impl Build {
+    pub fn load<T: Displayed + LoadsTo>(&mut self, expr: &Unrolled<T>) -> usize {
+        let key = (expr.data.as_ref() as *const _) as usize;
+        *self.id_map.entry(key).or_insert_with(|| {
+            self.loaded.push(self.expand.load(expr));
+            self.loaded.len() - 1
+        })
+    }
+
+    pub fn add<I: Into<Item>>(&mut self, item: I) {
+        self.items.push(item.into());
+    }
+}
+
+pub fn load_script(input: &str) -> Result<(Adjusted, Figure), Vec<Error>> {
+    // Unroll script
+    // Expand rules & figure maximally (normalize at the point of expansion)
+    // ---
+    // Optimize rules and entities
+    // Reduce entities
+    // --- repeat
+    // Turn entities into adjustables
+    // Ultimately reduce entities
+    // Split rules & figure
+    // Fold rules & figure separately
+    // Assign reserved registers to figure expressions
+    // Return
+
+    // Unroll script
+    let (mut unrolled, nodes) = unroll::unroll(input)?;
+
+    // Expand figure
+    let mut build = Build::default();
+    nodes.build(&mut build);
+
+    // Move expand base
+    let mut expand = build.expand;
+
+    // Expand rules
     let mut rules = Vec::new();
 
     for rule in unrolled.take_rules() {
-        rules.push(Rule::load(&rule, &mut expansion));
+        rules.push(Rule::load(&rule, &mut expand));
     }
 
-    // Give entity indices.
-    // let exprs = expansion.record.map_meta(|_| {
-        
-    // });
+    // Fold & normalize rules
 
-    Adjusted {
-        template: Vec::new(),
-        items: Vec::new(),
-        rules: Vec::new()
-    }
-}
 
-pub fn load_script(input: &str, canvas_size: (usize, usize)) -> Result<Intermediate, Vec<Error>> {
-    let (unrolled, nodes) = unroll::unroll(input)?;
-
-    let adjusted = load_adjusted(unrolled);
-
-    Ok(Intermediate {
-        figure: Figure {
+    Ok((
+        adjusted,
+        Figure {
             items: Vec::new(),
-            canvas_size
+            variables: Vec::new()
         },
-        adjusted: Adjusted {
-            template: Vec::new(),
-            items: Vec::new(),
-            rules: Vec::new()
-        },
-    })
+    ))
 }
