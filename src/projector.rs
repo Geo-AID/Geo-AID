@@ -582,6 +582,8 @@ pub fn project(
         cache: None,
     };
 
+    let data: Vec<ValueEnum> = Vec::new();
+
     let points: Vec<Complex> = figure
         .points
         .iter()

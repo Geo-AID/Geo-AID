@@ -28,6 +28,7 @@ use crate::generator::fast_float::FastFloat;
 use crate::script::builtins::macros::number;
 use crate::script::unroll::{AnyExpr, CloneWithNode};
 use crate::script::{unit, ComplexUnit, Error};
+use crate::script::token::number::ProcNum;
 use crate::span;
 
 use super::figure::FromExpr;
@@ -133,7 +134,7 @@ impl CompileContext {
         self.push_rule(UnrolledRule {
             kind: UnrolledRuleKind::ScalarEq(
                 self.distance_pl(lhs.clone_without_node(), rhs.clone_without_node()),
-                number!(=0.0),
+                number!(=ProcNum::zero()),
             ),
             inverted: false,
             weight,

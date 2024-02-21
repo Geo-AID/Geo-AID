@@ -24,7 +24,6 @@ use std::collections::HashSet;
 use std::fmt::Formatter;
 use std::mem;
 use std::{
-    cell::RefCell,
     collections::{hash_map::Entry, HashMap},
     fmt::{Debug, Display},
     hash::Hash,
@@ -50,7 +49,7 @@ use super::parser::{
     ExprBinop, ExprCall, FieldIndex, FromProperty, InputStream, Name, PointCollectionConstructor,
     RefStatement,
 };
-use super::token::number::{CompExponent, CompFloat};
+use super::token::number::{CompExponent, ProcNum};
 use super::token::Number;
 use super::{
     builtins,
@@ -378,7 +377,7 @@ type GeoFunc = dyn Fn(Vec<AnyExpr>, &mut CompileContext, Properties) -> AnyExpr;
 pub struct FunctionDefinition(pub Box<GeoFunc>);
 
 impl Debug for FunctionDefinition {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "function definition")
     }
 }
@@ -962,11 +961,11 @@ macro_rules! impl_make_variable {
                 Expr {
                     span: sp,
                     data: Rc::new($what::Generic(Generic::VariableAccess(Rc::new(
-                        RefCell::new(Variable {
+                        Variable {
                             name,
                             definition: self,
                             definition_span: sp,
-                        }),
+                        },
                     )))),
                     node: None, // Variable references are NEVER displayed
                 }
@@ -983,13 +982,13 @@ macro_rules! impl_make_variable {
                     span: sp,
                     data: Rc::new($what {
                         $other: self.data.$other,
-                        data: $data::Generic(Generic::VariableAccess(Rc::new(RefCell::new(
+                        data: $data::Generic(Generic::VariableAccess(Rc::new(
                             Variable {
                                 name,
                                 definition: self,
                                 definition_span: sp,
                             },
-                        )))),
+                        ))),
                     }),
                     node: None, // Variable references are NEVER displayed
                 }
@@ -1013,7 +1012,7 @@ pub enum Generic<T>
 where
     T: Displayed,
 {
-    VariableAccess(Rc<RefCell<Variable<T>>>),
+    VariableAccess(Rc<Variable<T>>),
     Boxed(Expr<T>),
     /// Dummy is a value specifically for continued unrolling after error occurence.
     /// It should never show up in compilation step.
@@ -1021,9 +1020,9 @@ where
 }
 
 impl<T: Display + Displayed> Display for Generic<T> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::VariableAccess(name) => write!(f, "{}", name.borrow().name),
+            Self::VariableAccess(name) => write!(f, "{}", name.name),
             Self::Boxed(expr) => {
                 write!(f, "{expr}")
             }
@@ -1064,7 +1063,19 @@ impl Displayed for Point {
 
 impl Expr<Point> {
     #[must_use]
-    pub fn boxed(mut self, weight: FastFloat, span: Span) -> Self {
+    pub fn get_data(&self) -> &Point {
+        match self.data.as_ref() {
+            Point::Generic(v) => match v {
+                Generic::Boxed(v) => v.get_data(),
+                Generic::VariableAccess(v) => v.definition.get_data(),
+                Generic::Dummy => self.data.as_ref()
+            },
+            v => v
+        }
+    }
+
+    #[must_use]
+    pub fn boxed(mut self, span: Span) -> Self {
         let node = self.node.take();
 
         Self {
@@ -1078,7 +1089,6 @@ impl Expr<Point> {
     pub fn x(
         self,
         span: Span,
-        weight: FastFloat,
         display: Properties,
         context: &CompileContext,
     ) -> Expr<Scalar> {
@@ -1086,7 +1096,7 @@ impl Expr<Point> {
             span,
             node: None,
             data: Rc::new(Scalar {
-                unit: Some(unit::SCALAR),
+                unit: Some(unit::DISTANCE),
                 data: ScalarData::PointX(self),
             }),
         };
@@ -1099,7 +1109,6 @@ impl Expr<Point> {
     pub fn y(
         self,
         span: Span,
-        weight: FastFloat,
         display: Properties,
         context: &CompileContext,
     ) -> Expr<Scalar> {
@@ -1107,7 +1116,7 @@ impl Expr<Point> {
             span,
             node: None,
             data: Rc::new(Scalar {
-                unit: Some(unit::SCALAR),
+                unit: Some(unit::DISTANCE),
                 data: ScalarData::PointY(self),
             }),
         };
@@ -1124,7 +1133,7 @@ impl GetValueType for Point {
 }
 
 impl Display for Point {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Generic(v) => write!(f, "{v}"),
             Self::Average(exprs) => write!(
@@ -1231,7 +1240,19 @@ impl Displayed for Circle {
 
 impl Expr<Circle> {
     #[must_use]
-    pub fn boxed(mut self, weight: FastFloat, span: Span) -> Self {
+    pub fn get_data(&self) -> &Circle {
+        match self.data.as_ref() {
+            Circle::Generic(v) => match v {
+                Generic::Boxed(v) => v.get_data(),
+                Generic::VariableAccess(v) => v.definition.get_data(),
+                Generic::Dummy => self.data.as_ref()
+            },
+            v => v
+        }
+    }
+
+    #[must_use]
+    pub fn boxed(mut self, span: Span) -> Self {
         let node = self.node.take();
 
         Self {
@@ -1245,7 +1266,6 @@ impl Expr<Circle> {
     pub fn center(
         self,
         span: Span,
-        weight: FastFloat,
         display: Properties,
         context: &CompileContext,
     ) -> Expr<Point> {
@@ -1263,7 +1283,6 @@ impl Expr<Circle> {
     pub fn radius(
         self,
         span: Span,
-        weight: FastFloat,
         display: Properties,
         context: &CompileContext,
     ) -> Expr<Scalar> {
@@ -1288,7 +1307,7 @@ impl GetValueType for Circle {
 }
 
 impl Display for Circle {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Generic(v) => write!(f, "{v}"),
             Self::Circle(center, radius) => {
@@ -1301,7 +1320,6 @@ impl Display for Circle {
 #[derive(Debug, CloneWithNode)]
 pub enum Line {
     Generic(Generic<Self>),
-    Entity(usize),
     LineFromPoints(Expr<Point>, Expr<Point>),
     AngleBisector(Expr<Point>, Expr<Point>, Expr<Point>),
     PerpendicularThrough(Expr<Line>, Expr<Point>), // Line, Point
@@ -1331,7 +1349,19 @@ impl Displayed for Line {
 
 impl Expr<Line> {
     #[must_use]
-    pub fn boxed(mut self, weight: FastFloat, span: Span) -> Self {
+    pub fn get_data(&self) -> &Line {
+        match self.data.as_ref() {
+            Line::Generic(v) => match v {
+                Generic::Boxed(v) => v.get_data(),
+                Generic::VariableAccess(v) => v.definition.get_data(),
+                Generic::Dummy => self.data.as_ref()
+            },
+            v => v
+        }
+    }
+
+    #[must_use]
+    pub fn boxed(mut self, span: Span) -> Self {
         let node = self.node.take();
 
         Self {
@@ -1397,10 +1427,9 @@ impl GetValueType for Line {
 }
 
 impl Display for Line {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Generic(v) => write!(f, "{v}"),
-            Self::Entity(i) => write!(f, "Entity {i}"),
             Self::LineFromPoints(e1, e2) => write!(f, "line({e1}, {e2})"),
             Self::AngleBisector(e1, e2, e3) => {
                 write!(f, "angle-bisector({e1}, {e2}, {e3})")
@@ -1418,8 +1447,8 @@ impl Display for Line {
 #[derive(Debug, CloneWithNode)]
 pub enum ScalarData {
     Generic(Generic<Scalar>),
-    Number(CompFloat),
-    DstLiteral(CompFloat),
+    Number(ProcNum),
+    DstLiteral(ProcNum),
     SetUnit(Expr<Scalar>, ComplexUnit),
     PointPointDistance(Expr<Point>, Expr<Point>),
     PointLineDistance(Expr<Point>, Expr<Line>),
@@ -1440,7 +1469,7 @@ pub enum ScalarData {
 }
 
 impl Display for ScalarData {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Generic(v) => write!(f, "{v}"),
             Self::Average(exprs) => write!(
@@ -1561,7 +1590,19 @@ impl Scalar {
 
 impl Expr<Scalar> {
     #[must_use]
-    pub fn boxed(mut self, weight: FastFloat, span: Span) -> Self {
+    pub fn get_data(&self) -> &ScalarData {
+        match &self.data.data {
+            ScalarData::Generic(v) => match v {
+                Generic::Boxed(v) => v.get_data(),
+                Generic::VariableAccess(v) => v.definition.get_data(),
+                Generic::Dummy => &self.data.data
+            },
+            v => v
+        }
+    }
+
+    #[must_use]
+    pub fn boxed(mut self, span: Span) -> Self {
         let node = self.node.take();
 
         Self {
@@ -1616,8 +1657,8 @@ impl Expr<Scalar> {
                         v @ ScalarData::Number(_) => {
                             v.clone_without_node()
                         }
-                        v @ ScalarData::Free => {
-                            todo!()
+                        ScalarData::Free => {
+                            ScalarData::SetUnit(self.clone_without_node(), unit.unwrap())
                         }
                         ScalarData::DstLiteral(_)
                         | ScalarData::PointPointDistance(_, _)
@@ -1743,7 +1784,7 @@ impl PointCollectionData {
     pub fn index(&self, index: usize) -> Expr<Point> {
         match self {
             PointCollectionData::Generic(generic) => match generic {
-                Generic::VariableAccess(var) => var.borrow().definition.index_without_node(index),
+                Generic::VariableAccess(var) => var.definition.index_without_node(index),
                 Generic::Boxed(expr) => expr.index_without_node(index),
                 Generic::Dummy => Expr::new_spanless(Point::Generic(Generic::Dummy)),
             },
@@ -1756,7 +1797,7 @@ impl PointCollectionData {
 }
 
 impl Display for PointCollectionData {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Generic(v) => write!(f, "{v}"),
             Self::PointCollection(col) => write!(
@@ -1825,10 +1866,6 @@ impl ConvertFrom<Expr<Point>> for PointCollection {
 }
 
 impl ConvertFrom<Expr<PointCollection>> for PointCollection {
-    fn can_convert_from(_value: &Expr<PointCollection>) -> bool {
-        true
-    }
-
     fn convert_from(mut value: Expr<PointCollection>, context: &CompileContext) -> Expr<Self> {
         if let Some(node) = &mut value.node {
             if let Some(props) = node.root.props.take() {
@@ -1837,6 +1874,10 @@ impl ConvertFrom<Expr<PointCollection>> for PointCollection {
         }
 
         value
+    }
+
+    fn can_convert_from(_value: &Expr<PointCollection>) -> bool {
+        true
     }
 }
 
@@ -1849,7 +1890,7 @@ impl PointCollection {
 
 impl Expr<PointCollection> {
     #[must_use]
-    pub fn boxed(mut self, weight: FastFloat, span: Span) -> Self {
+    pub fn boxed(mut self, span: Span) -> Self {
         let node = self.node.take();
 
         Self {
@@ -1922,7 +1963,7 @@ pub enum BundleData {
 }
 
 impl Display for BundleData {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Generic(v) => write!(f, "{v}"),
             Self::ConstructBundle(fields) => {
@@ -1968,7 +2009,7 @@ impl Bundle {
     pub fn index(&self, field: &str) -> AnyExpr {
         match &self.data {
             BundleData::Generic(generic) => match &generic {
-                Generic::VariableAccess(var) => var.borrow().definition.index_without_node(field),
+                Generic::VariableAccess(var) => var.definition.index_without_node(field),
                 Generic::Boxed(expr) => expr.index_without_node(field),
                 Generic::Dummy => AnyExpr::Unknown(Expr::new_spanless(Unknown::dummy())),
             },
@@ -1999,7 +2040,7 @@ impl Dummy for Bundle {
 
 impl Expr<Bundle> {
     #[must_use]
-    pub fn boxed(mut self, weight: FastFloat, span: Span) -> Self {
+    pub fn boxed(mut self, span: Span) -> Self {
         let node = self.node.take();
 
         Self {
@@ -2138,7 +2179,7 @@ impl GetValueType for Unknown {
 
 impl Expr<Unknown> {
     #[must_use]
-    pub fn boxed(mut self, weight: FastFloat, span: Span) -> Self {
+    pub fn boxed(mut self, span: Span) -> Self {
         let node = self.take_node();
 
         Self {
@@ -2199,27 +2240,27 @@ impl AnyExpr {
     pub fn replace_node(&mut self, with: Option<AnyExprNode>) -> Option<AnyExprNode> {
         Some(match self {
             Self::Point(v) => {
-                AnyExprNode::Point(mem::replace(&mut v.node, with.map(AnyExprNode::as_point))?)
+                AnyExprNode::Point(mem::replace(&mut v.node, with.map(AnyExprNode::to_point))?)
             }
             Self::Line(v) => {
-                AnyExprNode::Line(mem::replace(&mut v.node, with.map(AnyExprNode::as_line))?)
+                AnyExprNode::Line(mem::replace(&mut v.node, with.map(AnyExprNode::to_line))?)
             }
             Self::Scalar(v) => {
-                AnyExprNode::Scalar(mem::replace(&mut v.node, with.map(AnyExprNode::as_scalar))?)
+                AnyExprNode::Scalar(mem::replace(&mut v.node, with.map(AnyExprNode::to_scalar))?)
             }
             Self::Circle(v) => {
-                AnyExprNode::Circle(mem::replace(&mut v.node, with.map(AnyExprNode::as_circle))?)
+                AnyExprNode::Circle(mem::replace(&mut v.node, with.map(AnyExprNode::to_circle))?)
             }
             Self::PointCollection(v) => AnyExprNode::PointCollection(mem::replace(
                 &mut v.node,
-                with.map(AnyExprNode::as_point_collection),
+                with.map(AnyExprNode::to_point_collection),
             )?),
             Self::Bundle(v) => {
-                AnyExprNode::Bundle(mem::replace(&mut v.node, with.map(AnyExprNode::as_bundle))?)
+                AnyExprNode::Bundle(mem::replace(&mut v.node, with.map(AnyExprNode::to_bundle))?)
             }
             Self::Unknown(v) => AnyExprNode::Unknown(mem::replace(
                 &mut v.node,
-                with.map(AnyExprNode::as_unknown),
+                with.map(AnyExprNode::to_unknown),
             )?),
         })
     }
@@ -2320,15 +2361,15 @@ impl AnyExpr {
     }
 
     #[must_use]
-    pub fn boxed(self, weight: FastFloat, span: Span) -> Self {
+    pub fn boxed(self, span: Span) -> Self {
         match self {
-            Self::Point(v) => Self::Point(v.boxed(weight, span)),
-            Self::Line(v) => Self::Line(v.boxed(weight, span)),
-            Self::Scalar(v) => Self::Scalar(v.boxed(weight, span)),
-            Self::Circle(v) => Self::Circle(v.boxed(weight, span)),
-            Self::PointCollection(v) => Self::PointCollection(v.boxed(weight, span)),
-            Self::Bundle(v) => Self::Bundle(v.boxed(weight, span)),
-            Self::Unknown(v) => Self::Unknown(v.boxed(weight, span)),
+            Self::Point(v) => Self::Point(v.boxed(span)),
+            Self::Line(v) => Self::Line(v.boxed(span)),
+            Self::Scalar(v) => Self::Scalar(v.boxed(span)),
+            Self::Circle(v) => Self::Circle(v.boxed(span)),
+            Self::PointCollection(v) => Self::PointCollection(v.boxed(span)),
+            Self::Bundle(v) => Self::Bundle(v.boxed(span)),
+            Self::Unknown(v) => Self::Unknown(v.boxed(span)),
         }
     }
 
@@ -2338,33 +2379,33 @@ impl AnyExpr {
     pub fn get_variable_span(&self) -> Span {
         match self {
             Self::Point(v) => match v.data.as_ref() {
-                Point::Generic(Generic::VariableAccess(var)) => var.borrow().definition_span,
+                Point::Generic(Generic::VariableAccess(var)) => var.definition_span,
                 _ => panic!("not a variable"),
             },
             Self::Line(v) => match v.data.as_ref() {
-                Line::Generic(Generic::VariableAccess(var)) => var.borrow().definition_span,
+                Line::Generic(Generic::VariableAccess(var)) => var.definition_span,
                 _ => panic!("not a variable"),
             },
             Self::Scalar(v) => match &v.data.data {
-                ScalarData::Generic(Generic::VariableAccess(var)) => var.borrow().definition_span,
+                ScalarData::Generic(Generic::VariableAccess(var)) => var.definition_span,
                 _ => panic!("not a variable"),
             },
             Self::Circle(v) => match v.data.as_ref() {
-                Circle::Generic(Generic::VariableAccess(var)) => var.borrow().definition_span,
+                Circle::Generic(Generic::VariableAccess(var)) => var.definition_span,
                 _ => panic!("not a variable"),
             },
             Self::PointCollection(v) => match &v.data.data {
                 PointCollectionData::Generic(Generic::VariableAccess(var)) => {
-                    var.borrow().definition_span
+                    var.definition_span
                 }
                 _ => panic!("not a variable"),
             },
             Self::Bundle(v) => match &v.data.data {
-                BundleData::Generic(Generic::VariableAccess(var)) => var.borrow().definition_span,
+                BundleData::Generic(Generic::VariableAccess(var)) => var.definition_span,
                 _ => panic!("not a variable"),
             },
             Self::Unknown(v) => match v.data.as_ref() {
-                Unknown::Generic(Generic::VariableAccess(var)) => var.borrow().definition_span,
+                Unknown::Generic(Generic::VariableAccess(var)) => var.definition_span,
                 Unknown::Generic(_) => panic!("not a variable"),
             },
         }
@@ -2565,7 +2606,7 @@ impl<T: GetValueType + Displayed> GetValueType for Expr<T> {
 }
 
 impl<T: Display + Displayed> Display for Expr<T> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.data)
     }
 }
@@ -2604,7 +2645,7 @@ pub struct UnrolledRule {
 }
 
 impl Display for UnrolledRule {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let inv = if self.inverted { "!" } else { "" };
 
         match &self.kind {
@@ -2658,7 +2699,6 @@ fn fetch_variable(
     context: &CompileContext,
     name: &str,
     variable_span: Span,
-    weight: FastFloat,
 ) -> AnyExpr {
     let mut var = if let Some(var) = context.variables.get(name) {
         var.clone_without_node()
@@ -2757,16 +2797,14 @@ impl Unroll for Ident {
     ) -> AnyExpr {
         match self {
             Ident::Named(named) => {
-                let weight = display.get("weight").get_or(FastFloat::One);
                 // No options are expected, as var refs don't generate nodes.
                 display.finish(context);
 
-                fetch_variable(context, &named.ident, named.span, weight)
+                fetch_variable(context, &named.ident, named.span)
             }
             Ident::Collection(col) => {
                 let mut display = display;
                 let display_pc = display.get("display").maybe_unset(true);
-                let weight = display.get("weight").get_or(FastFloat::One);
 
                 let mut pc_children = Vec::new();
                 pc_children.resize_with(col.collection.len(), || None);
@@ -2779,7 +2817,7 @@ impl Unroll for Ident {
                             col.collection
                                 .iter()
                                 .map(|item| {
-                                    fetch_variable(context, &format!("{item}"), col.span, weight)
+                                    fetch_variable(context, &format!("{item}"), col.span)
                                         .convert::<Point>(context)
                                 })
                                 .collect::<Vec<_>>()
@@ -2831,7 +2869,6 @@ impl Unroll for ExprCall {
             let param_types = params.iter().map(AnyExpr::get_type).collect();
 
             if let Some(overload) = func.get_overload(&param_types) {
-                let weight = display.get("weight").get_or(FastFloat::One);
                 let params = params
                     .into_iter()
                     .enumerate()
@@ -2846,7 +2883,7 @@ impl Unroll for ExprCall {
 
                 let ret = unroll_parameters(&overload.definition, params, display, context);
 
-                ret.boxed(weight, self.get_span())
+                ret.boxed(self.get_span())
             } else {
                 context.push_error(Error::OverloadNotFound {
                     error_span: self.get_span(),
@@ -2899,7 +2936,6 @@ impl Unroll for FieldIndex {
         it_index: &HashMap<u8, usize>,
         mut display: Properties,
     ) -> AnyExpr {
-        let weight = display.get("weight").get_or(FastFloat::One);
         let name = self
             .name
             .unroll(context, library, it_index, Properties::default());
@@ -2908,10 +2944,10 @@ impl Unroll for FieldIndex {
             AnyExpr::Circle(circle) => match &self.field {
                 Ident::Named(named) => match named.ident.as_str() {
                     "center" => circle
-                        .center(self.get_span(), weight, display, context)
+                        .center(self.get_span(), display, context)
                         .into(),
                     "radius" => circle
-                        .radius(self.get_span(), weight, display, context)
+                        .radius(self.get_span(), display, context)
                         .into(),
                     x => {
                         display.finish(context);
@@ -2941,8 +2977,8 @@ impl Unroll for FieldIndex {
             },
             AnyExpr::Point(point) => match &self.field {
                 Ident::Named(named) => match named.ident.as_str() {
-                    "x" => point.x(self.get_span(), weight, display, context).into(),
-                    "y" => point.y(self.get_span(), weight, display, context).into(),
+                    "x" => point.x(self.get_span(), display, context).into(),
+                    "y" => point.y(self.get_span(), display, context).into(),
                     x => {
                         display.finish(context);
 
@@ -2970,7 +3006,6 @@ impl Unroll for FieldIndex {
                 }
             },
             AnyExpr::Bundle(mut bundle) => {
-                let weight = display.get("weight").get_or(FastFloat::One);
                 display.finish(context);
                 let field_name = self.field.to_string();
                 let bundle_fields = library.get_bundle(bundle.data.name);
@@ -2978,7 +3013,7 @@ impl Unroll for FieldIndex {
                 if bundle_fields.contains(field_name.as_str()) {
                     bundle
                         .index_with_node(&self.field.to_string())
-                        .boxed(weight, self.get_span())
+                        .boxed(self.get_span())
                 } else {
                     let suggested = most_similar(bundle_fields.iter(), &field_name);
 
@@ -3085,7 +3120,7 @@ impl Unroll for Number {
         AnyExpr::Scalar(Expr {
             data: Rc::new(Scalar {
                 unit: None,
-                data: ScalarData::Number(self.to_float()),
+                data: ScalarData::Number(self.into()),
             }),
             span: self.get_span(),
             node: None,
@@ -3116,7 +3151,6 @@ impl Unroll for PointCollectionConstructor {
         mut display: Properties,
     ) -> AnyExpr {
         let display_pc = display.get("display").maybe_unset(true);
-        let weight_pc = display.get("weight").get_or(FastFloat::One);
 
         let mut pc_children = Vec::new();
         pc_children.resize_with(self.points.len(), || None);
@@ -3144,7 +3178,7 @@ impl Unroll for PointCollectionConstructor {
                             points.push(Expr {
                                 span: unrolled.get_span(),
                                 data: Rc::new(Point::dummy()),
-                                node: unrolled.replace_node(None).map(AnyExprNode::as_point),
+                                node: unrolled.replace_node(None).map(AnyExprNode::to_point),
                             });
                         }
                     }
@@ -3188,7 +3222,7 @@ impl<const ITER: bool> Unroll for ExprBinop<ITER> {
         context: &mut CompileContext,
         library: &Library,
         it_index: &HashMap<u8, usize>,
-        mut display: Properties,
+        display: Properties,
     ) -> AnyExpr {
         let lhs = self
             .lhs
@@ -3232,8 +3266,6 @@ impl<const ITER: bool> Unroll for ExprBinop<ITER> {
         // Binary operators generate collection nodes for the lhs and rhs nodes.
         let lhs_node = lhs.take_node();
         let rhs_node = rhs.take_node();
-
-        let weight = display.get("weight").get_or(FastFloat::One);
 
         match &self.operator {
             BinaryOperator::Add(_) | BinaryOperator::Sub(_) => {
@@ -3585,7 +3617,7 @@ fn create_variable_named(
         }),
         // Otherwise, create a new variable
         Entry::Vacant(entry) => {
-            variable_nodes.extend(rhs_unrolled.replace_node(None).map(AnyExprNode::as_dyn));
+            variable_nodes.extend(rhs_unrolled.replace_node(None).map(AnyExprNode::to_dyn));
 
             let var = rhs_unrolled.make_variable(entry.key().clone());
             entry.insert(var);
@@ -3797,7 +3829,7 @@ fn unroll_ref(
             });
         }
 
-        let node = expr.replace_node(None).map(AnyExprNode::as_dyn);
+        let node = expr.replace_node(None).map(AnyExprNode::to_dyn);
         nodes.extend(node);
 
         // If any weight is given, add a bias

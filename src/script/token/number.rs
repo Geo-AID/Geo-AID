@@ -1,7 +1,13 @@
 use std::{fmt::Display, mem};
+use std::cmp::Ordering;
+use std::fmt::Formatter;
+use std::ops::Add;
+use num_bigint::BigInt;
+use num_complex::Complex;
 
-use num_rational::Rational64;
-use num_traits::{CheckedAdd, CheckedMul, FromPrimitive, ToPrimitive, Zero};
+use num_rational::{BigRational, Rational64};
+use num_traits::{CheckedAdd, CheckedMul, FromPrimitive, One, ToPrimitive, Zero};
+use crate::script::token::Number;
 
 #[derive(Debug)]
 pub struct ParseIntError;
@@ -172,6 +178,107 @@ impl ParsedFloatBuilder {
         ParsedFloat {
             integral: self.integral,
             decimal: digits,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum ParsedNumber {
+    Int(ParsedInt),
+    Float(ParsedFloat)
+}
+
+impl Display for ParsedNumber {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ParsedNumber::Int(v) => write!(f, "{v}"),
+            ParsedNumber::Float(v) => write!(f, "{v}")
+        }
+    }
+}
+
+/// Number for processing
+#[derive(Debug, Clone)]
+pub struct ProcNum(Complex<BigRational>);
+
+impl Add<Self, Output=Self> for ProcNum {
+    type Output = ProcNum;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        Self::Output(self.0 + rhs.0)
+    }
+}
+
+impl Zero for ProcNum {
+    fn zero() -> Self {
+        Self(Complex::zero())
+    }
+
+    fn is_zero(&self) -> bool {
+        self.0.is_zero()
+    }
+}
+
+impl Display for ProcNum(Complex<BigRational>) {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl PartialEq for ProcNum {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.eq(&other.0)
+    }
+}
+
+impl Eq for ProcNum {}
+
+impl PartialOrd for ProcNum {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for ProcNum {
+    fn cmp(&self, other: &Self) -> Ordering {
+        match self.0.re.cmp(&other.0.re) {
+            Ordering::Equal => self.0.im.cmp(&other.0.im),
+            ord => ord
+        }
+    }
+}
+
+impl From<&Number> for ProcNum {
+    fn from(value: &Number) -> Self {
+        match value {
+            Number::Integer(i) => {
+                let mut x: Complex<BigRational> = Complex::zero();
+
+                for digit in &i.parsed.digits {
+                    x *= 10;
+                    x += *digit;
+                }
+
+                Self(x)
+            }
+            Number::Float(f) => {
+                let mut integral: Complex<BigRational> = Complex::zero();
+                let mut decimal: Complex<BigRational> = Complex::zero();
+                let mut denominator = BigInt::one();
+
+                for digit in &f.parsed.integral.digits {
+                    integral *= 10;
+                    integral += *digit;
+                }
+
+                for digit in &f.parsed.decimal {
+                    denominator *= 10;
+                    decimal *= 10;
+                    decimal += *digit;
+                }
+
+                Self(integral + decimal)
+            }
         }
     }
 }
