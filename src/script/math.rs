@@ -1,11 +1,12 @@
 use std::cell::OnceCell;
 use std::collections::HashMap;
+use std::iter::Peekable;
 use std::mem;
-use num_traits::Zero;
+use num_traits::{FromPrimitive, One, Zero};
 
 use crate::generator::AdjustableTemplate;
 use crate::script::figure::Item;
-use crate::script::token::number::{CompExponent, ProcNum};
+use crate::script::token::number::{CompExponent, CompFloat, ProcNum};
 use crate::script::unroll::figure::Node;
 
 use super::{figure::Figure, unroll::{self, Displayed, Expr as Unrolled, UnrolledRule, UnrolledRuleKind,
@@ -78,9 +79,6 @@ pub enum Number<M> {
         k: LineExpr<M>,
         l: LineExpr<M>
     },
-    Average {
-        items: Vec<NumberExpr<M>>
-    },
     CircleCenter {
         circle: CircleExpr<M>
     },
@@ -94,9 +92,6 @@ pub enum Number<M> {
     Product {
         times: Vec<NumberExpr<M>>,
         by: Vec<NumberExpr<M>>
-    },
-    Const {
-        value: ProcNum
     },
     Power {
         value: NumberExpr<M>,
@@ -129,7 +124,10 @@ pub enum Number<M> {
     },
     PointY {
         point: NumberExpr<M>
-    }
+    },
+    Const {
+        value: ProcNum
+    },
 }
 
 pub type NumberExpr<M> = Expr<Number<M>, M>;
@@ -174,6 +172,8 @@ fn fix_dst(expr: NumberExpr<()>, unit: Option<ComplexUnit>, math: &mut Expand) -
             if unit.0[SimpleUnit::Distance as usize].is_zero() {
                 expr
             } else {
+                let math
+
                 Expr::new(Number::Product {
                     times: vec![expr, Expr::new(Number::Power {
                         value: math.get_dst_var(),
@@ -186,12 +186,106 @@ fn fix_dst(expr: NumberExpr<()>, unit: Option<ComplexUnit>, math: &mut Expand) -
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct Merge<T, I, J>
+where T: Ord, I: Iterator<Item = T>, J: Iterator<Item = T> {
+    i: Peekable<I>,
+    j: Peekable<J>
+}
+
+impl<T: Ord, I: Iterator<Item = T>, J: Iterator<Item = T>> Merge<T, I, J> {
+    #[must_use]
+    pub fn new<A: IntoIterator<IntoIter = I>, B: IntoIterator<IntoIter = J>>(a: A, b: B) -> Self {
+        Self {
+            i: a.into_iter().peekable(),
+            j: b.into_iter().peekable()
+        }
+    }
+
+    #[must_use]
+    pub fn empty() -> Self {
+        Self::new(None, None)
+    }
+
+    #[must_use]
+    pub fn merge_with<It: IntoIterator<Item = T>>(self, other: It) -> Merge<T, Self, It::IntoIter> {
+        Merge::new(self, other)
+    }
+}
+
+impl<T: Ord, I: Iterator<Item = T>, J: Iterator<Item = T>> Iterator for Merge<T, I, J> {
+    type Item = T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if let Some(i_item) = self.i.peek() {
+            if let Some(j_item) = self.j.peek() {
+                if j_item > i_item {
+                    self.i.next()
+                } else {
+                    self.j.next()
+                }
+            } else {
+                self.i.next()
+            }
+        } else {
+            self.j.next()
+        }
+    }
+}
+
+fn normalize_sum(plus: &mut Vec<NumberExpr<()>>, minus: &mut Vec<NumberExpr<()>>) {
+    let plus_v = mem::take(plus);
+    let minus_v = mem::take(minus);
+
+    let mut constant = ProcNum::zero();
+
+    let mut plus_final = Vec::new();
+    let mut minus_final = Vec::new();
+
+    for item in plus_v {
+        match *item.kind {
+            Number::Sum {
+                plus, minus
+            } => {
+                plus_final = Merge::new(plus_final, plus).collect();
+                minus_final = Merge::new(minus_final, minus).collect();
+            }
+            Number::Const { value } => constant += value,
+            kind => {
+                plus_final = Merge::new(plus_final, Some(Expr::new(kind))).collect();
+            }
+        }
+    }
+
+    for item in minus_v {
+        match *item.kind {
+            Number::Sum {
+                plus, minus
+            } => {
+                plus_final = Merge::new(plus_final, minus).collect();
+                minus_final = Merge::new(minus_final, plus).collect();
+            }
+            Number::Const { value } => constant -= value,
+            kind => {
+                minus_final = Merge::new(minus_final, Some(Expr::new(kind))).collect();
+            }
+        }
+    }
+
+    plus_final.push(Expr::new(Number::Const { value: constant }));
+
+    *plus = plus_final;
+    *minus = minus_final;
+}
+
 impl FromUnrolled<unroll::Scalar> for NumberExpr<()> {
     fn load(expr: &Unrolled<unroll::Scalar>, math: &mut Expand) -> Self {
         let mut kind = match expr.get_data() {
-            UnrolledScalar::Add(a, b) => Number::Sum {
-                plus: vec![math.load(a), math.load(b)],
-                minus: Vec::new()
+            UnrolledScalar::Add(a, b) => {
+                Number::Sum {
+                    plus: vec![math.load(a)],
+                    minus: vec![math.load(b)]
+                }
             },
             UnrolledScalar::Subtract(a, b) => Number::Sum {
                 plus: vec![math.load(a)],
@@ -205,8 +299,21 @@ impl FromUnrolled<unroll::Scalar> for NumberExpr<()> {
                 times: vec![math.load(a)],
                 by: vec![math.load(b)]
             },
-            UnrolledScalar::Average(exprs) => Number::Average {
-                items: exprs.iter().map(|x| math.load(x)).collect()
+            UnrolledScalar::Average(exprs) => {
+                let mut plus = exprs.iter().map(|x| math.load(x)).collect();
+                let mut minus = Vec::new();
+
+                normalize_sum(&mut plus, &mut minus);
+
+                Number::Product {
+                    times: vec![Expr::new(Number::Sum {
+                        plus,
+                        minus
+                    })],
+                    by: vec![Expr::new(Number::Const {
+                        value: ProcNum::from_usize(exprs.len()).unwrap()
+                    })]
+                }
             },
             UnrolledScalar::CircleRadius(circle) => {
                 match circle.get_data() {
@@ -267,9 +374,53 @@ impl FromUnrolled<unroll::Scalar> for NumberExpr<()> {
                 }
             }
             Number::Average { items } => items.sort(),
-            Number::Sum { .. } => {}
-            Number::Product { .. } => {}
-            Number::Const { .. } => {}
+            Number::Sum { plus, minus } => {
+                normalize_sum(plus, minus);
+            }
+            Number::Product { times, by } => {
+                let times_v = mem::take(times);
+                let by_v = mem::take(by);
+
+                let mut constant = ProcNum::one();
+
+                let mut times_final = Vec::new();
+                let mut by_final = Vec::new();
+
+                for item in times_v {
+                    match *item.kind {
+                        Number::Product {
+                            times, by
+                        } => {
+                            times_final = Merge::new(times_final, times).collect();
+                            by_final = Merge::new(by_final, by).collect();
+                        }
+                        Number::Const { value } => constant *= value,
+                        kind => {
+                            times_final = Merge::new(times_final, Some(Expr::new(kind))).collect();
+                        }
+                    }
+                }
+
+                for item in by_v {
+                    match *item.kind {
+                        Number::Product {
+                            times, by
+                        } => {
+                            times_final = Merge::new(times_final, by).collect();
+                            by_final = Merge::new(by_final, times).collect();
+                        }
+                        Number::Const { value } => constant /= value,
+                        kind => {
+                            by_final = Merge::new(by_final, Some(Expr::new(kind))).collect();
+                        }
+                    }
+                }
+
+                times_final.push(Expr::new(Number::Const { value: constant }));
+
+                *times = times_final;
+                *by = by_final;
+            }
             Number::Power { .. } => {}
             Number::PointPointDistance { .. } => {}
             Number::PointLineDistance { .. } => {}
@@ -278,6 +429,7 @@ impl FromUnrolled<unroll::Scalar> for NumberExpr<()> {
             Number::TwoLineAngle { .. } => {}
             Number::PointX { .. } => {}
             Number::PointY { .. } => {}
+            Number::Const { .. } => {}
         }
 
         Self {

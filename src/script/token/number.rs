@@ -1,7 +1,7 @@
 use std::{fmt::Display, mem};
 use std::cmp::Ordering;
 use std::fmt::Formatter;
-use std::ops::Add;
+use std::ops::{Add, Mul};
 use num_bigint::BigInt;
 use num_complex::Complex;
 
@@ -201,6 +201,16 @@ impl Display for ParsedNumber {
 #[derive(Debug, Clone)]
 pub struct ProcNum(Complex<BigRational>);
 
+impl FromPrimitive for ProcNum {
+    fn from_i64(n: i64) -> Option<Self> {
+        Some(Self(Complex::from_i64(n)?))
+    }
+
+    fn from_u64(n: u64) -> Option<Self> {
+        Some(Self(Complex::from_u64(n)?))
+    }
+}
+
 impl Add<Self, Output=Self> for ProcNum {
     type Output = ProcNum;
 
@@ -216,6 +226,24 @@ impl Zero for ProcNum {
 
     fn is_zero(&self) -> bool {
         self.0.is_zero()
+    }
+}
+
+impl Mul<Self, Output=Self> for ProcNum {
+    type Output = Self;
+
+    fn mul(self, rhs: Self) -> Self::Output {
+        Self::Output(self.0 * rhs.0)
+    }
+}
+
+impl One for ProcNum {
+    fn one() -> Self {
+        Self(Complex::one())
+    }
+
+    fn is_one(&self) -> bool where Self: PartialEq {
+        self.0.is_one()
     }
 }
 
