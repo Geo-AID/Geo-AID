@@ -6,7 +6,6 @@ use num_traits::Zero;
 use crate::generator::AdjustableTemplate;
 use crate::script::figure::Item;
 use crate::script::token::number::{CompExponent, ProcNum};
-use crate::script::unroll::figure::Node;
 
 use super::{figure::Figure, unroll::{self, Displayed, Expr as Unrolled, UnrolledRule, UnrolledRuleKind,
                                      Point as UnrolledPoint, Line as UnrolledLine, Circle as UnrolledCircle, ScalarData as UnrolledScalar}, Error, ComplexUnit, SimpleUnit};
@@ -53,6 +52,10 @@ trait FromUnrolled<T: Displayed> {
     fn load(expr: &Unrolled<T>, math: &mut Expand) -> Self;
 }
 
+trait Normalize {
+    fn normalize(&mut self);
+}
+
 pub trait LoadsTo {
     type Output;
 }
@@ -90,6 +93,58 @@ pub enum Point<M> {
 }
 
 pub type PointExpr<M> = Expr<Point<M>, M>;
+
+impl FromUnrolled<UnrolledPoint> for PointExpr<()> {
+    fn load(expr: &Unrolled<UnrolledPoint>, math: &mut Expand) -> Self {
+        let kind = match expr.get_data() {
+            UnrolledPoint::LineLineIntersection(a, b) => Point::LineLineIntersection {
+                k: math.load(a),
+                l: math.load(b)
+            },
+            UnrolledPoint::Average(exprs) => Point::Average {
+                items: exprs.iter().map(|x| math.load(x)).collect()
+            },
+            UnrolledPoint::CircleCenter(circle) => {
+                match circle.get_data() {
+                    UnrolledCircle::Circle(center, _) => return math.load(center),
+                    _ => unreachable!()
+                }
+            },
+            UnrolledPoint::Free => Point::Entity { id: math.add_point() },
+            _ => unreachable!()
+        };
+
+        Self {
+            kind: Box::new(kind),
+            meta: ()
+        }
+    }
+}
+
+impl<M> Normalize for Point<M> {
+    fn normalize(&mut self) {
+        match self {
+            Point::Entity { .. }
+            | Point::Var { .. } => (),
+            Point::LineLineIntersection { k, l } => {
+                k.normalize();
+                l.normalize();
+
+                if k > l {
+                    mem::swap(k, l);
+                }
+            }
+            Point::Average { items } => {
+                for item in &mut items {
+                    item.normalize();
+                }
+
+                items.sort();
+            }
+            Point::CircleCenter { circle } => circle.normalize(),
+        }
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Number<M> {
@@ -152,33 +207,6 @@ pub type NumberExpr<M> = Expr<Number<M>, M>;
 impl<M> Var for Number<M> {
     fn var(id: usize) -> Self {
         Self::Var { id }
-    }
-}
-
-impl FromUnrolled<UnrolledPoint> for NumberExpr<()> {
-    fn load(expr: &Unrolled<UnrolledPoint>, math: &mut Expand) -> Self {
-        let kind = match expr.get_data() {
-            UnrolledPoint::LineLineIntersection(a, b) => Number::LineLineIntersection {
-                k: math.load(a),
-                l: math.load(b)
-            },
-            UnrolledPoint::Average(exprs) => Number::Average {
-                items: exprs.iter().map(|x| math.load(x)).collect()
-            },
-            UnrolledPoint::CircleCenter(circle) => {
-                match circle.get_data() {
-                    UnrolledCircle::Circle(center, _) => return math.load(center),
-                    _ => unreachable!()
-                }
-            },
-            UnrolledPoint::Free => Number::Entity { id: math.add_point() },
-            _ => unreachable!()
-        };
-
-        Self {
-            kind: Box::new(kind),
-            meta: ()
-        }
     }
 }
 
@@ -435,6 +463,7 @@ pub type CircleExpr<M> = Expr<Circle<M>, M>;
 
 #[derive(Debug, Clone)]
 pub enum Any<M> {
+    Point(Point<M>),
     Number(Number<M>),
     Line(Line<M>)
 }
@@ -453,10 +482,28 @@ impl<M> From<Line<M>> for Any<M> {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+impl<M> From<Point<M>> for Any<M> {
+    fn from(value: Point<M>) -> Self {
+        Self::Point(value)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Expr<T, M> {
     pub kind: Box<T>,
     pub meta: M
+}
+
+impl<T: Ord, M: PartialEq> PartialOrd for Expr<T, M> {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl<T: Ord, M: PartialEq> Ord for Expr<T, M> {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.kind.cmp(&other.kind)
+    }
 }
 
 impl<T: Var> Var for Expr<T, ()> {
@@ -465,6 +512,12 @@ impl<T: Var> Var for Expr<T, ()> {
             kind: Box::new(T::var(id)),
             meta: ()
         }
+    }
+}
+
+impl<T: Normalize, M> Normalize for Expr<T, M> {
+    fn normalize(&mut self) {
+        self.kind.normalize();
     }
 }
 
@@ -694,10 +747,6 @@ pub fn load_script(input: &str) -> Result<(Adjusted, Figure), Vec<Error>> {
 
 
     Ok((
-        adjusted,
-        Figure {
-            items: Vec::new(),
-            variables: Vec::new()
-        },
+        todo!()
     ))
 }

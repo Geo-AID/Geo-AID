@@ -201,11 +201,11 @@ impl Display for ParsedNumber {
 #[derive(Debug, Clone)]
 pub struct ProcNum(Complex<BigRational>);
 
-impl Add<Self, Output=Self> for ProcNum {
-    type Output = ProcNum;
+impl Add<Self> for ProcNum {
+    type Output = Self;
 
     fn add(self, rhs: Self) -> Self::Output {
-        Self::Output(self.0 + rhs.0)
+        Self(self.0 + rhs.0)
     }
 }
 
@@ -219,7 +219,7 @@ impl Zero for ProcNum {
     }
 }
 
-impl Display for ProcNum(Complex<BigRational>) {
+impl Display for ProcNum {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
     }
@@ -250,13 +250,15 @@ impl Ord for ProcNum {
 
 impl From<&Number> for ProcNum {
     fn from(value: &Number) -> Self {
+        let ten = Complex::from_u8(10).unwrap();
+
         match value {
             Number::Integer(i) => {
                 let mut x: Complex<BigRational> = Complex::zero();
 
                 for digit in &i.parsed.digits {
-                    x *= 10;
-                    x += *digit;
+                    x *= ten;
+                    x += Complex::from_u8(*digit).unwrap();
                 }
 
                 Self(x)
@@ -267,14 +269,14 @@ impl From<&Number> for ProcNum {
                 let mut denominator = BigInt::one();
 
                 for digit in &f.parsed.integral.digits {
-                    integral *= 10;
-                    integral += *digit;
+                    integral *= ten;
+                    integral += Complex::from_u8(*digit).unwrap();
                 }
 
                 for digit in &f.parsed.decimal {
-                    denominator *= 10;
-                    decimal *= 10;
-                    decimal += *digit;
+                    denominator *= BigInt::from_u8(10).unwrap();
+                    decimal *= ten;
+                    decimal += Complex::from_u8(*digit).unwrap();
                 }
 
                 Self(integral + decimal)
