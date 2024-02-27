@@ -1,6 +1,7 @@
 use std::cell::OnceCell;
 use std::collections::HashMap;
 use std::mem;
+use std::ops::{Deref, DerefMut};
 use num_traits::Zero;
 
 use crate::generator::AdjustableTemplate;
@@ -121,7 +122,7 @@ impl FromUnrolled<UnrolledPoint> for PointExpr<()> {
     }
 }
 
-impl<M> Normalize for Point<M> {
+impl<M: Ord> Normalize for Point<M> {
     fn normalize(&mut self) {
         match self {
             Point::Entity { .. }
@@ -135,7 +136,7 @@ impl<M> Normalize for Point<M> {
                 }
             }
             Point::Average { items } => {
-                for item in &mut items {
+                for item in items {
                     item.normalize();
                 }
 
@@ -173,32 +174,32 @@ pub enum Number<M> {
         exponent: CompExponent
     },
     PointPointDistance {
-        p: NumberExpr<M>,
-        q: NumberExpr<M>
+        p: PointExpr<M>,
+        q: PointExpr<M>
     },
     PointLineDistance {
-        p: NumberExpr<M>,
+        p: PointExpr<M>,
         k: LineExpr<M>
     },
     ThreePointAngle {
-        p: NumberExpr<M>,
-        q: NumberExpr<M>,
-        r: NumberExpr<M>
+        p: PointExpr<M>,
+        q: PointExpr<M>,
+        r: PointExpr<M>
     },
     ThreePointAngleDir {
-        p: NumberExpr<M>,
-        q: NumberExpr<M>,
-        r: NumberExpr<M>
+        p: PointExpr<M>,
+        q: PointExpr<M>,
+        r: PointExpr<M>
     },
     TwoLineAngle {
         k: LineExpr<M>,
         l: LineExpr<M>
     },
     PointX {
-        point: NumberExpr<M>
+        point: PointExpr<M>
     },
     PointY {
-        point: NumberExpr<M>
+        point: PointExpr<M>
     }
 }
 
@@ -300,32 +301,36 @@ impl FromUnrolled<unroll::Scalar> for NumberExpr<()> {
             _ => unreachable!()
         };
 
-        match &mut kind {
-            Number::Var { .. }
-            | Number::CircleCenter { .. }
-            | Number::Entity { .. } => (),
-            Number::LineLineIntersection { k, l } => {
-                if k > l {
-                    mem::swap(k, l);
-                }
-            }
-            Number::Average { items } => items.sort(),
-            Number::Sum { .. } => {}
-            Number::Product { .. } => {}
-            Number::Const { .. } => {}
-            Number::Power { .. } => {}
-            Number::PointPointDistance { .. } => {}
-            Number::PointLineDistance { .. } => {}
-            Number::ThreePointAngle { .. } => {}
-            Number::ThreePointAngleDir { .. } => {}
-            Number::TwoLineAngle { .. } => {}
-            Number::PointX { .. } => {}
-            Number::PointY { .. } => {}
-        }
-
         Self {
             kind: Box::new(kind),
             meta: ()
+        }
+    }
+}
+
+impl<M: Ord> Normalize for Number<M> {
+    fn normalize(&mut self) {
+        match self {
+            Self::Var { .. } => (),
+            Self::Average { items } => {
+                for item in items {
+                    item.normalize();
+                }
+
+                items.sort();
+            },
+            Self::Entity { id } => todo!(),
+            Self::Sum { plus, minus } => todo!(),
+            Self::Product { times, by } => todo!(),
+            Self::Const { value } => todo!(),
+            Self::Power { value, exponent } => todo!(),
+            Self::PointPointDistance { p, q } => todo!(),
+            Self::PointLineDistance { p, k } => todo!(),
+            Self::ThreePointAngle { p, q, r } => todo!(),
+            Self::ThreePointAngleDir { p, q, r } => todo!(),
+            Self::TwoLineAngle { k, l } => todo!(),
+            Self::PointX { point } => todo!(),
+            Self::PointY { point } => todo!(),
         }
     }
 }
@@ -340,23 +345,23 @@ pub enum Line<M> {
     },
     /// Normalized iff `p` and `q` are in ascending order
     PointPoint {
-        p: NumberExpr<M>,
-        q: NumberExpr<M>
+        p: PointExpr<M>,
+        q: PointExpr<M>
     },
     /// Normalized iff `a` and `c` are in ascending order (`b` must stay in the middle)
     AngleBisector {
-        a: NumberExpr<M>,
-        b: NumberExpr<M>,
-        c: NumberExpr<M>
+        a: PointExpr<M>,
+        b: PointExpr<M>,
+        c: PointExpr<M>
     },
     /// Always normalized
     ParallelThrough {
-        point: NumberExpr<M>,
+        point: PointExpr<M>,
         line: LineExpr<M>
     },
     /// Always normalized
     PerpendicularThrough {
-        point: NumberExpr<M>,
+        point: PointExpr<M>,
         line: LineExpr<M>
     }
 }
@@ -426,25 +431,61 @@ impl FromUnrolled<UnrolledLine> for LineExpr<()> {
             _ => unreachable!()
         };
 
-        // Normalize
-        match &mut kind {
-            // Normalized at the point of construction
-            Line::ParallelThrough { .. }
-            | Line::PerpendicularThrough { .. }
-            | Line::Var { .. } => (),
-            // Reorder if necessary
-            Line::PointPoint { p, q }
-            | Line::AngleBisector { a: p, b: _, c: q } => {
-                if p > q {
-                    mem::swap(p, q);
-                }
-            }
-        }
-
         Self {
             kind: Box::new(kind),
             meta: ()
         }
+    }
+}
+
+impl<M: Ord> Normalize for Line<M> {
+    fn normalize(&mut self) {
+        // Simplification.
+        *self = match *self {
+            Self::ParallelThrough { mut point, mut line } => {
+                point.normalize();
+                line.normalize();
+
+                match *line.kind {
+                    Self::ParallelThrough { line, .. } => Self::ParallelThrough { point, line },
+                    Self::PerpendicularThrough { line, .. } => Self::PerpendicularThrough { point, line },
+                    _ => Self::ParallelThrough { point, line }
+                }
+            }
+            Self::PerpendicularThrough { mut point, mut line } => {
+                point.normalize();
+                line.normalize();
+
+                match *line.kind { 
+                    Self::ParallelThrough { line, .. } => Self::PerpendicularThrough { point, line },
+                    Self::PerpendicularThrough { line, .. } => Self::ParallelThrough { point, line },
+                    _ => Self::PerpendicularThrough { point, line }
+                }
+            }
+            ln @ Self::Var { .. } => ln,
+            // Reorder if necessary
+            Self::PointPoint { mut p, mut q } => {
+                p.normalize();
+                q.normalize();
+
+                if p > q {
+                    mem::swap(&mut p, &mut q);
+                }
+
+                Self::PointPoint { p, q }
+            }
+            Self::AngleBisector { mut a, mut b, mut c } => {
+                a.normalize();
+                b.normalize();
+                c.normalize();
+
+                if a > c {
+                    mem::swap(&mut a, &mut c);
+                }
+
+                Self::AngleBisector { a, b, c }
+            }
+        };
     }
 }
 
@@ -454,12 +495,24 @@ pub enum Circle<M> {
         id: usize
     },
     Construct {
-        center: NumberExpr<M>,
+        center: PointExpr<M>,
         radius: NumberExpr<M>
     }
 }
 
 pub type CircleExpr<M> = Expr<Circle<M>, M>;
+
+impl<M: Ord> Normalize for Circle<M> {
+    fn normalize(&mut self) {
+        match self {
+            Circle::Var { .. } => (),
+            Circle::Construct { mut center, mut radius } => {
+                center.normalize();
+                radius.normalize();
+            }
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 pub enum Any<M> {
@@ -488,22 +541,47 @@ impl<M> From<Point<M>> for Any<M> {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Expr<T, M> {
-    pub kind: Box<T>,
-    pub meta: M
+#[derive(Debug, Clone)]
+pub struct AlwaysEq<T>(T);
+
+impl<T> PartialEq for AlwaysEq<T> {
+    fn eq(&self, _: &Self) -> bool {
+        true
+    }
 }
 
-impl<T: Ord, M: PartialEq> PartialOrd for Expr<T, M> {
+impl<T> Eq for AlwaysEq<T> {}
+
+impl<T> PartialOrd for AlwaysEq<T> {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl<T: Ord, M: PartialEq> Ord for Expr<T, M> {
+impl<T> Ord for AlwaysEq<T> {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.kind.cmp(&other.kind)
+        std::cmp::Ordering::Equal
     }
+}
+
+impl<T> Deref for AlwaysEq<T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<T> DerefMut for AlwaysEq<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Expr<T, M> {
+    pub kind: Box<T>,
+    pub meta: M
 }
 
 impl<T: Var> Var for Expr<T, ()> {
