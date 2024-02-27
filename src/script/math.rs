@@ -58,7 +58,7 @@ pub trait LoadsTo {
 }
 
 impl LoadsTo for UnrolledPoint {
-    type Output = NumberExpr<()>;
+    type Output = PointExpr<()>;
 }
 
 impl LoadsTo for UnrolledLine {
@@ -70,7 +70,7 @@ impl LoadsTo for UnrolledCircle {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub enum Number<M> {
+pub enum Point<M> {
     Var {
         id: usize
     },
@@ -79,10 +79,25 @@ pub enum Number<M> {
         l: LineExpr<M>
     },
     Average {
-        items: Vec<NumberExpr<M>>
+        items: Vec<PointExpr<M>>
     },
     CircleCenter {
         circle: CircleExpr<M>
+    },
+    Entity {
+        id: usize
+    }
+}
+
+pub type PointExpr<M> = Expr<Point<M>, M>;
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Number<M> {
+    Var {
+        id: usize
+    },
+    Average {
+        items: Vec<NumberExpr<M>>
     },
     Entity {
         id: usize
