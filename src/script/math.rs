@@ -1,13 +1,12 @@
 use std::cell::OnceCell;
 use std::collections::HashMap;
-use std::iter::Peekable;
 use std::mem;
-use num_traits::{FromPrimitive, One, Zero};
+use std::ops::{Deref, DerefMut};
+use num_traits::Zero;
 
 use crate::generator::AdjustableTemplate;
 use crate::script::figure::Item;
-use crate::script::token::number::{CompExponent, CompFloat, ProcNum};
-use crate::script::unroll::figure::Node;
+use crate::script::token::number::{CompExponent, ProcNum};
 
 use super::{figure::Figure, unroll::{self, Displayed, Expr as Unrolled, UnrolledRule, UnrolledRuleKind,
                                      Point as UnrolledPoint, Line as UnrolledLine, Circle as UnrolledCircle, ScalarData as UnrolledScalar}, Error, ComplexUnit, SimpleUnit};
@@ -54,12 +53,16 @@ trait FromUnrolled<T: Displayed> {
     fn load(expr: &Unrolled<T>, math: &mut Expand) -> Self;
 }
 
+trait Normalize {
+    fn normalize(&mut self);
+}
+
 pub trait LoadsTo {
     type Output;
 }
 
 impl LoadsTo for UnrolledPoint {
-    type Output = NumberExpr<()>;
+    type Output = PointExpr<()>;
 }
 
 impl LoadsTo for UnrolledLine {
@@ -71,7 +74,7 @@ impl LoadsTo for UnrolledCircle {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub enum Number<M> {
+pub enum Point<M> {
     Var {
         id: usize
     },
@@ -79,8 +82,78 @@ pub enum Number<M> {
         k: LineExpr<M>,
         l: LineExpr<M>
     },
+    Average {
+        items: Vec<PointExpr<M>>
+    },
     CircleCenter {
         circle: CircleExpr<M>
+    },
+    Entity {
+        id: usize
+    }
+}
+
+pub type PointExpr<M> = Expr<Point<M>, M>;
+
+impl FromUnrolled<UnrolledPoint> for PointExpr<()> {
+    fn load(expr: &Unrolled<UnrolledPoint>, math: &mut Expand) -> Self {
+        let kind = match expr.get_data() {
+            UnrolledPoint::LineLineIntersection(a, b) => Point::LineLineIntersection {
+                k: math.load(a),
+                l: math.load(b)
+            },
+            UnrolledPoint::Average(exprs) => Point::Average {
+                items: exprs.iter().map(|x| math.load(x)).collect()
+            },
+            UnrolledPoint::CircleCenter(circle) => {
+                match circle.get_data() {
+                    UnrolledCircle::Circle(center, _) => return math.load(center),
+                    _ => unreachable!()
+                }
+            },
+            UnrolledPoint::Free => Point::Entity { id: math.add_point() },
+            _ => unreachable!()
+        };
+
+        Self {
+            kind: Box::new(kind),
+            meta: ()
+        }
+    }
+}
+
+impl<M: Ord> Normalize for Point<M> {
+    fn normalize(&mut self) {
+        match self {
+            Point::Entity { .. }
+            | Point::Var { .. } => (),
+            Point::LineLineIntersection { k, l } => {
+                k.normalize();
+                l.normalize();
+
+                if k > l {
+                    mem::swap(k, l);
+                }
+            }
+            Point::Average { items } => {
+                for item in items {
+                    item.normalize();
+                }
+
+                items.sort();
+            }
+            Point::CircleCenter { circle } => circle.normalize(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Number<M> {
+    Var {
+        id: usize
+    },
+    Average {
+        items: Vec<NumberExpr<M>>
     },
     Entity {
         id: usize
@@ -93,41 +166,41 @@ pub enum Number<M> {
         times: Vec<NumberExpr<M>>,
         by: Vec<NumberExpr<M>>
     },
+    Const {
+        value: ProcNum
+    },
     Power {
         value: NumberExpr<M>,
         exponent: CompExponent
     },
     PointPointDistance {
-        p: NumberExpr<M>,
-        q: NumberExpr<M>
+        p: PointExpr<M>,
+        q: PointExpr<M>
     },
     PointLineDistance {
-        p: NumberExpr<M>,
+        p: PointExpr<M>,
         k: LineExpr<M>
     },
     ThreePointAngle {
-        p: NumberExpr<M>,
-        q: NumberExpr<M>,
-        r: NumberExpr<M>
+        p: PointExpr<M>,
+        q: PointExpr<M>,
+        r: PointExpr<M>
     },
     ThreePointAngleDir {
-        p: NumberExpr<M>,
-        q: NumberExpr<M>,
-        r: NumberExpr<M>
+        p: PointExpr<M>,
+        q: PointExpr<M>,
+        r: PointExpr<M>
     },
     TwoLineAngle {
         k: LineExpr<M>,
         l: LineExpr<M>
     },
     PointX {
-        point: NumberExpr<M>
+        point: PointExpr<M>
     },
     PointY {
-        point: NumberExpr<M>
-    },
-    Const {
-        value: ProcNum
-    },
+        point: PointExpr<M>
+    }
 }
 
 pub type NumberExpr<M> = Expr<Number<M>, M>;
@@ -138,33 +211,6 @@ impl<M> Var for Number<M> {
     }
 }
 
-impl FromUnrolled<UnrolledPoint> for NumberExpr<()> {
-    fn load(expr: &Unrolled<UnrolledPoint>, math: &mut Expand) -> Self {
-        let kind = match expr.get_data() {
-            UnrolledPoint::LineLineIntersection(a, b) => Number::LineLineIntersection {
-                k: math.load(a),
-                l: math.load(b)
-            },
-            UnrolledPoint::Average(exprs) => Number::Average {
-                items: exprs.iter().map(|x| math.load(x)).collect()
-            },
-            UnrolledPoint::CircleCenter(circle) => {
-                match circle.get_data() {
-                    UnrolledCircle::Circle(center, _) => return math.load(center),
-                    _ => unreachable!()
-                }
-            },
-            UnrolledPoint::Free => Number::Entity { id: math.add_point() },
-            _ => unreachable!()
-        };
-
-        Self {
-            kind: Box::new(kind),
-            meta: ()
-        }
-    }
-}
-
 fn fix_dst(expr: NumberExpr<()>, unit: Option<ComplexUnit>, math: &mut Expand) -> NumberExpr<()> {
     match unit {
         None => expr,
@@ -172,8 +218,6 @@ fn fix_dst(expr: NumberExpr<()>, unit: Option<ComplexUnit>, math: &mut Expand) -
             if unit.0[SimpleUnit::Distance as usize].is_zero() {
                 expr
             } else {
-                let math
-
                 Expr::new(Number::Product {
                     times: vec![expr, Expr::new(Number::Power {
                         value: math.get_dst_var(),
@@ -186,106 +230,12 @@ fn fix_dst(expr: NumberExpr<()>, unit: Option<ComplexUnit>, math: &mut Expand) -
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct Merge<T, I, J>
-where T: Ord, I: Iterator<Item = T>, J: Iterator<Item = T> {
-    i: Peekable<I>,
-    j: Peekable<J>
-}
-
-impl<T: Ord, I: Iterator<Item = T>, J: Iterator<Item = T>> Merge<T, I, J> {
-    #[must_use]
-    pub fn new<A: IntoIterator<IntoIter = I>, B: IntoIterator<IntoIter = J>>(a: A, b: B) -> Self {
-        Self {
-            i: a.into_iter().peekable(),
-            j: b.into_iter().peekable()
-        }
-    }
-
-    #[must_use]
-    pub fn empty() -> Self {
-        Self::new(None, None)
-    }
-
-    #[must_use]
-    pub fn merge_with<It: IntoIterator<Item = T>>(self, other: It) -> Merge<T, Self, It::IntoIter> {
-        Merge::new(self, other)
-    }
-}
-
-impl<T: Ord, I: Iterator<Item = T>, J: Iterator<Item = T>> Iterator for Merge<T, I, J> {
-    type Item = T;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if let Some(i_item) = self.i.peek() {
-            if let Some(j_item) = self.j.peek() {
-                if j_item > i_item {
-                    self.i.next()
-                } else {
-                    self.j.next()
-                }
-            } else {
-                self.i.next()
-            }
-        } else {
-            self.j.next()
-        }
-    }
-}
-
-fn normalize_sum(plus: &mut Vec<NumberExpr<()>>, minus: &mut Vec<NumberExpr<()>>) {
-    let plus_v = mem::take(plus);
-    let minus_v = mem::take(minus);
-
-    let mut constant = ProcNum::zero();
-
-    let mut plus_final = Vec::new();
-    let mut minus_final = Vec::new();
-
-    for item in plus_v {
-        match *item.kind {
-            Number::Sum {
-                plus, minus
-            } => {
-                plus_final = Merge::new(plus_final, plus).collect();
-                minus_final = Merge::new(minus_final, minus).collect();
-            }
-            Number::Const { value } => constant += value,
-            kind => {
-                plus_final = Merge::new(plus_final, Some(Expr::new(kind))).collect();
-            }
-        }
-    }
-
-    for item in minus_v {
-        match *item.kind {
-            Number::Sum {
-                plus, minus
-            } => {
-                plus_final = Merge::new(plus_final, minus).collect();
-                minus_final = Merge::new(minus_final, plus).collect();
-            }
-            Number::Const { value } => constant -= value,
-            kind => {
-                minus_final = Merge::new(minus_final, Some(Expr::new(kind))).collect();
-            }
-        }
-    }
-
-    plus_final.push(Expr::new(Number::Const { value: constant }));
-
-    *plus = plus_final;
-    *minus = minus_final;
-}
-
 impl FromUnrolled<unroll::Scalar> for NumberExpr<()> {
     fn load(expr: &Unrolled<unroll::Scalar>, math: &mut Expand) -> Self {
         let mut kind = match expr.get_data() {
-            UnrolledScalar::Add(a, b) => {
-                Number::Sum {
-                    plus: vec![math.load(a)],
-                    minus: vec![math.load(b)]
-                }
+            UnrolledScalar::Add(a, b) => Number::Sum {
+                plus: vec![math.load(a), math.load(b)],
+                minus: Vec::new()
             },
             UnrolledScalar::Subtract(a, b) => Number::Sum {
                 plus: vec![math.load(a)],
@@ -299,21 +249,8 @@ impl FromUnrolled<unroll::Scalar> for NumberExpr<()> {
                 times: vec![math.load(a)],
                 by: vec![math.load(b)]
             },
-            UnrolledScalar::Average(exprs) => {
-                let mut plus = exprs.iter().map(|x| math.load(x)).collect();
-                let mut minus = Vec::new();
-
-                normalize_sum(&mut plus, &mut minus);
-
-                Number::Product {
-                    times: vec![Expr::new(Number::Sum {
-                        plus,
-                        minus
-                    })],
-                    by: vec![Expr::new(Number::Const {
-                        value: ProcNum::from_usize(exprs.len()).unwrap()
-                    })]
-                }
+            UnrolledScalar::Average(exprs) => Number::Average {
+                items: exprs.iter().map(|x| math.load(x)).collect()
             },
             UnrolledScalar::CircleRadius(circle) => {
                 match circle.get_data() {
@@ -364,77 +301,36 @@ impl FromUnrolled<unroll::Scalar> for NumberExpr<()> {
             _ => unreachable!()
         };
 
-        match &mut kind {
-            Number::Var { .. }
-            | Number::CircleCenter { .. }
-            | Number::Entity { .. } => (),
-            Number::LineLineIntersection { k, l } => {
-                if k > l {
-                    mem::swap(k, l);
-                }
-            }
-            Number::Average { items } => items.sort(),
-            Number::Sum { plus, minus } => {
-                normalize_sum(plus, minus);
-            }
-            Number::Product { times, by } => {
-                let times_v = mem::take(times);
-                let by_v = mem::take(by);
-
-                let mut constant = ProcNum::one();
-
-                let mut times_final = Vec::new();
-                let mut by_final = Vec::new();
-
-                for item in times_v {
-                    match *item.kind {
-                        Number::Product {
-                            times, by
-                        } => {
-                            times_final = Merge::new(times_final, times).collect();
-                            by_final = Merge::new(by_final, by).collect();
-                        }
-                        Number::Const { value } => constant *= value,
-                        kind => {
-                            times_final = Merge::new(times_final, Some(Expr::new(kind))).collect();
-                        }
-                    }
-                }
-
-                for item in by_v {
-                    match *item.kind {
-                        Number::Product {
-                            times, by
-                        } => {
-                            times_final = Merge::new(times_final, by).collect();
-                            by_final = Merge::new(by_final, times).collect();
-                        }
-                        Number::Const { value } => constant /= value,
-                        kind => {
-                            by_final = Merge::new(by_final, Some(Expr::new(kind))).collect();
-                        }
-                    }
-                }
-
-                times_final.push(Expr::new(Number::Const { value: constant }));
-
-                *times = times_final;
-                *by = by_final;
-            }
-            Number::Power { .. } => {}
-            Number::PointPointDistance { .. } => {}
-            Number::PointLineDistance { .. } => {}
-            Number::ThreePointAngle { .. } => {}
-            Number::ThreePointAngleDir { .. } => {}
-            Number::TwoLineAngle { .. } => {}
-            Number::PointX { .. } => {}
-            Number::PointY { .. } => {}
-            Number::Const { .. } => {}
-        }
-
         Self {
             kind: Box::new(kind),
             meta: ()
+        }
+    }
+}
+
+impl<M: Ord> Normalize for Number<M> {
+    fn normalize(&mut self) {
+        match self {
+            Self::Var { .. } => (),
+            Self::Average { items } => {
+                for item in items {
+                    item.normalize();
+                }
+
+                items.sort();
+            },
+            Self::Entity { id } => todo!(),
+            Self::Sum { plus, minus } => todo!(),
+            Self::Product { times, by } => todo!(),
+            Self::Const { value } => todo!(),
+            Self::Power { value, exponent } => todo!(),
+            Self::PointPointDistance { p, q } => todo!(),
+            Self::PointLineDistance { p, k } => todo!(),
+            Self::ThreePointAngle { p, q, r } => todo!(),
+            Self::ThreePointAngleDir { p, q, r } => todo!(),
+            Self::TwoLineAngle { k, l } => todo!(),
+            Self::PointX { point } => todo!(),
+            Self::PointY { point } => todo!(),
         }
     }
 }
@@ -449,23 +345,23 @@ pub enum Line<M> {
     },
     /// Normalized iff `p` and `q` are in ascending order
     PointPoint {
-        p: NumberExpr<M>,
-        q: NumberExpr<M>
+        p: PointExpr<M>,
+        q: PointExpr<M>
     },
     /// Normalized iff `a` and `c` are in ascending order (`b` must stay in the middle)
     AngleBisector {
-        a: NumberExpr<M>,
-        b: NumberExpr<M>,
-        c: NumberExpr<M>
+        a: PointExpr<M>,
+        b: PointExpr<M>,
+        c: PointExpr<M>
     },
     /// Always normalized
     ParallelThrough {
-        point: NumberExpr<M>,
+        point: PointExpr<M>,
         line: LineExpr<M>
     },
     /// Always normalized
     PerpendicularThrough {
-        point: NumberExpr<M>,
+        point: PointExpr<M>,
         line: LineExpr<M>
     }
 }
@@ -535,25 +431,61 @@ impl FromUnrolled<UnrolledLine> for LineExpr<()> {
             _ => unreachable!()
         };
 
-        // Normalize
-        match &mut kind {
-            // Normalized at the point of construction
-            Line::ParallelThrough { .. }
-            | Line::PerpendicularThrough { .. }
-            | Line::Var { .. } => (),
-            // Reorder if necessary
-            Line::PointPoint { p, q }
-            | Line::AngleBisector { a: p, b: _, c: q } => {
-                if p > q {
-                    mem::swap(p, q);
-                }
-            }
-        }
-
         Self {
             kind: Box::new(kind),
             meta: ()
         }
+    }
+}
+
+impl<M: Ord> Normalize for Line<M> {
+    fn normalize(&mut self) {
+        // Simplification.
+        *self = match *self {
+            Self::ParallelThrough { mut point, mut line } => {
+                point.normalize();
+                line.normalize();
+
+                match *line.kind {
+                    Self::ParallelThrough { line, .. } => Self::ParallelThrough { point, line },
+                    Self::PerpendicularThrough { line, .. } => Self::PerpendicularThrough { point, line },
+                    _ => Self::ParallelThrough { point, line }
+                }
+            }
+            Self::PerpendicularThrough { mut point, mut line } => {
+                point.normalize();
+                line.normalize();
+
+                match *line.kind { 
+                    Self::ParallelThrough { line, .. } => Self::PerpendicularThrough { point, line },
+                    Self::PerpendicularThrough { line, .. } => Self::ParallelThrough { point, line },
+                    _ => Self::PerpendicularThrough { point, line }
+                }
+            }
+            ln @ Self::Var { .. } => ln,
+            // Reorder if necessary
+            Self::PointPoint { mut p, mut q } => {
+                p.normalize();
+                q.normalize();
+
+                if p > q {
+                    mem::swap(&mut p, &mut q);
+                }
+
+                Self::PointPoint { p, q }
+            }
+            Self::AngleBisector { mut a, mut b, mut c } => {
+                a.normalize();
+                b.normalize();
+                c.normalize();
+
+                if a > c {
+                    mem::swap(&mut a, &mut c);
+                }
+
+                Self::AngleBisector { a, b, c }
+            }
+        };
     }
 }
 
@@ -563,15 +495,28 @@ pub enum Circle<M> {
         id: usize
     },
     Construct {
-        center: NumberExpr<M>,
+        center: PointExpr<M>,
         radius: NumberExpr<M>
     }
 }
 
 pub type CircleExpr<M> = Expr<Circle<M>, M>;
 
+impl<M: Ord> Normalize for Circle<M> {
+    fn normalize(&mut self) {
+        match self {
+            Circle::Var { .. } => (),
+            Circle::Construct { mut center, mut radius } => {
+                center.normalize();
+                radius.normalize();
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum Any<M> {
+    Point(Point<M>),
     Number(Number<M>),
     Line(Line<M>)
 }
@@ -590,6 +535,49 @@ impl<M> From<Line<M>> for Any<M> {
     }
 }
 
+impl<M> From<Point<M>> for Any<M> {
+    fn from(value: Point<M>) -> Self {
+        Self::Point(value)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct AlwaysEq<T>(T);
+
+impl<T> PartialEq for AlwaysEq<T> {
+    fn eq(&self, _: &Self) -> bool {
+        true
+    }
+}
+
+impl<T> Eq for AlwaysEq<T> {}
+
+impl<T> PartialOrd for AlwaysEq<T> {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl<T> Ord for AlwaysEq<T> {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        std::cmp::Ordering::Equal
+    }
+}
+
+impl<T> Deref for AlwaysEq<T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<T> DerefMut for AlwaysEq<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Expr<T, M> {
     pub kind: Box<T>,
@@ -602,6 +590,12 @@ impl<T: Var> Var for Expr<T, ()> {
             kind: Box::new(T::var(id)),
             meta: ()
         }
+    }
+}
+
+impl<T: Normalize, M> Normalize for Expr<T, M> {
+    fn normalize(&mut self) {
+        self.kind.normalize();
     }
 }
 
@@ -831,10 +825,6 @@ pub fn load_script(input: &str) -> Result<(Adjusted, Figure), Vec<Error>> {
 
 
     Ok((
-        adjusted,
-        Figure {
-            items: Vec::new(),
-            variables: Vec::new()
-        },
+        todo!()
     ))
 }
