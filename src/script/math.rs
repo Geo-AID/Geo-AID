@@ -7,6 +7,7 @@ use num_traits::Zero;
 use crate::generator::AdjustableTemplate;
 use crate::script::figure::Item;
 use crate::script::token::number::{CompExponent, ProcNum};
+use crate::script::unroll::figure::Node;
 
 use super::{figure::Figure, unroll::{self, Displayed, Expr as Unrolled, UnrolledRule, UnrolledRuleKind,
                                      Point as UnrolledPoint, Line as UnrolledLine, Circle as UnrolledCircle, ScalarData as UnrolledScalar}, Error, ComplexUnit, SimpleUnit};
@@ -319,7 +320,7 @@ impl<M: Ord> Normalize for Number<M> {
 
                 items.sort();
             },
-            Self::Entity { id } => todo!(),
+            Self::Entity { .. } => todo!(),
             Self::Sum { plus, minus } => todo!(),
             Self::Product { times, by } => todo!(),
             Self::Const { value } => todo!(),
@@ -441,7 +442,7 @@ impl FromUnrolled<UnrolledLine> for LineExpr<()> {
 impl<M: Ord> Normalize for Line<M> {
     fn normalize(&mut self) {
         // Simplification.
-        *self = match *self {
+        *self = match self {
             Self::ParallelThrough { mut point, mut line } => {
                 point.normalize();
                 line.normalize();
@@ -559,7 +560,7 @@ impl<T> PartialOrd for AlwaysEq<T> {
 }
 
 impl<T> Ord for AlwaysEq<T> {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+    fn cmp(&self, _other: &Self) -> std::cmp::Ordering {
         std::cmp::Ordering::Equal
     }
 }
@@ -640,7 +641,8 @@ impl<T, M> Expr<T, M> where Any<M>: From<T> {
 /// * their operands are sorted in ascending order
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Rule<M> {
-    Eq(NumberExpr<M>, NumberExpr<M>),
+    PointEq(PointExpr<M>, PointExpr<M>),
+    NumberEq(NumberExpr<M>, NumberExpr<M>),
     Lt(NumberExpr<M>, NumberExpr<M>),
     Gt(NumberExpr<M>, NumberExpr<M>),
     Alternative(Vec<Rule<M>>),
