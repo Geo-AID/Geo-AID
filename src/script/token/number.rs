@@ -1,7 +1,7 @@
 use std::{fmt::Display, mem};
 use std::cmp::Ordering;
 use std::fmt::Formatter;
-use std::ops::Add;
+use std::ops::{Add, AddAssign, SubAssign};
 use num_bigint::BigInt;
 use num_complex::Complex;
 
@@ -200,6 +200,32 @@ impl Display for ParsedNumber {
 /// Number for processing
 #[derive(Debug, Clone)]
 pub struct ProcNum(Complex<BigRational>);
+
+impl SubAssign for ProcNum {
+    fn sub_assign(&mut self, rhs: Self) {
+        self.0 -= rhs.0;
+    }
+}
+
+impl AddAssign for ProcNum {
+    fn add_assign(&mut self, rhs: Self) {
+        self.0 += rhs.0;
+    }
+}
+
+impl FromPrimitive for ProcNum {
+    fn from_i64(n: i64) -> Option<Self> {
+        Some(Self(Complex::from_i64(n)?))
+    }
+
+    fn from_u64(n: u64) -> Option<Self> {
+        Some(Self(Complex::from_u64(n)?))
+    }
+
+    fn from_f32(n: f32) -> Option<Self> {
+        Some(Self(Complex::from_f32(n)?))
+    }
+}
 
 impl Add<Self> for ProcNum {
     type Output = Self;

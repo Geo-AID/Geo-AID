@@ -1,16 +1,47 @@
+/*
+ Copyright (c) 2024 Michał Wilczek, Michał Margos
+
+ Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
+ associated documentation files (the “Software”), to deal in the Software without restriction,
+ including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
+ and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do
+ so, subject to the following conditions:
+
+ The above copyright notice and this permission notice shall be included in all copies or substantial
+ portions of the Software.
+
+ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+ FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS
+ OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+ WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ */
+
 use std::cell::OnceCell;
 use std::collections::HashMap;
+use std::iter::Peekable;
 use std::mem;
-use std::ops::{Deref, DerefMut};
-use num_traits::Zero;
+use std::ops::{Deref, DerefMut, SubAssign};
+use derive_recursive::Recursive;
+use num_traits::{FromPrimitive, Zero};
 
 use crate::generator::AdjustableTemplate;
 use crate::script::figure::Item;
+use crate::script::math::optimizations::ZeroLineDst;
 use crate::script::token::number::{CompExponent, ProcNum};
 use crate::script::unroll::figure::Node;
 
 use super::{figure::Figure, unroll::{self, Displayed, Expr as Unrolled, UnrolledRule, UnrolledRuleKind,
                                      Point as UnrolledPoint, Line as UnrolledLine, Circle as UnrolledCircle, ScalarData as UnrolledScalar}, Error, ComplexUnit, SimpleUnit};
+
+mod optimizations;
+
+trait HandleEntity {
+    fn contains_entity(&self, entity: usize) -> bool;
+
+    fn map_entity(&mut self, with: &[usize]);
+}
 
 trait Var {
     fn var(id: usize) -> Self;
@@ -74,15 +105,24 @@ impl LoadsTo for UnrolledCircle {
     type Output = CircleExpr<()>;
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Recursive)]
+#[recursive(
+    impl<M> HandleEntity for Self<M> {
+        fn contains_entity(&self, entity: EntityId) -> bool {
+            aggregate = ||
+        }
+    }
+)]
 pub enum Point<M> {
     Var {
         id: usize
     },
+    /// k and l must be ordered
     LineLineIntersection {
         k: LineExpr<M>,
         l: LineExpr<M>
     },
+    /// items must be sorted
     Average {
         items: Vec<PointExpr<M>>
     },
@@ -148,21 +188,21 @@ impl<M: Ord> Normalize for Point<M> {
     }
 }
 
+/// Normalized if has sorted parameters and potential additional conditions are met.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Number<M> {
     Var {
         id: usize
     },
-    Average {
-        items: Vec<NumberExpr<M>>
-    },
     Entity {
         id: usize
     },
+    /// plus and minus must be sorted and must not contain other sums. An aggregated constant, if any, must be at the end.
     Sum {
         plus: Vec<NumberExpr<M>>,
         minus: Vec<NumberExpr<M>>
     },
+    /// times and by must be sorted and must not contain other sums. An aggregated constant, if any, must be at the end.
     Product {
         times: Vec<NumberExpr<M>>,
         by: Vec<NumberExpr<M>>
@@ -174,6 +214,7 @@ pub enum Number<M> {
         value: NumberExpr<M>,
         exponent: CompExponent
     },
+    /// p and q must be ordered
     PointPointDistance {
         p: PointExpr<M>,
         q: PointExpr<M>
@@ -182,16 +223,19 @@ pub enum Number<M> {
         p: PointExpr<M>,
         k: LineExpr<M>
     },
+    /// p and r must be ordered
     ThreePointAngle {
         p: PointExpr<M>,
         q: PointExpr<M>,
         r: PointExpr<M>
     },
+    /// p and r must be ordered
     ThreePointAngleDir {
         p: PointExpr<M>,
         q: PointExpr<M>,
         r: PointExpr<M>
     },
+    /// k and l must be ordered
     TwoLineAngle {
         k: LineExpr<M>,
         l: LineExpr<M>
@@ -205,6 +249,39 @@ pub enum Number<M> {
 }
 
 pub type NumberExpr<M> = Expr<Number<M>, M>;
+
+impl<M> HandleEntity for Number<M> {
+    fn contains_entity(&self, entity: usize) -> bool {
+        match self {
+            Number::Const { .. }
+            | Number::Var { .. } => false,
+            Number::Entity { id } => *id == entity,
+            Number::Sum { plus: a, minus: b }
+            | Number::Product { times: a, by: b } => {
+                a.iter().any(|x| x.contains_entity(entity))
+                || b.iter().any(|x| x.contains_entity(entity))
+            }
+            Number::Power { value: v, .. } => v.contains_entity(entity),
+            Number::PointPointDistance { p, q } => {
+                p.contains_entity(entity) || q.contains_entity(entity)
+            }
+            Number::PointLineDistance { p, k } => {
+                p.contains_entity(entity) || k.contains_entity(entity)
+            }
+            Number::ThreePointAngle { p, q, r }
+            | Number::ThreePointAngleDir { p, q, r } => {
+                p.contains_entity(entity)
+                || q.contains_entity(entity)
+                || r.contains_entity(entity)
+            }
+            Number::TwoLineAngle { k, l } => {
+                k.contains_entity(entity) || l.contains_entity(entity)
+            }
+            Number::PointX { point }
+            | Number::PointY { point } => point.contains_entity(entity)
+        }
+    }
+}
 
 impl<M> Var for Number<M> {
     fn var(id: usize) -> Self {
@@ -250,8 +327,12 @@ impl FromUnrolled<unroll::Scalar> for NumberExpr<()> {
                 times: vec![math.load(a)],
                 by: vec![math.load(b)]
             },
-            UnrolledScalar::Average(exprs) => Number::Average {
-                items: exprs.iter().map(|x| math.load(x)).collect()
+            UnrolledScalar::Average(exprs) => Number::Product {
+                times: vec![Expr::new(Number::Sum {
+                    plus: exprs.iter().map(|x| math.load(x)).collect(),
+                    minus: Vec::new()
+                })],
+                by: vec![Expr::new(Number::Const { value: ProcNum::from_usize(exprs.len()).unwrap() })]
             },
             UnrolledScalar::CircleRadius(circle) => {
                 match circle.get_data() {
@@ -309,29 +390,196 @@ impl FromUnrolled<unroll::Scalar> for NumberExpr<()> {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct Merge<T, I, J>
+    where T: Ord, I: Iterator<Item = T>, J: Iterator<Item = T> {
+    i: Peekable<I>,
+    j: Peekable<J>
+}
+
+impl<T: Ord, I: Iterator<Item = T>, J: Iterator<Item = T>> Merge<T, I, J> {
+    #[must_use]
+    pub fn new<A: IntoIterator<IntoIter = I>, B: IntoIterator<IntoIter = J>>(a: A, b: B) -> Self {
+        Self {
+            i: a.into_iter().peekable(),
+            j: b.into_iter().peekable()
+        }
+    }
+
+    #[must_use]
+    pub fn empty() -> Self {
+        Self::new(None, None)
+    }
+
+    #[must_use]
+    pub fn merge_with<It: IntoIterator<Item = T>>(self, other: It) -> Merge<T, Self, It::IntoIter> {
+        Merge::new(self, other)
+    }
+}
+
+impl<T: Ord, I: Iterator<Item = T>, J: Iterator<Item = T>> Iterator for Merge<T, I, J> {
+    type Item = T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if let Some(i_item) = self.i.peek() {
+            if let Some(j_item) = self.j.peek() {
+                if j_item > i_item {
+                    self.i.next()
+                } else {
+                    self.j.next()
+                }
+            } else {
+                self.i.next()
+            }
+        } else {
+            self.j.next()
+        }
+    }
+}
+
+fn normalize_sum(plus: &mut Vec<NumberExpr<()>>, minus: &mut Vec<NumberExpr<()>>) {
+    let plus_v = mem::take(plus);
+    let minus_v = mem::take(minus);
+
+    let mut constant = ProcNum::zero();
+
+    let mut plus_final = Vec::new();
+    let mut minus_final = Vec::new();
+
+    for mut item in plus_v {
+        item.normalize();
+
+        match *item.kind {
+            Number::Sum {
+                plus, minus
+            } => {
+                plus_final = Merge::new(plus_final, plus).collect();
+                minus_final = Merge::new(minus_final, minus).collect();
+            }
+            Number::Const { value } => constant += value,
+            kind => {
+                plus_final = Merge::new(plus_final, Some(Expr::new(kind))).collect();
+            }
+        }
+    }
+
+    for item in minus_v {
+        match *item.kind {
+            Number::Sum {
+                plus, minus
+            } => {
+                plus_final = Merge::new(plus_final, minus).collect();
+                minus_final = Merge::new(minus_final, plus).collect();
+            }
+            Number::Const { value } => constant -= value,
+            kind => {
+                minus_final = Merge::new(minus_final, Some(Expr::new(kind))).collect();
+            }
+        }
+    }
+
+    if !constant.is_zero() {
+        plus_final.push(Expr::new(Number::Const { value: constant }));
+    }
+
+    *plus = plus_final;
+    *minus = minus_final;
+}
+
+fn normalize_product(times: &mut Vec<NumberExpr<()>>, by: &mut Vec<NumberExpr<()>>) {
+    let times_v = mem::take(times);
+    let by_v = mem::take(by);
+
+    let mut constant = ProcNum::one();
+
+    let mut times_final = Vec::new();
+    let mut by_final = Vec::new();
+
+    for mut item in times_v {
+        item.normalize();
+
+        match *item.kind {
+            Number::Product {
+                times, by
+            } => {
+                times_final = Merge::new(times_final, times).collect();
+                by_final = Merge::new(by_final, by).collect();
+            }
+            Number::Const { value } => constant *= value,
+            kind => {
+                times_final = Merge::new(times_final, Some(Expr::new(kind))).collect();
+            }
+        }
+    }
+
+    for item in by_v {
+        match *item.kind {
+            Number::Product {
+                times, by
+            } => {
+                times_final = Merge::new(times_final, by).collect();
+                by_final = Merge::new(by_final, times).collect();
+            }
+            Number::Const { value } => constant /= value,
+            kind => {
+                by_final = Merge::new(by_final, Some(Expr::new(kind))).collect();
+            }
+        }
+    }
+
+    if !constant.is_one() {
+        times_final.push(Expr::new(Number::Const { value: constant }));
+    }
+
+    *times = times_final;
+    *by = by_final;
+}
+
 impl<M: Ord> Normalize for Number<M> {
     fn normalize(&mut self) {
         match self {
-            Self::Var { .. } => (),
-            Self::Average { items } => {
-                for item in items {
-                    item.normalize();
-                }
+            Self::Var { .. }
+            | Self::Const { .. }
+            | Self::Entity { .. } => (),
+            Self::Sum { plus, minus } => {
+                normalize_sum(plus, minus);
+            }
+            Self::Product { times, by } => {
+                normalize_product(times, by);
+            }
+            Self::Power { value, .. } => value.normalize(),
+            Self::PointPointDistance { p, q } => {
+                p.normalize();
+                q.normalize();
 
-                items.sort();
-            },
-            Self::Entity { .. } => todo!(),
-            Self::Sum { plus, minus } => todo!(),
-            Self::Product { times, by } => todo!(),
-            Self::Const { value } => todo!(),
-            Self::Power { value, exponent } => todo!(),
-            Self::PointPointDistance { p, q } => todo!(),
-            Self::PointLineDistance { p, k } => todo!(),
-            Self::ThreePointAngle { p, q, r } => todo!(),
-            Self::ThreePointAngleDir { p, q, r } => todo!(),
-            Self::TwoLineAngle { k, l } => todo!(),
-            Self::PointX { point } => todo!(),
-            Self::PointY { point } => todo!(),
+                if p > q {
+                    mem::swap(p, q);
+                }
+            }
+            Self::PointLineDistance { p, k } => {
+                p.normalize();
+                k.normalize();
+            }
+            Self::ThreePointAngle { p, q, r }
+            | Self::ThreePointAngleDir { p, q, r } => {
+                p.normalize();
+                q.normalize();
+                r.normalize();
+
+                if p > r {
+                    mem::swap(p, r);
+                }
+            }
+            Self::TwoLineAngle { k, l } => {
+                k.normalize();
+                l.normalize();
+
+                if k > l {
+                    mem::swap(k, l);
+                }
+            }
+            Self::PointX { point }
+            | Self::PointY { point } => point.normalize(),
         }
     }
 }
@@ -369,6 +617,24 @@ pub enum Line<M> {
 
 pub type LineExpr<M> = Expr<Line<M>, M>;
 
+impl<M> HandleEntity for Line<M> {
+    fn contains_entity(&self, entity: usize) -> bool {
+        match self {
+            Line::Var { .. } => false,
+            Line::PointPoint { p, q } => {
+                p.contains_entity(entity) || q.contains_entity(entity)
+            }
+            Line::AngleBisector { a, b, c } => {
+                a.contains_entity(entity) || b.contains_entity(entity) || c.contains_entity(entity)
+            }
+            Line::ParallelThrough { point, line }
+            | Line::PerpendicularThrough { point, line } => {
+                point.contains_entity(entity) || line.contains_entity(entity)
+            }
+        }
+    }
+}
+
 impl<M> Var for Line<M> {
     fn var(id: usize) -> Self {
         Self::Var { id }
@@ -377,7 +643,7 @@ impl<M> Var for Line<M> {
 
 impl FromUnrolled<UnrolledLine> for LineExpr<()> {
     fn load(expr: &Unrolled<UnrolledLine>, math: &mut Expand) -> Self {
-        let mut kind = match expr.get_data() {
+        let kind = match expr.get_data() {
             UnrolledLine::LineFromPoints(a, b) => Line::PointPoint {
                 p: math.load(a),
                 q: math.load(b)
@@ -463,7 +729,7 @@ impl<M: Ord> Normalize for Line<M> {
                     _ => Self::PerpendicularThrough { point, line }
                 }
             }
-            ln @ Self::Var { .. } => ln,
+            Self::Var { .. } => return,
             // Reorder if necessary
             Self::PointPoint { mut p, mut q } => {
                 p.normalize();
@@ -490,8 +756,10 @@ impl<M: Ord> Normalize for Line<M> {
     }
 }
 
+/// Normalized if its parameters are normalized and potential additional conditions are met.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Circle<M> {
+    /// Used to represent a variable in script or a variadic in a pattern.
     Var {
         id: usize
     },
@@ -502,6 +770,17 @@ pub enum Circle<M> {
 }
 
 pub type CircleExpr<M> = Expr<Circle<M>, M>;
+
+impl<M> HandleEntity for Circle<M> {
+    fn contains_entity(&self, entity: usize) -> bool {
+        match self {
+            Circle::Var { .. } => false,
+            Circle::Construct { center, radius } => {
+                center.contains_entity(entity) || radius.contains_entity(entity)
+            }
+        }
+    }
+}
 
 impl<M: Ord> Normalize for Circle<M> {
     fn normalize(&mut self) {
@@ -583,6 +862,12 @@ impl<T> DerefMut for AlwaysEq<T> {
 pub struct Expr<T, M> {
     pub kind: Box<T>,
     pub meta: M
+}
+
+impl<T: HandleEntity, M> HandleEntity for Expr<T, M> {
+    fn contains_entity(&self, entity: usize) -> bool {
+        self.kind.contains_entity(entity)
+    }
 }
 
 impl<T: Var> Var for Expr<T, ()> {
@@ -677,24 +962,34 @@ impl Rule<()> {
             UnrolledRuleKind::Bias(_) => Self::Bias
         };
 
-        // Normalize
-        match &mut mathed {
-            | Self::Eq(a, b)
+        mathed.normalize();
+
+        if rule.inverted {
+            Self::Invert(Box::new(mathed))
+        } else {
+            mathed
+        }
+    }
+}
+
+impl Normalize for Rule<()> {
+    fn normalize(&mut self) {
+        match self {
+            | Self::NumberEq(a, b)
             | Self::Gt(a, b)
             | Self::Lt(a, b) => {
                 if a > b {
                     mem::swap(a, b);
                 }
             }
+            Self::PointEq(a, b) => {
+                if a > b {
+                    mem::swap(a, b);
+                }
+            }
             Self::Alternative(v) => v.sort(),
             Self::Bias => (),
-            Self::Invert(_) => unreachable!()
-        }
-
-        if rule.inverted {
-            Self::Invert(Box::new(mathed))
-        } else {
-            mathed
+            Self::Invert(v) => v.normalize()
         }
     }
 }
@@ -722,7 +1017,18 @@ pub struct Entry {
 #[derive(Debug)]
 pub enum Entity {
     FreePoint,
-    FreeReal
+    PointOnLine(LineExpr<()>),
+    FreeReal,
+    Bind
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct EntityId(usize);
+
+impl HandleEntity for EntityId {
+    fn contains_entity(&self, entity: usize) -> bool {
+        entity == 
+    }
 }
 
 #[derive(Debug, Clone, Default)]
@@ -745,7 +1051,8 @@ impl Expand {
             loaded.try_into().unwrap()
         } else {
             // If expression has not been mathed yet, math it and put it into the record.
-            let loaded = Expr::load(expr, self);
+            let mut loaded = Expr::load(expr, self);
+            loaded.normalize();
             self.expr_map.insert( key, loaded.clone().into_any());
             loaded
         }
@@ -792,15 +1099,33 @@ impl Build {
     }
 }
 
+/// Tries to transform the rules so that they are simpler to process for the generator.
+///
+/// # Returns
+/// `true` if an optimization was performed. `false` otherwise.
+fn optimize_rules(rules: &mut Vec<Option<Rule<()>>>, entities: &mut [Entity]) -> bool {
+    let mut performed = false;
+    
+    for rule in rules {
+        performed = performed
+            | ZeroLineDst::process(rule, entities);
+    }
+
+    if performed {
+        rules.retain(Option::is_some);
+    }
+
+    performed
+}
+
 pub fn load_script(input: &str) -> Result<(Adjusted, Figure), Vec<Error>> {
     // Unroll script
-    // Expand rules & figure maximally (normalize at the point of expansion)
+    // Expand rules & figure maximally, normalize them
     // ---
     // Optimize rules and entities
     // Reduce entities
     // --- repeat
     // Turn entities into adjustables
-    // Ultimately reduce entities
     // Split rules & figure
     // Fold rules & figure separately
     // Assign reserved registers to figure expressions
@@ -809,21 +1134,34 @@ pub fn load_script(input: &str) -> Result<(Adjusted, Figure), Vec<Error>> {
     // Unroll script
     let (mut unrolled, nodes) = unroll::unroll(input)?;
 
-    // Expand figure
+    // Expand & normalize figure
     let mut build = Build::default();
     nodes.build(&mut build);
 
     // Move expand base
     let mut expand = build.expand;
 
-    // Expand rules
+    // Expand & normalize rules
     let mut rules = Vec::new();
 
     for rule in unrolled.take_rules() {
-        rules.push(Rule::load(&rule, &mut expand));
+        rules.push(Some(Rule::load(&rule, &mut expand)));
     }
 
-    // Fold & normalize rules
+    // The optimize cycle:
+    // 1. Optimize
+    // 2. Normalize
+    // 3. Repeat if any optimizations applied.
+
+    loop {
+        if !optimize_rules(&mut rules, &mut expand.entities) {
+            break;
+        }
+
+        for rule in rules.iter_mut().flatten() {
+            rule.normalize();
+        }
+    }
 
 
     Ok((
