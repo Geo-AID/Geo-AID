@@ -29,6 +29,7 @@ use std::{
 };
 
 use serde::Serialize;
+use crate::script::math::Entity;
 
 use self::{program::Value, critic::EvaluateProgram};
 
@@ -430,6 +431,17 @@ impl AdjustableTemplate {
     #[must_use]
     pub fn is_point(&self) -> bool {
         matches!(self, Self::Point | Self::PointOnLine | Self::PointOnCircle)
+    }
+}
+
+impl From<&Entity> for AdjustableTemplate {
+    fn from(value: &Entity) -> Self {
+        match value {
+            Entity::FreePoint => AdjustableTemplate::Point,
+            Entity::PointOnLine(_) => AdjustableTemplate::PointOnLine,
+            Entity::FreeReal => AdjustableTemplate::Real,
+            Entity::Bind(_) => unreachable!()
+        }
     }
 }
 

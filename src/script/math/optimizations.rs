@@ -19,12 +19,12 @@
  */
 
 use num_traits::Zero;
-use crate::script::math::{HandleEntity, Entity, Number, Point, Rule};
+use crate::script::math::{HandleEntity, Entity, Number, Point, Rule, SimpleRule};
 
 pub struct ZeroLineDst;
 
 impl ZeroLineDst {
-    pub fn process(rule: &mut Option<Rule<()>>, entities: &mut [Entity]) -> bool {
+    pub fn process(rule: &mut Option<SimpleRule>, entities: &mut [Entity]) -> bool {
         let Some(Rule::NumberEq(a, b)) = rule
             else { return false };
 
@@ -48,7 +48,7 @@ impl ZeroLineDst {
             return false;
         }
 
-        if !ln.contains_entity(*a) {
+        if !ln.contains_entity(*a, entities) {
             return false;
         }
 

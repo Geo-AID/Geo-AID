@@ -23,16 +23,11 @@ use std::{fmt::Display, str::FromStr};
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 use serde::Serialize;
+use crate::script::math::VarIndex;
 
 use crate::span;
 
-use super::{
-    math::AnyExpr,
-    parser::{FromProperty, Parse, PropertyValue},
-    token::{Ident, PointCollectionItem, Span},
-    unroll::most_similar,
-    Error,
-};
+use super::{parser::{FromProperty, Parse, PropertyValue}, token::{Ident, PointCollectionItem, Span}, unroll::most_similar, Error, math};
 
 pub const SPECIAL_MATH: [&str; 49] = [
     "alpha", "Alpha", "beta", "Beta", "gamma", "Gamma", "delta", "Delta", "epsilon", "Epsilon",
@@ -126,7 +121,7 @@ pub enum Item {
 #[derive(Debug, Default)]
 pub struct Figure {
     /// Variables used by the figure
-    pub variables: Vec<AnyExpr<usize>>,
+    pub variables: Vec<math::Expr<math::Any<VarIndex>, usize>>,
     /// Drawn items with meta
     pub items: Vec<Item>
 }

@@ -21,6 +21,7 @@
 use std::cell::OnceCell;
 use std::collections::HashMap;
 use std::iter::Peekable;
+use std::marker::PhantomData;
 use std::mem;
 use std::ops::{Deref, DerefMut, SubAssign};
 use derive_recursive::Recursive;
@@ -37,10 +38,47 @@ use super::{figure::Figure, unroll::{self, Displayed, Expr as Unrolled, Unrolled
 
 mod optimizations;
 
-trait HandleEntity {
-    fn contains_entity(&self, entity: usize) -> bool;
+trait HandleEntity<I: Indirection> {
+    fn contains_entity(&self, entity: EntityId, entities: &[Entity]) -> bool;
 
-    fn map_entity(&mut self, with: &[usize]);
+    fn map_entity(self, entity: EntityId, into: &Any<I>) -> Self;
+}
+
+fn map_entity_over<T, I: Indirection>(entity_id: EntityId, mapped: EntityId, into: &Any<I>) -> T
+    where Any<I>: TryInto<T> {
+    if entity_id == mapped {
+        into.clone().try_into().unwrap()
+    }
+}
+
+impl<I: Indirection> HandleEntity<I> for ProcNum {
+    fn contains_entity(&self, _entity: EntityId, _entities: &[Entity]) -> bool {
+        false
+    }
+
+    fn map_entity(self, _entity: EntityId, _into: &Any<I>) -> Self {
+        self
+    }
+}
+
+impl<I: Indirection, T: HandleEntity<I>> HandleEntity<I> for Box<T> {
+    fn contains_entity(&self, entity: EntityId, entities: &[Entity]) -> bool {
+        self.as_ref().contains_entity(entity, entities)
+    }
+
+    fn map_entity(self, entity: EntityId, into: &Any<I>) -> Self {
+        Self::new((*self).map_entity(entity, into))
+    }
+}
+
+impl<I: Indirection, T: HandleEntity<I>> HandleEntity<I> for Vec<T> {
+    fn contains_entity(&self, entity: EntityId, entities: &[Entity]) -> bool {
+        self.iter().any(|item| item.contains_entity(entity, entities))
+    }
+
+    fn map_entity(self, entity: EntityId, into: &Any<I>) -> Self {
+        self.into_iter().map(|x| x.map_entity(entity, into)).collect()
+    }
 }
 
 trait Var {
@@ -105,36 +143,92 @@ impl LoadsTo for UnrolledCircle {
     type Output = CircleExpr<()>;
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Recursive)]
-#[recursive(
-    impl<M> HandleEntity for Self<M> {
-        fn contains_entity(&self, entity: EntityId) -> bool {
-            aggregate = ||
-        }
-    }
-)]
-pub enum Point<M> {
-    Var {
-        id: usize
-    },
-    /// k and l must be ordered
-    LineLineIntersection {
-        k: LineExpr<M>,
-        l: LineExpr<M>
-    },
-    /// items must be sorted
-    Average {
-        items: Vec<PointExpr<M>>
-    },
-    CircleCenter {
-        circle: CircleExpr<M>
-    },
-    Entity {
-        id: usize
+pub trait Indirection {
+    type Point;
+    type Line;
+    type Number;
+    type Circle;
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct VarIndex(pub usize);
+
+impl Deref for VarIndex {
+    type Target = usize;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
     }
 }
 
-pub type PointExpr<M> = Expr<Point<M>, M>;
+impl DerefMut for VarIndex {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl Indirection for VarIndex {
+    type Point = Self;
+    type Line = Self;
+    type Number = Self;
+    type Circle = Self;
+}
+
+#[derive(Debug, Clone, Copy, Default, Ord, PartialOrd, Eq, PartialEq)]
+pub struct ExprTypes<M>(PhantomData<M>);
+
+impl<M> ExprTypes<M> {
+    #[must_use]
+    pub fn new() -> Self {
+        Self(PhantomData::default())
+    }
+}
+
+impl<M> Indirection for ExprTypes<M> {
+    type Point = PointExpr<M>;
+    type Line = LineExpr<M>;
+    type Number = NumberExpr<M>;
+    type Circle = CircleExpr<M>;
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Recursive)]
+#[recursive(
+    impl<I: Indirection> HandleEntity<I> for Self<I>
+    where
+        I::Point: HandleEntity<I>,
+        I::Line: HandleEntity<I>,
+        I::Circle: HandleEntity<I>,
+        I::Number: HandleEntity<I> {
+        fn contains_entity(&self, entity: EntityId, entities: &[Entity]) -> bool {
+            aggregate = ||
+        }
+
+        fn map_entity(self, entity: EntityId, into: &Any<I>) -> Self {
+            aggregate = {},
+            override_marker = override_map
+        }
+    }
+)]
+pub enum Point<I: Indirection> {
+    /// k and l must be ordered
+    LineLineIntersection {
+        k: I::Line,
+        l: I::Line
+    },
+    /// items must be sorted
+    Average {
+        items: Vec<I::Point>
+    },
+    CircleCenter {
+        circle: I::Circle
+    },
+    #[recursive(override_map = map_entity_over::<Self, I>)]
+    Entity {
+        id: EntityId
+    }
+}
+
+pub type PointExpr<M> = Expr<Point<ExprTypes<M>>, M>;
 
 impl FromUnrolled<UnrolledPoint> for PointExpr<()> {
     fn load(expr: &Unrolled<UnrolledPoint>, math: &mut Expand) -> Self {
@@ -163,11 +257,10 @@ impl FromUnrolled<UnrolledPoint> for PointExpr<()> {
     }
 }
 
-impl<M: Ord> Normalize for Point<M> {
+impl<M: Ord> Normalize for Point<ExprTypes<M>> {
     fn normalize(&mut self) {
         match self {
-            Point::Entity { .. }
-            | Point::Var { .. } => (),
+            Point::Entity { .. } => (),
             Point::LineLineIntersection { k, l } => {
                 k.normalize();
                 l.normalize();
@@ -189,105 +282,81 @@ impl<M: Ord> Normalize for Point<M> {
 }
 
 /// Normalized if has sorted parameters and potential additional conditions are met.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub enum Number<M> {
-    Var {
-        id: usize
-    },
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Recursive)]
+#[recursive(
+    impl<I: Indirection> HandleEntity<I> for Self<I>
+    where
+        I::Point: HandleEntity<I>,
+        I::Line: HandleEntity<I>,
+        I::Circle: HandleEntity<I>,
+        I::Number: HandleEntity<I> {
+        fn contains_entity(&self, entity: EntityId, entities: &[Entity]) -> bool {
+            aggregate = ||
+        }
+
+        fn map_entity(self, entity: EntityId, into: &Any<I>) -> Self {
+            aggregate = {},
+            override_marker = override_map
+        }
+    }
+)]
+pub enum Number<I: Indirection> {
+    #[recursive(override_map = map_entity_over::<Self, I>)]
     Entity {
-        id: usize
+        id: EntityId
     },
     /// plus and minus must be sorted and must not contain other sums. An aggregated constant, if any, must be at the end.
     Sum {
-        plus: Vec<NumberExpr<M>>,
-        minus: Vec<NumberExpr<M>>
+        plus: Vec<I::Number>,
+        minus: Vec<I::Number>
     },
     /// times and by must be sorted and must not contain other sums. An aggregated constant, if any, must be at the end.
     Product {
-        times: Vec<NumberExpr<M>>,
-        by: Vec<NumberExpr<M>>
+        times: Vec<I::Number>,
+        by: Vec<I::Number>
     },
     Const {
         value: ProcNum
     },
     Power {
-        value: NumberExpr<M>,
+        value: I::Number,
         exponent: CompExponent
     },
     /// p and q must be ordered
     PointPointDistance {
-        p: PointExpr<M>,
-        q: PointExpr<M>
+        p: I::Point,
+        q: I::Point
     },
     PointLineDistance {
-        p: PointExpr<M>,
-        k: LineExpr<M>
+        p: I::Point,
+        k: I::Line
     },
     /// p and r must be ordered
     ThreePointAngle {
-        p: PointExpr<M>,
-        q: PointExpr<M>,
-        r: PointExpr<M>
+        p: I::Point,
+        q: I::Point,
+        r: I::Point
     },
     /// p and r must be ordered
     ThreePointAngleDir {
-        p: PointExpr<M>,
-        q: PointExpr<M>,
-        r: PointExpr<M>
+        p: I::Point,
+        q: I::Point,
+        r: I::Point
     },
     /// k and l must be ordered
     TwoLineAngle {
-        k: LineExpr<M>,
-        l: LineExpr<M>
+        k: I::Line,
+        l: I::Line
     },
     PointX {
-        point: PointExpr<M>
+        point: I::Point
     },
     PointY {
-        point: PointExpr<M>
+        point: I::Point
     }
 }
 
-pub type NumberExpr<M> = Expr<Number<M>, M>;
-
-impl<M> HandleEntity for Number<M> {
-    fn contains_entity(&self, entity: usize) -> bool {
-        match self {
-            Number::Const { .. }
-            | Number::Var { .. } => false,
-            Number::Entity { id } => *id == entity,
-            Number::Sum { plus: a, minus: b }
-            | Number::Product { times: a, by: b } => {
-                a.iter().any(|x| x.contains_entity(entity))
-                || b.iter().any(|x| x.contains_entity(entity))
-            }
-            Number::Power { value: v, .. } => v.contains_entity(entity),
-            Number::PointPointDistance { p, q } => {
-                p.contains_entity(entity) || q.contains_entity(entity)
-            }
-            Number::PointLineDistance { p, k } => {
-                p.contains_entity(entity) || k.contains_entity(entity)
-            }
-            Number::ThreePointAngle { p, q, r }
-            | Number::ThreePointAngleDir { p, q, r } => {
-                p.contains_entity(entity)
-                || q.contains_entity(entity)
-                || r.contains_entity(entity)
-            }
-            Number::TwoLineAngle { k, l } => {
-                k.contains_entity(entity) || l.contains_entity(entity)
-            }
-            Number::PointX { point }
-            | Number::PointY { point } => point.contains_entity(entity)
-        }
-    }
-}
-
-impl<M> Var for Number<M> {
-    fn var(id: usize) -> Self {
-        Self::Var { id }
-    }
-}
+pub type NumberExpr<M> = Expr<Number<ExprTypes<M>>, M>;
 
 fn fix_dst(expr: NumberExpr<()>, unit: Option<ComplexUnit>, math: &mut Expand) -> NumberExpr<()> {
     match unit {
@@ -310,7 +379,7 @@ fn fix_dst(expr: NumberExpr<()>, unit: Option<ComplexUnit>, math: &mut Expand) -
 
 impl FromUnrolled<unroll::Scalar> for NumberExpr<()> {
     fn load(expr: &Unrolled<unroll::Scalar>, math: &mut Expand) -> Self {
-        let mut kind = match expr.get_data() {
+        let kind = match expr.get_data() {
             UnrolledScalar::Add(a, b) => Number::Sum {
                 plus: vec![math.load(a), math.load(b)],
                 minus: Vec::new()
@@ -535,7 +604,7 @@ fn normalize_product(times: &mut Vec<NumberExpr<()>>, by: &mut Vec<NumberExpr<()
     *by = by_final;
 }
 
-impl<M: Ord> Normalize for Number<M> {
+impl<M: Ord> Normalize for Number<ExprTypes<M>> {
     fn normalize(&mut self) {
         match self {
             Self::Var { .. }
@@ -586,60 +655,49 @@ impl<M: Ord> Normalize for Number<M> {
 
 /// Beyond their specific conditions, all variants are
 /// only normalized if their operands are normalized.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub enum Line<M> {
-    /// Always normalized
-    Var {
-        id: usize
-    },
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Recursive)]
+#[recursive(
+    impl<I: Indirection> HandleEntity<I> for Self<I>
+        where
+        I::Point: HandleEntity<I>,
+        I::Line: HandleEntity<I>,
+        I::Circle: HandleEntity<I>,
+        I::Number: HandleEntity<I> {
+        fn contains_entity(&self, entity: EntityId, entities: &[Entity]) -> bool {
+            aggregate = ||
+        }
+
+        fn map_entity(self, entity: EntityId, into: &Any<I>) -> Self {
+            aggregate = {},
+            override_marker = override_map
+        }
+    }
+)]
+pub enum Line<I: Indirection> {
     /// Normalized iff `p` and `q` are in ascending order
     PointPoint {
-        p: PointExpr<M>,
-        q: PointExpr<M>
+        p: I::Point,
+        q: I::Point
     },
     /// Normalized iff `a` and `c` are in ascending order (`b` must stay in the middle)
     AngleBisector {
-        a: PointExpr<M>,
-        b: PointExpr<M>,
-        c: PointExpr<M>
+        a: I::Point,
+        b: I::Point,
+        c: I::Point
     },
     /// Always normalized
     ParallelThrough {
-        point: PointExpr<M>,
-        line: LineExpr<M>
+        point: I::Point,
+        line: I::Line
     },
     /// Always normalized
     PerpendicularThrough {
-        point: PointExpr<M>,
-        line: LineExpr<M>
+        point: I::Point,
+        line: I::Line
     }
 }
 
-pub type LineExpr<M> = Expr<Line<M>, M>;
-
-impl<M> HandleEntity for Line<M> {
-    fn contains_entity(&self, entity: usize) -> bool {
-        match self {
-            Line::Var { .. } => false,
-            Line::PointPoint { p, q } => {
-                p.contains_entity(entity) || q.contains_entity(entity)
-            }
-            Line::AngleBisector { a, b, c } => {
-                a.contains_entity(entity) || b.contains_entity(entity) || c.contains_entity(entity)
-            }
-            Line::ParallelThrough { point, line }
-            | Line::PerpendicularThrough { point, line } => {
-                point.contains_entity(entity) || line.contains_entity(entity)
-            }
-        }
-    }
-}
-
-impl<M> Var for Line<M> {
-    fn var(id: usize) -> Self {
-        Self::Var { id }
-    }
-}
+pub type LineExpr<M> = Expr<Line<ExprTypes<M>>, M>;
 
 impl FromUnrolled<UnrolledLine> for LineExpr<()> {
     fn load(expr: &Unrolled<UnrolledLine>, math: &mut Expand) -> Self {
@@ -705,7 +763,7 @@ impl FromUnrolled<UnrolledLine> for LineExpr<()> {
     }
 }
 
-impl<M: Ord> Normalize for Line<M> {
+impl<M: Ord> Normalize for Line<ExprTypes<M>> {
     fn normalize(&mut self) {
         // Simplification.
         *self = match self {
@@ -723,7 +781,7 @@ impl<M: Ord> Normalize for Line<M> {
                 point.normalize();
                 line.normalize();
 
-                match *line.kind { 
+                match *line.kind {
                     Self::ParallelThrough { line, .. } => Self::PerpendicularThrough { point, line },
                     Self::PerpendicularThrough { line, .. } => Self::ParallelThrough { point, line },
                     _ => Self::PerpendicularThrough { point, line }
@@ -757,35 +815,36 @@ impl<M: Ord> Normalize for Line<M> {
 }
 
 /// Normalized if its parameters are normalized and potential additional conditions are met.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub enum Circle<M> {
-    /// Used to represent a variable in script or a variadic in a pattern.
-    Var {
-        id: usize
-    },
-    Construct {
-        center: PointExpr<M>,
-        radius: NumberExpr<M>
-    }
-}
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Recursive)]
+#[recursive(
+    impl<I: Indirection> HandleEntity<I> for Self<I>
+    where
+        I::Point: HandleEntity<I>,
+        I::Line: HandleEntity<I>,
+        I::Circle: HandleEntity<I>,
+        I::Number: HandleEntity<I> {
+        fn contains_entity(&self, entity: EntityId, entities: &[Entity]) -> bool {
+            aggregate = ||
+        }
 
-pub type CircleExpr<M> = Expr<Circle<M>, M>;
-
-impl<M> HandleEntity for Circle<M> {
-    fn contains_entity(&self, entity: usize) -> bool {
-        match self {
-            Circle::Var { .. } => false,
-            Circle::Construct { center, radius } => {
-                center.contains_entity(entity) || radius.contains_entity(entity)
-            }
+        fn map_entity(self, entity: EntityId, into: &Any<I>) -> Self {
+            aggregate = {},
+            override_marker = override_map
         }
     }
+)]
+pub enum Circle<I: Indirection> {
+    Construct {
+        center: I::Point,
+        radius: I::Number
+    }
 }
 
-impl<M: Ord> Normalize for Circle<M> {
+pub type CircleExpr<M> = Expr<Circle<ExprTypes<M>>, M>;
+
+impl<M: Ord> Normalize for Circle<ExprTypes<M>> {
     fn normalize(&mut self) {
         match self {
-            Circle::Var { .. } => (),
             Circle::Construct { mut center, mut radius } => {
                 center.normalize();
                 radius.normalize();
@@ -794,30 +853,99 @@ impl<M: Ord> Normalize for Circle<M> {
     }
 }
 
-#[derive(Debug, Clone)]
-pub enum Any<M> {
-    Point(Point<M>),
-    Number(Number<M>),
-    Line(Line<M>)
+#[derive(Debug, Clone, Recursive)]
+#[recursive(
+    impl<I: Indirection> HandleEntity<I> for Self<I> {
+        fn contains_entity(&self, entity: EntityId, entities: &[Entity]) -> bool {
+            aggregate = ||
+        }
+
+        fn map_entity(self, entity: EntityId, into: &Any<I>) -> Self {
+            aggregate = {}
+        }
+    }
+)]
+pub enum Any<I: Indirection> {
+    Point(Point<I>),
+    Number(Number<I>),
+    Line(Line<I>),
+    Circle(Circle<I>)
 }
 
-pub type AnyExpr<M> = Expr<Any<M>, M>;
+pub type AnyExpr<M> = Expr<Any<ExprTypes<M>>, M>;
 
-impl<M> From<Number<M>> for Any<M> {
+impl<M: Indirection> From<Number<M>> for Any<M> {
     fn from(value: Number<M>) -> Self {
         Self::Number(value)
     }
 }
 
-impl<M> From<Line<M>> for Any<M> {
+impl<M: Indirection> From<Line<M>> for Any<M> {
     fn from(value: Line<M>) -> Self {
         Self::Line(value)
     }
 }
 
-impl<M> From<Point<M>> for Any<M> {
+impl<M: Indirection> From<Point<M>> for Any<M> {
     fn from(value: Point<M>) -> Self {
         Self::Point(value)
+    }
+}
+
+impl<M: Indirection> From<Circle<M>> for Any<M> {
+    fn from(value: Circle<M>) -> Self {
+        Self::Circle(value)
+    }
+}
+
+#[derive(Debug)]
+pub struct WrongVariant;
+
+impl<M: Indirection> TryFrom<Any<M>> for Point<M> {
+    type Error = WrongVariant;
+
+    fn try_from(value: Any<M>) -> Result<Self, Self::Error> {
+        if let Any::Point(point) = value {
+            Ok(point)
+        } else {
+            Err(WrongVariant)
+        }
+    }
+}
+
+impl<M: Indirection> TryFrom<Any<M>> for Number<M> {
+    type Error = WrongVariant;
+
+    fn try_from(value: Any<M>) -> Result<Self, Self::Error> {
+        if let Any::Number(number) = value {
+            Ok(number)
+        } else {
+            Err(WrongVariant)
+        }
+    }
+}
+
+impl<M: Indirection> TryFrom<Any<M>> for Line<M> {
+    type Error = WrongVariant;
+
+    fn try_from(value: Any<M>) -> Result<Self, Self::Error> {
+        if let Any::Line(line) = value {
+            Ok(line)
+        } else {
+            Err(WrongVariant)
+        }
+    }
+}
+
+impl<M: Indirection> TryFrom<Any<M>> for Circle<M> {
+    type Error = WrongVariant;
+
+    fn try_from(value: Any<M>) -> Result<Self, Self::Error> {
+        if let Any::Circle(circle) = value {
+            Ok(circle)
+        } else {
+            Err(WrongVariant)
+        }
     }
 }
 
@@ -864,9 +992,16 @@ pub struct Expr<T, M> {
     pub meta: M
 }
 
-impl<T: HandleEntity, M> HandleEntity for Expr<T, M> {
-    fn contains_entity(&self, entity: usize) -> bool {
-        self.kind.contains_entity(entity)
+impl<T: HandleEntity<M>, M: Indirection> HandleEntity<M> for Expr<T, M> {
+    fn contains_entity(&self, entity: EntityId, entities: &[Entity]) -> bool {
+        self.kind.contains_entity(entity, entities)
+    }
+
+    fn map_entity(self, entity: EntityId, into: &Any<M>) -> Self {
+        Self {
+            kind: self.kind.map_entity(entity, into),
+            meta: self.meta
+        }
     }
 }
 
@@ -910,9 +1045,9 @@ impl<T> Expr<T, ()> {
     }
 }
 
-impl<T, M> Expr<T, M> where Any<M>: From<T> {
+impl<T, M> Expr<T, M> {
     #[must_use]
-    pub fn into_any(self) -> AnyExpr<M> {
+    pub fn into_any<I: Indirection>(self) -> Expr<Any<I>, M> where Any<I>: From<T> {
         AnyExpr {
             kind: Box::new((*self.kind).into()),
             meta: self.meta
@@ -924,18 +1059,32 @@ impl<T, M> Expr<T, M> where Any<M>: From<T> {
 /// Rules are normalized iff:
 /// * their operands are normalized
 /// * their operands are sorted in ascending order
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub enum Rule<M> {
-    PointEq(PointExpr<M>, PointExpr<M>),
-    NumberEq(NumberExpr<M>, NumberExpr<M>),
-    Lt(NumberExpr<M>, NumberExpr<M>),
-    Gt(NumberExpr<M>, NumberExpr<M>),
-    Alternative(Vec<Rule<M>>),
-    Invert(Box<Rule<M>>),
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Recursive)]
+#[recursive(
+    impl<I: Indirection> HandleEntity<I> for Self<I> {
+        fn contains_entity(&self, entity: EntityId, entities: &[Entity]) -> bool {
+            aggregate = ||,
+            init = false
+        }
+
+        fn map_entity(self, entity: EntityId, into: &Any<I>) -> Self {
+            aggregate = {}
+        }
+    }
+)]
+pub enum Rule<I: Indirection> {
+    PointEq(I::Point, I::Point),
+    NumberEq(I::Number, I::Number),
+    Lt(I::Number, I::Number),
+    Gt(I::Number, I::Number),
+    Alternative(Vec<Rule<I>>),
+    Invert(Box<Rule<I>>),
     Bias
 }
 
-impl Rule<()> {
+pub type SimpleRule = Rule<ExprTypes<()>>;
+
+impl Rule<ExprTypes<()>> {
     /// # Returns
     /// A normalized rule.
     fn load(rule: &UnrolledRule, math: &mut Expand) -> Self {
@@ -972,7 +1121,7 @@ impl Rule<()> {
     }
 }
 
-impl Normalize for Rule<()> {
+impl Normalize for Rule<ExprTypes<()>> {
     fn normalize(&mut self) {
         match self {
             | Self::NumberEq(a, b)
@@ -998,7 +1147,7 @@ impl Normalize for Rule<()> {
 pub struct Adjusted {
     pub template: Vec<AdjustableTemplate>,
     pub items: Vec<AnyExpr<()>>,
-    pub rules: Vec<Rule<()>>
+    pub rules: Vec<Rule<ExprTypes<()>>>
 }
 
 #[derive(Debug)]
@@ -1014,20 +1163,36 @@ pub struct Entry {
     pub uses: usize
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Recursive)]
+#[recursive(
+    impl HandleEntity<ExprTypes<()>> for Self {
+        fn contains_entity(&self, entity: EntityId, entities: &[Entity]) -> bool {
+            aggregate = ||,
+            init = false
+        }
+
+        fn map_entity(self, entity: EntityId, into: &Any<ExprTypes<()>>) -> Self {
+            aggregate = {}
+        }
+    }
+)]
 pub enum Entity {
     FreePoint,
-    PointOnLine(LineExpr<()>),
+    PointOnLine(LineExpr<ExprTypes<()>>),
     FreeReal,
-    Bind
+    Bind(Any<ExprTypes<()>>)
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq)]
 pub struct EntityId(usize);
 
-impl HandleEntity for EntityId {
-    fn contains_entity(&self, entity: usize) -> bool {
-        entity == 
+impl HandleEntity<ExprTypes<()>> for EntityId {
+    fn contains_entity(&self, entity: EntityId, entities: &[Entity]) -> bool {
+        *self == entity || entities[self.0].contains_entity(entity, entities)
+    }
+
+    fn map_entity(self, _: EntityId, _: &Any<ExprTypes<()>>) -> Self {
+        unreachable!("map_entity should never be called for EntityId")
     }
 }
 
@@ -1043,7 +1208,7 @@ pub struct Expand {
 
 impl Expand {
     pub fn load<T: Displayed, U>(&mut self, expr: &Unrolled<T>) -> Expr<U, ()>
-        where Any<()>: From<U>, Expr<U, ()>: FromUnrolled<T> {
+        where Any<ExprTypes<()>>: From<U>, Expr<U, ()>: FromUnrolled<T> {
         let key = (expr.data.as_ref() as *const _) as usize;
         let loaded = self.expr_map.get_mut(&key).cloned();
 
@@ -1063,16 +1228,16 @@ impl Expand {
         self.dst_var.get_or_init(|| Expr::new(Number::Entity { id: self.add_real() })).clone()
     }
 
-    fn add_entity(&mut self, entity: Entity) -> usize {
+    fn add_entity(&mut self, entity: Entity) -> EntityId {
         self.entities.push(entity);
-        self.entities.len() - 1
+        EntityId(self.entities.len() - 1)
     }
 
-    pub fn add_point(&mut self) -> usize {
+    pub fn add_point(&mut self) -> EntityId {
         self.add_entity(Entity::FreePoint)
     }
 
-    pub fn add_real(&mut self) -> usize {
+    pub fn add_real(&mut self) -> EntityId {
         self.add_entity(Entity::FreeReal)
     }
 }
@@ -1103,7 +1268,7 @@ impl Build {
 ///
 /// # Returns
 /// `true` if an optimization was performed. `false` otherwise.
-fn optimize_rules(rules: &mut Vec<Option<Rule<()>>>, entities: &mut [Entity]) -> bool {
+fn optimize_rules(rules: &mut Vec<Option<SimpleRule>>, entities: &mut [Entity]) -> bool {
     let mut performed = false;
     
     for rule in rules {
@@ -1118,7 +1283,7 @@ fn optimize_rules(rules: &mut Vec<Option<Rule<()>>>, entities: &mut [Entity]) ->
     performed
 }
 
-pub fn load_script(input: &str) -> Result<(Adjusted, Figure), Vec<Error>> {
+pub fn load_script(input: &str) -> Result<Intermediate, Vec<Error>> {
     // Unroll script
     // Expand rules & figure maximally, normalize them
     // ---
@@ -1158,13 +1323,70 @@ pub fn load_script(input: &str) -> Result<(Adjusted, Figure), Vec<Error>> {
             break;
         }
 
+        // Create the entity reduction map:
+        // If an entity is a bind, it should be turned into an expression
+        // Remaining entities should be appropriately offset.
+
+        let mut intos = Vec::new() ;
+        let mut offset = 0;
+
+        for (i, entity) in expand.entities.iter().enumerate() {
+            intos.push(match entity {
+                Entity::FreePoint
+                | Entity::PointOnLine(_) => Any::Point(Point::Entity { id: EntityId(i - offset) }),
+                Entity::FreeReal => Any::Number(Number::Entity { id: EntityId(i - offset) }),
+                Entity::Bind(expr) => {
+                    offset += 1;
+                    expr.clone()
+                }
+            });
+        }
+
+        expand.entities.retain(|x| !matches!(x, Entity::Bind(_)));
+
+        // Bind entities are now gone, we should update entities, loaded node expressions and rules with the map.
+
+        for (ent, into) in intos.into_iter().enumerate() {
+            expand.entities = expand.entities.map_entity(EntityId(ent), &into);
+            build.loaded = HandleEntity::<ExprTypes<()>>::map_entity(build.loaded, EntityId(ent), &into);
+            rules = rules.map_entity(EntityId(ent), &into);
+        }
+
+        // Normalize all rules now
         for rule in rules.iter_mut().flatten() {
             rule.normalize();
         }
     }
 
+    // After all optimizations are done, normalize the loaded expressions
+    for loaded in &mut build.loaded {
+        loaded.normalize();
+    }
 
-    Ok((
-        todo!()
-    ))
+    let template = expand.entities
+        .iter()
+        .map(AdjustableTemplate::from)
+        .collect();
+
+    // We can also finalize rules:
+    let rules = rules.iter().flatten().collect();
+
+    // THE FOLDING STEP
+    // First, all rules, entities and expressions have to be maximally segmented.
+    // Then, we perform similar expression elimination multiple times
+    //      - We reindex the element
+    //      - We put it into a hashmap
+    //      - If the element repeats, we replace it and add an entry into the index map
+    //      - Otherwise, we rejoice
+    // When the process ends NO REORGANIZATION HAPPENS AS NONE IS NECESSARY
+    // Rules and entities are updated using the obtained index map.
+
+    Ok(Intermediate {
+        adjusted: Adjusted {
+            template,
+            items: todo!(),
+            rules
+        },
+        figure: todo!()
+    })
 }
