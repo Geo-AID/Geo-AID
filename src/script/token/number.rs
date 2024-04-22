@@ -198,7 +198,7 @@ impl Display for ParsedNumber {
 }
 
 /// Number for processing
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash)]
 pub struct ProcNum(Complex<BigRational>);
 
 impl SubAssign for ProcNum {
@@ -283,7 +283,7 @@ impl From<&Number> for ProcNum {
                 let mut x: Complex<BigRational> = Complex::zero();
 
                 for digit in &i.parsed.digits {
-                    x *= ten;
+                    x *= &ten;
                     x += Complex::from_u8(*digit).unwrap();
                 }
 
@@ -295,13 +295,13 @@ impl From<&Number> for ProcNum {
                 let mut denominator = BigInt::one();
 
                 for digit in &f.parsed.integral.digits {
-                    integral *= ten;
+                    integral *= &ten;
                     integral += Complex::from_u8(*digit).unwrap();
                 }
 
                 for digit in &f.parsed.decimal {
                     denominator *= BigInt::from_u8(10).unwrap();
-                    decimal *= ten;
+                    decimal *= &ten;
                     decimal += Complex::from_u8(*digit).unwrap();
                 }
 

@@ -2641,7 +2641,7 @@ impl<T: CloneWithNode + Displayed + Dummy> Dummy for Expr<T> {
 pub struct UnrolledRule {
     pub kind: UnrolledRuleKind,
     pub inverted: bool,
-    pub weight: FastFloat,
+    pub weight: ProcNum,
 }
 
 impl Display for UnrolledRule {
