@@ -29,7 +29,6 @@ use std::{
 use num_traits::{One, Zero};
 use serde::Serialize;
 
-use crate::generator::fast_float::FastFloat;
 use crate::{
     cli::{AnnotationKind, Change, DiagnosticData, Fix},
     span,
@@ -597,22 +596,6 @@ impl Error {
                 DiagnosticData::new(&"expected function, found, value")
                     .add_span(error_span)
             }
-        }
-    }
-}
-
-/// Defines an object with assigned weight
-#[derive(Debug, Clone, Serialize)]
-pub struct Weighed<T> {
-    pub object: T,
-    pub weight: FastFloat,
-}
-
-impl<T> Weighed<T> {
-    pub fn one(object: T) -> Self {
-        Self {
-            object,
-            weight: FastFloat::One,
         }
     }
 }

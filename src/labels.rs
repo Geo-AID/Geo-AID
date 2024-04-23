@@ -21,10 +21,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 use std::f64::consts::PI;
 
 use crate::{
-    generator::{
-        geometry::{distance_pt_ln, distance_pt_pt, get_line},
-        Complex,
-    },
+    geometry::{distance_pt_ln, distance_pt_pt, get_line, Complex},
     projector::{RenderedAngle, RenderedCircle, RenderedLine, RenderedRay, RenderedSegment},
     script::figure::MathSpecial,
 };

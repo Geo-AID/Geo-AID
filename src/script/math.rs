@@ -32,10 +32,29 @@ use crate::script::math::optimizations::ZeroLineDst;
 use crate::script::token::number::{CompExponent, ProcNum};
 use crate::script::unroll::figure::Node;
 
+use super::unroll::Flag;
 use super::{figure::Figure, unroll::{self, Displayed, Expr as Unrolled, UnrolledRule, UnrolledRuleKind,
                                      Point as UnrolledPoint, Line as UnrolledLine, Circle as UnrolledCircle, ScalarData as UnrolledScalar}, Error, ComplexUnit, SimpleUnit};
 
 mod optimizations;
+
+#[derive(Debug)]
+pub struct Optimizations {}
+
+#[derive(Debug)]
+pub struct Flags {
+    pub optimizations: Optimizations,
+    pub point_bounds: bool,
+}
+
+impl Default for Flags {
+    fn default() -> Self {
+        Self {
+            optimizations: Optimizations {},
+            point_bounds: false,
+        }
+    }
+}
 
 trait HandleEntity<I: Indirection> {
     fn contains_entity(&self, entity: EntityId, entities: &[Entity<I>]) -> bool;
@@ -1668,7 +1687,8 @@ pub struct Adjusted {
 pub struct Intermediate {
     pub figure: Figure,
     /// Ready for generation
-    pub adjusted: Adjusted
+    pub adjusted: Adjusted,
+    pub flags: Flags
 }
 
 #[derive(Debug, Clone)]
@@ -1941,6 +1961,13 @@ fn fold(matrix: &mut Vec<Expr<Any<VarIndex>, ()>>) -> IndexMap {
     }
 }
 
+fn read_flags(flags: &HashMap<String, Flag>) -> Flags {
+    Flags {
+        optimizations: Optimizations {},
+        point_bounds: flags["point_bounds"].as_bool().unwrap(),
+    }
+}
+
 pub fn load_script(input: &str) -> Result<Intermediate, Vec<Error>> {
     // Unroll script
     // Expand rules & figure maximally, normalize them
@@ -2078,6 +2105,6 @@ pub fn load_script(input: &str) -> Result<Intermediate, Vec<Error>> {
             variables: fig_variables,
             items
         },
-        flags: unrolled.fl
+        flags: read_flags(&unrolled.flags)
     })
 }

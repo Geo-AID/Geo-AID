@@ -31,9 +31,7 @@ use std::{
 use clap::{Parser, ValueEnum};
 use crossterm::{cursor, terminal, ExecutableCommand, QueueableCommand};
 use geo_aid::{
-    cli::{Diagnostic, DiagnosticKind},
-    drawer::{Draw, Json, Latex, Raw, Svg},
-    generator::GenerationArgs, script::math,
+    cli::{Diagnostic, DiagnosticKind}, drawer::{Draw, Json, Latex, Raw, Svg}, engine::{rage::Rage, Engine}, generator::GenerationArgs, script::math
 };
 use geo_aid::{
     generator::Generator,
@@ -127,11 +125,8 @@ fn main() {
     };
 
     let flags = Arc::new(intermediate.flags);
-    let mut gen = unsafe { Generator::new(
-        args.count_of_workers,
-        intermediate,
-        &flags,
-    )};
+    let mut rage = Rage::new(args.count_of_workers);
+    let compiled = rage.compile(&intermediate, ());
 
     let mut stdout = io::stdout();
 

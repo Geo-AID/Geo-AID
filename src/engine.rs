@@ -1,9 +1,14 @@
-use crate::{generator::program::ValueEnum, script::math::Intermediate};
+use crate::{geometry::ValueEnum, script::math::Intermediate};
+
+/// Random Adjustment Generation Engine - adjustables are randomly adjusted before rating the figure's quality.
+pub mod rage;
 
 pub trait Engine {
     type Compiled;
+    type CompileParams;
+    type GenerateParams;
 
-    fn compile(&self, intermediate: &Intermediate) -> Self::Compiled;
+    fn compile(&self, intermediate: &Intermediate, params: Self::CompileParams) -> Self::Compiled;
 
-    fn generate(&self, compiled: Self::Compiled) -> Vec<ValueEnum>;
+    fn generate(&self, compiled: Self::Compiled, params: Self::GenerateParams) -> Vec<ValueEnum>;
 }

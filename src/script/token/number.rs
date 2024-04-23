@@ -1,7 +1,7 @@
 use std::{fmt::Display, mem};
 use std::cmp::Ordering;
 use std::fmt::Formatter;
-use std::ops::{Add, AddAssign, SubAssign};
+use std::ops::{Add, AddAssign, Mul, SubAssign};
 use num_bigint::BigInt;
 use num_complex::Complex;
 
@@ -235,6 +235,14 @@ impl Add<Self> for ProcNum {
     }
 }
 
+impl Mul<Self> for ProcNum {
+    type Output = Self;
+
+    fn mul(self, rhs: Self) -> Self::Output {
+        Self(self.0 * rhs.0)
+    }
+}
+
 impl Zero for ProcNum {
     fn zero() -> Self {
         Self(Complex::zero())
@@ -242,6 +250,18 @@ impl Zero for ProcNum {
 
     fn is_zero(&self) -> bool {
         self.0.is_zero()
+    }
+}
+
+impl One for ProcNum {
+    fn one() -> Self {
+        Self(Complex::one())
+    }
+
+    fn is_one(&self) -> bool
+        where
+            Self: PartialEq, {
+        self.0.is_one()
     }
 }
 

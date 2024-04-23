@@ -19,10 +19,11 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
 use geo_aid_derive::overload;
+use num_traits::One;
 use std::rc::Rc;
 
 use super::prelude::*;
-use crate::generator::fast_float::FastFloat;
+use crate::script::token::number::ProcNum;
 
 fn pt_lies_on_circle(
     mut lhs: Expr<Point>,
@@ -30,7 +31,7 @@ fn pt_lies_on_circle(
     context: &mut CompileContext,
     display: Properties,
     inverted: bool,
-    weight: FastFloat,
+    weight: ProcNum,
 ) -> CollectionNode {
     let mut node = CollectionNode::from_display(display, context);
     node.extend(lhs.node.take());
@@ -61,7 +62,7 @@ fn pt_lies_on_line(
     context: &mut CompileContext,
     display: Properties,
     inverted: bool,
-    weight: FastFloat,
+    weight: ProcNum,
 ) -> CollectionNode {
     let mut node = CollectionNode::from_display(display, context);
     node.extend(lhs.node.take());
@@ -89,7 +90,7 @@ fn col_lies_on_circle(
     context: &mut CompileContext,
     display: Properties,
     inverted: bool,
-    weight: FastFloat,
+    weight: ProcNum,
 ) -> CollectionNode {
     let len = lhs.data.length;
 
@@ -147,7 +148,7 @@ fn pt_lies_on_segment(
     context: &mut CompileContext,
     display: Properties,
     inverted: bool,
-    weight: FastFloat,
+    weight: ProcNum,
 ) -> CollectionNode {
     let mut node = CollectionNode::from_display(display, context);
     node.extend(lhs.node.take());
@@ -171,7 +172,7 @@ fn pt_lies_on_segment(
                         context.distance_pl(point, line),
                     ),
                     inverted: true,
-                    weight: FastFloat::One,
+                    weight: ProcNum::one(),
                 },
                 UnrolledRule {
                     kind: UnrolledRuleKind::ScalarEq(
@@ -188,7 +189,7 @@ fn pt_lies_on_segment(
                         ),
                     ),
                     inverted: true,
-                    weight: FastFloat::One,
+                    weight: ProcNum::one(),
                 },
             ]),
             inverted: false,
