@@ -32,8 +32,8 @@ use clap::{Parser, ValueEnum};
 use crossterm::{cursor, terminal, ExecutableCommand, QueueableCommand};
 use geo_aid::{
     cli::{Diagnostic, DiagnosticKind},
-    drawer::{Draw, Latex, Svg, Json, Raw},
-    generator::GenerationArgs,
+    drawer::{Draw, Json, Latex, Raw, Svg},
+    generator::GenerationArgs, script::math,
 };
 use geo_aid::{
     generator::Generator,
@@ -104,9 +104,7 @@ fn main() {
     };
     let canvas_size = (args.width, args.height);
 
-    let result = compile::compile(&script, canvas_size);
-
-    let compiled = match result {
+    let intermediate = match math::load_script(&script) {
         Ok(v) => v,
         Err(errors) => {
             for err in errors {
@@ -128,10 +126,10 @@ fn main() {
         }
     };
 
-    let flags = Arc::new(compiled.flags);
+    let flags = Arc::new(intermediate.flags);
     let mut gen = unsafe { Generator::new(
         args.count_of_workers,
-        compiled,
+        intermediate,
         &flags,
     )};
 
@@ -159,7 +157,7 @@ fn main() {
 
     stdout.execute(cursor::Show).unwrap();
 
-    let rendered = projector::project(&compiled.figure, gen.get_state(), &flags);
+    let rendered = projector::project(&intermediate.figure, gen.get_state(), &flags);
 
     #[allow(clippy::cast_precision_loss)]
     let mut latex = Latex {

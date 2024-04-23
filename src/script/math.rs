@@ -2077,6 +2077,7 @@ pub fn load_script(input: &str) -> Result<Intermediate, Vec<Error>> {
         figure: Figure {
             variables: fig_variables,
             items
-        }
+        },
+        flags: unrolled.fl
     })
 }
