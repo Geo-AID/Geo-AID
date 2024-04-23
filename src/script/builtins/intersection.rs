@@ -18,6 +18,8 @@ WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use crate::script::math::Build;
+
 use super::prelude::*;
 use geo_aid_derive::overload;
 
@@ -43,8 +45,7 @@ pub struct Associated;
 impl BuildAssociated<PointNode> for Associated {
     fn build_associated(
         self: Box<Self>,
-        _compiler: &mut Compiler,
-        _figure: &mut Figure,
+        _build: &mut Build,
         associated: &mut HierarchyNode<PointNode>,
     ) {
         associated.root.display_dot.set_if_unset(false);

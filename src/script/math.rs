@@ -119,7 +119,7 @@ trait FindEntities {
 }
 
 impl FindEntities for Vec<VarIndex> {
-    fn find_entities(&self, previous: &[&HashSet<EntityId>]) -> HashSet<EntityId> {
+    fn find_entities(&self, previous: &[HashSet<EntityId>]) -> HashSet<EntityId> {
         self.iter().map(|x| previous[x.0].iter().copied()).flatten().collect()
     }
 }
