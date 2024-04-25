@@ -29,6 +29,7 @@ use std::{
 use serde::Serialize;
 
 use crate::geometry::Complex;
+use crate::script::math::{Entity, Indirection};
 
 use self::{critic::EvaluateProgram, program::Value};
 
@@ -180,16 +181,16 @@ impl AdjustableTemplate {
     }
 }
 
-// impl From<&Entity> for AdjustableTemplate {
-//     fn from(value: &Entity) -> Self {
-//         match value {
-//             Entity::FreePoint => AdjustableTemplate::Point,
-//             Entity::PointOnLine(_) => AdjustableTemplate::PointOnLine,
-//             Entity::FreeReal => AdjustableTemplate::Real,
-//             Entity::Bind(_) => unreachable!()
-//         }
-//     }
-// }
+impl<I: Indirection> From<&Entity<I>> for AdjustableTemplate {
+    fn from(value: &Entity<I>) -> Self {
+        match value {
+            Entity::FreePoint => AdjustableTemplate::Point,
+            Entity::PointOnLine(_) => AdjustableTemplate::PointOnLine,
+            Entity::FreeReal => AdjustableTemplate::Real,
+            Entity::Bind(_) => unreachable!()
+        }
+    }
+}
 
 impl Generator {
     /// # Safety
@@ -313,8 +314,6 @@ impl Generator {
     }
 
     pub fn single_cycle(&mut self, maximum_adjustment: f64) {
-        let current_quality = self.get_total_quality();
-
         self.cycle_prebaked(&self.bake_magnitudes(maximum_adjustment));
 
         self.delta = self.get_total_quality();

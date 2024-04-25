@@ -31,13 +31,13 @@ use std::{
 use clap::{Parser, ValueEnum};
 use crossterm::{cursor, terminal, ExecutableCommand, QueueableCommand};
 use geo_aid::{
-    cli::{Diagnostic, DiagnosticKind}, drawer::{Draw, Json, Latex, Raw, Svg}, engine::{rage::Rage, Engine}, generator::GenerationArgs, script::math
+    cli::{Diagnostic, DiagnosticKind}, drawer::{Draw, Json, Latex, Raw, Svg}, engine::{rage::Rage, Engine}, script::math
 };
 use geo_aid::{
-    generator::Generator,
-    projector,
-    script::compile,
+    projector
 };
+use geo_aid::engine::GenerateResult;
+use geo_aid::engine::rage::GenParams;
 
 #[derive(Debug, Parser)]
 #[command(name = "Geo-AID")]
@@ -132,11 +132,15 @@ fn main() {
 
     stdout.execute(cursor::Hide).unwrap();
 
-    let duration = gen.cycle_until_mean_delta(
-        args.adjustment_max,
-        args.mean_count,
-        args.delta_max_mean,
-        |quality| {
+    let GenerateResult {
+        time,
+        values,
+        total_quality
+    } = rage.generate(compiled, GenParams {
+        max_adjustment: args.adjustment_max,
+        mean_count: args.mean_count,
+        delta_max_mean: args.delta_max_mean,
+        progress_update: Box::new(|quality| {
             stdout
                 .queue(terminal::Clear(terminal::ClearType::FromCursorDown))
                 .unwrap();
@@ -147,12 +151,12 @@ fn main() {
                 .unwrap();
             stdout.queue(cursor::RestorePosition).unwrap();
             stdout.flush().unwrap();
-        },
-    );
+        })
+    });
 
     stdout.execute(cursor::Show).unwrap();
 
-    let rendered = projector::project(&intermediate.figure, gen.get_state(), &flags);
+    let rendered = projector::project(&intermediate.figure, &values, &flags);
 
     #[allow(clippy::cast_precision_loss)]
     let mut latex = Latex {
@@ -193,15 +197,15 @@ fn main() {
 
     println!(
         "Finished rendering with total quality {:.2}% in {:.2} seconds.",
-        gen.get_total_quality() * 100.0,
-        duration.as_secs_f64()
+        total_quality * 100.0,
+        time.as_secs_f64()
     );
 
     if let Some(path) = &args.log {
         let mut log = File::create(path)
             .unwrap_or_else(|_| panic!("Failed to create log file at {}", path.display()));
 
-        let full = format!("0\n{}\n{}", gen.get_total_quality(), duration.as_secs_f64());
+        let full = format!("0\n{}\n{}", total_quality, time.as_secs_f64());
         log.write_all(full.as_bytes())
             .expect("Writing to log file failed.");
     }

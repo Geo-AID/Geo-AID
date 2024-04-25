@@ -1,8 +1,13 @@
-use crate::geometry::ValueEnum;
+use crate::engine::rage::compiler::Compiler;
+use crate::engine::rage::generator::Adjustable;
+use crate::engine::rage::generator::critic::{EvaluateProgram, FigureProgram};
+use crate::engine::rage::generator::program::ValueType;
+use crate::geometry::{Complex, ValueEnum};
+use crate::script::math::Intermediate;
 
 use self::generator::Generator;
 
-use super::Engine;
+use super::{Engine, GenerateResult};
 
 mod compiler;
 mod generator;
@@ -22,36 +27,65 @@ impl Rage {
     }
 }
 
-impl Engine for Rage {
-    type Compiled = ();
-    type CompileParams = ();
-    type GenerateParams = ();
+pub struct GenParams {
+    pub max_adjustment: f64,
+    pub mean_count: usize,
+    pub delta_max_mean: f64,
+    pub progress_update: Box<dyn FnMut(f64)>
+}
 
-    fn compile(&self, intermediate: &crate::script::math::Intermediate, params: Self::CompileParams) -> Self::Compiled {
-        todo!()
+impl Engine for Rage {
+    type Compiled = (EvaluateProgram, FigureProgram);
+    type CompileParams = ();
+    type GenerateParams = GenParams;
+
+    fn compile(&self, intermediate: &Intermediate, _params: Self::CompileParams) -> Self::Compiled {
+        Compiler::new(intermediate).compile_programs()
     }
 
-    fn generate(&self, compiled: Self::Compiled, params: Self::GenerateParams) -> Vec<ValueEnum> {
+    fn generate(&self, compiled: Self::Compiled, params: Self::GenerateParams) -> GenerateResult {
         let mut gen = unsafe {
-            Generator::new(self.worker_count, todo!())
+            Generator::new(self.worker_count, compiled.0)
         };
 
-        let duration = gen.cycle_until_mean_delta(
-            args.adjustment_max,
-            args.mean_count,
-            args.delta_max_mean,
-            |quality| {
-                stdout
-                    .queue(terminal::Clear(terminal::ClearType::FromCursorDown))
-                    .unwrap();
-    
-                stdout.queue(cursor::SavePosition).unwrap();
-                stdout
-                    .write_all(format!("Quality: {:.2}% ", quality * 100.0).as_bytes())
-                    .unwrap();
-                stdout.queue(cursor::RestorePosition).unwrap();
-                stdout.flush().unwrap();
-            },
+        let time = gen.cycle_until_mean_delta(
+            params.max_adjustment,
+            params.mean_count,
+            params.delta_max_mean,
+            params.progress_update,
         );
+
+        let mut figure = compiled.1;
+        for  (c, adj) in figure.base.constants.iter_mut().zip(&gen.get_state().adjustables) {
+            *c = match adj {
+                Adjustable::Point(point) => ValueEnum::Complex(*point),
+                Adjustable::Real(x)
+                | Adjustable::Clip1D(x) => ValueEnum::Complex(Complex::real(*x))
+            };
+        }
+
+        let mut memory = figure.setup();
+        unsafe {
+            figure.calculate(&mut memory);
+        }
+
+        let mut values = Vec::new();
+        for (ty, loc) in figure.variables {
+            let v = memory[loc];
+            let v = unsafe {
+                match ty {
+                    ValueType::Complex => ValueEnum::Complex(v.complex),
+                    ValueType::Line => ValueEnum::Line(v.line),
+                    ValueType::Circle => ValueEnum::Circle(v.circle)
+                }
+            };
+            values.push(v);
+        }
+
+        GenerateResult {
+            values,
+            time,
+            total_quality: gen.get_total_quality()
+        }
     }
 }

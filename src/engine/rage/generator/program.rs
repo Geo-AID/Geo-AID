@@ -45,6 +45,13 @@ impl From<ValueEnum> for Value {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+pub enum ValueType {
+    Complex,
+    Line,
+    Circle
+}
+
 /// # Safety
 /// The program is considered safe iff:
 /// * `req_memory_size` is larger than any register used by any instruction.
@@ -425,11 +432,25 @@ pub enum Instruction {
     /// Multiplies two values
     Product(Product),
     /// Partially multiplies two values
-    PatialProduct(PartialProduct),
+    PartialProduct(PartialProduct),
     /// Changes the sign
     Negation(Negation),
     /// Raises to a power
     Pow(PartialPow),
     /// Radius of a circle
     CircleRadius(CircleRadius),
+    /// Swaps real and imaginary parts
+    SwapParts(SwapParts),
+    /// Compares two complexes
+    EqualComplex(EqualComplex),
+    /// Compares two reals
+    EqualReal(EqualReal),
+    /// Compares two reals
+    Greater(Greater),
+    /// Compares two reals
+    Less(Less),
+    /// Gets the maximal parameter value.
+    MaxReal(Max),
+    /// Inverts a rule's quality.
+    InvertQuality(InvertQuality)
 }

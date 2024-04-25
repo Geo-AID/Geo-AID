@@ -25,7 +25,7 @@ use std::marker::PhantomData;
 use std::mem;
 use std::ops::{Deref, DerefMut};
 use derive_recursive::Recursive;
-use num_traits::{FromPrimitive, Zero};
+use num_traits::{FromPrimitive, One, Zero};
 
 use crate::script::figure::Item;
 use crate::script::math::optimizations::ZeroLineDst;
@@ -1742,7 +1742,7 @@ impl Flatten for Entity<ExprTypes<()>> {
 }
 
 #[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Hash)]
-pub struct EntityId(usize);
+pub struct EntityId(pub usize);
 
 impl HandleEntity<ExprTypes<()>> for EntityId {
     fn contains_entity(&self, entity: EntityId, entities: &[Entity<ExprTypes<()>>]) -> bool {
@@ -1870,19 +1870,30 @@ impl IndexMap {
 
     /// Creates a mapping from a to b (works like function composition).
     pub fn map(&mut self, a: usize, b: usize) {
+        // Before everything, if a == b, nothing happens.
+        if a == b {
+            return;
+        }
+
         // If a is present in b->a, that means there exists a direct mapping a->b which we should override and remove the b->a map.
         // Otherwise, if a is not present in a->b, we should add it along with a b->a mapping.
         // If a is present in a->b but not present in b->a, a is not reachable, thus nothing should happen.
         let a_key = self.b_to_a.get(&a).copied();
         if let Some(a_key) = a_key {
             // There's a mapping a_key -> a
-            // Make the mapping a_key -> b
-            self.a_to_b.get_mut(&a_key).map(|current| *current = b);
             // Remove the inverse mapping a -> a_key
             self.b_to_a.remove(&a);
-            // Insert the new mapping b -> a_key
-            self.b_to_a.insert(b, a_key);
-        } else if !self.a_to_b.contains_key(&a) {
+
+            if a_key == b {
+                // Also remove a -> b
+                self.a_to_b.remove(&a_key);
+            } else {
+                // Make the mapping a_key -> b
+                self.a_to_b.get_mut(&a_key).map(|current| *current = b);
+                // Insert the new mapping b -> a_key
+                self.b_to_a.insert(b, a_key);
+            }
+        } else if !self.a_to_b.contains_key(&a){
             // There is no a -> ?.
             self.a_to_b.insert(a, b);
             self.b_to_a.insert(b, a);
@@ -1936,7 +1947,9 @@ fn fold(matrix: &mut Vec<Expr<Any<VarIndex>, ()>>) -> IndexMap {
             match record.entry(expr) {
                 hash_map::Entry::Vacant(entry) => {
                     target.push(entry.key().clone());
-                    entry.insert(i);
+                    let new_i = target.len() - 1;
+                    map.map(i, new_i);
+                    entry.insert(new_i);
                 },
                 hash_map::Entry::Occupied(entry) => {
                     // We have to update the index map. No push into target happens.

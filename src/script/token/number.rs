@@ -1,12 +1,13 @@
 use std::{fmt::Display, mem};
 use std::cmp::Ordering;
 use std::fmt::Formatter;
-use std::ops::{Add, AddAssign, Mul, SubAssign};
+use std::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, SubAssign};
 use num_bigint::BigInt;
 use num_complex::Complex;
 
 use num_rational::{BigRational, Rational64};
 use num_traits::{CheckedAdd, CheckedMul, FromPrimitive, One, ToPrimitive, Zero};
+use crate::geometry;
 use crate::script::token::Number;
 
 #[derive(Debug)]
@@ -201,6 +202,12 @@ impl Display for ParsedNumber {
 #[derive(Debug, Clone, Hash)]
 pub struct ProcNum(Complex<BigRational>);
 
+impl ProcNum {
+    pub fn to_complex(self) -> geometry::Complex {
+        geometry::Complex::new(self.0.re.to_f64().unwrap(), self.0.im.to_f64().unwrap())
+    }
+}
+
 impl SubAssign for ProcNum {
     fn sub_assign(&mut self, rhs: Self) {
         self.0 -= rhs.0;
@@ -240,6 +247,26 @@ impl Mul<Self> for ProcNum {
 
     fn mul(self, rhs: Self) -> Self::Output {
         Self(self.0 * rhs.0)
+    }
+}
+
+impl MulAssign for ProcNum {
+    fn mul_assign(&mut self, rhs: Self) {
+        self.0 *= rhs.0;
+    }
+}
+
+impl Div for ProcNum {
+    type Output = Self;
+    
+    fn div(self, rhs: Self) -> Self::Output {
+        Self(self.0 / rhs.0)
+    }
+}
+
+impl DivAssign for ProcNum {
+    fn div_assign(&mut self, rhs: Self) {
+        self.0 /= rhs.0;
     }
 }
 

@@ -19,6 +19,8 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
 use serde::Serialize;
+use crate::engine::rage::generator::program::{Loc, ValueType};
+use crate::geometry::Complex;
 
 use super::{program::{Program, Execute, Value}, AdjustableTemplate};
 
@@ -27,7 +29,7 @@ use super::{program::{Program, Execute, Value}, AdjustableTemplate};
 /// # Safety
 /// The program is considered safe iff:
 /// * the `base` is a safe program.
-/// * After the 'constants' block there are `rule_count` registers holding respecitve rule qualities and the end of execution.
+/// * After the 'constants' block there are `rule_count` registers holding respective rule qualities and the end of execution.
 #[derive(Debug, Clone, Serialize)]
 pub struct EvaluateProgram {
     /// Program base.
@@ -36,6 +38,8 @@ pub struct EvaluateProgram {
     pub adjustables: Vec<AdjustableTemplate>,
     /// How many rules are to be used in the generation process.
     pub rule_count: usize,
+    /// A vec of biases to fill when preparing.
+    pub biases: Vec<Loc>,
     /// How much each rule quality influences each adjustable.
     /// Constants take up the first registers in memory.
     /// Do note that the first constants are always the adjustables.
@@ -48,7 +52,13 @@ pub struct EvaluateProgram {
 impl EvaluateProgram {
     /// Prepares the memory layout for execution.
     pub fn setup(&self) -> Vec<Value> {
-        self.base.setup()
+        let mut memory = self.base.setup();
+
+        for bias in &self.biases {
+            memory[*bias].complex = Complex::real(1.0);
+        }
+
+        memory
     }
 
     /// Evaluates the qualities of adjustables.
@@ -76,5 +86,34 @@ impl EvaluateProgram {
             }
         }
 
+    }
+}
+
+/// Program used for figure preparation
+///
+/// # Safety
+/// The program is considered safe iff:
+/// * the `base` is a safe program.
+#[derive(Debug, Clone, Serialize)]
+pub struct FigureProgram {
+    /// Program base.
+    pub base: Program,
+    /// Expression values.
+    pub variables: Vec<(ValueType, Loc)>
+}
+
+impl FigureProgram {
+    /// Prepares the memory layout for execution.
+    pub fn setup(&self) -> Vec<Value> {
+        self.base.setup()
+    }
+
+    /// Calculates values of the right expressions.
+    ///
+    /// # Safety
+    /// The program must be valid.
+    pub unsafe fn calculate(&self, memory: &mut [Value]) {
+        // Execute the base program.
+        self.base.execute(memory);
     }
 }
