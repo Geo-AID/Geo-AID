@@ -41,7 +41,7 @@ pub struct EvaluateProgram {
     /// A vec of biases to fill when preparing.
     pub biases: Vec<Loc>,
     /// How much each rule quality influences each adjustable.
-    /// Constants take up the first registers in memory.
+    /// Constants take up the first registers in memory. Weights should be normalized.
     /// Do note that the first constants are always the adjustables.
     /// `rule_count` registers after that are expected to contain rule qualities.
     /// Everything beyond that point is active program memory with no layout guarantees.

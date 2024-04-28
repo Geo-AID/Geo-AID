@@ -107,7 +107,7 @@ impl<'i> Compiler<'i> {
 
         for (i, rule) in self.intermediate.adjusted.rules.iter().enumerate() {
             for EntityId(adj) in &rule.entities {
-                weights[i * adjustables.len() + *adj] = 1.0;
+                weights[i * adjustables.len() + *adj] = 1.0 / rule.entities.len() as f64;
             }
         }
 
