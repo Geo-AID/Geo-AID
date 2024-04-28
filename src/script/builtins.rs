@@ -38,7 +38,7 @@ pub mod segment;
 pub mod prelude {
     pub(crate) use crate::script::{
         builtins::macros::*,
-        figure::{Figure, Style},
+        figure::Style,
         unit,
         unroll::{
             context::CompileContext,

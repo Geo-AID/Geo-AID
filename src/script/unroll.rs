@@ -19,7 +19,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
 use geo_aid_derive::CloneWithNode;
-use num_traits::One;
+use num_traits::{One, Zero};
 use std::collections::HashSet;
 use std::fmt::Formatter;
 use std::mem;
@@ -34,7 +34,6 @@ use std::{
 
 use crate::span;
 
-use crate::generator::fast_float::FastFloat;
 use crate::script::builtins::macros::index;
 use crate::script::ty;
 
@@ -310,7 +309,7 @@ pub struct RuleOverload {
 
 /// geoscript rule declaration
 type GeoRule =
-    dyn Fn(AnyExpr, AnyExpr, &mut CompileContext, Properties, bool, FastFloat) -> Box<dyn Node>;
+    dyn Fn(AnyExpr, AnyExpr, &mut CompileContext, Properties, bool, ProcNum) -> Box<dyn Node>;
 
 /// A function definition.
 pub struct RuleDefinition(pub Box<GeoRule>);
@@ -2641,7 +2640,7 @@ impl<T: CloneWithNode + Displayed + Dummy> Dummy for Expr<T> {
 pub struct UnrolledRule {
     pub kind: UnrolledRuleKind,
     pub inverted: bool,
-    pub weight: FastFloat,
+    pub weight: ProcNum,
 }
 
 impl Display for UnrolledRule {
@@ -3813,7 +3812,7 @@ fn unroll_ref(
 
     while let Some(it_index) = index.get_currents() {
         let mut display = Properties::from(stat.display.clone());
-        let weight = display.get("weight").get_or(FastFloat::Zero);
+        let weight = display.get("weight").get_or(ProcNum::zero());
 
         let mut expr = stat.operand.unroll(context, library, it_index, display);
 
@@ -4117,7 +4116,7 @@ fn unroll_rule(
             ),
         },
         RuleOperator::Defined(op) => {
-            let weight = display.get("weight").get_or(FastFloat::One);
+            let weight = display.get("weight").get_or(ProcNum::one());
 
             let (def, lhs, rhs) = if let Some(func) = library.rule_ops.get(&op.ident) {
                 if let Some(overload) = func.get_overload((&lhs.get_type(), &rhs.get_type())) {

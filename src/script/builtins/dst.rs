@@ -18,7 +18,7 @@ WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use crate::script::unroll::Convert;
+use crate::script::{figure::{MathString, SegmentItem}, math::Build, token::Span, unroll::Convert};
 
 use super::prelude::*;
 use geo_aid_derive::overload;
@@ -92,8 +92,7 @@ pub struct Associated;
 impl BuildAssociated<ScalarNode> for Associated {
     fn build_associated(
         self: Box<Self>,
-        compiler: &mut Compiler,
-        figure: &mut Figure,
+        build: &mut Build,
         associated: &mut HierarchyNode<ScalarNode>,
     ) {
         let display_segment = associated
@@ -106,11 +105,12 @@ impl BuildAssociated<ScalarNode> for Associated {
         if display_segment.unwrap() {
             match &associated.root.expr.data.data {
                 ScalarData::PointPointDistance(a, b) => {
-                    figure.segments.push((
-                        compiler.compile(a),
-                        compiler.compile(b),
-                        style.unwrap(),
-                    ));
+                    build.add(SegmentItem {
+                        p_id: build.load(a),
+                        q_id: build.load(b),
+                        label: MathString::new(Span::empty()),
+                        style: style.unwrap(),
+                    });
                 }
                 ScalarData::PointLineDistance(a, k) => {
                     // Projection
@@ -122,11 +122,12 @@ impl BuildAssociated<ScalarNode> for Associated {
                         k.clone_without_node(),
                     ));
 
-                    figure.segments.push((
-                        compiler.compile(a),
-                        compiler.compile(&b),
-                        style.unwrap(),
-                    ));
+                    build.add(SegmentItem {
+                        p_id: build.load(a),
+                        q_id: build.load(&b),
+                        label: MathString::new(Span::empty()),
+                        style: style.unwrap(),
+                    });
                 }
                 _ => unreachable!(),
             }

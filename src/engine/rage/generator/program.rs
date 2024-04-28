@@ -21,9 +21,36 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 use geo_aid_derive::Execute;
 use serde::Serialize;
 
+use crate::geometry::{Circle, Line, ValueEnum};
+
 use self::expr::*;
 
 use super::Complex;
+
+/// Value type used by the machine.
+#[derive(Clone, Copy)]
+pub union Value {
+    pub complex: Complex,
+    pub line: Line,
+    pub circle: Circle
+}
+
+impl From<ValueEnum> for Value {
+    fn from(value: ValueEnum) -> Self {
+        match value {
+            ValueEnum::Complex(complex) => Self { complex },
+            ValueEnum::Line(line) => Self { line },
+            ValueEnum::Circle(circle) => Self { circle },
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum ValueType {
+    Complex,
+    Line,
+    Circle
+}
 
 /// # Safety
 /// The program is considered safe iff:
@@ -61,57 +88,6 @@ impl Program {
     }
 }
 
-/// Represents a line in a 2D euclidean space.
-#[derive(Debug, Clone, Copy, Serialize)]
-pub struct Line {
-    /// Line's origin as a complex number.
-    pub origin: Complex,
-    /// A normalized direction vector.
-    pub direction: Complex,
-}
-
-impl Line {
-    #[must_use]
-    pub fn new(origin: Complex, direction: Complex) -> Self {
-        Self { origin, direction }
-    }
-}
-
-/// Represents a circle in a 2D euclidean space.
-#[derive(Debug, Clone, Copy, Serialize)]
-pub struct Circle {
-    /// Circle's center.
-    pub center: Complex,
-    /// Its radius
-    pub radius: f64,
-}
-
-/// Value type used by the machine.
-#[derive(Clone, Copy)]
-pub union Value {
-    pub complex: Complex,
-    pub line: Line,
-    pub circle: Circle
-}
-
-impl From<ValueEnum> for Value {
-    fn from(value: ValueEnum) -> Self {
-        match value {
-            ValueEnum::Complex(complex) => Self { complex },
-            ValueEnum::Line(line) => Self { line },
-            ValueEnum::Circle(circle) => Self { circle },
-        }
-    }
-}
-
-/// Enumerated value type for serialization.
-#[derive(Debug, Clone, Copy, Serialize)]
-pub enum ValueEnum {
-    Complex(Complex),
-    Line(Line),
-    Circle(Circle)
-}
-
 /// Represents a location in execution memory.
 pub type Loc = usize;
 
@@ -142,7 +118,7 @@ pub mod expr {
     use geo_aid_derive::instructions;
     use serde::Serialize;
 
-    use crate::generator::{Complex, geometry};
+    use crate::geometry::{self, Complex};
 
     use super::{
         Execute, Line, Circle,
@@ -456,11 +432,25 @@ pub enum Instruction {
     /// Multiplies two values
     Product(Product),
     /// Partially multiplies two values
-    PatialProduct(PartialProduct),
+    PartialProduct(PartialProduct),
     /// Changes the sign
     Negation(Negation),
     /// Raises to a power
     Pow(PartialPow),
     /// Radius of a circle
     CircleRadius(CircleRadius),
+    /// Swaps real and imaginary parts
+    SwapParts(SwapParts),
+    /// Compares two complexes
+    EqualComplex(EqualComplex),
+    /// Compares two reals
+    EqualReal(EqualReal),
+    /// Compares two reals
+    Greater(Greater),
+    /// Compares two reals
+    Less(Less),
+    /// Gets the maximal parameter value.
+    MaxReal(Max),
+    /// Inverts a rule's quality.
+    InvertQuality(InvertQuality)
 }

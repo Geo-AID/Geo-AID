@@ -20,275 +20,23 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 use std::{
     collections::VecDeque,
-    fmt::Display,
     mem,
-    ops::{Add, AddAssign, Div, Mul, Neg, Sub, SubAssign, MulAssign},
     sync::{mpsc, Arc},
     thread::{self, JoinHandle},
-    time::{Duration, Instant}, iter::{Sum, Product}, pin::Pin,
+    time::{Duration, Instant}, iter::Sum, pin::Pin,
 };
 
 use serde::Serialize;
-use crate::script::math::Entity;
 
-use self::{program::Value, critic::EvaluateProgram};
+use crate::geometry::Complex;
+use crate::script::math::{Entity, Indirection};
+
+use self::{critic::EvaluateProgram, program::Value};
 
 pub mod critic;
 pub mod fast_float;
-pub mod geometry;
 pub mod program;
 mod magic_box;
-
-/// Represents a complex number located on a "unit" plane.
-#[derive(Debug, Clone, Copy, Serialize)]
-pub struct Complex {
-    /// X coordinate located in range [0, 1).
-    pub real: f64,
-    /// Y coordinate located in range [0, 1).
-    pub imaginary: f64,
-}
-
-impl Complex {
-    #[must_use]
-    #[inline]
-    pub const fn new(real: f64, imaginary: f64) -> Self {
-        Self { real, imaginary }
-    }
-
-    #[must_use]
-    pub const fn real(real: f64) -> Self {
-        Self::new(real, 0.0)
-    }
-
-    #[must_use]
-    #[inline]
-    pub const fn zero() -> Self {
-        Self::new(0.0, 0.0)
-    }
-
-    #[must_use]
-    pub fn i() -> Self {
-        Self::new(0.0, 1.0)
-    }
-
-    /// Optimized multiplication by the complex unit (i).
-    #[must_use]
-    pub fn mul_i(self) -> Complex {
-        Complex::new(-self.imaginary, self.real)
-    }
-
-    #[must_use]
-    pub fn magnitude(self) -> f64 {
-        f64::sqrt(self.real.powi(2) + self.imaginary.powi(2))
-    }
-
-    #[must_use]
-    pub fn conjugate(self) -> Complex {
-        Complex::new(self.real, -self.imaginary)
-    }
-
-    #[must_use]
-    pub fn partial_mul(self, other: Complex) -> Complex {
-        Complex::new(self.real * other.real, self.imaginary * other.imaginary)
-    }
-
-    #[must_use]
-    pub fn partial_div(self, other: Complex) -> Complex {
-        Complex::new(self.real / other.real, self.imaginary / other.imaginary)
-    }
-
-    #[must_use]
-    pub fn arg(self) -> f64 {
-        f64::atan2(self.imaginary, self.real)
-    }
-
-    #[must_use]
-    pub fn normalize(self) -> Complex {
-        self / self.magnitude()
-    }
-
-    /// Number-theoretical norm. Simply a^2 + b^2 with self = a + bi
-    #[must_use]
-    pub fn len_squared(self) -> f64 {
-        self.real * self.real + self.imaginary * self.imaginary
-    }
-
-    #[must_use]
-    pub fn sqrt(self) -> Complex {
-        // The formula used here doesn't work for negative reals. We can use a trick here to bypass that restriction.
-        // If the real part is negative, we simply negate it to get a positive part and then multiply the result by i.
-        if self.real > 0.0 {
-            // Use the generic formula (https://math.stackexchange.com/questions/44406/how-do-i-get-the-square-root-of-a-complex-number)
-            let r = self.magnitude();
-
-            r.sqrt() * (self + r).normalize()
-        } else {
-            (-self).sqrt().mul_i()
-        }
-    }
-
-    /// Same as sqrt, but returns a normalized result.
-    #[must_use]
-    pub fn sqrt_norm(self) -> Complex {
-        // The formula used here doesn't work for negative reals. We can use a trick here to bypass that restriction.
-        // If the real part is negative, we simply negate it to get a positive part and then multiply the result by i.
-        if self.real > 0.0 {
-            // Use the generic formula (https://math.stackexchange.com/questions/44406/how-do-i-get-the-square-root-of-a-complex-number)
-            let r = self.magnitude();
-
-            // We simply don't multiply by the square root of r.
-            (self + r).normalize()
-        } else {
-            (-self).sqrt_norm().mul_i() // Normalization isn't lost here.
-        }
-    }
-
-    /// Inverse of the number.
-    #[must_use]
-    pub fn inverse(self) -> Self {
-        self.conjugate() / self.len_squared()
-    }
-}
-
-impl Mul for Complex {
-    type Output = Complex;
-
-    fn mul(self, rhs: Complex) -> Self::Output {
-        Complex::new(
-            self.real * rhs.real - self.imaginary * rhs.imaginary,
-            self.real * rhs.imaginary + rhs.real * self.imaginary,
-        )
-    }
-}
-
-impl Mul<Complex> for f64 {
-    type Output = Complex;
-
-    fn mul(self, rhs: Complex) -> Self::Output {
-        Complex::new(self * rhs.real, self * rhs.imaginary)
-    }
-}
-
-impl Mul<f64> for Complex {
-    type Output = Complex;
-
-    fn mul(self, rhs: f64) -> Self::Output {
-        Complex::new(self.real * rhs, self.imaginary * rhs)
-    }
-}
-
-impl Add<f64> for Complex {
-    type Output = Complex;
-
-    fn add(self, rhs: f64) -> Self::Output {
-        Complex::new(self.real + rhs, self.imaginary)
-    }
-}
-
-impl Add for Complex {
-    type Output = Complex;
-
-    fn add(self, rhs: Self) -> Self::Output {
-        Complex::new(self.real + rhs.real, self.imaginary + rhs.imaginary)
-    }
-}
-
-impl Div<f64> for Complex {
-    type Output = Complex;
-
-    fn div(self, rhs: f64) -> Self::Output {
-        Complex::new(self.real / rhs, self.imaginary / rhs)
-    }
-}
-
-impl Div for Complex {
-    type Output = Complex;
-
-    fn div(self, rhs: Complex) -> Self::Output {
-        (self * rhs.conjugate()) / (rhs.real * rhs.real + rhs.imaginary * rhs.imaginary)
-    }
-}
-
-impl Sub<f64> for Complex {
-    type Output = Complex;
-
-    fn sub(self, rhs: f64) -> Self::Output {
-        Complex::new(self.real - rhs, self.imaginary)
-    }
-}
-
-impl Sub for Complex {
-    type Output = Complex;
-
-    fn sub(self, rhs: Self) -> Self::Output {
-        Complex::new(self.real - rhs.real, self.imaginary - rhs.imaginary)
-    }
-}
-
-impl SubAssign for Complex {
-    fn sub_assign(&mut self, rhs: Self) {
-        *self = *self - rhs;
-    }
-}
-
-impl AddAssign for Complex {
-    fn add_assign(&mut self, rhs: Self) {
-        *self = *self + rhs;
-    }
-}
-
-impl MulAssign for Complex {
-    fn mul_assign(&mut self, rhs: Self) {
-        *self = *self * rhs;
-    }
-}
-
-impl Display for Complex {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} + {}i", self.real, self.imaginary)
-    }
-}
-
-impl Neg for Complex {
-    type Output = Complex;
-
-    fn neg(self) -> Self::Output {
-        Complex::new(-self.real, -self.imaginary)
-    }
-}
-
-impl Default for Complex {
-    fn default() -> Self {
-        Self {
-            real: 0.0,
-            imaginary: 0.0,
-        }
-    }
-}
-
-impl Sum for Complex {
-    fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
-        let mut v = Complex::zero();
-
-        for x in iter {
-            v += x;
-        }
-
-        v
-    }
-}
-
-impl Product for Complex {
-    fn product<I: Iterator<Item = Self>>(iter: I) -> Self {
-        let mut v = Complex::zero();
-
-        for x in iter {
-            v *= x;
-        }
-
-        v
-    }
-}
 
 pub type Logger = Vec<String>;
 
@@ -351,7 +99,6 @@ unsafe fn generation_cycle(
     receiver: mpsc::Receiver<Message>,
     sender: mpsc::Sender<CycleState>,
     program: Arc<EvaluateProgram>,
-    flags: Arc<Flags>,
     current_state: SendPtr<State>
 ) {
     let mut memory = program.setup();
@@ -434,8 +181,8 @@ impl AdjustableTemplate {
     }
 }
 
-impl From<&Entity> for AdjustableTemplate {
-    fn from(value: &Entity) -> Self {
+impl<I: Indirection> From<&Entity<I>> for AdjustableTemplate {
+    fn from(value: &Entity<I>) -> Self {
         match value {
             Entity::FreePoint => AdjustableTemplate::Point,
             Entity::PointOnLine(_) => AdjustableTemplate::PointOnLine,
@@ -452,7 +199,6 @@ impl Generator {
     pub unsafe fn new(
         workers: usize,
         program: EvaluateProgram,
-        flags: &Arc<Flags>,
     ) -> Self {
         let (input_senders, input_receivers): (
             Vec<mpsc::Sender<Message>>,
@@ -496,9 +242,8 @@ impl Generator {
                 .into_iter()
                 .map(|rec| {
                     let sender = mpsc::Sender::clone(&output_sender);
-                    let flags = Arc::clone(flags);
                     let program = Arc::clone(&program);
-                    thread::spawn(move || unsafe { generation_cycle(rec, sender, program, flags, state_ptr) })
+                    thread::spawn(move || unsafe { generation_cycle(rec, sender, program, state_ptr) })
                 })
                 .collect(),
             senders: input_senders,
@@ -569,8 +314,6 @@ impl Generator {
     }
 
     pub fn single_cycle(&mut self, maximum_adjustment: f64) {
-        let current_quality = self.get_total_quality();
-
         self.cycle_prebaked(&self.bake_magnitudes(maximum_adjustment));
 
         self.delta = self.get_total_quality();
@@ -645,24 +388,6 @@ impl Drop for Generator {
 
         for worker in workers {
             worker.join().unwrap();
-        }
-    }
-}
-
-#[derive(Debug)]
-pub struct Optimizations {}
-
-#[derive(Debug)]
-pub struct Flags {
-    pub optimizations: Optimizations,
-    pub point_bounds: bool,
-}
-
-impl Default for Flags {
-    fn default() -> Self {
-        Self {
-            optimizations: Optimizations {},
-            point_bounds: false,
         }
     }
 }

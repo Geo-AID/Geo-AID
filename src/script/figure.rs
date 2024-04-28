@@ -23,7 +23,7 @@ use std::{fmt::Display, str::FromStr};
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 use serde::Serialize;
-use crate::script::math::VarIndex;
+use crate::script::math::{IndexMap, Reindex, VarIndex};
 
 use crate::span;
 
@@ -54,6 +54,12 @@ pub struct PointItem {
     pub display_dot: bool
 }
 
+impl Reindex for PointItem {
+    fn reindex(&mut self, map: &IndexMap) {
+        self.id = map.get(self.id);
+    }
+}
+
 impl From<PointItem> for Item {
     fn from(value: PointItem) -> Self {
         Self::Point(value)
@@ -67,6 +73,12 @@ pub struct CircleItem {
     pub style: Style
 }
 
+impl Reindex for CircleItem {
+    fn reindex(&mut self, map: &IndexMap) {
+        self.id = map.get(self.id);
+    }
+}
+
 impl From<CircleItem> for Item {
     fn from(value: CircleItem) -> Self {
         Self::Circle(value)
@@ -78,6 +90,12 @@ pub struct LineItem {
     pub id: usize,
     pub label: MathString,
     pub style: Style
+}
+
+impl Reindex for LineItem {
+    fn reindex(&mut self, map: &IndexMap) {
+        self.id = map.get(self.id);
+    }
 }
 
 impl From<LineItem> for Item {
@@ -94,6 +112,13 @@ pub struct RayItem {
     pub style: Style
 }
 
+impl Reindex for RayItem {
+    fn reindex(&mut self, map: &IndexMap) {
+        self.p_id = map.get(self.p_id);
+        self.q_id = map.get(self.q_id);
+    }
+}
+
 impl From<RayItem> for Item {
     fn from(value: RayItem) -> Self {
         Self::Ray(value)
@@ -108,6 +133,13 @@ pub struct SegmentItem {
     pub style: Style
 }
 
+impl Reindex for SegmentItem {
+    fn reindex(&mut self, map: &IndexMap) {
+        self.p_id = map.get(self.p_id);
+        self.q_id = map.get(self.q_id);
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum Item {
     Point(PointItem),
@@ -115,6 +147,18 @@ pub enum Item {
     Line(LineItem),
     Ray(RayItem),
     Segment(SegmentItem)
+}
+
+impl Reindex for Item {
+    fn reindex(&mut self, map: &IndexMap) {
+        match self {
+            Self::Point(v) => v.reindex(map),
+            Self::Circle(v) => v.reindex(map),
+            Self::Line(v) => v.reindex(map),
+            Self::Ray(v) => v.reindex(map),
+            Self::Segment(v) => v.reindex(map),
+        }
+    }
 }
 
 /// Defines the visual data of the figure.

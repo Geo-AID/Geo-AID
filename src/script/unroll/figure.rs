@@ -265,7 +265,7 @@ impl Node for CollectionNode {
 pub trait BuildAssociated<T: Node>: Debug {
     fn build_associated(
         self: Box<Self>,
-        compiler: &mut Build,
+        build: &mut Build,
         associated: &mut HierarchyNode<T>,
     );
 }

@@ -21,10 +21,12 @@
 use num_traits::Zero;
 use crate::script::math::{HandleEntity, Entity, Number, Point, Rule, SimpleRule};
 
+use super::ExprTypes;
+
 pub struct ZeroLineDst;
 
 impl ZeroLineDst {
-    pub fn process(rule: &mut Option<SimpleRule>, entities: &mut [Entity]) -> bool {
+    pub fn process(rule: &mut Option<SimpleRule>, entities: &mut [Entity<ExprTypes<()>>]) -> bool {
         let Some(Rule::NumberEq(a, b)) = rule
             else { return false };
 

@@ -18,7 +18,9 @@ WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use super::prelude::*;
+use crate::script::math::Build;
+
+use super::{angle::display_angle_arms, prelude::*};
 use geo_aid_derive::overload;
 
 /// bisector(point, point, point) - angle bisector.
@@ -59,8 +61,7 @@ pub struct Associated;
 impl BuildAssociated<LineNode> for Associated {
     fn build_associated(
         self: Box<Self>,
-        compiler: &mut Compiler,
-        figure: &mut Figure,
+        build: &mut Build,
         associated: &mut HierarchyNode<LineNode>,
     ) {
         let display_arms = associated
@@ -97,33 +98,7 @@ impl BuildAssociated<LineNode> for Associated {
         if display_arms {
             match associated.root.expr.data.as_ref() {
                 Line::AngleBisector(a_expr, b_expr, c_expr) => {
-                    let a = compiler.compile(a_expr);
-                    let b = compiler.compile(b_expr);
-                    let c = compiler.compile(c_expr);
-
-                    match arms_type {
-                        LineType::Line => {
-                            let line_a = Expr::new_spanless(Line::LineFromPoints(
-                                b_expr.clone_without_node(),
-                                a_expr.clone_without_node(),
-                            ));
-                            let line_c = Expr::new_spanless(Line::LineFromPoints(
-                                b_expr.clone_without_node(),
-                                c_expr.clone_without_node(),
-                            ));
-
-                            figure.lines.push((compiler.compile(&line_a), arms_style));
-                            figure.lines.push((compiler.compile(&line_c), arms_style));
-                        }
-                        LineType::Ray => {
-                            figure.rays.push((b.clone(), a, arms_style));
-                            figure.rays.push((b, c, arms_style));
-                        }
-                        LineType::Segment => {
-                            figure.segments.push((b.clone(), a, arms_style));
-                            figure.segments.push((b, c, arms_style));
-                        }
-                    }
+                    display_angle_arms(build, a_expr, b_expr, c_expr, arms_type, arms_style);
                 }
                 _ => unreachable!(),
             }

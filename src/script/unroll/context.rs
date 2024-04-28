@@ -24,7 +24,6 @@ use std::mem;
 use std::rc::Rc;
 use std::{collections::HashMap, fmt::Debug};
 
-use crate::generator::fast_float::FastFloat;
 use crate::script::builtins::macros::number;
 use crate::script::unroll::{AnyExpr, CloneWithNode};
 use crate::script::{unit, ComplexUnit, Error};
@@ -110,7 +109,7 @@ impl CompileContext {
         &mut self,
         lhs: &Expr<Point>,
         rhs: &Expr<Circle>,
-        weight: FastFloat,
+        weight: ProcNum,
     ) {
         self.push_rule(UnrolledRule {
             kind: UnrolledRuleKind::ScalarEq(
@@ -129,7 +128,7 @@ impl CompileContext {
         &mut self,
         lhs: &Expr<Point>,
         rhs: &Expr<Line>,
-        weight: FastFloat,
+        weight: ProcNum,
     ) {
         self.push_rule(UnrolledRule {
             kind: UnrolledRuleKind::ScalarEq(
@@ -346,7 +345,7 @@ macro_rules! generic_rule {
                 display: Properties
             ) -> Box<dyn Node> {
                 let (lhs_node, rhs_node) = (lhs.take_node(), rhs.take_node());
-                self.rule_with(UnrolledRuleKind::$r(lhs, rhs), lhs_node, rhs_node, inverted, display, FastFloat::One)
+                self.rule_with(UnrolledRuleKind::$r(lhs, rhs), lhs_node, rhs_node, inverted, display, ProcNum::one())
             }
 
             pub fn $f(
@@ -371,7 +370,7 @@ impl CompileContext {
         rhs: Option<M>,
         inverted: bool,
         mut display: Properties,
-        def_weight: FastFloat,
+        def_weight: ProcNum,
     ) -> Box<dyn Node> {
         let weight = display.get("weight").get_or(def_weight);
         let mut node = CollectionNode::from_display(display, self);
