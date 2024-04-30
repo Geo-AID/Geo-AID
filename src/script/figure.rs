@@ -27,6 +27,7 @@ use crate::script::math::{IndexMap, Reindex, VarIndex};
 
 use crate::span;
 
+use super::math::Entity;
 use super::{parser::{FromProperty, Parse, PropertyValue}, token::{Ident, PointCollectionItem, Span}, unroll::most_similar, Error, math};
 
 pub const SPECIAL_MATH: [&str; 49] = [
@@ -164,6 +165,8 @@ impl Reindex for Item {
 /// Defines the visual data of the figure.
 #[derive(Debug, Default)]
 pub struct Figure {
+    /// Entities used by the figure
+    pub entities: Vec<Entity<VarIndex, usize>>,
     /// Variables used by the figure
     pub variables: Vec<math::Expr<math::Any<VarIndex>, usize>>,
     /// Drawn items with meta

@@ -26,7 +26,7 @@ use crate::engine::rage::generator::critic::{EvaluateProgram, FigureProgram};
 use crate::engine::rage::generator::program::{Instruction, Loc, Program, ValueType};
 use crate::engine::rage::generator::program::expr::{AngleBisector, AngleLine, AnglePoint, AnglePointDir, Average, CircleConstruct, EqualComplex, EqualReal, Greater, InvertQuality, Less, LineFromPoints, LineLineIntersection, Max, Negation, ParallelThrough, PartialPow, PartialProduct, PerpendicularThrough, PointLineDistance, PointOnLine, PointPointDistance, Sum, SwapParts};
 use crate::geometry::{Complex, ValueEnum};
-use crate::script::math::{Any, Circle, Entity, EntityId, Expr, Intermediate, Line, Number, Point, Rule, RuleKind, VarIndex};
+use crate::script::math::{Any, Circle, EntityKind, EntityId, Expr, Intermediate, Line, Number, Point, Rule, RuleKind, VarIndex};
 use crate::script::token::number::ProcNum;
 
 #[derive(Debug, Default)]
@@ -93,9 +93,9 @@ impl<'i> Compiler<'i> {
 
         // 1a. Figure out adjustables
 
-        let adjustables = self.intermediate.adjusted.entities
+        let adjustables: Vec<_> = self.intermediate.figure.entities
             .iter()
-            .map(AdjustableTemplate::from)
+            .map(|ent| AdjustableTemplate::from(&ent.kind))
             .collect();
         let adj_count = adjustables.len();
 
@@ -154,8 +154,20 @@ impl<'i> Compiler<'i> {
             })
             .collect();
 
+        let entity_types: Vec<_> = self.intermediate.figure.entities.iter()
+            .map(|ent| {
+                match &ent.kind {
+                    EntityKind::FreeReal
+                    | EntityKind::FreePoint
+                    | EntityKind::PointOnLine(_) => ValueType::Complex,
+                    EntityKind::Bind(_) => unreachable!(),
+                }
+            })
+            .collect();
+
         // 2. Compile `FigureProgram`
         self.variables.clear();
+        self.entities.clear();
 
         // 2a. Figure out constants
 
@@ -175,7 +187,8 @@ impl<'i> Compiler<'i> {
                 constants: self.constants,
                 instructions: self.instructions
             },
-            variables: variable_types.into_iter().zip(self.variables).collect()
+            variables: variable_types.into_iter().zip(self.variables).collect(),
+            entities: entity_types.into_iter().zip(self.entities).collect()
         };
 
         (evaluate, figure)
@@ -489,12 +502,12 @@ impl<'i> Compile<EntityId> for Compiler<'i> {
 
         let ent = self.intermediate.adjusted.entities[value.0].clone();
         let loc = match ent {
-            Entity::FreeReal
-            | Entity::FreePoint => {
+            EntityKind::FreeReal
+            | EntityKind::FreePoint => {
                 // The first constants are entities.
                 value.0
             }
-            Entity::PointOnLine(line) => {
+            EntityKind::PointOnLine(line) => {
                 let target = self.cursor.next();
 
                 self.instructions.push(Instruction::OnLine(PointOnLine {
@@ -505,7 +518,7 @@ impl<'i> Compile<EntityId> for Compiler<'i> {
 
                 target
             }
-            Entity::Bind(_) => unreachable!()
+            EntityKind::Bind(_) => unreachable!()
         };
         self.entities[value.0] = loc;
         loc

@@ -26,9 +26,9 @@ pub mod rage;
 
 #[derive(Debug, Clone)]
 pub struct GenerateResult {
-    values: Vec<ValueEnum>,
-    time: Duration,
-    total_quality: f64
+    pub values: Vec<ValueEnum>,
+    pub time: Duration,
+    pub total_quality: f64
 }
 
 pub trait Engine {

@@ -99,7 +99,9 @@ pub struct FigureProgram {
     /// Program base.
     pub base: Program,
     /// Expression values.
-    pub variables: Vec<(ValueType, Loc)>
+    pub variables: Vec<(ValueType, Loc)>,
+    /// Entity values.
+    pub entities: Vec<(ValueType, Loc)>
 }
 
 impl FigureProgram {

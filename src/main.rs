@@ -33,9 +33,7 @@ use crossterm::{cursor, terminal, ExecutableCommand, QueueableCommand};
 use geo_aid::{
     cli::{Diagnostic, DiagnosticKind}, drawer::{Draw, Json, Latex, Raw, Svg}, engine::{rage::Rage, Engine}, script::math
 };
-use geo_aid::{
-    projector
-};
+use geo_aid::projector;
 use geo_aid::engine::GenerateResult;
 use geo_aid::engine::rage::GenParams;
 
