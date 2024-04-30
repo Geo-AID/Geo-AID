@@ -19,16 +19,16 @@
  */
 
 use num_traits::Zero;
-use crate::script::math::{HandleEntity, EntityKind, Number, Point, Rule, SimpleRule};
+use crate::script::math::{HandleEntity, EntityKind, Number, Point, SimpleRule};
 
-use super::ExprTypes;
+use super::{ExprTypes, Rule, RuleKind};
 
 /// If a free point is at distance 0 from a line, it should be turned into a line clip.
 pub struct ZeroLineDst;
 
 impl ZeroLineDst {
     pub fn process(rule: &mut Option<SimpleRule>, entities: &mut [EntityKind<ExprTypes<()>>]) -> bool {
-        let Some(Rule::NumberEq(a, b)) = rule
+        let Some(Rule { kind: RuleKind::NumberEq(a, b), .. }) = &rule
             else { return false };
 
         // If 'a' is a constant, swab references for the sake of latter processing.
@@ -57,8 +57,14 @@ impl ZeroLineDst {
 
         // 'a' is a point entity with a zero distance from the line ln independent of 'a'.
         // Should it be beneficial, the rule should be deleted and the entity definition replaced.
-        if entities[*a].degree() <= 1 {
-            return false;
+        match &mut entities[a.0] {
+            ent @ EntityKind::FreePoint => {
+                *ent = EntityKind::PointOnLine(ln.clone());
+                *rule = None;
+            }
+            ent @ EntityKind::PointOnLine(ln) => {
+                
+            }
         }
 
         entities[*a] = EntityKind::PointOnLine(ln.clone());
