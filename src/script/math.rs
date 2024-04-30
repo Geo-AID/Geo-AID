@@ -1734,6 +1734,7 @@ impl<I: Indirection, M, Dst> MapMeta<Dst> for Entity<I, M> {
 pub enum EntityKind<I: Indirection> {
     FreePoint,
     PointOnLine(I::Line),
+    PointOnCircle(I::Circle),
     FreeReal,
     Bind(Any<I>)
 }
@@ -1743,6 +1744,7 @@ impl Clone for EntityKind<VarIndex> {
         match self {
             EntityKind::FreePoint => Self::FreePoint,
             EntityKind::PointOnLine(ln) => Self::PointOnLine(ln.clone()),
+            EntityKind::PointOnCircle(circ) => Self::PointOnCircle(circ.clone()),
             EntityKind::FreeReal => Self::FreeReal,
             EntityKind::Bind(bind) => Self::Bind(bind.clone()),
         }
@@ -1755,6 +1757,7 @@ impl Reindex for EntityKind<VarIndex> {
             EntityKind::FreePoint
             | EntityKind::FreeReal => {}
             EntityKind::PointOnLine(line) => line.reindex(map),
+            EntityKind::PointOnCircle(circle) => circle.reindex(map),
             EntityKind::Bind(_) => unreachable!("Should not appear")
         }
     }
@@ -1767,6 +1770,7 @@ impl Flatten for EntityKind<ExprTypes<()>> {
         match self {
             Self::FreePoint => EntityKind::FreePoint,
             Self::PointOnLine(line) => EntityKind::PointOnLine(line.flatten(context)),
+            Self::PointOnCircle(circle) => EntityKind::PointOnCircle(circle.flatten(context)),
             Self::FreeReal => EntityKind::FreeReal,
             Self::Bind(_) => unreachable!("bound entities should never appear in the flattening step")
         }
@@ -2063,6 +2067,7 @@ pub fn load_script(input: &str) -> Result<Intermediate, Vec<Error>> {
         for (i, entity) in expand.entities.iter().enumerate() {
             intos.push(match entity {
                 EntityKind::FreePoint
+                | EntityKind::PointOnCircle(_)
                 | EntityKind::PointOnLine(_) => Any::Point(Point::Entity { id: EntityId(i - offset) }),
                 EntityKind::FreeReal => Any::Number(Number::Entity { id: EntityId(i - offset) }),
                 EntityKind::Bind(expr) => {

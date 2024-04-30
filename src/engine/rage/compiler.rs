@@ -159,6 +159,7 @@ impl<'i> Compiler<'i> {
                 match &ent.kind {
                     EntityKind::FreeReal
                     | EntityKind::FreePoint
+                    | EntityKind::PointOnCircle(_)
                     | EntityKind::PointOnLine(_) => ValueType::Complex,
                     EntityKind::Bind(_) => unreachable!(),
                 }

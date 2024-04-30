@@ -38,7 +38,6 @@ use self::token::{number::CompExponent, NamedIdent, Span, Token};
 use self::{figure::SPECIAL_MATH, parser::Type};
 
 mod builtins;
-pub mod compile;
 pub mod figure;
 pub mod math;
 pub mod parser;

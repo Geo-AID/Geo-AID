@@ -21,7 +21,7 @@
 use num_traits::Zero;
 use crate::script::math::{HandleEntity, EntityKind, Number, Point, SimpleRule};
 
-use super::{ExprTypes, Rule, RuleKind};
+use super::{Any, Circle, Expr, ExprTypes, Rule, RuleKind};
 
 /// If a free point is at distance 0 from a line, it should be turned into a line clip.
 pub struct ZeroLineDst;
@@ -31,7 +31,7 @@ impl ZeroLineDst {
         let Some(Rule { kind: RuleKind::NumberEq(a, b), .. }) = &rule
             else { return false };
 
-        // If 'a' is a constant, swab references for the sake of latter processing.
+        // If 'a' is a constant, swap references for the sake of latter processing.
         let (a, b) = if let Number::Const { .. } = a.kind.as_ref() {
             (b, a)
         } else {
@@ -55,19 +55,102 @@ impl ZeroLineDst {
             return false;
         }
 
+        // Additional checks
+        let mut on_line = None;
+
+        match &entities[a.0] {
+            EntityKind::PointOnLine(on_ln) => {
+                if on_ln == ln {
+                    // This rule is useless.
+                    *rule = None;
+                    return true;
+                } else {
+                    on_line = Some(on_ln.clone());
+                }
+            }
+            _ => ()
+        }
+
         // 'a' is a point entity with a zero distance from the line ln independent of 'a'.
         // Should it be beneficial, the rule should be deleted and the entity definition replaced.
         match &mut entities[a.0] {
             ent @ EntityKind::FreePoint => {
                 *ent = EntityKind::PointOnLine(ln.clone());
-                *rule = None;
             }
-            ent @ EntityKind::PointOnLine(ln) => {
-                
+            ent @ EntityKind::PointOnLine(_) => {
+                *ent = EntityKind::Bind(Any::Point(Point::LineLineIntersection {
+                    k: on_line.unwrap(), l: ln.clone()
+                }));
             }
+            ent @ EntityKind::FreeReal => unreachable!(),
+            EntityKind::PointOnCircle(_)
+            | EntityKind::Bind(_) => return false
         }
 
-        entities[*a] = EntityKind::PointOnLine(ln.clone());
         *rule = None;
+        true
+    }
+}
+
+/// If two sides of an equality are exactly the same, the rule should be ommitted.
+pub struct EqExpressions;
+
+impl EqExpressions {
+    pub fn process(rule: &mut Option<SimpleRule>) -> bool {
+        let Some(Rule { kind: RuleKind::NumberEq(a, b), .. }) = rule else {
+            let Some(Rule { kind: RuleKind::PointEq(a, b), .. }) = rule else {
+                return false;
+            };
+
+            if a == b {
+                *rule = None;
+                return true;
+            }
+
+            return false;
+        };
+
+        if a == b {
+            *rule = None;
+            true
+        } else {
+            false
+        }
+    }
+}
+
+/// If two points are equally distant from a certain single point, they lie on a circle with the point as the origin.
+pub struct EqPointDst;
+
+impl EqPointDst {
+    pub fn process(rule: &mut Option<SimpleRule>, entities: &mut [EntityKind<ExprTypes<()>>]) -> bool {
+        let Some(Rule {
+            kind: RuleKind::NumberEq(a, b),
+            ..
+        }) = rule else {return false};
+
+        let Number::PointPointDistance { p, q } = a.kind.as_ref() else { return false };
+        let Number::PointPointDistance { p: r, q: s } = b.kind.as_ref() else { return false };
+
+        // q = s?
+        if q != s {
+            return false;
+        }
+
+        // r must be an entity (if there is one, it's definitely r, because normalization and ordering)
+        let Point::Entity { id: r_id } = r.kind.as_ref() else { return false };
+
+        // r must be a free point, otherwise it won't work.
+        if !matches!(entities[r_id.0], EntityKind::FreePoint) {
+            return false;
+        }
+
+        let circle = Expr::new(Circle::Construct {
+            center: q.clone(),
+            radius: Expr::new(Number::PointPointDistance { p: p.clone(), q: q.clone() })
+        });
+        entities[r_id.0] = EntityKind::PointOnCircle(circle);
+        *rule = None;
+        true
     }
 }
