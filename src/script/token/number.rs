@@ -206,6 +206,11 @@ impl ProcNum {
     pub fn to_complex(self) -> geometry::Complex {
         geometry::Complex::new(self.0.re.to_f64().unwrap(), self.0.im.to_f64().unwrap())
     }
+
+    #[must_use]
+    pub fn pi() -> Self {
+        Self(Complex::acos(Complex::new(-BigRational::one(), BigRational::zero())))
+    }
 }
 
 impl SubAssign for ProcNum {

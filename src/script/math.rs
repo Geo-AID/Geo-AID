@@ -1408,12 +1408,12 @@ impl_flatten!{CircleExpr}
 impl_flatten!{NumberExpr}
 impl_flatten!{AnyExpr}
 
-impl<T: HandleEntity<M>, M: Indirection> HandleEntity<M> for Expr<T, M> {
-    fn contains_entity(&self, entity: EntityId, entities: &[EntityKind<M>]) -> bool {
+impl<T: HandleEntity<I>, I: Indirection, M> HandleEntity<I> for Expr<T, M> {
+    fn contains_entity(&self, entity: EntityId, entities: &[EntityKind<I>]) -> bool {
         self.kind.contains_entity(entity, entities)
     }
 
-    fn map_entity(self, entity: EntityId, into: &Any<M>) -> Self {
+    fn map_entity(self, entity: EntityId, into: &Any<I>) -> Self {
         Self {
             kind: self.kind.map_entity(entity, into),
             meta: self.meta
@@ -1740,6 +1740,18 @@ pub enum EntityKind<I: Indirection> {
 }
 
 impl Clone for EntityKind<VarIndex> {
+    fn clone(&self) -> Self {
+        match self {
+            EntityKind::FreePoint => Self::FreePoint,
+            EntityKind::PointOnLine(ln) => Self::PointOnLine(ln.clone()),
+            EntityKind::PointOnCircle(circ) => Self::PointOnCircle(circ.clone()),
+            EntityKind::FreeReal => Self::FreeReal,
+            EntityKind::Bind(bind) => Self::Bind(bind.clone()),
+        }
+    }
+}
+
+impl Clone for EntityKind<ExprTypes<()>> {
     fn clone(&self) -> Self {
         match self {
             EntityKind::FreePoint => Self::FreePoint,

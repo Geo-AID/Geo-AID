@@ -20,6 +20,7 @@
 
 use num_traits::Zero;
 use crate::script::math::{HandleEntity, EntityKind, Number, Point, SimpleRule};
+use crate::script::token::number::ProcNum;
 
 use super::{Any, Circle, Expr, ExprTypes, Rule, RuleKind};
 
@@ -64,9 +65,9 @@ impl ZeroLineDst {
                     // This rule is useless.
                     *rule = None;
                     return true;
-                } else {
-                    on_line = Some(on_ln.clone());
                 }
+
+                on_line = Some(on_ln.clone());
             }
             _ => ()
         }
@@ -92,7 +93,7 @@ impl ZeroLineDst {
     }
 }
 
-/// If two sides of an equality are exactly the same, the rule should be ommitted.
+/// If two sides of an equality are exactly the same, the rule should be omitted.
 pub struct EqExpressions;
 
 impl EqExpressions {
@@ -151,6 +152,40 @@ impl EqPointDst {
         });
         entities[r_id.0] = EntityKind::PointOnCircle(circle);
         *rule = None;
+        true
+    }
+}
+
+/// If angle ABC is a right angle,
+pub struct RightAngle;
+
+impl RightAngle {
+    pub fn process(rule: &mut Option<SimpleRule>) -> bool {
+        let Some(Rule {
+             kind: RuleKind::NumberEq(a, b),
+             ..
+         }) = rule else {return false};
+
+        let Number::ThreePointAngle { p, q, r } = a.kind.as_ref() else { return false };
+        let Number::Const { value } = b.kind.as_ref() else { return false };
+
+        if *value != ProcNum::pi() {
+            return false;
+        }
+
+        let mid = Expr::new(Point::Average {
+            items: vec![p.clone(), r.clone()]
+        });
+        let p = p.clone();
+        let q = q.clone();
+
+        if let Some(rule) = rule {
+            rule.kind = RuleKind::NumberEq(
+                Expr::new(Number::PointPointDistance { p: mid.clone(), q }),
+                Expr::new(Number::PointPointDistance { p, q: mid })
+            );
+        }
+
         true
     }
 }
