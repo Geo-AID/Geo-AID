@@ -22,13 +22,13 @@ use num_traits::Zero;
 use crate::script::math::{HandleEntity, EntityKind, Number, Point, SimpleRule};
 use crate::script::token::number::ProcNum;
 
-use super::{Any, Circle, Expr, ExprTypes, Rule, RuleKind};
+use super::{Any, Circle, Expr, MathTypes, Rule, RuleKind};
 
 /// If a free point is at distance 0 from a line, it should be turned into a line clip.
 pub struct ZeroLineDst;
 
 impl ZeroLineDst {
-    pub fn process(rule: &mut Option<SimpleRule>, entities: &mut [EntityKind<ExprTypes<()>>]) -> bool {
+    pub fn process(rule: &mut Option<SimpleRule>, entities: &mut [EntityKind<MathTypes>]) -> bool {
         let Some(Rule { kind: RuleKind::NumberEq(a, b), .. }) = &rule
             else { return false };
 
@@ -124,7 +124,7 @@ impl EqExpressions {
 pub struct EqPointDst;
 
 impl EqPointDst {
-    pub fn process(rule: &mut Option<SimpleRule>, entities: &mut [EntityKind<ExprTypes<()>>]) -> bool {
+    pub fn process(rule: &mut Option<SimpleRule>, entities: &mut [EntityKind<MathTypes>]) -> bool {
         let Some(Rule {
             kind: RuleKind::NumberEq(a, b),
             ..

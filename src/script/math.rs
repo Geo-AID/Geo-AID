@@ -32,6 +32,8 @@ use crate::script::math::optimizations::ZeroLineDst;
 use crate::script::token::number::{CompExponent, ProcNum};
 use crate::script::unroll::figure::Node;
 
+use self::optimizations::{EqExpressions, EqPointDst, RightAngle};
+
 use super::unroll::Flag;
 use super::{figure::Figure, unroll::{self, Displayed, Expr as Unrolled, UnrolledRule, UnrolledRuleKind,
                                      Point as UnrolledPoint, Line as UnrolledLine, Circle as UnrolledCircle, ScalarData as UnrolledScalar}, Error, ComplexUnit, SimpleUnit};
@@ -229,6 +231,7 @@ impl Indirection for VarIndex {
 
 #[derive(Debug, Clone, Copy, Default, Ord, PartialOrd, Eq, PartialEq)]
 pub struct ExprTypes<M>(PhantomData<M>);
+pub type MathTypes = ExprTypes<MathMeta>;
 
 impl<M> ExprTypes<M> {
     #[must_use]
@@ -1367,9 +1370,11 @@ impl<T> DerefMut for AlwaysEq<T> {
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Default, Hash)]
 pub struct Expr<T, M> {
+    pub meta: M,
     pub kind: Box<T>,
-    pub meta: M
 }
+
+pub type MathMeta = u64;
 
 impl<T: FindEntities, M> FindEntities for Expr<T, M> {
     fn find_entities(&self, previous: &[HashSet<EntityId>]) -> HashSet<EntityId> {
@@ -1852,7 +1857,7 @@ impl Expand {
 pub struct Build {
     expand: Expand,
     id_map: HashMap<usize, usize>,
-    loaded: Vec<AnyExpr<()>>,
+    loaded: Vec<AnyExpr<MathMeta>>,
     items: Vec<Item>
 }
 
@@ -1879,12 +1884,16 @@ struct FlattenContext {
 ///
 /// # Returns
 /// `true` if an optimization was performed. `false` otherwise.
-fn optimize_rules(rules: &mut Vec<Option<SimpleRule>>, entities: &mut [EntityKind<ExprTypes<()>>]) -> bool {
+fn optimize_rules(rules: &mut Vec<Option<SimpleRule>>, entities: &mut [EntityKind<MathTypes>]) -> bool {
     let mut performed = false;
     
     for rule in rules {
         performed = performed
-            | ZeroLineDst::process(rule, entities);
+            | ZeroLineDst::process(rule, entities)
+            | RightAngle::process(rule)
+            | EqPointDst::process(rule, entities)
+            | EqExpressions::process(rule)
+            ;
     }
 
     if performed {
@@ -2058,6 +2067,9 @@ pub fn load_script(input: &str) -> Result<Intermediate, Vec<Error>> {
     for rule in unrolled.take_rules() {
         rules.push(Some(Rule::load(&rule, &mut expand)));
     }
+
+    // Hash all expressions.
+    
 
     // The optimize cycle:
     // 1. Optimize
