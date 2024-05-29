@@ -27,9 +27,15 @@ use uuid::Uuid;
 use crate::geometry::{Complex, ValueEnum};
 
 use crate::labels::point_label_position;
-use crate::script::figure::{CircleItem, Figure, LineItem, MathString, PointItem, RayItem, SegmentItem, Style};
+use crate::script::figure::{CircleItem, Figure, Item, LineItem, MathString, PointItem, RayItem, SegmentItem, Style};
 use crate::script::math;
 use crate::script::math::{Entity, Expr, Flags, VarIndex};
+
+trait Project {
+    fn project() {
+
+    }    
+}
 
 /// Enum representing the things that are later drawn in the drawers.
 #[derive(Serialize)]
@@ -53,6 +59,7 @@ pub struct Output {
     pub entities: Vec<Entity<VarIndex, usize>>,
     /// Variables used by the figure
     pub variables: Vec<math::Expr<math::Any<VarIndex>, usize>>,
+    /// Figure items.
 }
 
 #[derive(Debug, Serialize)]
@@ -64,6 +71,8 @@ pub struct RenderedPoint {
     /// Point's defining item.
     pub item: PointItem,
 }
+
+
 
 #[derive(Serialize)]
 pub struct RenderedLine {
@@ -214,7 +223,7 @@ fn transform(offset: Complex, scale: f64, size: Complex, pt: Complex) -> Complex
 /// ///
 /// # Panics
 /// It shouldn't panic.
-fn lines(
+fn project_lines(
     figure: &Figure,
     offset: Complex,
     scale: f64,
@@ -233,7 +242,9 @@ fn lines(
             style: ln.1,
         });
     }
-    blueprint_lines
+    blueprint_lines;
+
+
 }
 
 /// Function that outputs the vector containing the angles.
@@ -384,62 +395,59 @@ pub fn project(
             meta: generated_points[var.meta]
         })
         .collect();
+    let items = figure.items;
+
+    // Collect points (currently only the actual points, in the future also some more, like circle borders etc)
+    let points: Vec<_> = items.iter().flat_map(|x| match x {
+        Item::Point(pt) => variables[pt.id].meta.as_complex(),
+        _ => None
+    }).collect();
+
+    // Frame top left point.
+    let mut topleft = Complex::new(
+        points.iter()
+            .map(|pt| pt.real)
+            .min().unwrap_or_default(),
+        points.iter()
+            .map(|pt| pt.imaginary)
+            .min().unwrap_or_default()
+    );
+
+    let offset = -topleft;
+
+    // Frame bottom right point.
+    let mut furthest = Complex::new(
+        points.iter()
+            .map(|pt| pt.real)
+            .max().unwrap_or_default(),
+        points.iter()
+            .map(|pt| pt.imaginary)
+            .max().unwrap_or_default()
+    );
+    let total_size = furthest + offset;
 
     #[allow(clippy::cast_precision_loss)]
     let size1 = Complex::new(canvas_size.0 as f64, canvas_size.1 as f64);
     let size09 = size1 * 0.9;
     let size005 = size1 * 0.05;
 
-    // Frame top left point.
-    let mut offset = points.get(0).copied().unwrap_or_default();
-
-    //noinspection DuplicatedCode
-    for x in &points {
-        if x.real < offset.real {
-            offset.real = x.real;
-        }
-
-        if x.imaginary < offset.imaginary {
-            offset.imaginary = x.imaginary;
-        }
-    }
-
-    // println!("Points pre-offset: {:?}", points);
-    // println!("Offset: {offset}");
-    let points: Vec<Complex> = points.into_iter().map(|x| x - offset).collect();
-    // println!("Points post-offset: {:?}", points);
-
-    // Frame bottom right point.
-    let mut furthest = points.get(0).copied().unwrap_or_default();
-
-    //noinspection DuplicatedCode
-    for x in &points {
-        if x.real > furthest.real {
-            furthest.real = x.real;
-        }
-
-        if x.imaginary > furthest.imaginary {
-            furthest.imaginary = x.imaginary;
-        }
-    }
-
     // The scaled frame should be at most (and equal for at least one dimension) 90% of the size of the desired image (margins for rendering).
     let scale = f64::min(
-        size09.real / furthest.real,
-        size09.imaginary / furthest.imaginary,
+        size09.real / total_size.real,
+        size09.imaginary / total_size.imaginary,
     );
-    // println!("furthest: {furthest}, scale: {scale}");
 
-    let points: Vec<Complex> = points.into_iter().map(|x| x * scale + size005).collect();
-    // println!("{points:#?}");
+    // let points: Vec<Complex> = points.into_iter().map(|x| x * scale + size005).collect();
+    let sizes = (size1, size09, size005);
 
-    //let points = points(figure, generated_points, flags);
+    let rendered = items.into_iter()
+        .map(Project::project)
 
     let mut vec_associated = Vec::new();
 
     let mut blueprint_points = Vec::new();
 
-    let blueprint_lines = lines(figure, offset, scale, size005, &args);
+    let blueprint_lines = project_lines(figure, offset, scale, size005, &args);
 
     let blueprint_angles = angles(figure, offset, scale, size005, &args);
 

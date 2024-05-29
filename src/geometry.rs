@@ -306,6 +306,16 @@ pub enum ValueEnum {
     Circle(Circle)
 }
 
+impl ValueEnum {
+    #[must_use]
+    pub fn as_complex(self) -> Option<Complex> {
+        match self {
+            Self::Complex(c) => Some(c),
+            _ => None
+        }
+    }
+}
+
 #[must_use]
 pub fn get_line(p1: Complex, p2: Complex) -> Line {
     Line {
