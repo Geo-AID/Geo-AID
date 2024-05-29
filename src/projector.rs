@@ -24,199 +24,19 @@ use std::{collections::HashMap, rc::Rc};
 use serde::Serialize;
 
 use uuid::Uuid;
+use crate::geometry::{Complex, ValueEnum};
 
-use crate::generator::expression::expr::{AngleLine, AnglePoint};
-use crate::generator::expression::{LineExpr, PointExpr, ScalarExpr};
-use crate::generator::geometry::get_line;
-use crate::generator::program::ValueEnum;
 use crate::labels::point_label_position;
-use crate::script::figure::{MathString, Style};
-use crate::{
-    generator::{
-        critic::EvaluationArgs, expression::Expression, expression::Line, geometry, Adjustable,
-        Complex, Flags,
-    },
-    script::{figure::Figure, HashableArc},
-};
-
-#[cfg(test)]
-mod tests {
-    use std::str::FromStr;
-    use std::{path::PathBuf, sync::Arc};
-
-    use crate::drawer::Draw;
-    use crate::generator::fast_float::FastFloat;
-    use crate::script::figure::{MathChar, MathIndex, MathSpecial, MathString};
-    use crate::script::token::{Position, Span};
-    use crate::{
-        drawer,
-        generator::{
-            expression::{expr::FreePoint, Expression, PointExpr},
-            Adjustable, Complex,
-        },
-        script::figure::{Figure, Style},
-    };
-
-    use super::project;
-
-    /// Utility function used in fn `test_project()`, it makes the code below less messy and more readable.
-    fn create_point_expr(index: usize) -> Arc<Expression<PointExpr>> {
-        Arc::new(Expression::new(
-            PointExpr::Free(FreePoint { index }),
-            FastFloat::One,
-        ))
-    }
-
-    /// Function that tests the performance of the projector and drawers.
-    #[test]
-    fn test_project() {
-        //let x: u8 = 1;
-        let gen_points: [(Adjustable, f64); 3] = [
-            (
-                Adjustable::Point(Complex {
-                    real: 0.3463,
-                    imaginary: 0.436,
-                }),
-                1.0,
-            ),
-            (
-                Adjustable::Point(Complex {
-                    real: 0.23,
-                    imaginary: 0.87,
-                }),
-                1.0,
-            ),
-            (
-                Adjustable::Point(Complex {
-                    real: 0.312,
-                    imaginary: 0.314,
-                }),
-                1.0,
-            ),
-        ];
-
-        let fig = Figure {
-            points: vec![
-                (
-                    create_point_expr(0),
-                    MathString {
-                        chars: vec![
-                            MathChar::Special(MathSpecial::AlphaUpper),
-                            MathChar::SetIndex(MathIndex::Lower),
-                            MathChar::Ascii('X'),
-                        ],
-                        span: Span {
-                            start: Position { line: 0, column: 0 },
-                            end: Position { line: 0, column: 0 },
-                        },
-                    },
-                ),
-                (create_point_expr(1), MathString::from_str("B").unwrap()),
-                (create_point_expr(2), MathString::from_str("C").unwrap()),
-            ],
-            lines: Vec::new(), /* vec![
-                (
-                    Arc::new(Expression::new(
-                        LineExpr::Line(LinePoint {
-                            a: create_point_expr(0),
-                            b: create_point_expr(1),
-                        }),
-                        FastFloat::One,
-                    )),
-                    Style::Dashed,
-                ),
-                (
-                    Arc::new(Expression::new(
-                        LineExpr::Line(LinePoint {
-                            a: create_point_expr(1),
-                            b: create_point_expr(2),
-                        }),
-                        FastFloat::One,
-                    )),
-                    Style::default(),
-                ),
-                (
-                    Arc::new(Expression::new(
-                        LineExpr::Line(LinePoint {
-                            a: create_point_expr(2),
-                            b: create_point_expr(0),
-                        }),
-                        FastFloat::One,
-                    )),
-                    Style::default(),
-                ),
-            ],*/
-            angles: Vec::new(), /*vec![(
-                Arc::new(Expression::new(
-                    ScalarExpr::AnglePoint(AnglePoint {
-                        arm1: create_point_expr(0),
-                        origin: create_point_expr(1),
-                        arm2: create_point_expr(2),
-                    }),
-                    FastFloat::One,
-                )),
-                x,
-                Style::Dashed,
-            )],*/
-
-            segments: vec![
-                //(create_point_expr(0), create_point_expr(1), Style::default()),
-                (create_point_expr(1), create_point_expr(2), Style::default()),
-                (create_point_expr(2), create_point_expr(0), Style::default()),
-            ],
-            rays: Vec::new(), /*vec![
-                (create_point_expr(0), create_point_expr(1), Style::Solid),
-                (create_point_expr(1), create_point_expr(2), Style::Solid),
-                (create_point_expr(2), create_point_expr(0), Style::Solid),
-            ],*/
-            circles: Vec::new(), /*vec![(
-                Arc::new(Expression::new(
-                    CircleExpr::CenterRadius(CenterRadius {
-                        center: create_point_expr(0),
-                        radius: Arc::new(Expression::new(
-                            ScalarExpr::Literal(Literal { value: 0.124 }),
-                            FastFloat::One,
-                        )),
-                    }),
-                    FastFloat::One,
-                )),
-                Style::Dashed,
-            )], */
-
-            canvas_size: (200, 200),
-        };
-
-        let path_latex = PathBuf::from("testoutputs//test.latex");
-        let _path_svg = PathBuf::from("testoutputs//test.svg");
-        let path_json = PathBuf::from("testoutputs//test.json");
-        let _path_raw = PathBuf::from("testoutputs//test.raw");
-
-        let pr = &project(&fig, &gen_points, &Arc::default());
-        //drawer::latex::draw(&path_latex, (fig.canvas_size.0, fig.canvas_size.1), pr);
-        
-        let width = fig.canvas_size.0;
-        let height = fig.canvas_size.1;
-
-        #[allow(clippy::cast_precision_loss)]
-        let mut latex = drawer::Latex {canvas_size: (width, height), scale: f64::min(10.0 / fig.canvas_size.0 as f64, 10.0 / fig.canvas_size.1 as f64), content: String::default() };
-
-        latex.draw(&path_latex, pr).expect("error");
-
-        let mut json = drawer::Json {canvas_size: (width, height), content: String::default()};
-
-        json.draw(&path_json, pr).expect("error");
-        //drawer::svg::draw(&path_svg, (fig.canvas_size.0, fig.canvas_size.1), pr);
-        //drawer::json::draw(&path_json, (fig.canvas_size.0, fig.canvas_size.1), pr);
-        //drawer::raw::draw(&path_raw, (fig.canvas_size.0, fig.canvas_size.1), pr);
-    }
-}
+use crate::script::figure::{CircleItem, Figure, LineItem, MathString, PointItem, RayItem, SegmentItem, Style};
+use crate::script::math;
+use crate::script::math::{Entity, Expr, Flags, VarIndex};
 
 /// Enum representing the things that are later drawn in the drawers.
 #[derive(Serialize)]
 #[serde(tag = "type")]
 #[serde(rename_all = "snake_case")]
 pub enum Rendered {
-    Point(Rc<RenderedPoint>),
+    Point(RenderedPoint),
     Line(RenderedLine),
     Angle(RenderedAngle),
     Segment(RenderedSegment),
@@ -227,85 +47,65 @@ pub enum Rendered {
 /// The final product passed to the drawers.
 #[derive(Serialize)]
 pub struct Output {
-    /// Map containing Expression (points) as keys and point structs as values
-    pub map: HashMap<HashableArc<Expression<PointExpr>>, Rc<RenderedPoint>>,
     /// final product of the project function
     pub vec_rendered: Vec<Rendered>,
+    /// Entities used by the figure
+    pub entities: Vec<Entity<VarIndex, usize>>,
+    /// Variables used by the figure
+    pub variables: Vec<math::Expr<math::Any<VarIndex>, usize>>,
 }
 
 #[derive(Debug, Serialize)]
 pub struct RenderedPoint {
-    /// Label's position
+    /// Label's position relative to point's
     pub label_position: Complex,
-    /// Point's position
+    /// Point's position on the canvas.
     pub position: Complex,
-    /// Point's custom uuid
-    pub uuid: Uuid,
-    /// Math string assigned to the point
-    pub math_string: MathString,
+    /// Point's defining item.
+    pub item: PointItem,
 }
 
 #[derive(Serialize)]
 pub struct RenderedLine {
-    /// The line's label
-    pub label: String,
-    /// Two ends of the line
+    /// Two ends of the line (calculated f)
     pub points: (Complex, Complex),
-    /// Expression defining the line
-    pub expr: Arc<Expression<LineExpr>>,
-    /// Enum defining the style in which the expression should be drawn
-    pub style: Style,
+    /// Line's defining item.
+    pub item: LineItem
 }
 
 #[derive(Serialize)]
 pub struct RenderedAngle {
-    /// The angle's label
-    pub label: String,
     /// Points defining the angle
     pub points: (Complex, Complex, Complex),
-    /// Number of arcs in the angle
-    pub no_arcs: u8,
-    /// Expression that the angle was defined by
-    pub expr: Arc<Expression<ScalarExpr>>,
-    /// Value of the angle (who'd have guessed)
+    /// Self-explanatory
     pub angle_value: f64,
-    /// Enum defining the style in which the expression should be drawn
-    pub style: Style,
+    /// The defining item.
+    pub item: () // placeholder
 }
 #[derive(Serialize)]
 pub struct RenderedSegment {
-    /// Label of the segment
-    pub label: String,
     /// Points defining the segment
     pub points: (Complex, Complex),
-    /// Enum defining the style in which the expression should be drawn
-    pub style: Style,
+    /// The defining item.
+    pub item: SegmentItem
 }
 
 #[derive(Serialize)]
 pub struct RenderedRay {
-    /// Ray's label
-    pub label: String,
     /// Points defining the ray
     pub points: (Complex, Complex),
-    /// Second drawing point
-    pub draw_point: Complex,
-    /// Enum defining the style in which the expression should be drawn
-    pub style: Style,
+    /// The defining item.
+    pub item: RayItem
 }
 
 #[derive(Serialize)]
 pub struct RenderedCircle {
-    /// Circle's label
-    pub label: String,
     /// Center of the circle
     pub center: Complex,
-    /// Drawing point
-    pub draw_point: Complex,
-    /// Radius
+    /// Self-explanatory
     pub radius: f64,
-    /// Enum defining the style in which the expression should be drawn
-    pub style: Style,
+    /// The defining item.
+    pub item: CircleItem
 }
 
 /// Function getting the points defining the angle from the Expression defining it.
@@ -563,38 +363,30 @@ fn circles(
     blueprint_circles
 }
 
-/// Takes the figure and rendered points and attempts to design a figure that can then be rendered in chosen format.
-///
-/// # Panics
-/// Despite containing .unwrap() calls, it shouldn't panic.
-///
-/// # Errors
-/// Returns an error if there is a problem with evaluating constructs (e. g. intersection of two parallel lines).
+/// Takes the figure and rendered adjustables and attempts to design a figure that can then be rendered in chosen format.
 pub fn project(
-    figure: &Figure,
+    figure: Figure,
     generated_points: &[ValueEnum],
     flags: &Arc<Flags>,
+    canvas_size: (usize, usize)
 ) -> Output {
-    let args = EvaluationArgs {
-        adjustables: generated_points,
-        generation: 0,
-        flags,
-        cache: None,
-    };
-
-    let data: Vec<ValueEnum> = Vec::new();
-
-    let points: Vec<Complex> = figure
-        .points
-        .iter()
-        .map(|pt| {
-            // println!("{pt:#?}");
-            pt.0.evaluate(&args)
+    let entities: Vec<_> = figure.entities
+        .into_iter()
+        .map(|ent| Entity {
+            kind: ent.kind,
+            meta: generated_points[ent.meta]
         })
-        .collect::<Vec<Complex>>();
+        .collect();
+    let variables: Vec<_> = figure.variables
+        .into_iter()
+        .map(|var| Expr {
+            kind: var.kind,
+            meta: generated_points[var.meta]
+        })
+        .collect();
 
     #[allow(clippy::cast_precision_loss)]
-    let size1 = Complex::new(figure.canvas_size.0 as f64, figure.canvas_size.1 as f64);
+    let size1 = Complex::new(canvas_size.0 as f64, canvas_size.1 as f64);
     let size09 = size1 * 0.9;
     let size005 = size1 * 0.05;
 
