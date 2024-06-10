@@ -218,13 +218,13 @@ trait Compile<T> {
 
 impl<'i> Compile<VarIndex> for Compiler<'i> {
     fn compile(&mut self, value: &VarIndex) -> Loc {
-        let loc = self.variables[*value];
+        let loc = self.variables[value.0];
         if loc != usize::MAX {
             return loc;
         }
 
-        let loc = self.compile(&self.intermediate.adjusted.variables[*value]);
-        self.variables[*value] = loc;
+        let loc = self.compile(&self.intermediate.adjusted.variables[value.0]);
+        self.variables[value.0] = loc;
         loc
     }
 }

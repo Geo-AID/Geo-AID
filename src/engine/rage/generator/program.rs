@@ -45,7 +45,7 @@ impl From<ValueEnum> for Value {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize)]
 pub enum ValueType {
     Complex,
     Line,

@@ -20,6 +20,8 @@
 
 use std::cell::OnceCell;
 use std::collections::{hash_map, HashMap, HashSet};
+use std::fmt::Debug;
+use std::hash::{Hash, Hasher};
 use std::iter::Peekable;
 use std::marker::PhantomData;
 use std::mem;
@@ -68,6 +70,8 @@ fn map_entity_over<T, I: Indirection>(entity_id: EntityId, mapped: EntityId, int
     where Any<I>: TryInto<T> {
     if entity_id == mapped {
         into.clone().try_into().unwrap()
+    } else {
+
     }
 }
 
@@ -193,13 +197,13 @@ impl LoadsTo for UnrolledCircle {
 }
 
 pub trait Indirection {
-    type Point;
-    type Line;
-    type Number;
-    type Circle;
+    type Point: Debug + Hash;
+    type Line: Debug + Hash;
+    type Number: Debug + Hash;
+    type Circle: Debug + Hash;
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Hash)]
 pub struct VarIndex(pub usize);
 
 impl Reindex for VarIndex {
@@ -231,6 +235,11 @@ impl Indirection for VarIndex {
 
 #[derive(Debug, Clone, Copy, Default, Ord, PartialOrd, Eq, PartialEq)]
 pub struct ExprTypes<M>(PhantomData<M>);
+
+impl<M> Hash for ExprTypes<M> {
+    fn hash<H: Hasher>(&self, state: &mut H) {}
+}
+
 pub type MathTypes = ExprTypes<MathMeta>;
 
 impl<M> ExprTypes<M> {
@@ -240,7 +249,7 @@ impl<M> ExprTypes<M> {
     }
 }
 
-impl<M> Indirection for ExprTypes<M> {
+impl<M: Hash> Indirection for ExprTypes<M> {
     type Point = PointExpr<M>;
     type Line = LineExpr<M>;
     type Number = NumberExpr<M>;
@@ -265,18 +274,18 @@ impl<M> Indirection for ExprTypes<M> {
         }
     }
 )]
-pub enum Point<I: Indirection> {
+pub enum Point<P, L, C, N> {
     /// k and l must be ordered
     LineLineIntersection {
-        k: I::Line,
-        l: I::Line
+        k: L,
+        l: L
     },
     /// items must be sorted
     Average {
-        items: Vec<I::Point>
+        items: Vec<P>
     },
     CircleCenter {
-        circle: I::Circle
+        circle: C
     },
     #[recursive(override_map = map_entity_over::<Self, I>)]
     Entity {

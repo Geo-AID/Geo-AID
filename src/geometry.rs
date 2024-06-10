@@ -314,6 +314,22 @@ impl ValueEnum {
             _ => None
         }
     }
+
+    #[must_use]
+    pub fn as_line(self) -> Option<Line> {
+        match self {
+            Self::Line(l) => Some(l),
+            _ => None
+        }
+    }
+
+    #[must_use]
+    pub fn as_circle(self) -> Option<Circle> {
+        match self {
+            Self::Circle(l) => Some(l),
+            _ => None
+        }
+    }
 }
 
 #[must_use]

@@ -18,7 +18,7 @@ WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use std::{path::Path, rc::Rc, fs::File, io::Write};
+use std::{path::Path, fs::File, io::Write};
 
 use crate::projector::{Output, RenderedPoint, RenderedLine, RenderedAngle, RenderedSegment, RenderedRay, RenderedCircle, Rendered};
 
@@ -29,22 +29,21 @@ pub mod svg;
 
 pub trait Draw {
     /// # Errors
-    /// Returns an error when there was a problem with creating the output file.
+    /// In case of io failure.
     fn draw(&mut self, target: &Path, output: &Output) -> Result<(), std::io::Error> {
-        self.begin();
+        self.begin(output);
 
-        for item in &output.vec_rendered {
+        for item in &output.rendered {
             match item {
                 Rendered::Point(point) => self.draw_point(point),
                 Rendered::Line(line) => self.draw_line(line),
-                Rendered::Angle(angle) => self.draw_angle(angle, output),
+                Rendered::Angle(angle) => self.draw_angle(angle),
                 Rendered::Segment(segment) => self.draw_segment(segment),
                 Rendered::Ray(ray) => self.draw_ray(ray),
                 Rendered::Circle(circle) => self.draw_circle(circle),
             }
         }
 
-        self.close_draw();
         let content = self.end();
 
         let file = File::create(target);
@@ -55,34 +54,30 @@ pub trait Draw {
         }
     }
 
-    fn begin(&mut self);
-    fn draw_point(&mut self, point: &Rc<RenderedPoint>);
-    fn draw_line(&mut self, line: &RenderedLine);
-    fn draw_ray(&mut self, ray: &RenderedRay);
-    fn draw_segment(&mut self, segment: &RenderedSegment);
-    fn draw_angle(&mut self, angle: &RenderedAngle, output: &Output);
-    fn draw_circle(&mut self, circle: &RenderedCircle);
-    fn close_draw(&mut self);
-    fn end(&self) -> &String;
+    fn begin(&mut self, _output: &Output) {}
+    fn draw_point(&mut self, _point: &RenderedPoint) {
+        unimplemented!("support for point rendering not implemented")
+    }
+    fn draw_line(&mut self, _line: &RenderedLine) {
+        unimplemented!("support for line rendering not implemented")
+    }
+    fn draw_ray(&mut self, _ray: &RenderedRay) {
+        unimplemented!("support for ray rendering not implemented")
+    }
+    fn draw_segment(&mut self, _segment: &RenderedSegment) {
+        unimplemented!("support for segment rendering not implemented")
+    }
+    fn draw_angle(&mut self, _angle: &RenderedAngle) {
+        unimplemented!("support for angle rendering not implemented")
+    }
+    fn draw_circle(&mut self, _circle: &RenderedCircle) {
+        unimplemented!("support for circle rendering not implemented")
+    }
+
+    fn end(&mut self) -> &str;
 }
 
 pub struct Json {
-    pub content: String,
-    pub canvas_size: (usize, usize),
-}
-
-pub struct Latex {
-    pub content: String,
-    pub canvas_size: (usize, usize),
-    pub scale: f64,
-}
-
-pub struct Raw {
-    pub content: String,
-    pub canvas_size: (usize, usize),
-} 
-
-pub struct Svg {
     pub content: String,
     pub canvas_size: (usize, usize),
 }
