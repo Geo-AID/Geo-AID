@@ -20,6 +20,8 @@
 
 use std::cell::OnceCell;
 use std::collections::{hash_map, HashMap, HashSet};
+use std::fmt::Debug;
+use std::hash::{Hash, Hasher};
 use std::iter::Peekable;
 use std::marker::PhantomData;
 use std::mem;
@@ -31,6 +33,8 @@ use crate::script::figure::Item;
 use crate::script::math::optimizations::ZeroLineDst;
 use crate::script::token::number::{CompExponent, ProcNum};
 use crate::script::unroll::figure::Node;
+
+use self::optimizations::{EqExpressions, EqPointDst, RightAngle};
 
 use super::unroll::Flag;
 use super::{figure::Figure, unroll::{self, Displayed, Expr as Unrolled, UnrolledRule, UnrolledRuleKind,
@@ -57,7 +61,7 @@ impl Default for Flags {
 }
 
 trait HandleEntity<I: Indirection> {
-    fn contains_entity(&self, entity: EntityId, entities: &[Entity<I>]) -> bool;
+    fn contains_entity(&self, entity: EntityId, entities: &[EntityKind<I>]) -> bool;
 
     fn map_entity(self, entity: EntityId, into: &Any<I>) -> Self;
 }
@@ -66,11 +70,13 @@ fn map_entity_over<T, I: Indirection>(entity_id: EntityId, mapped: EntityId, int
     where Any<I>: TryInto<T> {
     if entity_id == mapped {
         into.clone().try_into().unwrap()
+    } else {
+
     }
 }
 
 impl<I: Indirection> HandleEntity<I> for ProcNum {
-    fn contains_entity(&self, _entity: EntityId, _entities: &[Entity<I>]) -> bool {
+    fn contains_entity(&self, _entity: EntityId, _entities: &[EntityKind<I>]) -> bool {
         false
     }
 
@@ -80,7 +86,7 @@ impl<I: Indirection> HandleEntity<I> for ProcNum {
 }
 
 impl<I: Indirection, T: HandleEntity<I>> HandleEntity<I> for Box<T> {
-    fn contains_entity(&self, entity: EntityId, entities: &[Entity<I>]) -> bool {
+    fn contains_entity(&self, entity: EntityId, entities: &[EntityKind<I>]) -> bool {
         self.as_ref().contains_entity(entity, entities)
     }
 
@@ -90,7 +96,7 @@ impl<I: Indirection, T: HandleEntity<I>> HandleEntity<I> for Box<T> {
 }
 
 impl<I: Indirection, T: HandleEntity<I>> HandleEntity<I> for Vec<T> {
-    fn contains_entity(&self, entity: EntityId, entities: &[Entity<I>]) -> bool {
+    fn contains_entity(&self, entity: EntityId, entities: &[EntityKind<I>]) -> bool {
         self.iter().any(|item| item.contains_entity(entity, entities))
     }
 
@@ -146,6 +152,7 @@ impl FindEntities for Vec<VarIndex> {
 trait Flatten {
     type Output;
 
+    /// Maps an `ExprTypes` into a `VarIndex`
     fn flatten(self, context: &mut FlattenContext) -> Self::Output;
 }
 
@@ -190,13 +197,13 @@ impl LoadsTo for UnrolledCircle {
 }
 
 pub trait Indirection {
-    type Point;
-    type Line;
-    type Number;
-    type Circle;
+    type Point: Debug + Hash;
+    type Line: Debug + Hash;
+    type Number: Debug + Hash;
+    type Circle: Debug + Hash;
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Hash)]
 pub struct VarIndex(pub usize);
 
 impl Reindex for VarIndex {
@@ -229,6 +236,12 @@ impl Indirection for VarIndex {
 #[derive(Debug, Clone, Copy, Default, Ord, PartialOrd, Eq, PartialEq)]
 pub struct ExprTypes<M>(PhantomData<M>);
 
+impl<M> Hash for ExprTypes<M> {
+    fn hash<H: Hasher>(&self, state: &mut H) {}
+}
+
+pub type MathTypes = ExprTypes<MathMeta>;
+
 impl<M> ExprTypes<M> {
     #[must_use]
     pub fn new() -> Self {
@@ -236,7 +249,7 @@ impl<M> ExprTypes<M> {
     }
 }
 
-impl<M> Indirection for ExprTypes<M> {
+impl<M: Hash> Indirection for ExprTypes<M> {
     type Point = PointExpr<M>;
     type Line = LineExpr<M>;
     type Number = NumberExpr<M>;
@@ -251,7 +264,7 @@ impl<M> Indirection for ExprTypes<M> {
         I::Line: HandleEntity<I>,
         I::Circle: HandleEntity<I>,
         I::Number: HandleEntity<I> {
-        fn contains_entity(&self, entity: EntityId, entities: &[Entity<I>]) -> bool {
+        fn contains_entity(&self, entity: EntityId, entities: &[EntityKind<I>]) -> bool {
             aggregate = ||
         }
 
@@ -261,18 +274,18 @@ impl<M> Indirection for ExprTypes<M> {
         }
     }
 )]
-pub enum Point<I: Indirection> {
+pub enum Point<P, L, C, N> {
     /// k and l must be ordered
     LineLineIntersection {
-        k: I::Line,
-        l: I::Line
+        k: L,
+        l: L
     },
     /// items must be sorted
     Average {
-        items: Vec<I::Point>
+        items: Vec<P>
     },
     CircleCenter {
-        circle: I::Circle
+        circle: C
     },
     #[recursive(override_map = map_entity_over::<Self, I>)]
     Entity {
@@ -412,7 +425,7 @@ impl<M: Ord> Normalize for Point<ExprTypes<M>> {
         I::Line: HandleEntity<I>,
         I::Circle: HandleEntity<I>,
         I::Number: HandleEntity<I> {
-        fn contains_entity(&self, entity: EntityId, entities: &[Entity<I>]) -> bool {
+        fn contains_entity(&self, entity: EntityId, entities: &[EntityKind<I>]) -> bool {
             aggregate = ||
         }
 
@@ -900,7 +913,7 @@ impl<M: Ord> Normalize for Number<ExprTypes<M>> {
         I::Line: HandleEntity<I>,
         I::Circle: HandleEntity<I>,
         I::Number: HandleEntity<I> {
-        fn contains_entity(&self, entity: EntityId, entities: &[Entity<I>]) -> bool {
+        fn contains_entity(&self, entity: EntityId, entities: &[EntityKind<I>]) -> bool {
             aggregate = ||
         }
 
@@ -1134,7 +1147,7 @@ impl<M: Ord> Normalize for Line<ExprTypes<M>> {
         I::Line: HandleEntity<I>,
         I::Circle: HandleEntity<I>,
         I::Number: HandleEntity<I> {
-        fn contains_entity(&self, entity: EntityId, entities: &[Entity<I>]) -> bool {
+        fn contains_entity(&self, entity: EntityId, entities: &[EntityKind<I>]) -> bool {
             aggregate = ||
         }
 
@@ -1206,7 +1219,7 @@ impl<M: Ord> Normalize for Circle<ExprTypes<M>> {
 #[derive(Debug, Clone, Recursive, Hash)]
 #[recursive(
     impl<I: Indirection> HandleEntity<I> for Self<I> {
-        fn contains_entity(&self, entity: EntityId, entities: &[Entity<I>]) -> bool {
+        fn contains_entity(&self, entity: EntityId, entities: &[EntityKind<I>]) -> bool {
             aggregate = ||
         }
 
@@ -1366,9 +1379,11 @@ impl<T> DerefMut for AlwaysEq<T> {
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Default, Hash)]
 pub struct Expr<T, M> {
+    pub meta: M,
     pub kind: Box<T>,
-    pub meta: M
 }
+
+pub type MathMeta = u64;
 
 impl<T: FindEntities, M> FindEntities for Expr<T, M> {
     fn find_entities(&self, previous: &[HashSet<EntityId>]) -> HashSet<EntityId> {
@@ -1407,12 +1422,12 @@ impl_flatten!{CircleExpr}
 impl_flatten!{NumberExpr}
 impl_flatten!{AnyExpr}
 
-impl<T: HandleEntity<M>, M: Indirection> HandleEntity<M> for Expr<T, M> {
-    fn contains_entity(&self, entity: EntityId, entities: &[Entity<M>]) -> bool {
+impl<T: HandleEntity<I>, I: Indirection, M> HandleEntity<I> for Expr<T, M> {
+    fn contains_entity(&self, entity: EntityId, entities: &[EntityKind<I>]) -> bool {
         self.kind.contains_entity(entity, entities)
     }
 
-    fn map_entity(self, entity: EntityId, into: &Any<M>) -> Self {
+    fn map_entity(self, entity: EntityId, into: &Any<I>) -> Self {
         Self {
             kind: self.kind.map_entity(entity, into),
             meta: self.meta
@@ -1468,7 +1483,7 @@ impl<T, M> Expr<T, M> {
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Recursive)]
 #[recursive(
     impl<I: Indirection> HandleEntity<I> for Self<I> {
-        fn contains_entity(&self, entity: EntityId, entities: &[Entity<I>]) -> bool {
+        fn contains_entity(&self, entity: EntityId, entities: &[EntityKind<I>]) -> bool {
             aggregate = ||,
             init = false
         }
@@ -1521,7 +1536,7 @@ pub struct Rule<I: Indirection> {
 }
 
 impl<I: Indirection> HandleEntity<I> for Rule<I> {
-    fn contains_entity(&self, entity: EntityId, entities: &[Entity<I>]) -> bool {
+    fn contains_entity(&self, entity: EntityId, entities: &[EntityKind<I>]) -> bool {
         self.kind.contains_entity(entity, entities)
     }
 
@@ -1678,7 +1693,6 @@ impl Normalize for Rule<ExprTypes<()>> {
 
 #[derive(Debug)]
 pub struct Adjusted {
-    pub entities: Vec<Entity<VarIndex>>,
     pub variables: Vec<Expr<Any<VarIndex>, ()>>,
     pub rules: Vec<Rule<VarIndex>>
 }
@@ -1697,10 +1711,31 @@ pub struct Entry {
     pub uses: usize
 }
 
-#[derive(Debug, Clone, Recursive)]
+#[derive(Debug, Clone)]
+pub struct Entity<I: Indirection, M> {
+    pub kind: EntityKind<I>,
+    pub meta: M
+}
+
+impl<I: Indirection, M> HasMeta for Entity<I, M> {
+    type Meta = M;
+}
+
+impl<I: Indirection, M, Dst> MapMeta<Dst> for Entity<I, M> {
+    type Output = Entity<I, Dst>;
+
+    fn map_meta<F: FnMut(Self::Meta) -> Dst>(self, mut f: F) -> Self::Output {
+        Entity {
+            kind: self.kind,
+            meta: f(self.meta)
+        }
+    }
+}
+
+#[derive(Debug, Recursive)]
 #[recursive(
     impl<I: Indirection> HandleEntity<I> for Self<I> {
-        fn contains_entity(&self, entity: EntityId, entities: &[Entity<I>]) -> bool {
+        fn contains_entity(&self, entity: EntityId, entities: &[EntityKind<I>]) -> bool {
             aggregate = ||,
             init = false
         }
@@ -1710,32 +1745,59 @@ pub struct Entry {
         }
     }
 )]
-pub enum Entity<I: Indirection> {
+pub enum EntityKind<I: Indirection> {
     FreePoint,
     PointOnLine(I::Line),
+    PointOnCircle(I::Circle),
     FreeReal,
     Bind(Any<I>)
 }
 
-impl Reindex for Entity<VarIndex> {
-    fn reindex(&mut self, map: &IndexMap) {
+impl Clone for EntityKind<VarIndex> {
+    fn clone(&self) -> Self {
         match self {
-            Entity::FreePoint
-            | Entity::FreeReal => {}
-            Entity::PointOnLine(line) => line.reindex(map),
-            Entity::Bind(_) => unreachable!("Should not appear")
+            EntityKind::FreePoint => Self::FreePoint,
+            EntityKind::PointOnLine(ln) => Self::PointOnLine(ln.clone()),
+            EntityKind::PointOnCircle(circ) => Self::PointOnCircle(circ.clone()),
+            EntityKind::FreeReal => Self::FreeReal,
+            EntityKind::Bind(bind) => Self::Bind(bind.clone()),
         }
     }
 }
 
-impl Flatten for Entity<ExprTypes<()>> {
-    type Output = Entity<VarIndex>;
+impl Clone for EntityKind<ExprTypes<()>> {
+    fn clone(&self) -> Self {
+        match self {
+            EntityKind::FreePoint => Self::FreePoint,
+            EntityKind::PointOnLine(ln) => Self::PointOnLine(ln.clone()),
+            EntityKind::PointOnCircle(circ) => Self::PointOnCircle(circ.clone()),
+            EntityKind::FreeReal => Self::FreeReal,
+            EntityKind::Bind(bind) => Self::Bind(bind.clone()),
+        }
+    }
+}
+
+impl Reindex for EntityKind<VarIndex> {
+    fn reindex(&mut self, map: &IndexMap) {
+        match self {
+            EntityKind::FreePoint
+            | EntityKind::FreeReal => {}
+            EntityKind::PointOnLine(line) => line.reindex(map),
+            EntityKind::PointOnCircle(circle) => circle.reindex(map),
+            EntityKind::Bind(_) => unreachable!("Should not appear")
+        }
+    }
+}
+
+impl Flatten for EntityKind<ExprTypes<()>> {
+    type Output = EntityKind<VarIndex>;
 
     fn flatten(self, context: &mut FlattenContext) -> Self::Output {
         match self {
-            Self::FreePoint => Entity::FreePoint,
-            Self::PointOnLine(line) => Entity::PointOnLine(line.flatten(context)),
-            Self::FreeReal => Entity::FreeReal,
+            Self::FreePoint => EntityKind::FreePoint,
+            Self::PointOnLine(line) => EntityKind::PointOnLine(line.flatten(context)),
+            Self::PointOnCircle(circle) => EntityKind::PointOnCircle(circle.flatten(context)),
+            Self::FreeReal => EntityKind::FreeReal,
             Self::Bind(_) => unreachable!("bound entities should never appear in the flattening step")
         }
     }
@@ -1745,7 +1807,7 @@ impl Flatten for Entity<ExprTypes<()>> {
 pub struct EntityId(pub usize);
 
 impl HandleEntity<ExprTypes<()>> for EntityId {
-    fn contains_entity(&self, entity: EntityId, entities: &[Entity<ExprTypes<()>>]) -> bool {
+    fn contains_entity(&self, entity: EntityId, entities: &[EntityKind<ExprTypes<()>>]) -> bool {
         *self == entity || entities[self.0].contains_entity(entity, entities)
     }
 
@@ -1759,7 +1821,7 @@ pub struct Expand {
     /// Expressions are mapped to the record entries.
     pub expr_map: HashMap<usize, AnyExpr<()>>,
     /// All found entities
-    pub entities: Vec<Entity<ExprTypes<()>>>,
+    pub entities: Vec<EntityKind<ExprTypes<()>>>,
     /// Dst variable
     pub dst_var: OnceCell<NumberExpr<()>>
 }
@@ -1786,17 +1848,17 @@ impl Expand {
         self.dst_var.get_or_init(|| Expr::new(Number::Entity { id: self.add_real() })).clone()
     }
 
-    fn add_entity(&mut self, entity: Entity<ExprTypes<()>>) -> EntityId {
+    fn add_entity(&mut self, entity: EntityKind<ExprTypes<()>>) -> EntityId {
         self.entities.push(entity);
         EntityId(self.entities.len() - 1)
     }
 
     pub fn add_point(&mut self) -> EntityId {
-        self.add_entity(Entity::FreePoint)
+        self.add_entity(EntityKind::FreePoint)
     }
 
     pub fn add_real(&mut self) -> EntityId {
-        self.add_entity(Entity::FreeReal)
+        self.add_entity(EntityKind::FreeReal)
     }
 }
 
@@ -1804,7 +1866,7 @@ impl Expand {
 pub struct Build {
     expand: Expand,
     id_map: HashMap<usize, usize>,
-    loaded: Vec<AnyExpr<()>>,
+    loaded: Vec<AnyExpr<MathMeta>>,
     items: Vec<Item>
 }
 
@@ -1831,12 +1893,16 @@ struct FlattenContext {
 ///
 /// # Returns
 /// `true` if an optimization was performed. `false` otherwise.
-fn optimize_rules(rules: &mut Vec<Option<SimpleRule>>, entities: &mut [Entity<ExprTypes<()>>]) -> bool {
+fn optimize_rules(rules: &mut Vec<Option<SimpleRule>>, entities: &mut [EntityKind<MathTypes>]) -> bool {
     let mut performed = false;
     
     for rule in rules {
         performed = performed
-            | ZeroLineDst::process(rule, entities);
+            | ZeroLineDst::process(rule, entities)
+            | RightAngle::process(rule)
+            | EqPointDst::process(rule, entities)
+            | EqExpressions::process(rule)
+            ;
     }
 
     if performed {
@@ -2011,6 +2077,9 @@ pub fn load_script(input: &str) -> Result<Intermediate, Vec<Error>> {
         rules.push(Some(Rule::load(&rule, &mut expand)));
     }
 
+    // Hash all expressions.
+    
+
     // The optimize cycle:
     // 1. Optimize
     // 2. Normalize
@@ -2030,17 +2099,18 @@ pub fn load_script(input: &str) -> Result<Intermediate, Vec<Error>> {
 
         for (i, entity) in expand.entities.iter().enumerate() {
             intos.push(match entity {
-                Entity::FreePoint
-                | Entity::PointOnLine(_) => Any::Point(Point::Entity { id: EntityId(i - offset) }),
-                Entity::FreeReal => Any::Number(Number::Entity { id: EntityId(i - offset) }),
-                Entity::Bind(expr) => {
+                EntityKind::FreePoint
+                | EntityKind::PointOnCircle(_)
+                | EntityKind::PointOnLine(_) => Any::Point(Point::Entity { id: EntityId(i - offset) }),
+                EntityKind::FreeReal => Any::Number(Number::Entity { id: EntityId(i - offset) }),
+                EntityKind::Bind(expr) => {
                     offset += 1;
                     expr.clone()
                 }
             });
         }
 
-        expand.entities.retain(|x| !matches!(x, Entity::Bind(_)));
+        expand.entities.retain(|x| !matches!(x, EntityKind::Bind(_)));
 
         // Bind entities are now gone, we should update entities, loaded node expressions and rules with the map.
 
@@ -2084,6 +2154,7 @@ pub fn load_script(input: &str) -> Result<Intermediate, Vec<Error>> {
     entities.reindex(&index_map);
     rules.reindex(&index_map);
 
+    // Find entities affected by specific rules
     let mut found_entities = Vec::new();
     for expr in &variables {
         let found = expr.find_entities(&found_entities);
@@ -2095,26 +2166,37 @@ pub fn load_script(input: &str) -> Result<Intermediate, Vec<Error>> {
         rule.entities = entities.into_iter().collect();
     }
 
+    let mut counter = 0..;
+
+    // Give metas to entities.
+    let entities = entities
+        .into_iter()
+        .map(|ent| Entity {
+            kind: ent,
+            meta: counter.next().unwrap()
+        })
+        .collect();
+
+    // Fold figure variables
     let index_map = fold(&mut fig_variables);
     let mut items = build.items;
     items.reindex(&index_map);
 
     let fig_variables = fig_variables
         .into_iter()
-        .enumerate()
-        .map(|(i, expr)| Expr {
+        .map(|expr| Expr {
             kind: expr.kind,
-            meta: i
+            meta: counter.next().unwrap()
         })
         .collect();
 
     Ok(Intermediate {
         adjusted: Adjusted {
-            entities,
             variables,
             rules
         },
         figure: Figure {
+            entities,
             variables: fig_variables,
             items
         },

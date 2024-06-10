@@ -19,20 +19,22 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
 use std::{fmt::Display, str::FromStr};
+use std::fmt::Formatter;
 
-use num_derive::FromPrimitive;
+use num_derive::{FromPrimitive, ToPrimitive};
 use num_traits::FromPrimitive;
 use serde::Serialize;
 use crate::script::math::{IndexMap, Reindex, VarIndex};
 
 use crate::span;
 
+use super::math::Entity;
 use super::{parser::{FromProperty, Parse, PropertyValue}, token::{Ident, PointCollectionItem, Span}, unroll::most_similar, Error, math};
 
 pub const SPECIAL_MATH: [&str; 49] = [
     "alpha", "Alpha", "beta", "Beta", "gamma", "Gamma", "delta", "Delta", "epsilon", "Epsilon",
     "zeta", "Zeta", "eta", "Eta", "theta", "Theta", "iota", "Iota", "kappa", "Kappa", "lambda",
-    "Lambda", "mu", "Mu", "nu", "Nu", "xi", "Xi", "omicron", "Omicorn", "phi", "Phi", "rho", "Rho",
+    "Lambda", "mu", "Mu", "nu", "Nu", "xi", "Xi", "omicron", "Omicron", "phi", "Phi", "rho", "Rho",
     "sigma", "Sigma", "tau", "Tau", "upsilon", "Upsilon", "phi", "Phi", "chi", "Chi", "psi", "Psi",
     "omega", "Omega", "quote",
 ];
@@ -164,6 +166,8 @@ impl Reindex for Item {
 /// Defines the visual data of the figure.
 #[derive(Debug, Default)]
 pub struct Figure {
+    /// Entities used by the figure
+    pub entities: Vec<Entity<VarIndex, usize>>,
     /// Variables used by the figure
     pub variables: Vec<math::Expr<math::Any<VarIndex>, usize>>,
     /// Drawn items with meta
@@ -211,7 +215,7 @@ impl Display for MathChar {
 }
 
 /// A special character.
-#[derive(Debug, Clone, Copy, FromPrimitive, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, FromPrimitive, ToPrimitive, PartialEq, Eq, Serialize)]
 pub enum MathSpecial {
     Alpha,
     AlphaUpper,

@@ -29,7 +29,7 @@ use std::{
 use serde::Serialize;
 
 use crate::geometry::Complex;
-use crate::script::math::{Entity, Indirection};
+use crate::script::math::{EntityKind, Indirection};
 
 use self::{critic::EvaluateProgram, program::Value};
 
@@ -181,13 +181,13 @@ impl AdjustableTemplate {
     }
 }
 
-impl<I: Indirection> From<&Entity<I>> for AdjustableTemplate {
-    fn from(value: &Entity<I>) -> Self {
+impl<I: Indirection> From<&EntityKind<I>> for AdjustableTemplate {
+    fn from(value: &EntityKind<I>) -> Self {
         match value {
-            Entity::FreePoint => AdjustableTemplate::Point,
-            Entity::PointOnLine(_) => AdjustableTemplate::PointOnLine,
-            Entity::FreeReal => AdjustableTemplate::Real,
-            Entity::Bind(_) => unreachable!()
+            EntityKind::FreePoint => AdjustableTemplate::Point,
+            EntityKind::PointOnLine(_) => AdjustableTemplate::PointOnLine,
+            EntityKind::FreeReal => AdjustableTemplate::Real,
+            EntityKind::Bind(_) => unreachable!()
         }
     }
 }
