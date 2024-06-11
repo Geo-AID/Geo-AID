@@ -26,7 +26,7 @@ use crate::engine::rage::generator::critic::{EvaluateProgram, FigureProgram};
 use crate::engine::rage::generator::program::{Instruction, Loc, Program, ValueType};
 use crate::engine::rage::generator::program::expr::{AngleBisector, AngleLine, AnglePoint, AnglePointDir, Average, CircleConstruct, EqualComplex, EqualReal, Greater, InvertQuality, Less, LineFromPoints, LineLineIntersection, Max, Negation, ParallelThrough, PartialPow, PartialProduct, PerpendicularThrough, PointLineDistance, PointOnLine, PointPointDistance, Sum, SwapParts};
 use crate::geometry::{Complex, ValueEnum};
-use crate::script::math::{Any, Circle, EntityKind, EntityId, Expr, Intermediate, Line, Number, Point, Rule, RuleKind, VarIndex};
+use crate::script::math::{Any, Circle, EntityKind, EntityId, Expr, Intermediate, Line, ExprKind, ExprKind, Rule, RuleKind, VarIndex};
 use crate::script::token::number::ProcNum;
 
 #[derive(Debug, Default)]
@@ -80,7 +80,7 @@ impl<'i> Compiler<'i> {
         self.entities.resize(adjustable_count, usize::MAX);
 
         for expr in exprs {
-            if let Any::Number(Number::Const { value }) = expr {
+            if let Any::Number(ExprKind::Const { value }) = expr {
                 self.constants.push(ValueEnum::Complex(value.clone().to_complex()));
                 let index = self.constants.len() - 1;
                 self.constants_indices.insert(value.clone(), index);
@@ -246,10 +246,10 @@ impl<'i> Compile<Any<VarIndex>> for Compiler<'i> {
     }
 }
 
-impl<'i> Compile<Point<VarIndex>> for Compiler<'i> {
-    fn compile(&mut self, value: &Point<VarIndex>) -> Loc {
+impl<'i> Compile<ExprKind<VarIndex>> for Compiler<'i> {
+    fn compile(&mut self, value: &ExprKind<VarIndex>) -> Loc {
         match value {
-            Point::LineLineIntersection { k, l } => {
+            ExprKind::LineLineIntersection { k, l } => {
                 let target = self.cursor.next();
 
                 self.instructions.push(Instruction::LineLineIntersection(LineLineIntersection {
@@ -260,7 +260,7 @@ impl<'i> Compile<Point<VarIndex>> for Compiler<'i> {
 
                 target
             }
-            Point::Average { items } => {
+            ExprKind::AveragePoint { items } => {
                 let target = self.cursor.next();
 
                 self.instructions.push(Instruction::Average(Average {
@@ -270,11 +270,11 @@ impl<'i> Compile<Point<VarIndex>> for Compiler<'i> {
 
                 target
             }
-            Point::CircleCenter { circle } => {
+            ExprKind::CircleCenter { circle } => {
                 // It should be enough to just move the circle.
                 self.compile(circle)
             }
-            Point::Entity { id } => {
+            ExprKind::Entity { id } => {
                 self.compile(id)
             }
         }
@@ -333,13 +333,13 @@ impl<'i> Compile<Line<VarIndex>> for Compiler<'i> {
     }
 }
 
-impl<'i> Compile<Number<VarIndex>> for Compiler<'i> {
-    fn compile(&mut self, value: &Number<VarIndex>) -> Loc {
+impl<'i> Compile<ExprKind<VarIndex>> for Compiler<'i> {
+    fn compile(&mut self, value: &ExprKind<VarIndex>) -> Loc {
         match value {
-            Number::Entity { id } => {
+            ExprKind::Entity { id } => {
                 self.compile(id)
             }
-            Number::Sum { plus, minus } => {
+            ExprKind::Sum { plus, minus } => {
                 let target = self.cursor.next();
 
                 self.instructions.push(Instruction::Sum(Sum {
@@ -362,7 +362,7 @@ impl<'i> Compile<Number<VarIndex>> for Compiler<'i> {
 
                 target
             }
-            Number::Product { times, by } => {
+            ExprKind::Product { times, by } => {
                 let target = self.cursor.next();
 
                 self.instructions.push(Instruction::PartialProduct(PartialProduct {
@@ -386,10 +386,10 @@ impl<'i> Compile<Number<VarIndex>> for Compiler<'i> {
 
                 target
             }
-            Number::Const { value } => {
+            ExprKind::Const { value } => {
                 self.locate_const(value)
             }
-            Number::Power { value, exponent } => {
+            ExprKind::Power { value, exponent } => {
                 let target = self.cursor.next();
 
                 self.instructions.push(Instruction::Pow(PartialPow {
@@ -400,7 +400,7 @@ impl<'i> Compile<Number<VarIndex>> for Compiler<'i> {
 
                 target
             }
-            Number::PointPointDistance { p, q } => {
+            ExprKind::PointPointDistance { p, q } => {
                 let target = self.cursor.next();
 
                 self.instructions.push(Instruction::PointPointDistance(PointPointDistance {
@@ -411,7 +411,7 @@ impl<'i> Compile<Number<VarIndex>> for Compiler<'i> {
 
                 target
             }
-            Number::PointLineDistance { p, k } => {
+            ExprKind::PointLineDistance { p, k } => {
                 let target = self.cursor.next();
 
                 self.instructions.push(Instruction::PointLineDistance(PointLineDistance {
@@ -422,7 +422,7 @@ impl<'i> Compile<Number<VarIndex>> for Compiler<'i> {
 
                 target
             }
-            Number::ThreePointAngle { p, q, r } => {
+            ExprKind::ThreePointAngle { p, q, r } => {
                 let target = self.cursor.next();
 
                 self.instructions.push(Instruction::AnglePoint(AnglePoint {
@@ -434,7 +434,7 @@ impl<'i> Compile<Number<VarIndex>> for Compiler<'i> {
 
                 target
             }
-            Number::ThreePointAngleDir { p, q, r } => {
+            ExprKind::ThreePointAngleDir { p, q, r } => {
                 let target = self.cursor.next();
 
                 self.instructions.push(Instruction::AnglePointDir(AnglePointDir {
@@ -446,7 +446,7 @@ impl<'i> Compile<Number<VarIndex>> for Compiler<'i> {
 
                 target
             }
-            Number::TwoLineAngle { k, l } => {
+            ExprKind::TwoLineAngle { k, l } => {
                 let target = self.cursor.next();
 
                 self.instructions.push(Instruction::AngleLine(AngleLine {
@@ -457,11 +457,11 @@ impl<'i> Compile<Number<VarIndex>> for Compiler<'i> {
 
                 target
             }
-            Number::PointX { point } => {
+            ExprKind::PointX { point } => {
                 // Simply moving is enough.
                 self.compile(point)
             }
-            Number::PointY { point } => {
+            ExprKind::PointY { point } => {
                 // We're going to have to swap parts, instead of just moving.
                 let target = self.cursor.next();
 

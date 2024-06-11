@@ -27,7 +27,7 @@ use crate::geometry;
 use crate::geometry::{Circle, Complex, Line, ValueEnum};
 
 use crate::script::figure::{CircleItem, Figure, Item, LineItem, PointItem, RayItem, SegmentItem};
-use crate::script::math::{Any, Entity, Expr, Flags, Number, VarIndex};
+use crate::script::math::{Any, Entity, Expr, Flags, ExprKind, VarIndex};
 
 struct Projector {
     /// Transform used by the projector
@@ -447,25 +447,25 @@ impl Project<CircleItem> for Projector {
 /// # Panics
 /// If given invalid data.
 fn get_angle_points(
-    angle: &Number<VarIndex>,
+    angle: &ExprKind<VarIndex>,
     variables: &[Expr<Any<VarIndex>, ValueEnum>],
 ) -> (Complex, Complex, Complex) {
     match angle {
-        Number::ThreePointAngle { p, q, r } => {
+        ExprKind::ThreePointAngle { p, q, r } => {
             let arm1 = variables[p.0].meta.as_complex().unwrap();
             let origin = variables[q.0].meta.as_complex().unwrap();
             let arm2 = variables[r.0].meta.as_complex().unwrap();
 
             (arm1, origin, arm2)
         }
-        Number::ThreePointAngleDir { p, q, r } => {
+        ExprKind::ThreePointAngleDir { p, q, r } => {
             let arm1 = variables[p.0].meta.as_complex().unwrap();
             let origin = variables[q.0].meta.as_complex().unwrap();
             let arm2 = variables[r.0].meta.as_complex().unwrap();
 
             (arm1, origin, arm2)
         }
-        Number::TwoLineAngle { k, l } => {
+        ExprKind::TwoLineAngle { k, l } => {
             let ev_ln1 = variables[k.0].meta.as_line().unwrap();
             let ev_ln2 = variables[l.0].meta.as_line().unwrap();
 

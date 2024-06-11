@@ -60,47 +60,46 @@ impl Default for Flags {
     }
 }
 
-trait HandleEntity<I: Indirection> {
-    fn contains_entity(&self, entity: EntityId, entities: &[EntityKind<I>]) -> bool;
+trait HandleEntity {
+    fn contains_entity(&self, entity: EntityId, entities: &[EntityKind]) -> bool;
 
-    fn map_entity(self, entity: EntityId, into: &Any<I>) -> Self;
+    fn map_entity(self, entity: EntityId, into: &ExprKind) -> Self;
 }
 
-fn map_entity_over<T, I: Indirection>(entity_id: EntityId, mapped: EntityId, into: &Any<I>) -> T
-    where Any<I>: TryInto<T> {
+fn map_entity_override(entity_id: EntityId, mapped: EntityId, into: &ExprKind) -> ExprKind {
     if entity_id == mapped {
-        into.clone().try_into().unwrap()
+        into.clone()
     } else {
-
+        ExprKind::Entity { id: entity_id }
     }
 }
 
-impl<I: Indirection> HandleEntity<I> for ProcNum {
-    fn contains_entity(&self, _entity: EntityId, _entities: &[EntityKind<I>]) -> bool {
+impl HandleEntity for ProcNum {
+    fn contains_entity(&self, _entity: EntityId, _entities: &[EntityKind]) -> bool {
         false
     }
 
-    fn map_entity(self, _entity: EntityId, _into: &Any<I>) -> Self {
+    fn map_entity(self, _entity: EntityId, _into: &ExprKind) -> Self {
         self
     }
 }
 
-impl<I: Indirection, T: HandleEntity<I>> HandleEntity<I> for Box<T> {
-    fn contains_entity(&self, entity: EntityId, entities: &[EntityKind<I>]) -> bool {
+impl<T: HandleEntity> HandleEntity for Box<T> {
+    fn contains_entity(&self, entity: EntityId, entities: &[EntityKind]) -> bool {
         self.as_ref().contains_entity(entity, entities)
     }
 
-    fn map_entity(self, entity: EntityId, into: &Any<I>) -> Self {
+    fn map_entity(self, entity: EntityId, into: &ExprKind) -> Self {
         Self::new((*self).map_entity(entity, into))
     }
 }
 
-impl<I: Indirection, T: HandleEntity<I>> HandleEntity<I> for Vec<T> {
-    fn contains_entity(&self, entity: EntityId, entities: &[EntityKind<I>]) -> bool {
+impl<T: HandleEntity> HandleEntity for Vec<T> {
+    fn contains_entity(&self, entity: EntityId, entities: &[EntityKind]) -> bool {
         self.iter().any(|item| item.contains_entity(entity, entities))
     }
 
-    fn map_entity(self, entity: EntityId, into: &Any<I>) -> Self {
+    fn map_entity(self, entity: EntityId, into: &ExprKind) -> Self {
         self.into_iter().map(|x| x.map_entity(entity, into)).collect()
     }
 }
@@ -180,29 +179,6 @@ trait Normalize {
     fn normalize(&mut self);
 }
 
-pub trait LoadsTo {
-    type Output;
-}
-
-impl LoadsTo for UnrolledPoint {
-    type Output = PointExpr<()>;
-}
-
-impl LoadsTo for UnrolledLine {
-    type Output = LineExpr<()>;
-}
-
-impl LoadsTo for UnrolledCircle {
-    type Output = CircleExpr<()>;
-}
-
-pub trait Indirection {
-    type Point: Debug + Hash;
-    type Line: Debug + Hash;
-    type Number: Debug + Hash;
-    type Circle: Debug + Hash;
-}
-
 #[derive(Debug, Clone, Copy, Hash)]
 pub struct VarIndex(pub usize);
 
@@ -226,76 +202,95 @@ impl DerefMut for VarIndex {
     }
 }
 
-impl Indirection for VarIndex {
-    type Point = Self;
-    type Line = Self;
-    type Number = Self;
-    type Circle = Self;
-}
-
-#[derive(Debug, Clone, Copy, Default, Ord, PartialOrd, Eq, PartialEq)]
-pub struct ExprTypes<M>(PhantomData<M>);
-
-impl<M> Hash for ExprTypes<M> {
-    fn hash<H: Hasher>(&self, state: &mut H) {}
-}
-
-pub type MathTypes = ExprTypes<MathMeta>;
-
-impl<M> ExprTypes<M> {
-    #[must_use]
-    pub fn new() -> Self {
-        Self(PhantomData::default())
-    }
-}
-
-impl<M: Hash> Indirection for ExprTypes<M> {
-    type Point = PointExpr<M>;
-    type Line = LineExpr<M>;
-    type Number = NumberExpr<M>;
-    type Circle = CircleExpr<M>;
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Recursive, Hash)]
 #[recursive(
-    impl<I: Indirection> HandleEntity<I> for Self<I>
-    where
-        I::Point: HandleEntity<I>,
-        I::Line: HandleEntity<I>,
-        I::Circle: HandleEntity<I>,
-        I::Number: HandleEntity<I> {
-        fn contains_entity(&self, entity: EntityId, entities: &[EntityKind<I>]) -> bool {
+    impl HandleEntity for Self {
+        fn contains_entity(&self, entity: EntityId, entities: &[EntityKind]) -> bool {
             aggregate = ||
         }
 
-        fn map_entity(self, entity: EntityId, into: &Any<I>) -> Self {
+        fn map_entity(self, entity: EntityId, into: &ExprKind) -> Self {
             aggregate = {},
             override_marker = override_map
         }
     }
 )]
-pub enum Point<P, L, C, N> {
-    /// k and l must be ordered
-    LineLineIntersection {
-        k: L,
-        l: L
-    },
-    /// items must be sorted
-    Average {
-        items: Vec<P>
-    },
-    CircleCenter {
-        circle: C
-    },
-    #[recursive(override_map = map_entity_over::<Self, I>)]
+pub enum ExprKind {
+    #[recursive(override_map = map_entity_override)]
     Entity {
         id: EntityId
+    },
+
+    // POINT
+
+    /// k and l must be ordered
+    LineLineIntersection {
+        k: VarIndex,
+        l: VarIndex
+    },
+    /// Items must be sorted
+    AveragePoint {
+        items: Vec<VarIndex>
+    },
+    CircleCenter {
+        circle: VarIndex
+    },
+
+    // NUMBER
+
+    /// plus and minus must be sorted and must not contain other sums. An aggregated constant, if any, must be at the end.
+    Sum {
+        plus: Vec<VarIndex>,
+        minus: Vec<VarIndex>
+    },
+    /// times and by must be sorted and must not contain other sums. An aggregated constant, if any, must be at the end.
+    Product {
+        times: Vec<VarIndex>,
+        by: Vec<VarIndex>
+    },
+    Const {
+        value: ProcNum
+    },
+    Power {
+        value: VarIndex,
+        exponent: CompExponent
+    },
+    /// p and q must be ordered
+    PointPointDistance {
+        p: VarIndex,
+        q: VarIndex
+    },
+    PointLineDistance {
+        point: VarIndex,
+        line: VarIndex
+    },
+    /// p and r must be ordered
+    ThreePointAngle {
+        p: VarIndex,
+        q: VarIndex,
+        r: VarIndex
+    },
+    /// p and r must be ordered
+    ThreePointAngleDir {
+        p: VarIndex,
+        q: VarIndex,
+        r: VarIndex
+    },
+    /// k and l must be ordered
+    TwoLineAngle {
+        k: VarIndex,
+        l: VarIndex
+    },
+    PointX {
+        point: VarIndex
+    },
+    PointY {
+        point: VarIndex
     }
 }
 
-pub type PointExpr<M> = Expr<Point<ExprTypes<M>>, M>;
-
-impl FindEntities for Point<VarIndex> {
+impl FindEntities for ExprKind {
+    // FIXME: DOESN'T WORK WITH FORWARD REFERENCING
     fn find_entities(&self, previous: &[HashSet<EntityId>]) -> HashSet<EntityId> {
         let mut set = HashSet::new();
 
@@ -304,7 +299,7 @@ impl FindEntities for Point<VarIndex> {
                 set.extend(previous[k.0].iter().copied());
                 set.extend(previous[l.0].iter().copied());
             }
-            Self::Average { items } => {
+            Self::AveragePoint { items } => {
                 set.extend(items.iter().map(|x| previous[x.0].iter().copied()).flatten());
             }
             Self::CircleCenter { circle } => {
@@ -313,20 +308,43 @@ impl FindEntities for Point<VarIndex> {
             Self::Entity { id } => {
                 set.insert(*id);
             }
+            Self::Sum { plus: v1, minus: v2 }
+            | Self::Product { times: v1, by: v2 } => {
+                set.extend(v1.iter().copied());
+                set.extend(v2.iter().copied());
+            }
+            Self::PointPointDistance { p: a, q: b }
+            | Self::PointLineDistance { point: a, line: b }
+            | Self::TwoLineAngle { k: a, l: b } => {
+                set.extend(previous[a.0].iter().copied());
+                set.extend(previous[b.0].iter().copied());
+            }
+            Self::ThreePointAngle { p, q, r }
+            | Self::ThreePointAngleDir { p, q, r } => {
+                set.extend(previous[p.0].iter().copied());
+                set.extend(previous[q.0].iter().copied());
+                set.extend(previous[r.0].iter().copied());
+            }
+            Self::PointX { point: x }
+            | Self::PointY { point: x }
+            | Self::Power { value: x, .. } => {
+                set.extend(previous[x.0].iter().copied());
+            }
+            Self::Const { .. } => {}
         }
 
         set
     }
 }
 
-impl Reindex for Point<VarIndex> {
+impl Reindex for ExprKind {
     fn reindex(&mut self, map: &IndexMap) {
         match self {
             Self::LineLineIntersection { k, l } => {
                 k.reindex(map);
                 l.reindex(map);
             }
-            Self::Average { items } => {
+            Self::AveragePoint { items } => {
                 items.reindex(map);
             }
             Self::CircleCenter { circle } => {
@@ -337,42 +355,20 @@ impl Reindex for Point<VarIndex> {
     }
 }
 
-impl<I: Indirection> Default for Point<I> {
+impl Default for ExprKind {
     fn default() -> Self {
         Self::Entity { id: EntityId(0) }
     }
 }
 
-impl Flatten for Point<ExprTypes<()>> {
-    type Output = Point<VarIndex>;
-    
-    fn flatten(self, context: &mut FlattenContext) -> Self::Output {
-        match self {
-            Self::LineLineIntersection { k, l } => {
-                Point::LineLineIntersection {
-                    k: k.flatten(context),
-                    l: l.flatten(context)
-                }
-            }
-            Self::Average { items } => Point::Average {
-                items: items.flatten(context)
-            },
-            Self::CircleCenter { circle } => Point::CircleCenter {
-                circle: circle.flatten(context)
-            },
-            Self::Entity { id } => Point::Entity { id }
-        }
-    }
-}
-
-impl FromUnrolled<UnrolledPoint> for PointExpr<()> {
+impl FromUnrolled<UnrolledPoint> for ExprKind {
     fn load(expr: &Unrolled<UnrolledPoint>, math: &mut Expand) -> Self {
         let kind = match expr.get_data() {
-            UnrolledPoint::LineLineIntersection(a, b) => Point::LineLineIntersection {
+            UnrolledPoint::LineLineIntersection(a, b) => ExprKind::LineLineIntersection {
                 k: math.load(a),
                 l: math.load(b)
             },
-            UnrolledPoint::Average(exprs) => Point::Average {
+            UnrolledPoint::Average(exprs) => ExprKind::AveragePoint {
                 items: exprs.iter().map(|x| math.load(x)).collect()
             },
             UnrolledPoint::CircleCenter(circle) => {
@@ -381,7 +377,7 @@ impl FromUnrolled<UnrolledPoint> for PointExpr<()> {
                     _ => unreachable!()
                 }
             },
-            UnrolledPoint::Free => Point::Entity { id: math.add_point() },
+            UnrolledPoint::Free => ExprKind::Entity { id: math.add_point() },
             _ => unreachable!()
         };
 
@@ -392,11 +388,11 @@ impl FromUnrolled<UnrolledPoint> for PointExpr<()> {
     }
 }
 
-impl<M: Ord> Normalize for Point<ExprTypes<M>> {
+impl<M: Ord> Normalize for ExprKind {
     fn normalize(&mut self) {
         match self {
-            Point::Entity { .. } => (),
-            Point::LineLineIntersection { k, l } => {
+            ExprKind::Entity { .. } => (),
+            ExprKind::LineLineIntersection { k, l } => {
                 k.normalize();
                 l.normalize();
 
@@ -404,104 +400,27 @@ impl<M: Ord> Normalize for Point<ExprTypes<M>> {
                     mem::swap(k, l);
                 }
             }
-            Point::Average { items } => {
+            ExprKind::AveragePoint { items } => {
                 for item in items {
                     item.normalize();
                 }
 
                 items.sort();
             }
-            Point::CircleCenter { circle } => circle.normalize(),
+            ExprKind::CircleCenter { circle } => circle.normalize(),
         }
     }
 }
 
-/// Normalized if has sorted parameters and potential additional conditions are met.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Recursive, Hash)]
-#[recursive(
-    impl<I: Indirection> HandleEntity<I> for Self<I>
-    where
-        I::Point: HandleEntity<I>,
-        I::Line: HandleEntity<I>,
-        I::Circle: HandleEntity<I>,
-        I::Number: HandleEntity<I> {
-        fn contains_entity(&self, entity: EntityId, entities: &[EntityKind<I>]) -> bool {
-            aggregate = ||
-        }
-
-        fn map_entity(self, entity: EntityId, into: &Any<I>) -> Self {
-            aggregate = {},
-            override_marker = override_map
-        }
-    }
-)]
-pub enum Number<I: Indirection> {
-    #[recursive(override_map = map_entity_over::<Self, I>)]
-    Entity {
-        id: EntityId
-    },
-    /// plus and minus must be sorted and must not contain other sums. An aggregated constant, if any, must be at the end.
-    Sum {
-        plus: Vec<I::Number>,
-        minus: Vec<I::Number>
-    },
-    /// times and by must be sorted and must not contain other sums. An aggregated constant, if any, must be at the end.
-    Product {
-        times: Vec<I::Number>,
-        by: Vec<I::Number>
-    },
-    Const {
-        value: ProcNum
-    },
-    Power {
-        value: I::Number,
-        exponent: CompExponent
-    },
-    /// p and q must be ordered
-    PointPointDistance {
-        p: I::Point,
-        q: I::Point
-    },
-    PointLineDistance {
-        p: I::Point,
-        k: I::Line
-    },
-    /// p and r must be ordered
-    ThreePointAngle {
-        p: I::Point,
-        q: I::Point,
-        r: I::Point
-    },
-    /// p and r must be ordered
-    ThreePointAngleDir {
-        p: I::Point,
-        q: I::Point,
-        r: I::Point
-    },
-    /// k and l must be ordered
-    TwoLineAngle {
-        k: I::Line,
-        l: I::Line
-    },
-    PointX {
-        point: I::Point
-    },
-    PointY {
-        point: I::Point
-    }
-}
-
-pub type NumberExpr<M> = Expr<Number<ExprTypes<M>>, M>;
-
-fn fix_dst(expr: NumberExpr<()>, unit: Option<ComplexUnit>, math: &mut Expand) -> NumberExpr<()> {
+fn fix_dst(expr: Expr<MathMeta>, unit: Option<ComplexUnit>, math: &mut Expand) -> Expr<MathMeta> {
     match unit {
         None => expr,
         Some(unit) => {
             if unit.0[SimpleUnit::Distance as usize].is_zero() {
                 expr
             } else {
-                Expr::new(Number::Product {
-                    times: vec![expr, Expr::new(Number::Power {
+                Expr::new(ExprKind::Product {
+                    times: vec![expr, Expr::new(ExprKind::Power {
                         value: math.get_dst_var(),
                         exponent: unit.0[SimpleUnit::Distance as usize]
                     })],
@@ -512,7 +431,7 @@ fn fix_dst(expr: NumberExpr<()>, unit: Option<ComplexUnit>, math: &mut Expand) -
     }
 }
 
-impl FindEntities for Number<VarIndex> {
+impl FindEntities for ExprKind<VarIndex> {
     fn find_entities(&self, previous: &[HashSet<EntityId>]) -> HashSet<EntityId> {
         let mut set = HashSet::new();
 
@@ -549,7 +468,7 @@ impl FindEntities for Number<VarIndex> {
     }
 }
 
-impl Reindex for Number<VarIndex> {
+impl Reindex for ExprKind<VarIndex> {
     fn reindex(&mut self, map: &IndexMap) {
         match self {
             Self::Entity { .. }
@@ -580,49 +499,49 @@ impl Reindex for Number<VarIndex> {
     }
 }
 
-impl Flatten for Number<ExprTypes<()>> {
-    type Output = Number<VarIndex>;
+impl Flatten for ExprKind<ExprTypes<()>> {
+    type Output = ExprKind<VarIndex>;
 
     fn flatten(self, context: &mut FlattenContext) -> Self::Output {
         match self {
-            Number::Entity { id } => Number::Entity { id },
-            Number::Sum { plus, minus } => Number::Sum {
+            ExprKind::Entity { id } => ExprKind::Entity { id },
+            ExprKind::Sum { plus, minus } => ExprKind::Sum {
                 plus: plus.flatten(context),
                 minus: minus.flatten(context)
             },
-            Number::Product { times, by } => Number::Product {
+            ExprKind::Product { times, by } => ExprKind::Product {
                 times: times.flatten(context),
                 by: by.flatten(context)
             },
-            Number::Const { value } => Number::Const { value },
-            Number::Power { value, exponent } => Number::Power {
+            ExprKind::Const { value } => ExprKind::Const { value },
+            ExprKind::Power { value, exponent } => ExprKind::Power {
                 value: value.flatten(context),
                 exponent
             },
-            Number::PointPointDistance { p, q } => Number::PointPointDistance {
+            ExprKind::PointPointDistance { p, q } => ExprKind::PointPointDistance {
                 p: p.flatten(context),
                 q: q.flatten(context)
             },
-            Number::PointLineDistance { p, k } => Number::PointLineDistance {
+            ExprKind::PointLineDistance { p, k } => ExprKind::PointLineDistance {
                 p: p.flatten(context),
                 k: k.flatten(context)
             },
-            Number::ThreePointAngle { p, q, r } => Number::ThreePointAngle {
+            ExprKind::ThreePointAngle { p, q, r } => ExprKind::ThreePointAngle {
                 p: p.flatten(context),
                 q: q.flatten(context),
                 r: r.flatten(context)
             },
-            Number::ThreePointAngleDir { p, q, r } => Number::ThreePointAngleDir {
+            ExprKind::ThreePointAngleDir { p, q, r } => ExprKind::ThreePointAngleDir {
                 p: p.flatten(context),
                 q: q.flatten(context),
                 r: r.flatten(context)
             },
-            Number::TwoLineAngle { k, l } => Number::TwoLineAngle {
+            ExprKind::TwoLineAngle { k, l } => ExprKind::TwoLineAngle {
                 k: k.flatten(context),
                 l: l.flatten(context)
             },
-            Number::PointX { point } => Number::PointX { point: point.flatten(context) },
-            Number::PointY { point } => Number::PointY { point: point.flatten(context) }
+            ExprKind::PointX { point } => ExprKind::PointX { point: point.flatten(context) },
+            ExprKind::PointY { point } => ExprKind::PointY { point: point.flatten(context) }
         }
     }
 }
@@ -630,28 +549,28 @@ impl Flatten for Number<ExprTypes<()>> {
 impl FromUnrolled<unroll::Scalar> for NumberExpr<()> {
     fn load(expr: &Unrolled<unroll::Scalar>, math: &mut Expand) -> Self {
         let kind = match expr.get_data() {
-            UnrolledScalar::Add(a, b) => Number::Sum {
+            UnrolledScalar::Add(a, b) => ExprKind::Sum {
                 plus: vec![math.load(a), math.load(b)],
                 minus: Vec::new()
             },
-            UnrolledScalar::Subtract(a, b) => Number::Sum {
+            UnrolledScalar::Subtract(a, b) => ExprKind::Sum {
                 plus: vec![math.load(a)],
                 minus: vec![math.load(b)]
             },
-            UnrolledScalar::Multiply(a, b) => Number::Product {
+            UnrolledScalar::Multiply(a, b) => ExprKind::Product {
                 times: vec![math.load(a), math.load(b)],
                 by: Vec::new()
             },
-            UnrolledScalar::Divide(a, b) => Number::Product {
+            UnrolledScalar::Divide(a, b) => ExprKind::Product {
                 times: vec![math.load(a)],
                 by: vec![math.load(b)]
             },
-            UnrolledScalar::Average(exprs) => Number::Product {
-                times: vec![Expr::new(Number::Sum {
+            UnrolledScalar::Average(exprs) => ExprKind::Product {
+                times: vec![Expr::new(ExprKind::Sum {
                     plus: exprs.iter().map(|x| math.load(x)).collect(),
                     minus: Vec::new()
                 })],
-                by: vec![Expr::new(Number::Const { value: ProcNum::from_usize(exprs.len()).unwrap() })]
+                by: vec![Expr::new(ExprKind::Const { value: ProcNum::from_usize(exprs.len()).unwrap() })]
             },
             UnrolledScalar::CircleRadius(circle) => {
                 match circle.get_data() {
@@ -659,44 +578,44 @@ impl FromUnrolled<unroll::Scalar> for NumberExpr<()> {
                     _ => unreachable!()
                 }
             }
-            UnrolledScalar::Free => Number::Entity { id: math.add_real() },
-            UnrolledScalar::Number(x) => return fix_dst(Expr::new(Number::Const { value: x.clone() }), expr.data.unit, math),
-            UnrolledScalar::DstLiteral(x) => Number::Const { value: x.clone() },
+            UnrolledScalar::Free => ExprKind::Entity { id: math.add_real() },
+            UnrolledScalar::Number(x) => return fix_dst(Expr::new(ExprKind::Const { value: x.clone() }), expr.data.unit, math),
+            UnrolledScalar::DstLiteral(x) => ExprKind::Const { value: x.clone() },
             UnrolledScalar::SetUnit(x, unit) => return fix_dst(math.load(x), Some(*unit), math),
-            UnrolledScalar::PointPointDistance(p, q) => Number::PointPointDistance {
+            UnrolledScalar::PointPointDistance(p, q) => ExprKind::PointPointDistance {
                 p: math.load(p),
                 q: math.load(q)
             },
-            UnrolledScalar::PointLineDistance(p, k) => Number::PointLineDistance {
+            UnrolledScalar::PointLineDistance(p, k) => ExprKind::PointLineDistance {
                 p: math.load(p),
                 k: math.load(k)
             },
-            UnrolledScalar::Negate(x) => Number::Sum {
+            UnrolledScalar::Negate(x) => ExprKind::Sum {
                 plus: Vec::new(),
                 minus: vec![math.load(x)]
             },
-            UnrolledScalar::ThreePointAngle(p, q, r) => Number::ThreePointAngle {
+            UnrolledScalar::ThreePointAngle(p, q, r) => ExprKind::ThreePointAngle {
                 p: math.load(p),
                 q: math.load(q),
                 r: math.load(r)
             },
-            UnrolledScalar::ThreePointAngleDir(p, q, r) => Number::ThreePointAngleDir {
+            UnrolledScalar::ThreePointAngleDir(p, q, r) => ExprKind::ThreePointAngleDir {
                 p: math.load(p),
                 q: math.load(q),
                 r: math.load(r)
             },
-            UnrolledScalar::TwoLineAngle(k, l) => Number::TwoLineAngle {
+            UnrolledScalar::TwoLineAngle(k, l) => ExprKind::TwoLineAngle {
                 k: math.load(k),
                 l: math.load(l)
             },
-            UnrolledScalar::Pow(base, exponent) => Number::Power {
+            UnrolledScalar::Pow(base, exponent) => ExprKind::Power {
                 value: math.load(base),
                 exponent: exponent.clone()
             },
-            UnrolledScalar::PointX(point) => Number::PointX {
+            UnrolledScalar::PointX(point) => ExprKind::PointX {
                 point: math.load(point)
             },
-            UnrolledScalar::PointY(point) => Number::PointY {
+            UnrolledScalar::PointY(point) => ExprKind::PointY {
                 point: math.load(point)
             },
             _ => unreachable!()
@@ -769,13 +688,13 @@ fn normalize_sum(plus: &mut Vec<NumberExpr<()>>, minus: &mut Vec<NumberExpr<()>>
         item.normalize();
 
         match *item.kind {
-            Number::Sum {
+            ExprKind::Sum {
                 plus, minus
             } => {
                 plus_final = Merge::new(plus_final, plus).collect();
                 minus_final = Merge::new(minus_final, minus).collect();
             }
-            Number::Const { value } => constant += value,
+            ExprKind::Const { value } => constant += value,
             kind => {
                 plus_final = Merge::new(plus_final, Some(Expr::new(kind))).collect();
             }
@@ -784,13 +703,13 @@ fn normalize_sum(plus: &mut Vec<NumberExpr<()>>, minus: &mut Vec<NumberExpr<()>>
 
     for item in minus_v {
         match *item.kind {
-            Number::Sum {
+            ExprKind::Sum {
                 plus, minus
             } => {
                 plus_final = Merge::new(plus_final, minus).collect();
                 minus_final = Merge::new(minus_final, plus).collect();
             }
-            Number::Const { value } => constant -= value,
+            ExprKind::Const { value } => constant -= value,
             kind => {
                 minus_final = Merge::new(minus_final, Some(Expr::new(kind))).collect();
             }
@@ -798,7 +717,7 @@ fn normalize_sum(plus: &mut Vec<NumberExpr<()>>, minus: &mut Vec<NumberExpr<()>>
     }
 
     if !constant.is_zero() {
-        plus_final.push(Expr::new(Number::Const { value: constant }));
+        plus_final.push(Expr::new(ExprKind::Const { value: constant }));
     }
 
     *plus = plus_final;
@@ -818,13 +737,13 @@ fn normalize_product(times: &mut Vec<NumberExpr<()>>, by: &mut Vec<NumberExpr<()
         item.normalize();
 
         match *item.kind {
-            Number::Product {
+            ExprKind::Product {
                 times, by
             } => {
                 times_final = Merge::new(times_final, times).collect();
                 by_final = Merge::new(by_final, by).collect();
             }
-            Number::Const { value } => constant *= value,
+            ExprKind::Const { value } => constant *= value,
             kind => {
                 times_final = Merge::new(times_final, Some(Expr::new(kind))).collect();
             }
@@ -833,13 +752,13 @@ fn normalize_product(times: &mut Vec<NumberExpr<()>>, by: &mut Vec<NumberExpr<()
 
     for item in by_v {
         match *item.kind {
-            Number::Product {
+            ExprKind::Product {
                 times, by
             } => {
                 times_final = Merge::new(times_final, by).collect();
                 by_final = Merge::new(by_final, times).collect();
             }
-            Number::Const { value } => constant /= value,
+            ExprKind::Const { value } => constant /= value,
             kind => {
                 by_final = Merge::new(by_final, Some(Expr::new(kind))).collect();
             }
@@ -847,14 +766,14 @@ fn normalize_product(times: &mut Vec<NumberExpr<()>>, by: &mut Vec<NumberExpr<()
     }
 
     if !constant.is_one() {
-        times_final.push(Expr::new(Number::Const { value: constant }));
+        times_final.push(Expr::new(ExprKind::Const { value: constant }));
     }
 
     *times = times_final;
     *by = by_final;
 }
 
-impl<M: Ord> Normalize for Number<ExprTypes<M>> {
+impl<M: Ord> Normalize for ExprKind<ExprTypes<M>> {
     fn normalize(&mut self) {
         match self {
             Self::Var { .. }
@@ -1216,57 +1135,8 @@ impl<M: Ord> Normalize for Circle<ExprTypes<M>> {
     }
 }
 
-#[derive(Debug, Clone, Recursive, Hash)]
-#[recursive(
-    impl<I: Indirection> HandleEntity<I> for Self<I> {
-        fn contains_entity(&self, entity: EntityId, entities: &[EntityKind<I>]) -> bool {
-            aggregate = ||
-        }
-
-        fn map_entity(self, entity: EntityId, into: &Any<I>) -> Self {
-            aggregate = {}
-        }
-    }
-)]
-pub enum Any<I: Indirection> {
-    Point(Point<I>),
-    Number(Number<I>),
-    Line(Line<I>),
-    Circle(Circle<I>)
-}
-
-impl Reindex for Any<VarIndex> {
-    fn reindex(&mut self, map: &IndexMap) {
-        match self {
-            Any::Point(v) => v.reindex(map),
-            Any::Number(v) => v.reindex(map),
-            Any::Line(v) => v.reindex(map),
-            Any::Circle(v) => v.reindex(map),
-        }
-    }
-}
-
-impl FindEntities for Any<VarIndex> {
-    fn find_entities(&self, previous: &[HashSet<EntityId>]) -> HashSet<EntityId> {
-        match self {
-            Any::Point(v) => v.find_entities(previous),
-            Any::Number(v) => v.find_entities(previous),
-            Any::Line(v) => v.find_entities(previous),
-            Any::Circle(v) => v.find_entities(previous),
-        }
-    }
-}
-
-impl<I: Indirection> Default for Any<I> {
-    fn default() -> Self {
-        Self::Point(Point::default())
-    }
-}
-
-pub type AnyExpr<M> = Expr<Any<ExprTypes<M>>, M>;
-
-impl<M: Indirection> From<Number<M>> for Any<M> {
-    fn from(value: Number<M>) -> Self {
+impl<M: Indirection> From<ExprKind<M>> for Any<M> {
+    fn from(value: ExprKind<M>) -> Self {
         Self::Number(value)
     }
 }
@@ -1277,8 +1147,8 @@ impl<M: Indirection> From<Line<M>> for Any<M> {
     }
 }
 
-impl<M: Indirection> From<Point<M>> for Any<M> {
-    fn from(value: Point<M>) -> Self {
+impl<M: Indirection> From<ExprKind<M>> for Any<M> {
+    fn from(value: ExprKind<M>) -> Self {
         Self::Point(value)
     }
 }
@@ -1292,7 +1162,7 @@ impl<M: Indirection> From<Circle<M>> for Any<M> {
 #[derive(Debug)]
 pub struct WrongVariant;
 
-impl<M: Indirection> TryFrom<Any<M>> for Point<M> {
+impl<M: Indirection> TryFrom<Any<M>> for ExprKind<M> {
     type Error = WrongVariant;
 
     fn try_from(value: Any<M>) -> Result<Self, Self::Error> {
@@ -1304,7 +1174,7 @@ impl<M: Indirection> TryFrom<Any<M>> for Point<M> {
     }
 }
 
-impl<M: Indirection> TryFrom<Any<M>> for Number<M> {
+impl<M: Indirection> TryFrom<Any<M>> for ExprKind<M> {
     type Error = WrongVariant;
 
     fn try_from(value: Any<M>) -> Result<Self, Self::Error> {
@@ -1745,15 +1615,22 @@ impl<I: Indirection, M, Dst> MapMeta<Dst> for Entity<I, M> {
         }
     }
 )]
-pub enum EntityKind<I: Indirection> {
+pub enum EntityKind {
     FreePoint,
-    PointOnLine(I::Line),
-    PointOnCircle(I::Circle),
+    PointOnLine {
+        line: VarIndex
+    },
+    PointOnCircle {
+        circle: VarIndex
+    },
     FreeReal,
-    Bind(Any<I>)
+    Bind(Any)
 }
 
-impl Clone for EntityKind<VarIndex> {
+pub type EntityKindTree = EntityKind<PointExpr<MathMeta>, LineExpr<MathMeta>, CircleExpr<MathMeta>, NumberExpr<MathMeta>>;
+pub type EntityKindIndex = EntityKind<VarIndex, VarIndex, VarIndex, VarIndex>;
+
+impl Clone for EntityKindIndex {
     fn clone(&self) -> Self {
         match self {
             EntityKind::FreePoint => Self::FreePoint,
@@ -1765,7 +1642,7 @@ impl Clone for EntityKind<VarIndex> {
     }
 }
 
-impl Clone for EntityKind<ExprTypes<()>> {
+impl Clone for EntityKindTree {
     fn clone(&self) -> Self {
         match self {
             EntityKind::FreePoint => Self::FreePoint,
@@ -1777,7 +1654,7 @@ impl Clone for EntityKind<ExprTypes<()>> {
     }
 }
 
-impl Reindex for EntityKind<VarIndex> {
+impl Reindex for EntityKindIndex {
     fn reindex(&mut self, map: &IndexMap) {
         match self {
             EntityKind::FreePoint
@@ -1789,8 +1666,8 @@ impl Reindex for EntityKind<VarIndex> {
     }
 }
 
-impl Flatten for EntityKind<ExprTypes<()>> {
-    type Output = EntityKind<VarIndex>;
+impl Flatten for EntityKindTree {
+    type Output = EntityKindIndex;
 
     fn flatten(self, context: &mut FlattenContext) -> Self::Output {
         match self {
@@ -1845,7 +1722,7 @@ impl Expand {
 
     #[must_use]
     pub fn get_dst_var(&mut self) -> NumberExpr<()> {
-        self.dst_var.get_or_init(|| Expr::new(Number::Entity { id: self.add_real() })).clone()
+        self.dst_var.get_or_init(|| Expr::new(ExprKind::Entity { id: self.add_real() })).clone()
     }
 
     fn add_entity(&mut self, entity: EntityKind<ExprTypes<()>>) -> EntityId {
@@ -2101,8 +1978,8 @@ pub fn load_script(input: &str) -> Result<Intermediate, Vec<Error>> {
             intos.push(match entity {
                 EntityKind::FreePoint
                 | EntityKind::PointOnCircle(_)
-                | EntityKind::PointOnLine(_) => Any::Point(Point::Entity { id: EntityId(i - offset) }),
-                EntityKind::FreeReal => Any::Number(Number::Entity { id: EntityId(i - offset) }),
+                | EntityKind::PointOnLine(_) => Any::Point(ExprKind::Entity { id: EntityId(i - offset) }),
+                EntityKind::FreeReal => Any::Number(ExprKind::Entity { id: EntityId(i - offset) }),
                 EntityKind::Bind(expr) => {
                     offset += 1;
                     expr.clone()

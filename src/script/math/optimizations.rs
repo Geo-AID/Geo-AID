@@ -19,7 +19,7 @@
  */
 
 use num_traits::Zero;
-use crate::script::math::{HandleEntity, EntityKind, Number, Point, SimpleRule};
+use crate::script::math::{HandleEntity, EntityKind, ExprKind, ExprKind, SimpleRule};
 use crate::script::token::number::ProcNum;
 
 use super::{Any, Circle, Expr, MathTypes, Rule, RuleKind};
@@ -33,19 +33,19 @@ impl ZeroLineDst {
             else { return false };
 
         // If 'a' is a constant, swap references for the sake of latter processing.
-        let (a, b) = if let Number::Const { .. } = a.kind.as_ref() {
+        let (a, b) = if let ExprKind::Const { .. } = a.kind.as_ref() {
             (b, a)
         } else {
             (a, b)
         };
 
-        let Number::PointLineDistance { p: a, k: ln } = a.kind.as_ref()
+        let ExprKind::PointLineDistance { p: a, k: ln } = a.kind.as_ref()
             else { return false };
 
-        let Point::Entity { id: a } = a.kind.as_ref()
+        let ExprKind::Entity { id: a } = a.kind.as_ref()
             else { return false };
 
-        let Number::Const { value: b } = b.kind.as_ref()
+        let ExprKind::Const { value: b } = b.kind.as_ref()
             else { return false };
 
         if !b.is_zero() {
@@ -79,7 +79,7 @@ impl ZeroLineDst {
                 *ent = EntityKind::PointOnLine(ln.clone());
             }
             ent @ EntityKind::PointOnLine(_) => {
-                *ent = EntityKind::Bind(Any::Point(Point::LineLineIntersection {
+                *ent = EntityKind::Bind(Any::Point(ExprKind::LineLineIntersection {
                     k: on_line.unwrap(), l: ln.clone()
                 }));
             }
@@ -130,8 +130,8 @@ impl EqPointDst {
             ..
         }) = rule else {return false};
 
-        let Number::PointPointDistance { p, q } = a.kind.as_ref() else { return false };
-        let Number::PointPointDistance { p: r, q: s } = b.kind.as_ref() else { return false };
+        let ExprKind::PointPointDistance { p, q } = a.kind.as_ref() else { return false };
+        let ExprKind::PointPointDistance { p: r, q: s } = b.kind.as_ref() else { return false };
 
         // q = s?
         if q != s {
@@ -139,7 +139,7 @@ impl EqPointDst {
         }
 
         // r must be an entity (if there is one, it's definitely r, because normalization and ordering)
-        let Point::Entity { id: r_id } = r.kind.as_ref() else { return false };
+        let ExprKind::Entity { id: r_id } = r.kind.as_ref() else { return false };
 
         // r must be a free point, otherwise it won't work.
         if !matches!(entities[r_id.0], EntityKind::FreePoint) {
@@ -148,7 +148,7 @@ impl EqPointDst {
 
         let circle = Expr::new(Circle::Construct {
             center: q.clone(),
-            radius: Expr::new(Number::PointPointDistance { p: p.clone(), q: q.clone() })
+            radius: Expr::new(ExprKind::PointPointDistance { p: p.clone(), q: q.clone() })
         });
         entities[r_id.0] = EntityKind::PointOnCircle(circle);
         *rule = None;
@@ -166,14 +166,14 @@ impl RightAngle {
              ..
          }) = rule else {return false};
 
-        let Number::ThreePointAngle { p, q, r } = a.kind.as_ref() else { return false };
-        let Number::Const { value } = b.kind.as_ref() else { return false };
+        let ExprKind::ThreePointAngle { p, q, r } = a.kind.as_ref() else { return false };
+        let ExprKind::Const { value } = b.kind.as_ref() else { return false };
 
         if *value != ProcNum::pi() {
             return false;
         }
 
-        let mid = Expr::new(Point::Average {
+        let mid = Expr::new(ExprKind::AveragePoint {
             items: vec![p.clone(), r.clone()]
         });
         let p = p.clone();
@@ -181,8 +181,8 @@ impl RightAngle {
 
         if let Some(rule) = rule {
             rule.kind = RuleKind::NumberEq(
-                Expr::new(Number::PointPointDistance { p: mid.clone(), q }),
-                Expr::new(Number::PointPointDistance { p, q: mid })
+                Expr::new(ExprKind::PointPointDistance { p: mid.clone(), q }),
+                Expr::new(ExprKind::PointPointDistance { p, q: mid })
             );
         }
 
