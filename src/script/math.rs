@@ -176,10 +176,10 @@ trait FromUnrolled<T: Displayed> {
 }
 
 trait Normalize {
-    fn normalize(&mut self);
+    fn normalize(&mut self, math: &Expand);
 }
 
-#[derive(Debug, Clone, Copy, Hash)]
+#[derive(Debug, Clone, Copy, Hash, Ord, PartialOrd, Eq, PartialEq)]
 pub struct VarIndex(pub usize);
 
 impl Reindex for VarIndex {
@@ -389,7 +389,7 @@ impl FromUnrolled<UnrolledPoint> for ExprKind {
 }
 
 impl<M: Ord> Normalize for ExprKind {
-    fn normalize(&mut self) {
+    fn normalize(&mut self, math: &Expand) {
         match self {
             ExprKind::Entity { .. } => (),
             ExprKind::LineLineIntersection { k, l } => {
