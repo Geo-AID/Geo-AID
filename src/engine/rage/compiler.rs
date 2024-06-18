@@ -24,9 +24,9 @@ use num_traits::ToPrimitive;
 use crate::engine::rage::generator::AdjustableTemplate;
 use crate::engine::rage::generator::critic::{EvaluateProgram, FigureProgram};
 use crate::engine::rage::generator::program::{Instruction, Loc, Program, ValueType};
-use crate::engine::rage::generator::program::expr::{AngleBisector, AngleLine, AnglePoint, AnglePointDir, Average, CircleConstruct, EqualComplex, EqualReal, Greater, InvertQuality, Less, LineFromPoints, LineLineIntersection, Max, Negation, ParallelThrough, PartialPow, PartialProduct, PerpendicularThrough, PointLineDistance, PointOnLine, PointPointDistance, Sum, SwapParts};
+use crate::engine::rage::generator::program::expr::{AngleBisector, AngleLine, AnglePoint, AnglePointDir, Average, CircleConstruct, EqualComplex, EqualReal, Greater, InvertQuality, Less, LineFromPoints, LineLineIntersection, Max, Negation, ParallelThrough, PartialPow, PartialProduct, PerpendicularThrough, PointLineDistance, PointOnCircle, PointOnLine, PointPointDistance, Sum, SwapParts};
 use crate::geometry::{Complex, ValueEnum};
-use crate::script::math::{Any, Circle, EntityKind, EntityId, Expr, Intermediate, Line, ExprKind, ExprKind, Rule, RuleKind, VarIndex};
+use crate::script::math::{EntityKind, EntityId, Expr, Intermediate, ExprKind, Rule, RuleKind, VarIndex};
 use crate::script::token::number::ProcNum;
 
 #[derive(Debug, Default)]
@@ -72,7 +72,7 @@ impl<'i> Compiler<'i> {
         }
     }
 
-    fn prepare_constants<'r, I: IntoIterator<Item = &'r Any<VarIndex>>>(&mut self, adjustable_count: usize, exprs: I) {
+    fn prepare_constants<'r, I: IntoIterator<Item = &'r ExprKind>>(&mut self, adjustable_count: usize, exprs: I) {
         self.constants_indices.clear();
         self.constants.clear();
         self.entities.clear();
@@ -80,7 +80,7 @@ impl<'i> Compiler<'i> {
         self.entities.resize(adjustable_count, usize::MAX);
 
         for expr in exprs {
-            if let Any::Number(ExprKind::Const { value }) = expr {
+            if let ExprKind::Const { value } = expr {
                 self.constants.push(ValueEnum::Complex(value.clone().to_complex()));
                 let index = self.constants.len() - 1;
                 self.constants_indices.insert(value.clone(), index);
@@ -144,14 +144,7 @@ impl<'i> Compiler<'i> {
         };
 
         let variable_types: Vec<_> = self.intermediate.figure.variables.iter()
-            .map(|expr| {
-                match expr.kind.as_ref() {
-                    Any::Point(_)
-                    | Any::Number(_) => ValueType::Complex,
-                    Any::Line(_) => ValueType::Line,
-                    Any::Circle(_) => ValueType::Circle
-                }
-            })
+            .map(|expr| Self::get_value_type(&expr.kind))
             .collect();
 
         let entity_types: Vec<_> = self.intermediate.figure.entities.iter()
@@ -229,25 +222,14 @@ impl<'i> Compile<VarIndex> for Compiler<'i> {
     }
 }
 
-impl<'i, T, M> Compile<Expr<T, M>> for Compiler<'i> where Self: Compile<T> {
-    fn compile(&mut self, value: &Expr<T, M>) -> Loc {
+impl<'i, M> Compile<Expr<M>> for Compiler<'i> {
+    fn compile(&mut self, value: &Expr<M>) -> Loc {
         self.compile(value.kind.as_ref())
     }
 }
 
-impl<'i> Compile<Any<VarIndex>> for Compiler<'i> {
-    fn compile(&mut self, value: &Any<VarIndex>) -> Loc {
-        match value {
-            Any::Point(v) => self.compile(v),
-            Any::Number(v) => self.compile(v),
-            Any::Line(v) => self.compile(v),
-            Any::Circle(v) => self.compile(v),
-        }
-    }
-}
-
-impl<'i> Compile<ExprKind<VarIndex>> for Compiler<'i> {
-    fn compile(&mut self, value: &ExprKind<VarIndex>) -> Loc {
+impl<'i> Compile<ExprKind> for Compiler<'i> {
+    fn compile(&mut self, value: &ExprKind) -> Loc {
         match value {
             ExprKind::LineLineIntersection { k, l } => {
                 let target = self.cursor.next();
@@ -277,14 +259,7 @@ impl<'i> Compile<ExprKind<VarIndex>> for Compiler<'i> {
             ExprKind::Entity { id } => {
                 self.compile(id)
             }
-        }
-    }
-}
-
-impl<'i> Compile<Line<VarIndex>> for Compiler<'i> {
-    fn compile(&mut self, value: &Line<VarIndex>) -> Loc {
-        match value {
-            Line::PointPoint { p, q } => {
+            ExprKind::PointPoint { p, q } => {
                 let target = self.cursor.next();
 
                 self.instructions.push(Instruction::LineFromPoints(LineFromPoints {
@@ -295,19 +270,19 @@ impl<'i> Compile<Line<VarIndex>> for Compiler<'i> {
 
                 target
             }
-            Line::AngleBisector { a, b, c } => {
+            ExprKind::AngleBisector { p, q, r } => {
                 let target = self.cursor.next();
 
                 self.instructions.push(Instruction::AngleBisector(AngleBisector {
-                    arm1: self.compile(a),
-                    origin: self.compile(b),
-                    arm2: self.compile(c),
+                    arm1: self.compile(p),
+                    origin: self.compile(q),
+                    arm2: self.compile(r),
                     target
                 }));
 
                 target
             }
-            Line::ParallelThrough { point, line } => {
+            ExprKind::ParallelThrough { point, line } => {
                 let target = self.cursor.next();
 
                 self.instructions.push(Instruction::ParallelThrough(ParallelThrough {
@@ -318,7 +293,7 @@ impl<'i> Compile<Line<VarIndex>> for Compiler<'i> {
 
                 target
             }
-            Line::PerpendicularThrough { point, line } => {
+            ExprKind::PerpendicularThrough { point, line } => {
                 let target = self.cursor.next();
 
                 self.instructions.push(Instruction::PerpendicularThrough(PerpendicularThrough {
@@ -328,16 +303,6 @@ impl<'i> Compile<Line<VarIndex>> for Compiler<'i> {
                 }));
 
                 target
-            }
-        }
-    }
-}
-
-impl<'i> Compile<ExprKind<VarIndex>> for Compiler<'i> {
-    fn compile(&mut self, value: &ExprKind<VarIndex>) -> Loc {
-        match value {
-            ExprKind::Entity { id } => {
-                self.compile(id)
             }
             ExprKind::Sum { plus, minus } => {
                 let target = self.cursor.next();
@@ -411,12 +376,12 @@ impl<'i> Compile<ExprKind<VarIndex>> for Compiler<'i> {
 
                 target
             }
-            ExprKind::PointLineDistance { p, k } => {
+            ExprKind::PointLineDistance { point, line } => {
                 let target = self.cursor.next();
 
                 self.instructions.push(Instruction::PointLineDistance(PointLineDistance {
-                    point: self.compile(p),
-                    line: self.compile(k),
+                    point: self.compile(point),
+                    line: self.compile(line),
                     target
                 }));
 
@@ -472,14 +437,7 @@ impl<'i> Compile<ExprKind<VarIndex>> for Compiler<'i> {
 
                 target
             }
-        }
-    }
-}
-
-impl<'i> Compile<Circle<VarIndex>> for Compiler<'i> {
-    fn compile(&mut self, value: &Circle<VarIndex>) -> Loc {
-        match value {
-            Circle::Construct { center, radius } => {
+            ExprKind::ConstructCircle { center, radius } => {
                 let target = self.cursor.next();
 
                 self.instructions.push(Instruction::CircleConstruct(CircleConstruct {
@@ -502,17 +460,28 @@ impl<'i> Compile<EntityId> for Compiler<'i> {
         }
 
         let ent = self.intermediate.adjusted.entities[value.0].clone();
-        let loc = match ent {
+        let loc = match ent.kind {
             EntityKind::FreeReal
             | EntityKind::FreePoint => {
                 // The first constants are entities.
                 value.0
             }
-            EntityKind::PointOnLine(line) => {
+            EntityKind::PointOnLine { line } => {
                 let target = self.cursor.next();
 
                 self.instructions.push(Instruction::OnLine(PointOnLine {
                     line: self.compile(&line),
+                    clip: value.0,
+                    target
+                }));
+
+                target
+            }
+            EntityKind::PointOnCircle { circle } => {
+                let target = self.cursor.next();
+
+                self.instructions.push(Instruction::OnCircle(PointOnCircle {
+                    circle: self.compile(&circle),
                     clip: value.0,
                     target
                 }));
@@ -526,14 +495,14 @@ impl<'i> Compile<EntityId> for Compiler<'i> {
     }
 }
 
-impl<'i> Compile<Rule<VarIndex>> for Compiler<'i> {
-    fn compile(&mut self, value: &Rule<VarIndex>) -> Loc {
+impl<'i> Compile<Rule> for Compiler<'i> {
+    fn compile(&mut self, value: &Rule) -> Loc {
         self.compile(&value.kind)
     }
 }
 
-impl<'i> Compile<RuleKind<VarIndex>> for Compiler<'i> {
-    fn compile(&mut self, value: &RuleKind<VarIndex>) -> Loc {
+impl<'i> Compile<RuleKind> for Compiler<'i> {
+    fn compile(&mut self, value: &RuleKind) -> Loc {
         match value {
             RuleKind::PointEq(a, b) => {
                 let target = self.next_rule();
