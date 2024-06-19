@@ -1,36 +1,45 @@
 /*
- Copyright (c) 2024 Michał Wilczek, Michał Margos
+Copyright (c) 2024 Michał Wilczek, Michał Margos
 
- Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
- associated documentation files (the “Software”), to deal in the Software without restriction,
- including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
- and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do
- so, subject to the following conditions:
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
+associated documentation files (the “Software”), to deal in the Software without restriction,
+including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
+and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do
+so, subject to the following conditions:
 
- The above copyright notice and this permission notice shall be included in all copies or substantial
- portions of the Software.
+The above copyright notice and this permission notice shall be included in all copies or substantial
+portions of the Software.
 
- THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
- FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS
- OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
- WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
- CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- */
+THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS
+OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*/
 
-use num_traits::Zero;
-use crate::script::math::{HandleEntity, EntityKind, ExprKind};
+use crate::script::math::{EntityKind, ExprKind, HandleEntity};
 use crate::script::token::number::ProcNum;
+use num_traits::Zero;
 
-use super::{Expr, Rule, RuleKind};
+use super::{Expand, Expr, Rule, RuleKind};
 
 /// If a free point is at distance 0 from a line, it should be turned into a line clip.
 pub struct ZeroLineDst;
 
 impl ZeroLineDst {
-    pub fn process(rule: &mut Option<Rule>, entities: &mut [EntityKind]) -> bool {
-        let Some(Rule { kind: RuleKind::NumberEq(a, b), .. }) = &rule
-            else { return false };
+    pub fn process(
+        rule: &mut Option<Rule>,
+        entities: &mut [EntityKind],
+        math: &mut Expand,
+    ) -> bool {
+        let Some(Rule {
+            kind: RuleKind::NumberEq(a, b),
+            ..
+        }) = &rule
+        else {
+            return false;
+        };
 
         // If 'a' is a constant, swap references for the sake of latter processing.
         let (a, b) = if let ExprKind::Const { .. } = a.kind.as_ref() {
@@ -39,14 +48,17 @@ impl ZeroLineDst {
             (a, b)
         };
 
-        let ExprKind::PointLineDistance { p: a, k: ln } = a.kind.as_ref()
-            else { return false };
+        let ExprKind::PointLineDistance { point: a, line: ln } = math.at(*a).kind.as_ref() else {
+            return false;
+        };
 
-        let ExprKind::Entity { id: a } = a.kind.as_ref()
-            else { return false };
+        let ExprKind::Entity { id: a } = math.at(*a).kind.as_ref() else {
+            return false;
+        };
 
-        let ExprKind::Const { value: b } = b.kind.as_ref()
-            else { return false };
+        let ExprKind::Const { value: b } = math.at(*b).kind.as_ref() else {
+            return false;
+        };
 
         if !b.is_zero() {
             return false;
@@ -69,7 +81,7 @@ impl ZeroLineDst {
 
                 on_line = Some(on_ln.clone());
             }
-            _ => ()
+            _ => (),
         }
 
         // 'a' is a point entity with a zero distance from the line ln independent of 'a'.
@@ -80,12 +92,12 @@ impl ZeroLineDst {
             }
             ent @ EntityKind::PointOnLine(_) => {
                 *ent = EntityKind::Bind(Any::Point(ExprKind::LineLineIntersection {
-                    k: on_line.unwrap(), l: ln.clone()
+                    k: on_line.unwrap(),
+                    l: ln.clone(),
                 }));
             }
             ent @ EntityKind::FreeReal => unreachable!(),
-            EntityKind::PointOnCircle(_)
-            | EntityKind::Bind(_) => return false
+            EntityKind::PointOnCircle(_) | EntityKind::Bind(_) => return false,
         }
 
         *rule = None;
@@ -98,8 +110,16 @@ pub struct EqExpressions;
 
 impl EqExpressions {
     pub fn process(rule: &mut Option<SimpleRule>) -> bool {
-        let Some(Rule { kind: RuleKind::NumberEq(a, b), .. }) = rule else {
-            let Some(Rule { kind: RuleKind::PointEq(a, b), .. }) = rule else {
+        let Some(Rule {
+            kind: RuleKind::NumberEq(a, b),
+            ..
+        }) = rule
+        else {
+            let Some(Rule {
+                kind: RuleKind::PointEq(a, b),
+                ..
+            }) = rule
+            else {
                 return false;
             };
 
@@ -128,10 +148,17 @@ impl EqPointDst {
         let Some(Rule {
             kind: RuleKind::NumberEq(a, b),
             ..
-        }) = rule else {return false};
+        }) = rule
+        else {
+            return false;
+        };
 
-        let ExprKind::PointPointDistance { p, q } = a.kind.as_ref() else { return false };
-        let ExprKind::PointPointDistance { p: r, q: s } = b.kind.as_ref() else { return false };
+        let ExprKind::PointPointDistance { p, q } = a.kind.as_ref() else {
+            return false;
+        };
+        let ExprKind::PointPointDistance { p: r, q: s } = b.kind.as_ref() else {
+            return false;
+        };
 
         // q = s?
         if q != s {
@@ -139,7 +166,9 @@ impl EqPointDst {
         }
 
         // r must be an entity (if there is one, it's definitely r, because normalization and ordering)
-        let ExprKind::Entity { id: r_id } = r.kind.as_ref() else { return false };
+        let ExprKind::Entity { id: r_id } = r.kind.as_ref() else {
+            return false;
+        };
 
         // r must be a free point, otherwise it won't work.
         if !matches!(entities[r_id.0], EntityKind::FreePoint) {
@@ -148,7 +177,10 @@ impl EqPointDst {
 
         let circle = Expr::new(Circle::Construct {
             center: q.clone(),
-            radius: Expr::new(ExprKind::PointPointDistance { p: p.clone(), q: q.clone() })
+            radius: Expr::new(ExprKind::PointPointDistance {
+                p: p.clone(),
+                q: q.clone(),
+            }),
         });
         entities[r_id.0] = EntityKind::PointOnCircle(circle);
         *rule = None;
@@ -162,19 +194,26 @@ pub struct RightAngle;
 impl RightAngle {
     pub fn process(rule: &mut Option<SimpleRule>) -> bool {
         let Some(Rule {
-             kind: RuleKind::NumberEq(a, b),
-             ..
-         }) = rule else {return false};
+            kind: RuleKind::NumberEq(a, b),
+            ..
+        }) = rule
+        else {
+            return false;
+        };
 
-        let ExprKind::ThreePointAngle { p, q, r } = a.kind.as_ref() else { return false };
-        let ExprKind::Const { value } = b.kind.as_ref() else { return false };
+        let ExprKind::ThreePointAngle { p, q, r } = a.kind.as_ref() else {
+            return false;
+        };
+        let ExprKind::Const { value } = b.kind.as_ref() else {
+            return false;
+        };
 
         if *value != ProcNum::pi() {
             return false;
         }
 
         let mid = Expr::new(ExprKind::AveragePoint {
-            items: vec![p.clone(), r.clone()]
+            items: vec![p.clone(), r.clone()],
         });
         let p = p.clone();
         let q = q.clone();
@@ -182,7 +221,7 @@ impl RightAngle {
         if let Some(rule) = rule {
             rule.kind = RuleKind::NumberEq(
                 Expr::new(ExprKind::PointPointDistance { p: mid.clone(), q }),
-                Expr::new(ExprKind::PointPointDistance { p, q: mid })
+                Expr::new(ExprKind::PointPointDistance { p, q: mid }),
             );
         }
 
