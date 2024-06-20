@@ -23,6 +23,7 @@ use std::cell::RefCell;
 use std::mem;
 use std::rc::Rc;
 use std::{collections::HashMap, fmt::Debug};
+use num_traits::{Zero, One};
 
 use crate::script::builtins::macros::number;
 use crate::script::unroll::{AnyExpr, CloneWithNode};
@@ -212,7 +213,7 @@ impl CompileContext {
     pub fn expr_with<T: Displayed>(
         &self,
         content: T,
-        mut display: Properties,
+        display: Properties,
         nodes: Vec<Box<dyn Node>>,
     ) -> Expr<T>
     where

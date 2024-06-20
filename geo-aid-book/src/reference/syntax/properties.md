@@ -10,11 +10,11 @@
 > *PropertyValue* :\
 > &nbsp;&nbsp; &nbsp;&nbsp; [NUMBER](numbers.md)\
 > &nbsp;&nbsp; | [IDENT](identifiers.md)\
-> &nbsp;&nbsp; | [STRING](strings.md)\
+> &nbsp;&nbsp; | STRING\
 > &nbsp;&nbsp; | *RawString*\
 > \
 > *RawString* :\
-> &nbsp;&nbsp; `!` [STRING](string.md)
+> &nbsp;&nbsp; `!` STRING
 
 ## Property values
 
@@ -51,7 +51,7 @@ MathString properties usually represent label contents. MathStrings are used to 
 
 **Identifiers**
 
-If the identifier is a single character or a character code representing a letter (character codes explained below), a number or primes (also explained below), and a `_` followed by digits, it can be parsed as a MathString containing only that character.
+If the identifier is a single character or a character code representing a letter (character codes explained below), a number of primes (also explained below), and a `_` followed by digits, it can be parsed as a MathString containing only that character.
 
 Examples:
 
@@ -78,7 +78,7 @@ Examples:
 
 Strings are parsed like raw strings with a few important exceptions:
 
-* Single qoutes (`'`) are parsed as primes;
+* Single quotes (`'`) are parsed as primes;
 * Everything directly after a `_`, until, but not including, a space, is parsed as being in lower index;
 * Lower index cannot be used inside a lower index;
 * Longer text with spaces can be put inside a lower index if delimited by braces (`{}`);

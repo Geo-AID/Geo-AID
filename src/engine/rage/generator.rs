@@ -23,7 +23,7 @@ use std::{
     mem,
     sync::{mpsc, Arc},
     thread::{self, JoinHandle},
-    time::{Duration, Instant}, iter::Sum, pin::Pin,
+    time::{Duration, Instant}, pin::Pin,
 };
 
 use serde::Serialize;
@@ -38,7 +38,7 @@ pub mod fast_float;
 pub mod program;
 mod magic_box;
 
-pub type Logger = Vec<String>;
+// pub type Logger = Vec<String>;
 
 #[derive(Debug, Clone, Copy)]
 pub enum Adjustable {
@@ -47,35 +47,35 @@ pub enum Adjustable {
     Clip1D(f64),
 }
 
-impl Adjustable {
-    //noinspection DuplicatedCode
-    #[must_use]
-    pub fn as_point(&self) -> Option<&Complex> {
-        if let Self::Point(v) = self {
-            Some(v)
-        } else {
-            None
-        }
-    }
-
-    #[must_use]
-    pub fn as_real(&self) -> Option<&f64> {
-        if let Self::Real(v) = self {
-            Some(v)
-        } else {
-            None
-        }
-    }
-
-    #[must_use]
-    pub fn as_clip1d(&self) -> Option<&f64> {
-        if let Self::Clip1D(v) = self {
-            Some(v)
-        } else {
-            None
-        }
-    }
-}
+// impl Adjustable {
+//     //noinspection DuplicatedCode
+//     #[must_use]
+//     pub fn as_point(&self) -> Option<&Complex> {
+//         if let Self::Point(v) = self {
+//             Some(v)
+//         } else {
+//             None
+//         }
+//     }
+//
+//     #[must_use]
+//     pub fn as_real(&self) -> Option<&f64> {
+//         if let Self::Real(v) = self {
+//             Some(v)
+//         } else {
+//             None
+//         }
+//     }
+//
+//     #[must_use]
+//     pub fn as_clip1d(&self) -> Option<&f64> {
+//         if let Self::Clip1D(v) = self {
+//             Some(v)
+//         } else {
+//             None
+//         }
+//     }
+// }
 
 pub enum Message {
     Generate(f64),
@@ -87,7 +87,7 @@ struct SendPtr<T: ?Sized>(*const T);
 
 impl<T: ?Sized> Clone for SendPtr<T> {
     fn clone(&self) -> Self {
-        Self(self.0)
+        *self
     }
 }
 
@@ -96,9 +96,9 @@ impl<T: ?Sized> Copy for SendPtr<T> {}
 unsafe impl<T: ?Sized> Send for SendPtr<T> {}
 
 unsafe fn generation_cycle(
-    receiver: mpsc::Receiver<Message>,
-    sender: mpsc::Sender<CycleState>,
-    program: Arc<EvaluateProgram>,
+    receiver: &mpsc::Receiver<Message>,
+    sender: &mpsc::Sender<CycleState>,
+    program: &Arc<EvaluateProgram>,
     current_state: SendPtr<State>
 ) {
     let mut memory = program.setup();
@@ -136,7 +136,7 @@ unsafe fn generation_cycle(
 }
 
 #[derive(Debug, Clone)]
-struct State {
+pub struct State {
     pub adjustables: Vec<Adjustable>,
     pub qualities: Vec<f64>,
     pub total_quality: f64
@@ -149,7 +149,7 @@ struct CycleState {
     pub total_quality: f64
 }
 
-/// A structure responsible of generating a figure based on criteria and given points.
+/// A structure responsible for generating a figure based on criteria and given points.
 pub struct Generator {
     /// Current values of all adjustables.
     current_state: Pin<Box<State>>,
@@ -176,7 +176,7 @@ impl AdjustableTemplate {
     ///
     /// [`Point`]: AdjustableTemplate::Point
     #[must_use]
-    pub fn is_point(&self) -> bool {
+    pub fn is_point(self) -> bool {
         matches!(self, Self::Point | Self::PointOnLine | Self::PointOnCircle)
     }
 }
@@ -244,7 +244,7 @@ impl Generator {
                 .map(|rec| {
                     let sender = mpsc::Sender::clone(&output_sender);
                     let program = Arc::clone(&program);
-                    thread::spawn(move || unsafe { generation_cycle(rec, sender, program, state_ptr) })
+                    thread::spawn(move || unsafe { generation_cycle(&rec, &sender, &program, state_ptr) })
                 })
                 .collect(),
             senders: input_senders,
@@ -288,8 +288,8 @@ impl Generator {
                 for (adj, value) in mut_ref.adjustables.iter_mut().zip(&*best.adjustables.0) {
                     match adj {
                         Adjustable::Point(x) => *x = value.complex,
-                        Adjustable::Real(x) => *x = value.complex.real,
-                        Adjustable::Clip1D(x) => *x = value.complex.real,
+                        Adjustable::Real(x)
+                        | Adjustable::Clip1D(x) => *x = value.complex.real,
                     }
                 }
 
@@ -314,11 +314,11 @@ impl Generator {
         magnitudes
     }
 
-    pub fn single_cycle(&mut self, maximum_adjustment: f64) {
-        self.cycle_prebaked(&self.bake_magnitudes(maximum_adjustment));
-
-        self.delta = self.get_total_quality();
-    }
+    // pub fn single_cycle(&mut self, maximum_adjustment: f64) {
+    //     self.cycle_prebaked(&self.bake_magnitudes(maximum_adjustment));
+    //
+    //     self.delta = self.get_total_quality();
+    // }
 
     /// Performs generation cycles until the mean delta from the last `mean_count` deltas becomes less or equal to `max_mean`.
     /// Executes `cyclic` after the end of each cycle.
@@ -327,7 +327,7 @@ impl Generator {
     /// The time it took to generate the figure.
     ///
     /// # Panics
-    /// Panics if there are multithreading issues (there has been a panic in one of the generation threads).
+    /// If there are multithreading issues (there has been a panic in one of the generation threads).
     pub fn cycle_until_mean_delta<P: FnMut(f64)>(
         &mut self,
         maximum_adjustment: f64,
@@ -368,10 +368,10 @@ impl Generator {
         &self.current_state
     }
 
-    #[must_use]
-    pub fn get_delta(&self) -> f64 {
-        self.delta
-    }
+    // #[must_use]
+    // pub fn get_delta(&self) -> f64 {
+    //     self.delta
+    // }
 
     #[must_use]
     pub fn get_total_quality(&self) -> f64 {

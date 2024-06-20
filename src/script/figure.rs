@@ -19,12 +19,11 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
 use std::{fmt::Display, str::FromStr};
-use std::fmt::Formatter;
 
 use num_derive::{FromPrimitive, ToPrimitive};
 use num_traits::FromPrimitive;
 use serde::Serialize;
-use crate::script::math::{IndexMap, Reindex, VarIndex};
+use crate::script::math::{IndexMap, Reconstruct, ReconstructCtx, Reindex, VarIndex};
 
 use crate::span;
 
@@ -49,16 +48,25 @@ pub enum Style {
     Solid,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct PointItem {
-    pub id: usize,
+    pub id: VarIndex,
     pub label: MathString,
     pub display_dot: bool
 }
 
 impl Reindex for PointItem {
     fn reindex(&mut self, map: &IndexMap) {
-        self.id = map.get(self.id);
+        self.id.reindex(map);
+    }
+}
+
+impl Reconstruct for PointItem {
+    fn reconstruct(self, ctx: &mut ReconstructCtx) -> Self {
+        Self {
+            id: self.id.reconstruct(ctx),
+            ..self
+        }
     }
 }
 
@@ -68,16 +76,25 @@ impl From<PointItem> for Item {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct CircleItem {
-    pub id: usize,
+    pub id: VarIndex,
     pub label: MathString,
     pub style: Style
 }
 
 impl Reindex for CircleItem {
     fn reindex(&mut self, map: &IndexMap) {
-        self.id = map.get(self.id);
+        self.id.reindex(map);
+    }
+}
+
+impl Reconstruct for CircleItem {
+    fn reconstruct(self, ctx: &mut ReconstructCtx) -> Self {
+        Self {
+            id: self.id.reconstruct(ctx),
+            ..self
+        }
     }
 }
 
@@ -87,16 +104,25 @@ impl From<CircleItem> for Item {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct LineItem {
-    pub id: usize,
+    pub id: VarIndex,
     pub label: MathString,
     pub style: Style
 }
 
 impl Reindex for LineItem {
     fn reindex(&mut self, map: &IndexMap) {
-        self.id = map.get(self.id);
+        self.id.reindex(map);
+    }
+}
+
+impl Reconstruct for LineItem {
+    fn reconstruct(self, ctx: &mut ReconstructCtx) -> Self {
+        Self {
+            id: self.id.reconstruct(ctx),
+            ..self
+        }
     }
 }
 
@@ -106,18 +132,28 @@ impl From<LineItem> for Item {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct RayItem {
-    pub p_id: usize,
-    pub q_id: usize,
+    pub p_id: VarIndex,
+    pub q_id: VarIndex,
     pub label: MathString,
     pub style: Style
 }
 
 impl Reindex for RayItem {
     fn reindex(&mut self, map: &IndexMap) {
-        self.p_id = map.get(self.p_id);
-        self.q_id = map.get(self.q_id);
+        self.p_id.reindex(map);
+        self.q_id.reindex(map);
+    }
+}
+
+impl Reconstruct for RayItem {
+    fn reconstruct(self, ctx: &mut ReconstructCtx) -> Self {
+        Self {
+            p_id: self.p_id.reconstruct(ctx),
+            q_id: self.q_id.reconstruct(ctx),
+            ..self
+        }
     }
 }
 
@@ -127,18 +163,34 @@ impl From<RayItem> for Item {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct SegmentItem {
-    pub p_id: usize,
-    pub q_id: usize,
+    pub p_id: VarIndex,
+    pub q_id: VarIndex,
     pub label: MathString,
     pub style: Style
 }
 
+impl From<SegmentItem> for Item {
+    fn from(value: SegmentItem) -> Self {
+        Self::Segment(value)
+    }
+}
+
 impl Reindex for SegmentItem {
     fn reindex(&mut self, map: &IndexMap) {
-        self.p_id = map.get(self.p_id);
-        self.q_id = map.get(self.q_id);
+        self.p_id.reindex(map);
+        self.q_id.reindex(map);
+    }
+}
+
+impl Reconstruct for SegmentItem {
+    fn reconstruct(self, ctx: &mut ReconstructCtx) -> Self {
+        Self {
+            p_id: self.p_id.reconstruct(ctx),
+            q_id: self.q_id.reconstruct(ctx),
+            ..self
+        }
     }
 }
 
@@ -163,13 +215,25 @@ impl Reindex for Item {
     }
 }
 
+impl Reconstruct for Item {
+    fn reconstruct(self, ctx: &mut ReconstructCtx) -> Self {
+        match self {
+            Self::Point(v) => Self::Point(v.reconstruct(ctx)),
+            Self::Circle(v) => Self::Circle(v.reconstruct(ctx)),
+            Self::Line(v) => Self::Line(v.reconstruct(ctx)),
+            Self::Ray(v) => Self::Ray(v.reconstruct(ctx)),
+            Self::Segment(v) => Self::Segment(v.reconstruct(ctx))
+        }
+    }
+}
+
 /// Defines the visual data of the figure.
 #[derive(Debug, Default)]
 pub struct Figure {
     /// Entities used by the figure
-    pub entities: Vec<Entity<VarIndex, usize>>,
+    pub entities: Vec<Entity<usize>>,
     /// Variables used by the figure
-    pub variables: Vec<math::Expr<math::Any<VarIndex>, usize>>,
+    pub variables: Vec<math::Expr<usize>>,
     /// Drawn items with meta
     pub items: Vec<Item>
 }
@@ -278,19 +342,19 @@ impl MathSpecial {
     /// Returns an error on parsing error.
     ///
     /// # Panics
-    /// Panics in this function are a bug.
-    pub fn parse(charcode: &str, content_span: Span) -> Result<Self, Error> {
+    /// Any panic in this function are a bug.
+    pub fn parse(char_code: &str, content_span: Span) -> Result<Self, Error> {
         SPECIAL_MATH
             .iter()
             .enumerate()
-            .find(|x| *x.1 == charcode)
+            .find(|x| *x.1 == char_code)
             .map(|x| MathSpecial::from_usize(x.0).unwrap())
             .ok_or_else(|| {
-                let best = most_similar(SPECIAL_MATH, charcode);
+                let best = most_similar(SPECIAL_MATH, char_code);
 
-                Error::SpecialNotRecongised {
+                Error::SpecialNotRecognised {
                     error_span: content_span,
-                    code: charcode.to_string(),
+                    code: char_code.to_string(),
                     suggested: best,
                 }
             })

@@ -26,7 +26,7 @@ use crate::engine::rage::generator::critic::{EvaluateProgram, FigureProgram};
 use crate::engine::rage::generator::program::{Instruction, Loc, Program, ValueType};
 use crate::engine::rage::generator::program::expr::{AngleBisector, AngleLine, AnglePoint, AnglePointDir, Average, CircleConstruct, EqualComplex, EqualReal, Greater, InvertQuality, Less, LineFromPoints, LineLineIntersection, Max, Negation, ParallelThrough, PartialPow, PartialProduct, PerpendicularThrough, PointLineDistance, PointOnCircle, PointOnLine, PointPointDistance, Sum, SwapParts};
 use crate::geometry::{Complex, ValueEnum};
-use crate::script::math::{EntityKind, EntityId, Expr, Intermediate, ExprKind, Rule, RuleKind, VarIndex};
+use crate::script::math::{EntityKind, EntityId, Expr, Intermediate, ExprKind, Rule, RuleKind, VarIndex, ExprType};
 use crate::script::token::number::ProcNum;
 
 #[derive(Debug, Default)]
@@ -88,6 +88,15 @@ impl<'i> Compiler<'i> {
         }
     }
 
+    fn get_value_type(ty: ExprType) -> ValueType {
+        match ty {
+            ExprType::Number
+            | ExprType::Point => ValueType::Complex,
+            ExprType::Line => ValueType::Line,
+            ExprType::Circle => ValueType::Circle
+        }
+    }
+
     pub fn compile_programs(mut self) -> (EvaluateProgram, FigureProgram) {
         // 1. Compile `EvaluateProgram`
 
@@ -102,7 +111,7 @@ impl<'i> Compiler<'i> {
         // 1b. Figure out constants
 
         // The first constants are adjustable values
-        self.prepare_constants(adj_count, self.intermediate.adjusted.variables.iter().map(|x| x.kind.as_ref()));
+        self.prepare_constants(adj_count, self.intermediate.adjusted.variables.iter().map(|x| &x.kind));
 
         let rule_count = self.intermediate.adjusted.rules.len();
         let program_zero = self.constants.len() + rule_count;
@@ -127,7 +136,9 @@ impl<'i> Compiler<'i> {
 
         for (i, rule) in self.intermediate.adjusted.rules.iter().enumerate() {
             for EntityId(adj) in &rule.entities {
-                weights[i * adjustables.len() + *adj] = 1.0 / rule.entities.len() as f64;
+                #[allow(clippy::cast_precision_loss)]
+                let ent_count = rule.entities.len() as f64;
+                weights[i * adjustables.len() + *adj] = 1.0 / ent_count;
             }
         }
 
@@ -144,7 +155,7 @@ impl<'i> Compiler<'i> {
         };
 
         let variable_types: Vec<_> = self.intermediate.figure.variables.iter()
-            .map(|expr| Self::get_value_type(&expr.kind))
+            .map(|expr| Self::get_value_type(expr.ty))
             .collect();
 
         let entity_types: Vec<_> = self.intermediate.figure.entities.iter()
@@ -152,8 +163,8 @@ impl<'i> Compiler<'i> {
                 match &ent.kind {
                     EntityKind::FreeReal
                     | EntityKind::FreePoint
-                    | EntityKind::PointOnCircle(_)
-                    | EntityKind::PointOnLine(_) => ValueType::Complex,
+                    | EntityKind::PointOnCircle { .. }
+                    | EntityKind::PointOnLine { .. } => ValueType::Complex,
                     EntityKind::Bind(_) => unreachable!(),
                 }
             })
@@ -166,9 +177,9 @@ impl<'i> Compiler<'i> {
         // 2a. Figure out constants
 
         // The first constants are adjustable values
-        self.prepare_constants(adj_count, self.intermediate.figure.variables.iter().map(|x| x.kind.as_ref()));
+        self.prepare_constants(adj_count, self.intermediate.figure.variables.iter().map(|x| &x.kind));
 
-        let program_zero = adjustables.len();
+        let program_zero = evaluate.adjustables.len();
         self.cursor.current = program_zero;
 
         for expr in &self.intermediate.figure.variables {
@@ -200,9 +211,9 @@ impl<'i> Compiler<'i> {
         }
     }
 
-    fn set_alt_mode(&mut self, value: bool) {
-        self.alt_mode = value;
-    }
+    // fn set_alt_mode(&mut self, value: bool) {
+    //     self.alt_mode = value;
+    // }
 }
 
 trait Compile<T> {
@@ -224,31 +235,34 @@ impl<'i> Compile<VarIndex> for Compiler<'i> {
 
 impl<'i, M> Compile<Expr<M>> for Compiler<'i> {
     fn compile(&mut self, value: &Expr<M>) -> Loc {
-        self.compile(value.kind.as_ref())
+        self.compile(&value.kind)
     }
 }
 
 impl<'i> Compile<ExprKind> for Compiler<'i> {
+    #[allow(clippy::too_many_lines)]
     fn compile(&mut self, value: &ExprKind) -> Loc {
         match value {
             ExprKind::LineLineIntersection { k, l } => {
                 let target = self.cursor.next();
 
-                self.instructions.push(Instruction::LineLineIntersection(LineLineIntersection {
+                let instruction = Instruction::LineLineIntersection(LineLineIntersection {
                     k: self.compile(k),
                     l: self.compile(l),
                     target
-                }));
+                });
+                self.instructions.push(instruction);
 
                 target
             }
             ExprKind::AveragePoint { items } => {
                 let target = self.cursor.next();
 
-                self.instructions.push(Instruction::Average(Average {
+                let instruction = Instruction::Average(Average {
                     params: items.iter().map(|i| self.compile(i)).collect(),
                     target
-                }));
+                });
+                self.instructions.push(instruction);
 
                 target
             }
@@ -262,78 +276,85 @@ impl<'i> Compile<ExprKind> for Compiler<'i> {
             ExprKind::PointPoint { p, q } => {
                 let target = self.cursor.next();
 
-                self.instructions.push(Instruction::LineFromPoints(LineFromPoints {
+                let instruction = Instruction::LineFromPoints(LineFromPoints {
                     a: self.compile(p),
                     b: self.compile(q),
                     target
-                }));
+                });
+                self.instructions.push(instruction);
 
                 target
             }
             ExprKind::AngleBisector { p, q, r } => {
                 let target = self.cursor.next();
 
-                self.instructions.push(Instruction::AngleBisector(AngleBisector {
+                let instruction = Instruction::AngleBisector(AngleBisector {
                     arm1: self.compile(p),
                     origin: self.compile(q),
                     arm2: self.compile(r),
                     target
-                }));
+                });
+                self.instructions.push(instruction);
 
                 target
             }
             ExprKind::ParallelThrough { point, line } => {
                 let target = self.cursor.next();
 
-                self.instructions.push(Instruction::ParallelThrough(ParallelThrough {
+                let instruction = Instruction::ParallelThrough(ParallelThrough {
                     point: self.compile(point),
                     line: self.compile(line),
                     target
-                }));
+                });
+                self.instructions.push(instruction);
 
                 target
             }
             ExprKind::PerpendicularThrough { point, line } => {
                 let target = self.cursor.next();
 
-                self.instructions.push(Instruction::PerpendicularThrough(PerpendicularThrough {
+                let instruction = Instruction::PerpendicularThrough(PerpendicularThrough {
                     point: self.compile(point),
                     line: self.compile(line),
                     target
-                }));
+                });
+                self.instructions.push(instruction);
 
                 target
             }
             ExprKind::Sum { plus, minus } => {
                 let target = self.cursor.next();
 
-                self.instructions.push(Instruction::Sum(Sum {
+                let instruction = Instruction::Sum(Sum {
                     params: minus.iter().map(|x| self.compile(x)).collect(),
                     target
-                }));
+                });
+                self.instructions.push(instruction);
 
                 self.instructions.push(Instruction::Negation(Negation {
                     x: target,
                     target
                 }));
 
-                self.instructions.push(Instruction::Sum(Sum {
+                let instruction = Instruction::Sum(Sum {
                     params: Some(target)
                         .into_iter()
                         .chain(plus.iter().map(|x| self.compile(x)))
                         .collect(),
                     target
-                }));
+                });
+                self.instructions.push(instruction);
 
                 target
             }
             ExprKind::Product { times, by } => {
                 let target = self.cursor.next();
 
-                self.instructions.push(Instruction::PartialProduct(PartialProduct {
+                let instruction = Instruction::PartialProduct(PartialProduct {
                     params: by.iter().map(|x| self.compile(x)).collect(),
                     target
-                }));
+                });
+                self.instructions.push(instruction);
 
                 self.instructions.push(Instruction::Pow(PartialPow {
                     value: target,
@@ -341,13 +362,14 @@ impl<'i> Compile<ExprKind> for Compiler<'i> {
                     target
                 }));
 
-                self.instructions.push(Instruction::PartialProduct(PartialProduct {
+                let instruction = Instruction::PartialProduct(PartialProduct {
                     params: Some(target)
                         .into_iter()
                         .chain(times.iter().map(|x| self.compile(x)))
                         .collect(),
                     target
-                }));
+                });
+                self.instructions.push(instruction);
 
                 target
             }
@@ -357,68 +379,74 @@ impl<'i> Compile<ExprKind> for Compiler<'i> {
             ExprKind::Power { value, exponent } => {
                 let target = self.cursor.next();
 
-                self.instructions.push(Instruction::Pow(PartialPow {
+                let instruction = Instruction::Pow(PartialPow {
                     value: self.compile(value),
                     exponent: exponent.to_f64().unwrap(),
                     target
-                }));
+                });
+                self.instructions.push(instruction);
 
                 target
             }
             ExprKind::PointPointDistance { p, q } => {
                 let target = self.cursor.next();
 
-                self.instructions.push(Instruction::PointPointDistance(PointPointDistance {
+                let instruction = Instruction::PointPointDistance(PointPointDistance {
                     a: self.compile(p),
                     b: self.compile(q),
                     target
-                }));
+                });
+                self.instructions.push(instruction);
 
                 target
             }
             ExprKind::PointLineDistance { point, line } => {
                 let target = self.cursor.next();
 
-                self.instructions.push(Instruction::PointLineDistance(PointLineDistance {
+                let instruction = Instruction::PointLineDistance(PointLineDistance {
                     point: self.compile(point),
                     line: self.compile(line),
                     target
-                }));
+                });
+                self.instructions.push(instruction);
 
                 target
             }
             ExprKind::ThreePointAngle { p, q, r } => {
                 let target = self.cursor.next();
 
-                self.instructions.push(Instruction::AnglePoint(AnglePoint {
+                let instruction = Instruction::AnglePoint(AnglePoint {
                     arm1: self.compile(p),
                     origin: self.compile(q),
                     arm2: self.compile(r),
                     target
-                }));
+                });
+                self.instructions.push(instruction);
 
                 target
             }
             ExprKind::ThreePointAngleDir { p, q, r } => {
                 let target = self.cursor.next();
 
-                self.instructions.push(Instruction::AnglePointDir(AnglePointDir {
+                let instruction = Instruction::AnglePointDir(AnglePointDir {
                     arm1: self.compile(p),
                     origin: self.compile(q),
                     arm2: self.compile(r),
                     target
-                }));
+                });
+                self.instructions.push(instruction);
 
                 target
             }
             ExprKind::TwoLineAngle { k, l } => {
                 let target = self.cursor.next();
 
-                self.instructions.push(Instruction::AngleLine(AngleLine {
+                let instruction = Instruction::AngleLine(AngleLine {
                     k: self.compile(k),
                     l: self.compile(l),
                     target
-                }));
+                });
+                self.instructions.push(instruction);
 
                 target
             }
@@ -430,21 +458,23 @@ impl<'i> Compile<ExprKind> for Compiler<'i> {
                 // We're going to have to swap parts, instead of just moving.
                 let target = self.cursor.next();
 
-                self.instructions.push(Instruction::SwapParts(SwapParts {
+                let instruction = Instruction::SwapParts(SwapParts {
                     x: self.compile(point),
                     target
-                }));
+                });
+                self.instructions.push(instruction);
 
                 target
             }
             ExprKind::ConstructCircle { center, radius } => {
                 let target = self.cursor.next();
 
-                self.instructions.push(Instruction::CircleConstruct(CircleConstruct {
+                let instruction = Instruction::CircleConstruct(CircleConstruct {
                     center: self.compile(center),
                     radius: self.compile(radius),
                     target
-                }));
+                });
+                self.instructions.push(instruction);
 
                 target
             }
@@ -469,22 +499,24 @@ impl<'i> Compile<EntityId> for Compiler<'i> {
             EntityKind::PointOnLine { line } => {
                 let target = self.cursor.next();
 
-                self.instructions.push(Instruction::OnLine(PointOnLine {
+                let instruction = Instruction::OnLine(PointOnLine {
                     line: self.compile(&line),
                     clip: value.0,
                     target
-                }));
+                });
+                self.instructions.push(instruction);
 
                 target
             }
             EntityKind::PointOnCircle { circle } => {
                 let target = self.cursor.next();
 
-                self.instructions.push(Instruction::OnCircle(PointOnCircle {
+                let instruction = Instruction::OnCircle(PointOnCircle {
                     circle: self.compile(&circle),
                     clip: value.0,
                     target
-                }));
+                });
+                self.instructions.push(instruction);
 
                 target
             }
@@ -507,44 +539,48 @@ impl<'i> Compile<RuleKind> for Compiler<'i> {
             RuleKind::PointEq(a, b) => {
                 let target = self.next_rule();
 
-                self.instructions.push(Instruction::EqualComplex(EqualComplex {
+                let instruction = Instruction::EqualComplex(EqualComplex {
                     a: self.compile(a),
                     b: self.compile(b),
                     target
-                }));
+                });
+                self.instructions.push(instruction);
 
                 target
             }
             RuleKind::NumberEq(a, b) => {
                 let target = self.next_rule();
 
-                self.instructions.push(Instruction::EqualReal(EqualReal {
+                let instruction = Instruction::EqualReal(EqualReal {
                     a: self.compile(a),
                     b: self.compile(b),
                     target
-                }));
+                });
+                self.instructions.push(instruction);
 
                 target
             }
             RuleKind::Lt(a, b) => {
                 let target = self.next_rule();
 
-                self.instructions.push(Instruction::Less(Less {
+                let instruction = Instruction::Less(Less {
                     a: self.compile(a),
                     b: self.compile(b),
                     target
-                }));
+                });
+                self.instructions.push(instruction);
 
                 target
             }
             RuleKind::Gt(a, b) => {
                 let target = self.next_rule();
 
-                self.instructions.push(Instruction::Greater(Greater {
+                let instruction = Instruction::Greater(Greater {
                     a: self.compile(a),
                     b: self.compile(b),
                     target
-                }));
+                });
+                self.instructions.push(instruction);
 
                 target
             }
@@ -556,10 +592,11 @@ impl<'i> Compile<RuleKind> for Compiler<'i> {
                     self.alt_mode = true;
                 }
 
-                self.instructions.push(Instruction::MaxReal(Max {
+                let instruction = Instruction::MaxReal(Max {
                     params: items.iter().map(|x| self.compile(x)).collect(),
                     target
-                }));
+                });
+                self.instructions.push(instruction);
 
                 if !alt {
                     self.alt_mode = false;

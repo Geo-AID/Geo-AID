@@ -4,7 +4,7 @@ Bundle types are zero-cost abstractions over primitives. There are two types of 
 
 ## Point collections
 
-Point collections are simply ordered collections of points. It is never a seperate entity, only an abstraction over a set of points. Denoted as `<length>-P`. If `<length>` is given as `0`, it means a collection of any length. Most functions that accept points as arguments, also accept point collections.
+Point collections are simply ordered collections of points. It is never a separate entity, only an abstraction over a set of points. Denoted as `<length>-P`. If `<length>` is given as `0`, it means a collection of any length. Most functions that accept points as arguments, also accept point collections.
 
 ## Named Bundles
 
@@ -25,7 +25,7 @@ Segment {
 
 * `len()`
 
-**Return type**: [Scalar (distance)](./types/bundle-types.md#segment)
+**Return type**: [Scalar (distance)](primitives.md/#scalar)
 
 **Returns**: the distance `AB`.
 

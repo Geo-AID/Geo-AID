@@ -50,9 +50,10 @@ pub fn point_point_point(
 }
 
 /// ```
+/// # use geo_aid::script::figure::Style;
 /// struct Associated {
 ///     display_arms: bool,
-///     amrs_style: Style
+///     arms_style: Style
 /// }
 /// ```
 #[derive(Debug)]

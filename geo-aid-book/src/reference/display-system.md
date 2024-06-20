@@ -26,7 +26,7 @@ It's semantic structure is the following:
         - A
 ```
 
-Now, the value of the `display` property of a node in that tree (e. g. the first `perpendicular_through`) decides not only whether the expression itself is displayed, but also whether its child nodes (the `AB` and `C` in our examples) are displayed.
+Now, the value of the `display` property of a node in that tree (e.g. the first `perpendicular_through`) decides not only whether the expression itself is displayed, but also whether its child nodes (the `AB` and `C` in our examples) are displayed.
 
 Display properties are a simple sequence of key-value pairs used to modify how the figure should be displayed. They're accepted in expressions, rules and variable definitions. Display properties with invalid values or unexpected properties will cause an error and the ones with invalid names will be ignored.
 
@@ -42,7 +42,7 @@ A constructive expression is one that *constructs* a new object: a point, a line
 
 ## Basic properties for types
 
-All [types](../types.md) have their basic properties assigned to them. These are the following.
+All [types](./types.md) have their basic properties assigned to them. These are the following.
 
 *`Point`*
 
@@ -55,7 +55,7 @@ struct Properties {
 }
 ```
 
-The `display` property decides whethet the point should be displayed. `label` gives the point a label and `display_label` decides if it is to be displayed. If `display_dot` is `true`, a small dot is displayed in the point's position.
+The `display` property decides whether the point should be displayed. `label` gives the point a label and `display_label` decides if it is to be displayed. If `display_dot` is `true`, a small dot is displayed in the point's position.
 
 **NOTE**: `display_dot` has currently no effect and the dot is always displayed.
 **NOTE**: Labels currently have poor support in SVG.
@@ -124,7 +124,7 @@ All bundle types accept a `display` property.
 
 Variables and literals don't accept any properties, no matter the type. Beyond that, additional properties may be added depending on the kind of construction (used function). Details on those are in the documentation of respective functions.
 
-## Properties on variable deinitions
+## Properties on variable definitions
 
 Variable definitions display their defining expressions. Properties defined on definitions are passed onto the expression. Additionally, if no label is given, the variable name is parsed as a MathString and used as a label if the parse was successful (and if there is no `display_label=false`).
 

@@ -99,7 +99,7 @@ impl Complex {
     #[must_use]
     pub fn sqrt(self) -> Complex {
         // The formula used here doesn't work for negative reals. We can use a trick here to bypass that restriction.
-        // If the real part is negative, we simply negate it to get a positive part and then multiply the result by i.
+        // If the real part is negative, we simply negate it to get a positive part and then multiply the result by `i`.
         if self.real > 0.0 {
             // Use the generic formula (https://math.stackexchange.com/questions/44406/how-do-i-get-the-square-root-of-a-complex-number)
             let r = self.magnitude();
@@ -114,7 +114,7 @@ impl Complex {
     #[must_use]
     pub fn sqrt_norm(self) -> Complex {
         // The formula used here doesn't work for negative reals. We can use a trick here to bypass that restriction.
-        // If the real part is negative, we simply negate it to get a positive part and then multiply the result by i.
+        // If the real part is negative, we simply negate it to get a positive part and then multiply the result by `i`.
         if self.real > 0.0 {
             // Use the generic formula (https://math.stackexchange.com/questions/44406/how-do-i-get-the-square-root-of-a-complex-number)
             let r = self.magnitude();
@@ -273,7 +273,7 @@ impl Product for Complex {
     }
 }
 
-/// Represents a line in a 2D euclidean space.
+/// Represents a line in a 2D Euclidean space.
 #[derive(Debug, Clone, Copy, Serialize)]
 pub struct Line {
     /// Line's origin as a complex number.

@@ -27,7 +27,7 @@ use crate::geometry;
 use crate::geometry::{Circle, Complex, Line, ValueEnum};
 
 use crate::script::figure::{CircleItem, Figure, Item, LineItem, PointItem, RayItem, SegmentItem};
-use crate::script::math::{Any, Entity, Expr, Flags, ExprKind, VarIndex};
+use crate::script::math::{Entity, Expr, Flags, VarIndex};
 
 struct Projector {
     /// Transform used by the projector
@@ -161,7 +161,7 @@ impl Projector {
 
         let mut biggest_angle = 0.0;
         // Vectors between which the label should be located.
-        let mut label_vecs = (Complex::default(), Complex::default());
+        let mut label_vectors = (Complex::default(), Complex::default());
 
         // Label's position.
         let label_pos: Complex;
@@ -179,7 +179,7 @@ impl Projector {
                     let angle = vec_next.arg() - vec.arg();
                     if angle > biggest_angle {
                         biggest_angle = angle;
-                        label_vecs = (*vec, *vec_next);
+                        label_vectors = (*vec, *vec_next);
                     }
                 } else {
                     let first = vectors.first().unwrap();
@@ -187,14 +187,14 @@ impl Projector {
                     let angle = 2.0 * PI - (first.arg().abs() + last.arg().abs());
                     if angle > biggest_angle {
                         biggest_angle = angle;
-                        label_vecs = (*last, *first);
+                        label_vectors = (*last, *first);
                     }
                     break;
                 }
             }
             label_pos = {
                 // We get the bisector angle.
-                let bisector_angle = ((label_vecs.1.arg() - label_vecs.0.arg()).rem_euclid(2.0 * PI)) / 2.0 + label_vecs.0.arg();
+                let bisector_angle = ((label_vectors.1.arg() - label_vectors.0.arg()).rem_euclid(2.0 * PI)) / 2.0 + label_vectors.0.arg();
 
                 // This is just the standard complex number formula.
                 let bisector_vec = Complex::new(bisector_angle.cos(), bisector_angle.sin()).normalize();
@@ -215,24 +215,24 @@ impl Projector {
 
 trait UnVar<T> {
     /// Returns the actual variable value.
-    fn un_var(&self, id: usize) -> Option<T>;
+    fn un_var(&self, id: VarIndex) -> Option<T>;
 }
 
 impl UnVar<Complex> for Projector {
-    fn un_var(&self, id: usize) -> Option<Complex> {
-        self.variables[id].meta.as_complex()
+    fn un_var(&self, id: VarIndex) -> Option<Complex> {
+        self.variables[id.0].meta.as_complex()
     }
 }
 
 impl UnVar<Line> for Projector {
-    fn un_var(&self, id: usize) -> Option<Line> {
-        self.variables[id].meta.as_line()
+    fn un_var(&self, id: VarIndex) -> Option<Line> {
+        self.variables[id.0].meta.as_line()
     }
 }
 
 impl UnVar<Circle> for Projector {
-    fn un_var(&self, id: usize) -> Option<Circle> {
-        self.variables[id].meta.as_circle()
+    fn un_var(&self, id: VarIndex) -> Option<Circle> {
+        self.variables[id.0].meta.as_circle()
     }
 }
 
@@ -279,7 +279,7 @@ impl Rendered {
     }
 }
 
-type MathVariable = Expr<Any<VarIndex>, ValueEnum>;
+type MathVariable = Expr<ValueEnum>;
 
 /// The final product passed to the drawers.
 #[derive(Serialize)]
@@ -287,7 +287,7 @@ pub struct Output {
     /// final product of the project function
     pub rendered: Vec<Rendered>,
     /// Entities used by the figure
-    pub entities: Vec<Entity<VarIndex, ValueEnum>>,
+    pub entities: Vec<Entity<ValueEnum>>,
     /// Variables used by the figure
     pub variables: Vec<MathVariable>,
     /// Picture size
@@ -328,7 +328,7 @@ impl Project<LineItem> for Projector {
     type Result = RenderedLine;
     
     fn project(&mut self, item: LineItem) -> Self::Result {
-        let mut ln_c = self.variables[item.id].meta.as_line().unwrap();
+        let mut ln_c: Line = self.un_var(item.id).unwrap();
         ln_c.origin = self.transform(ln_c.origin);
         let points = self.get_line_ends(ln_c);
         self.segments.push(points);
@@ -429,7 +429,7 @@ impl Project<CircleItem> for Projector {
     type Result = RenderedCircle;
 
     fn project(&mut self, item: CircleItem) -> Self::Result {
-        let circle = self.un_var(item.id).unwrap();
+        let circle: Circle = self.un_var(item.id).unwrap();
         let center = self.transform(circle.center);
         let radius = circle.radius * self.transform_.scale;
         self.circles.push((center, radius));
@@ -442,44 +442,44 @@ impl Project<CircleItem> for Projector {
     }
 }
 
-/// Function getting the points defining the angle from the Expression defining it.
-///
-/// # Panics
-/// If given invalid data.
-fn get_angle_points(
-    angle: &ExprKind<VarIndex>,
-    variables: &[Expr<Any<VarIndex>, ValueEnum>],
-) -> (Complex, Complex, Complex) {
-    match angle {
-        ExprKind::ThreePointAngle { p, q, r } => {
-            let arm1 = variables[p.0].meta.as_complex().unwrap();
-            let origin = variables[q.0].meta.as_complex().unwrap();
-            let arm2 = variables[r.0].meta.as_complex().unwrap();
-
-            (arm1, origin, arm2)
-        }
-        ExprKind::ThreePointAngleDir { p, q, r } => {
-            let arm1 = variables[p.0].meta.as_complex().unwrap();
-            let origin = variables[q.0].meta.as_complex().unwrap();
-            let arm2 = variables[r.0].meta.as_complex().unwrap();
-
-            (arm1, origin, arm2)
-        }
-        ExprKind::TwoLineAngle { k, l } => {
-            let ev_ln1 = variables[k.0].meta.as_line().unwrap();
-            let ev_ln2 = variables[l.0].meta.as_line().unwrap();
-
-            let origin = geometry::get_intersection(ev_ln1, ev_ln2);
-
-            (
-                ev_ln1.origin + ev_ln1.direction,
-                origin,
-                ev_ln2.origin + ev_ln2.direction,
-            )
-        }
-        _ => unreachable!(),
-    }
-}
+// /// Function getting the points defining the angle from the Expression defining it.
+// ///
+// /// # Panics
+// /// If given invalid data.
+// fn get_angle_points(
+//     angle: &ExprKind,
+//     variables: &[Expr<ValueEnum>],
+// ) -> (Complex, Complex, Complex) {
+//     match angle {
+//         ExprKind::ThreePointAngle { p, q, r } => {
+//             let arm1 = variables[p.0].meta.as_complex().unwrap();
+//             let origin = variables[q.0].meta.as_complex().unwrap();
+//             let arm2 = variables[r.0].meta.as_complex().unwrap();
+//
+//             (arm1, origin, arm2)
+//         }
+//         ExprKind::ThreePointAngleDir { p, q, r } => {
+//             let arm1 = variables[p.0].meta.as_complex().unwrap();
+//             let origin = variables[q.0].meta.as_complex().unwrap();
+//             let arm2 = variables[r.0].meta.as_complex().unwrap();
+//
+//             (arm1, origin, arm2)
+//         }
+//         ExprKind::TwoLineAngle { k, l } => {
+//             let ev_ln1 = variables[k.0].meta.as_line().unwrap();
+//             let ev_ln2 = variables[l.0].meta.as_line().unwrap();
+//
+//             let origin = geometry::get_intersection(ev_ln1, ev_ln2);
+//
+//             (
+//                 ev_ln1.origin + ev_ln1.direction,
+//                 origin,
+//                 ev_ln2.origin + ev_ln2.direction,
+//             )
+//         }
+//         _ => unreachable!(),
+//     }
+// }
 
 struct Transform {
     offset: Complex,
@@ -542,14 +542,15 @@ pub fn project(
         .into_iter()
         .map(|var| Expr {
             kind: var.kind,
-            meta: generated_points[var.meta]
+            meta: generated_points[var.meta],
+            ty: var.ty
         })
         .collect();
     let items = figure.items;
 
-    // Collect points (currently only the actual points, in the future also some more, like circle borders etc)
-    let points: Vec<_> = items.iter().flat_map(|x| match x {
-        Item::Point(pt) => variables[pt.id].meta.as_complex(),
+    // Collect points (currently only the actual points, in the future also some more, like circle borders etc.)
+    let points: Vec<_> = items.iter().filter_map(|x| match x {
+        Item::Point(pt) => variables[pt.id.0].meta.as_complex(),
         _ => None
     }).collect();
 
@@ -566,7 +567,7 @@ pub fn project(
     let offset = -top_left;
 
     // Frame bottom right point.
-    let mut furthest = Complex::new(
+    let furthest = Complex::new(
         points.iter()
             .map(|pt| pt.real)
             .reduce(f64::max).unwrap_or_default(),
@@ -605,7 +606,7 @@ pub fn project(
         .map(|v| projector.project(v))
         .collect();
 
-    for point in rendered.iter_mut().flat_map(Rendered::as_point_mut) {
+    for point in rendered.iter_mut().filter_map(Rendered::as_point_mut) {
         point.label_position = projector.get_label_position(point.position);
     }
 

@@ -18,11 +18,11 @@ WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use crate::script::math::{EntityKind, ExprKind, HandleEntity};
+use crate::script::math::{EntityKind, ExprKind, ContainsEntity, ExprType, DeepClone, Math};
 use crate::script::token::number::ProcNum;
 use num_traits::Zero;
 
-use super::{Expand, Expr, Rule, RuleKind};
+use super::{Rule, RuleKind};
 
 /// If a free point is at distance 0 from a line, it should be turned into a line clip.
 pub struct ZeroLineDst;
@@ -30,8 +30,7 @@ pub struct ZeroLineDst;
 impl ZeroLineDst {
     pub fn process(
         rule: &mut Option<Rule>,
-        entities: &mut [EntityKind],
-        math: &mut Expand,
+        math: &mut Math,
     ) -> bool {
         let Some(Rule {
             kind: RuleKind::NumberEq(a, b),
@@ -41,22 +40,22 @@ impl ZeroLineDst {
             return false;
         };
 
-        // If 'a' is a constant, swap references for the sake of latter processing.
-        let (a, b) = if let ExprKind::Const { .. } = a.kind.as_ref() {
+        // If 'a' is a constant, swap references for the sake of later processing.
+        let (a, b) = if let ExprKind::Const { .. } = &math.at(*a).kind {
             (b, a)
         } else {
             (a, b)
         };
 
-        let ExprKind::PointLineDistance { point: a, line: ln } = math.at(*a).kind.as_ref() else {
+        let &ExprKind::PointLineDistance { point: a, line: ln } = &math.at(*a).kind else {
             return false;
         };
 
-        let ExprKind::Entity { id: a } = math.at(*a).kind.as_ref() else {
+        let &ExprKind::Entity { id: a } = &math.at(a).kind else {
             return false;
         };
 
-        let ExprKind::Const { value: b } = math.at(*b).kind.as_ref() else {
+        let ExprKind::Const { value: b } = &math.at(*b).kind else {
             return false;
         };
 
@@ -64,40 +63,39 @@ impl ZeroLineDst {
             return false;
         }
 
-        if !ln.contains_entity(*a, entities) {
+        if !ln.contains_entity(a, math) {
             return false;
         }
 
         // Additional checks
         let mut on_line = None;
 
-        match &entities[a.0] {
-            EntityKind::PointOnLine(on_ln) => {
-                if on_ln == ln {
-                    // This rule is useless.
-                    *rule = None;
-                    return true;
-                }
-
-                on_line = Some(on_ln.clone());
+        if let EntityKind::PointOnLine { line: on_ln } = &math.entities[a.0] {
+            if math.at(*on_ln) == math.at(ln) {
+                // This rule is useless.
+                *rule = None;
+                return true;
             }
-            _ => (),
+
+            on_line = Some(*on_ln);
         }
 
         // 'a' is a point entity with a zero distance from the line ln independent of 'a'.
         // Should it be beneficial, the rule should be deleted and the entity definition replaced.
-        match &mut entities[a.0] {
-            ent @ EntityKind::FreePoint => {
-                *ent = EntityKind::PointOnLine(ln.clone());
+        let ent = math.entities[a.0].clone(); // It's a copy, really
+        match ent {
+            EntityKind::FreePoint => {
+                math.entities[a.0] = EntityKind::PointOnLine { line: ln }; // The rule is going to be removed, so this is essentially like moving.
             }
-            ent @ EntityKind::PointOnLine(_) => {
-                *ent = EntityKind::Bind(Any::Point(ExprKind::LineLineIntersection {
+            EntityKind::PointOnLine { .. } => {
+                let expr = math.store(ExprKind::LineLineIntersection {
                     k: on_line.unwrap(),
-                    l: ln.clone(),
-                }));
+                    l: ln, // We're moving ln here
+                }, ExprType::Point);
+                math.entities[a.0] = EntityKind::Bind(expr);
             }
-            ent @ EntityKind::FreeReal => unreachable!(),
-            EntityKind::PointOnCircle(_) | EntityKind::Bind(_) => return false,
+            EntityKind::FreeReal => unreachable!(),
+            EntityKind::PointOnCircle { .. } | EntityKind::Bind(_) => return false,
         }
 
         *rule = None;
@@ -109,29 +107,16 @@ impl ZeroLineDst {
 pub struct EqExpressions;
 
 impl EqExpressions {
-    pub fn process(rule: &mut Option<SimpleRule>) -> bool {
+    pub fn process(rule: &mut Option<Rule>, math: &Math) -> bool {
         let Some(Rule {
-            kind: RuleKind::NumberEq(a, b),
+            kind: RuleKind::NumberEq(a, b) | RuleKind::PointEq(a, b),
             ..
         }) = rule
         else {
-            let Some(Rule {
-                kind: RuleKind::PointEq(a, b),
-                ..
-            }) = rule
-            else {
-                return false;
-            };
-
-            if a == b {
-                *rule = None;
-                return true;
-            }
-
             return false;
         };
 
-        if a == b {
+        if math.at(*a) == math.at(*b) {
             *rule = None;
             true
         } else {
@@ -144,7 +129,7 @@ impl EqExpressions {
 pub struct EqPointDst;
 
 impl EqPointDst {
-    pub fn process(rule: &mut Option<SimpleRule>, entities: &mut [EntityKind<MathTypes>]) -> bool {
+    pub fn process(rule: &mut Option<Rule>, math: &mut Math) -> bool {
         let Some(Rule {
             kind: RuleKind::NumberEq(a, b),
             ..
@@ -153,36 +138,44 @@ impl EqPointDst {
             return false;
         };
 
-        let ExprKind::PointPointDistance { p, q } = a.kind.as_ref() else {
+        let &ExprKind::PointPointDistance { p, q } = &math.at(*a).kind else {
             return false;
         };
-        let ExprKind::PointPointDistance { p: r, q: s } = b.kind.as_ref() else {
+        let &ExprKind::PointPointDistance { p: r, q: s } = &math.at(*b).kind else {
             return false;
         };
 
         // q = s?
-        if q != s {
-            return false;
-        }
-
-        // r must be an entity (if there is one, it's definitely r, because normalization and ordering)
-        let ExprKind::Entity { id: r_id } = r.kind.as_ref() else {
+        let (r, s) = if math.compare(q, s).is_eq() {
+            (r, s)
+        } else if math.compare(q, r).is_eq() {
+            // If not, check q=r? and if so, swap r and s.
+            (s, r)
+        } else {
             return false;
         };
 
-        // r must be a free point, otherwise it won't work.
-        if !matches!(entities[r_id.0], EntityKind::FreePoint) {
+        // p must be an entity (if there is one, it's definitely p, because normalization and ordering)
+        let &ExprKind::Entity { id: p_id } = &math.at(p).kind else {
+            return false;
+        };
+
+        // p must be a free point, otherwise it won't work.
+        if !matches!(math.entities[p_id.0], EntityKind::FreePoint) {
             return false;
         }
 
-        let circle = Expr::new(Circle::Construct {
-            center: q.clone(),
-            radius: Expr::new(ExprKind::PointPointDistance {
-                p: p.clone(),
-                q: q.clone(),
-            }),
-        });
-        entities[r_id.0] = EntityKind::PointOnCircle(circle);
+        // p is an entity that is as distant to q=s as r.
+
+        let radius = math.store(ExprKind::PointPointDistance {
+            p: r, // "moving" r here
+            q, // "moving" q
+        }, ExprType::Number);
+        let circle = math.store(ExprKind::ConstructCircle {
+            center: s, // "moving" s=q
+            radius,
+        }, ExprType::Circle);
+        math.entities[p_id.0] = EntityKind::PointOnCircle { circle };
         *rule = None;
         true
     }
@@ -192,7 +185,7 @@ impl EqPointDst {
 pub struct RightAngle;
 
 impl RightAngle {
-    pub fn process(rule: &mut Option<SimpleRule>) -> bool {
+    pub fn process(rule: &mut Option<Rule>, math: &mut Math) -> bool {
         let Some(Rule {
             kind: RuleKind::NumberEq(a, b),
             ..
@@ -201,10 +194,10 @@ impl RightAngle {
             return false;
         };
 
-        let ExprKind::ThreePointAngle { p, q, r } = a.kind.as_ref() else {
+        let &ExprKind::ThreePointAngle { p, q, r } = &math.at(*a).kind else {
             return false;
         };
-        let ExprKind::Const { value } = b.kind.as_ref() else {
+        let ExprKind::Const { value } = &math.at(*b).kind else {
             return false;
         };
 
@@ -212,16 +205,18 @@ impl RightAngle {
             return false;
         }
 
-        let mid = Expr::new(ExprKind::AveragePoint {
-            items: vec![p.clone(), r.clone()],
-        });
-        let p = p.clone();
-        let q = q.clone();
+        let p_cloned = p.deep_clone(math);
+
+        let mid = math.store(ExprKind::AveragePoint {
+            items: vec![p, r], // Here again, moving the values
+        }, ExprType::Point);
+        let mid_cloned = mid.deep_clone(math);
+        let p = p_cloned;
 
         if let Some(rule) = rule {
             rule.kind = RuleKind::NumberEq(
-                Expr::new(ExprKind::PointPointDistance { p: mid.clone(), q }),
-                Expr::new(ExprKind::PointPointDistance { p, q: mid }),
+                math.store(ExprKind::PointPointDistance { p: mid, q }, ExprType::Number),
+                math.store(ExprKind::PointPointDistance { p, q: mid_cloned }, ExprType::Number),
             );
         }
 

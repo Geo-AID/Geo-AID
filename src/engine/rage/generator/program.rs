@@ -23,6 +23,7 @@ use serde::Serialize;
 
 use crate::geometry::{Circle, Line, ValueEnum};
 
+#[allow(clippy::wildcard_imports)]
 use self::expr::*;
 
 use super::Complex;
@@ -144,7 +145,7 @@ pub mod expr {
     }
 
     #[derive(Debug, Clone, Copy, Serialize)]
-    /// A point on a aine.
+    /// A point on a line.
     pub struct PointOnLine {
         pub line: Loc,
         pub clip: Loc,
@@ -409,7 +410,7 @@ pub enum Instruction {
     CircleCenter(CircleCenter),
     /// A circle given the center and the radius.
     CircleConstruct(CircleConstruct),
-    /// A line in euclidean space. defined by two points.
+    /// A line in Euclidean space. defined by two points.
     LineFromPoints(LineFromPoints),
     /// An angle bisector.
     AngleBisector(AngleBisector),

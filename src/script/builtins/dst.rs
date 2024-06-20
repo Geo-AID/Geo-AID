@@ -82,6 +82,7 @@ fn distance_convert_pc(
 }
 
 /// ```
+/// # use geo_aid::script::figure::Style;
 /// struct Associated {
 ///     display_segment: bool,
 ///     style: Style
@@ -105,9 +106,11 @@ impl BuildAssociated<ScalarNode> for Associated {
         if display_segment.unwrap() {
             match &associated.root.expr.data.data {
                 ScalarData::PointPointDistance(a, b) => {
+                    let p_id = build.load(a);
+                    let q_id = build.load(b);
                     build.add(SegmentItem {
-                        p_id: build.load(a),
-                        q_id: build.load(b),
+                        p_id,
+                        q_id,
                         label: MathString::new(Span::empty()),
                         style: style.unwrap(),
                     });
@@ -122,9 +125,11 @@ impl BuildAssociated<ScalarNode> for Associated {
                         k.clone_without_node(),
                     ));
 
+                    let p_id = build.load(a);
+                    let q_id = build.load(&b);
                     build.add(SegmentItem {
-                        p_id: build.load(a),
-                        q_id: build.load(&b),
+                        p_id,
+                        q_id,
                         label: MathString::new(Span::empty()),
                         style: style.unwrap(),
                     });

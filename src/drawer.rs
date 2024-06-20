@@ -76,8 +76,3 @@ pub trait Draw {
 
     fn end(&mut self) -> &str;
 }
-
-pub struct Json {
-    pub content: String,
-    pub canvas_size: (usize, usize),
-}

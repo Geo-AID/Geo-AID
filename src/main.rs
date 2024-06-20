@@ -31,8 +31,12 @@ use std::{
 use clap::{Parser, ValueEnum};
 use crossterm::{cursor, terminal, ExecutableCommand, QueueableCommand};
 use geo_aid::{
-    cli::{Diagnostic, DiagnosticKind}, drawer::{Draw, Json, Latex, Raw, Svg}, engine::{rage::Rage, Engine}, script::math
+    cli::{Diagnostic, DiagnosticKind}, drawer::Draw, engine::{rage::Rage, Engine}, script::math
 };
+use geo_aid::drawer::json::Json;
+use geo_aid::drawer::latex::Latex;
+use geo_aid::drawer::raw::Raw;
+use geo_aid::drawer::svg::Svg;
 use geo_aid::projector;
 use geo_aid::engine::GenerateResult;
 use geo_aid::engine::rage::GenParams;
@@ -122,9 +126,9 @@ fn main() {
         }
     };
 
-    let flags = Arc::new(intermediate.flags);
-    let mut rage = Rage::new(args.count_of_workers);
+    let rage = Rage::new(args.count_of_workers);
     let compiled = rage.compile(&intermediate, ());
+    let flags = Arc::new(intermediate.flags);
 
     let mut stdout = io::stdout();
 
@@ -139,6 +143,7 @@ fn main() {
         mean_count: args.mean_count,
         delta_max_mean: args.delta_max_mean,
         progress_update: Box::new(|quality| {
+            let mut stdout = io::stdout();
             stdout
                 .queue(terminal::Clear(terminal::ClearType::FromCursorDown))
                 .unwrap();
@@ -154,35 +159,21 @@ fn main() {
 
     stdout.execute(cursor::Show).unwrap();
 
-    let rendered = projector::project(&intermediate.figure, &values, &flags);
-
-    #[allow(clippy::cast_precision_loss)]
-    let mut latex = Latex {
-        content: String::default(),
-        canvas_size,
-        scale: f64::min(10.0/canvas_size.0 as f64, 10.0/canvas_size.1 as f64),
-    };
-
-    let mut svg = Svg {
-        content: String::default(),
-        canvas_size,
-    };
-
-    let mut json = Json {
-        content: String::default(),
-        canvas_size,
-    };
-
-    let mut raw = Raw {
-        content: String::default(),
-        canvas_size,
-    };
+    let rendered = projector::project(intermediate.figure, &values, &flags, canvas_size);
     
     match args.renderer {
-        Renderer::Latex => latex.draw(&args.output, &rendered).unwrap(),
-        Renderer::Json => json.draw(&args.output, &rendered).unwrap(),
-        Renderer::Svg => svg.draw(&args.output, &rendered).unwrap(),
-        Renderer::Raw => raw.draw(&args.output, &rendered).unwrap(),
+        Renderer::Latex => {
+            Latex::default().draw(&args.output, &rendered).unwrap();
+        },
+        Renderer::Json => {
+            Json::default().draw(&args.output, &rendered).unwrap();
+        },
+        Renderer::Svg => {
+            Svg::default().draw(&args.output, &rendered).unwrap();
+        },
+        Renderer::Raw => {
+            Raw::default().draw(&args.output, &rendered).unwrap();
+        },
         //Renderer::Latex => latex::draw(&args.output, canvas_size, &rendered),
         //Renderer::Json => json::draw(&args.output, canvas_size, &rendered),
     }

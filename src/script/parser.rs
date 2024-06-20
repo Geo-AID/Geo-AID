@@ -27,6 +27,8 @@ use std::{
     iter::Peekable,
     marker::PhantomData,
 };
+use std::fmt::Formatter;
+use crate::script::token::number::ProcNum;
 
 use crate::span;
 
@@ -215,13 +217,13 @@ pub enum BinaryOperator {
     Div(Slash),
 }
 
-impl ToString for BinaryOperator {
-    fn to_string(&self) -> String {
+impl Display for BinaryOperator {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            BinaryOperator::Add(_) => String::from("+"),
-            BinaryOperator::Sub(_) => String::from("-"),
-            BinaryOperator::Mul(_) => String::from("*"),
-            BinaryOperator::Div(_) => String::from("/"),
+            BinaryOperator::Add(_) => write!(f, "+"),
+            BinaryOperator::Sub(_) => write!(f, "-"),
+            BinaryOperator::Mul(_) => write!(f, "*"),
+            BinaryOperator::Div(_) => write!(f, "/"),
         }
     }
 }
@@ -411,13 +413,13 @@ impl Parse for RationalExponent {
 #[derive(Debug, Parse)]
 pub enum Exponent {
     Simple(TokInteger),
-    Parenthised(RationalExponent),
+    Parenthesized(RationalExponent),
 }
 
 impl Exponent {
     /// # Errors
     /// Returns an error if the numbers can't fit.
-    pub fn into_comp(&self) -> Result<CompExponent, Error> {
+    pub fn as_comp(&self) -> Result<CompExponent, Error> {
         match self {
             Self::Simple(i) => Ok(CompExponent::new(
                 i.parsed
@@ -425,7 +427,7 @@ impl Exponent {
                     .map_err(|_| Error::NumberTooLarge { error_span: i.span })?,
                 1,
             )),
-            Self::Parenthised(exp) => Ok(CompExponent::new(
+            Self::Parenthesized(exp) => Ok(CompExponent::new(
                 exp.nom.parsed.parse().map_err(|_| Error::NumberTooLarge {
                     error_span: exp.nom.span,
                 })?,
@@ -468,7 +470,7 @@ pub enum Name {
     Call(ExprCall),
     FieldIndex(FieldIndex),
     Ident(Ident),
-    Expression(ExprParenthised),
+    Expression(ExprParenthesised),
 }
 
 impl Parse for Name {
@@ -555,9 +557,9 @@ pub struct ExprCall {
     pub rparen: RParen,
 }
 
-/// A parsed parenthesed expression
+/// A parsed parenthesised expression
 #[derive(Debug, Parse)]
-pub struct ExprParenthised {
+pub struct ExprParenthesised {
     /// The `(` token.
     pub lparen: LParen,
     /// The contained `Expression`.
@@ -586,7 +588,7 @@ impl BinaryOperator {
     }
 }
 
-/// Inserts an operator with an rhs into a operator series, considering the order of operations.
+/// Inserts an operator with an rhs into an operator series, considering the order of operations.
 fn dispatch_order<const ITER: bool>(
     lhs: Expression<ITER>,
     op: BinaryOperator,
@@ -636,7 +638,7 @@ pub enum PredefinedRuleOperator {
 /// A rule operator.
 #[derive(Debug, Parse)]
 pub enum RuleOperator {
-    /// A inverted rule operator (!op)
+    /// An inverted rule operator (!op)
     Inverted(InvertedRuleOperator),
     Predefined(PredefinedRuleOperator),
     Defined(NamedIdent),
@@ -647,7 +649,7 @@ pub enum RuleOperator {
 #[parse(first_token = Exclamation)]
 pub struct InvertedRuleOperator {
     /// The `!` token
-    pub exlamation: Exclamation,
+    pub exclamation: Exclamation,
     /// The operator.
     pub operator: Box<RuleOperator>,
 }
@@ -1064,6 +1066,23 @@ impl FromProperty for String {
             }),
             PropertyValue::RawString(s) => Ok(s.lit.content),
             PropertyValue::String(s) => Ok(s.content),
+        }
+    }
+}
+
+impl FromProperty for ProcNum {
+    fn from_property(property: PropertyValue) -> Result<Self, Error> {
+        match property {
+            PropertyValue::Number(num) => Ok(ProcNum::from(&num)),
+            PropertyValue::RawString(s) => Err(Error::NumberExpected {
+                error_span: s.get_span(),
+            }),
+            PropertyValue::String(s) => Err(Error::NumberExpected {
+                error_span: s.get_span(),
+            }),
+            PropertyValue::Ident(ident) => Err(Error::NumberExpected {
+                error_span: ident.get_span(),
+            })
         }
     }
 }

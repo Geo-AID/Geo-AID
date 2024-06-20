@@ -403,8 +403,8 @@ impl Function {
     /// Never. Shut up, clippy.
     #[must_use]
     pub fn match_params(
-        expected: &Vec<Type>,
-        received: &Vec<Type>,
+        expected: &[Type],
+        received: &[Type],
         param_group: Option<&Type>,
     ) -> bool {
         if let Some(ty) = param_group {
@@ -442,14 +442,14 @@ impl Function {
 
     /// Tries to find an overload for the given param types.
     #[must_use]
-    pub fn get_overload(&self, params: &Vec<Type>) -> Option<&FunctionOverload> {
+    pub fn get_overload(&self, params: &[Type]) -> Option<&FunctionOverload> {
         self.overloads
             .iter()
             .find(|x| Function::match_params(&x.params, params, x.param_group.as_ref()))
     }
 
     #[must_use]
-    pub fn get_returned(&self, params: &Vec<Type>) -> Type {
+    pub fn get_returned(&self, params: &[Type]) -> Type {
         self.get_overload(params)
             .map_or(Type::Unknown, |x| x.returned_type)
     }
@@ -1013,7 +1013,7 @@ where
 {
     VariableAccess(Rc<Variable<T>>),
     Boxed(Expr<T>),
-    /// Dummy is a value specifically for continued unrolling after error occurence.
+    /// Dummy is a value specifically for continued unrolling after error occurrence.
     /// It should never show up in compilation step.
     Dummy,
 }
@@ -1246,7 +1246,7 @@ impl Expr<Circle> {
                 Generic::VariableAccess(v) => v.definition.get_data(),
                 Generic::Dummy => self.data.as_ref()
             },
-            v => v
+            v @ Circle::Circle(..) => v
         }
     }
 
@@ -1657,7 +1657,7 @@ impl Expr<Scalar> {
                             v.clone_without_node()
                         }
                         ScalarData::Free => {
-                            ScalarData::SetUnit(self.clone_without_node(), unit.unwrap())
+                            ScalarData::SetUnit(self.clone_without_node(), unit.unwrap_or_default())
                         }
                         ScalarData::DstLiteral(_)
                         | ScalarData::PointPointDistance(_, _)
@@ -1778,7 +1778,7 @@ impl PointCollectionData {
     }
 
     /// # Panics
-    /// Panics if the collection isn't long enough
+    /// If the collection isn't long enough
     #[must_use]
     pub fn index(&self, index: usize) -> Expr<Point> {
         match self {
@@ -2058,7 +2058,7 @@ impl Expr<Bundle> {
     }
 
     /// # Panics
-    /// Panics if the given field does not exist.
+    /// If the given field does not exist.
     #[must_use]
     pub fn index_with_node(&mut self, field: &str) -> AnyExpr {
         let mut expr = self.data.index(field);
@@ -2735,7 +2735,7 @@ impl Unroll for SimpleExpression {
             let mut unrolled: Expr<Scalar> = unrolled.convert(context);
             let node = unrolled.node.take();
 
-            let exponent = match exponent.exponent.into_comp() {
+            let exponent = match exponent.exponent.as_comp() {
                 Ok(v) => {
                     if self.minus.is_some() {
                         -v
@@ -2792,7 +2792,7 @@ impl Unroll for Ident {
         context: &mut CompileContext,
         _library: &Library,
         _it_index: &HashMap<u8, usize>,
-        mut display: Properties,
+        display: Properties,
     ) -> AnyExpr {
         match self {
             Ident::Named(named) => {
@@ -2841,7 +2841,7 @@ impl Unroll for ExprCall {
         context: &mut CompileContext,
         library: &Library,
         it_index: &HashMap<u8, usize>,
-        mut display: Properties,
+        display: Properties,
     ) -> AnyExpr {
         let name = self
             .name
@@ -2865,7 +2865,7 @@ impl Unroll for ExprCall {
         }
 
         if let Some(func) = library.functions.get(&func_name) {
-            let param_types = params.iter().map(AnyExpr::get_type).collect();
+            let param_types: Vec<_> = params.iter().map(AnyExpr::get_type).collect();
 
             if let Some(overload) = func.get_overload(&param_types) {
                 let params = params
@@ -2933,7 +2933,7 @@ impl Unroll for FieldIndex {
         context: &mut CompileContext,
         library: &Library,
         it_index: &HashMap<u8, usize>,
-        mut display: Properties,
+        display: Properties,
     ) -> AnyExpr {
         let name = self
             .name
@@ -3368,7 +3368,7 @@ impl<const ITER: bool> Unroll for Expression<ITER> {
 //         Type::Point => Ok(vec![expr.clone()]),
 //         Type::PointCollection(l) => Ok((0..*l)
 //             .map(|i| Expr {
-//                 weight: FastFloat::One, // Weight propagated through `IndexCollecttion`
+//                 weight: FastFloat::One, // Weight propagated through `IndexCollection`
 //                 data: Rc::new(UnrolledExpressionData::IndexCollection(expr.clone(), i)),
 //                 ty: ty::POINT,
 //                 span: expr.span,
@@ -3600,7 +3600,7 @@ fn create_variable_named(
             }
         }
 
-        // Point collection variables are amiguous and therefore cause compilation errors.
+        // Point collection variables are ambiguous and therefore cause compilation errors.
         // They do not, however prevent the program from running properly.
         context.push_error(Error::InvalidPC {
             error_span: stat.get_span(),
@@ -4162,7 +4162,7 @@ fn unroll_rule(
     }
 }
 
-fn unroll_rulestat(
+fn unroll_rule_statement(
     rule: &RuleStatement,
     context: &mut CompileContext,
     library: &Library,
@@ -4403,7 +4403,7 @@ pub fn unroll(input: &str) -> Result<(CompileContext, CollectionNode), Vec<Error
                 }
                 Err(err) => context.push_error(err),
             },
-            Statement::Rule(stat) => match unroll_rulestat(&stat, &mut context, &library) {
+            Statement::Rule(stat) => match unroll_rule_statement(&stat, &mut context, &library) {
                 Ok(nodes) => {
                     for node in nodes {
                         figure.push_boxed(node);

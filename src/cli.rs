@@ -51,11 +51,11 @@ pub enum AnnotationKind {
 #[derive(Debug)]
 struct AnnotationSet {
     span: Span,
-    annotations: Vec<AnnotationPriv>,
+    annotations: Vec<AnnotationPrivate>,
 }
 
 #[derive(Debug)]
-struct AnnotationPriv {
+struct AnnotationPrivate {
     message: String,
     kind: AnnotationKind,
 }
@@ -201,8 +201,8 @@ impl<'r> Diagnostic<'r> {
                     break;
                 }
 
-                if !at.is_singleline()
-                    && set.span.is_singleline()
+                if !at.is_single_line()
+                    && set.span.is_single_line()
                     && at.end.line == set.span.start.line
                 {
                     // Banish the span
@@ -270,7 +270,7 @@ impl<'r> Diagnostic<'r> {
             for (i, annotation) in annotation_sets.iter_mut().enumerate() {
                 if annotation.span == ann.at {
                     // If there's a common span, attach both messages to one span.
-                    annotation.annotations.push(AnnotationPriv {
+                    annotation.annotations.push(AnnotationPrivate {
                         message: ann.message.clone(),
                         kind: ann.kind,
                     });
@@ -317,7 +317,7 @@ impl<'r> Diagnostic<'r> {
                     index,
                     AnnotationSet {
                         span: ann.at,
-                        annotations: vec![AnnotationPriv {
+                        annotations: vec![AnnotationPrivate {
                             message: ann.message.clone(),
                             kind: ann.kind,
                         }],
@@ -325,7 +325,7 @@ impl<'r> Diagnostic<'r> {
                 ),
                 2 => annotation_sets.push(AnnotationSet {
                     span: ann.at,
-                    annotations: vec![AnnotationPriv {
+                    annotations: vec![AnnotationPrivate {
                         message: ann.message.clone(),
                         kind: ann.kind,
                     }],
@@ -400,7 +400,7 @@ impl<'r> Display for Diagnostic<'r> {
 
             // Do for each annotation
             while let Some(ann) = annotations.next() {
-                if ann.span.is_singleline() {
+                if ann.span.is_single_line() {
                     // If single line, only render the line of code
                     writeln!(
                         f,
@@ -470,7 +470,7 @@ impl<'r> Display for Diagnostic<'r> {
                     )?;
                 }
 
-                let mut messages: Vec<(usize, Vec<&AnnotationPriv>)> = vec![(
+                let mut messages: Vec<(usize, Vec<&AnnotationPrivate>)> = vec![(
                     ann.span.end.column,
                     ann.annotations
                         .iter()
@@ -510,7 +510,7 @@ impl<'r> Display for Diagnostic<'r> {
                 }
 
                 let l = messages.len();
-                let mut messages: Vec<(usize, Vec<&AnnotationPriv>)> = messages
+                let mut messages: Vec<(usize, Vec<&AnnotationPrivate>)> = messages
                     .into_iter()
                     .enumerate()
                     .filter(|(i, (_, x))| !x.is_empty() || *i == l - 1)
@@ -678,7 +678,7 @@ impl<'r> Display for Diagnostic<'r> {
 
                 // Until there is a top of the stack.
                 while let Some(change) = changes.pop() {
-                    if !change.span.is_singleline() {
+                    if !change.span.is_single_line() {
                         // If not single line, divide in two.
                         changes.push(Change {
                             span: Span {

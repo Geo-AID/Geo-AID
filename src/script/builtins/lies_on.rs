@@ -19,7 +19,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
 use geo_aid_derive::overload;
-use num_traits::One;
+use num_traits::{One, Zero};
 use std::rc::Rc;
 
 use super::prelude::*;
@@ -37,8 +37,8 @@ fn pt_lies_on_circle(
     node.extend(lhs.node.take());
     node.extend(rhs.node.take());
 
-    let point = lhs.simplify(context);
-    let circle = rhs.simplify(context);
+    let point = lhs;
+    let circle = rhs;
 
     if inverted {
         context.push_rule(UnrolledRule {
@@ -68,12 +68,12 @@ fn pt_lies_on_line(
     node.extend(lhs.node.take());
     node.extend(rhs.node.take());
 
-    let point = lhs.simplify(context);
-    let line = rhs.simplify(context);
+    let point = lhs;
+    let line = rhs;
 
     if inverted {
         context.push_rule(UnrolledRule {
-            kind: UnrolledRuleKind::ScalarEq(number!(=0.0), context.distance_pl(point, line)),
+            kind: UnrolledRuleKind::ScalarEq(number!(=ProcNum::zero()), context.distance_pl(point, line)),
             inverted: true,
             weight,
         });
@@ -84,6 +84,7 @@ fn pt_lies_on_line(
     node
 }
 
+#[allow(clippy::needless_pass_by_value)]
 fn col_lies_on_circle(
     mut lhs: Expr<PointCollection>,
     mut rhs: Expr<Circle>,
@@ -103,7 +104,7 @@ fn col_lies_on_circle(
             context,
             Properties::default(),
             inverted,
-            weight,
+            weight.clone(),
         ));
     }
 
@@ -131,10 +132,10 @@ fn col_lies_on_circle(
                             index!(no-node lhs, i_plus_2),
                         ),
                     ),
-                    number!(ANGLE 0.0),
+                    number!(ANGLE ProcNum::zero()),
                 ),
                 inverted: false,
-                weight,
+                weight: weight.clone(),
             });
         }
     }
@@ -154,22 +155,21 @@ fn pt_lies_on_segment(
     node.extend(lhs.node.take());
     node.extend(rhs.node.take());
 
-    let point = lhs.simplify(context);
+    let point = lhs;
     let line = context
         .line(
             field!(node POINT rhs, A with context),
             field!(node POINT rhs, B with context),
-        )
-        .simplify(context);
+        );
 
     if inverted {
-        // not on line or not between A, B
+        // not on the line or not between A, B
         context.push_rule(UnrolledRule {
             kind: UnrolledRuleKind::Alternative(vec![
                 UnrolledRule {
                     kind: UnrolledRuleKind::ScalarEq(
-                        number!(=0.0),
-                        context.distance_pl(point, line),
+                        number!(=ProcNum::zero()),
+                        context.distance_pl(point.clone_without_node(), line),
                     ),
                     inverted: true,
                     weight: ProcNum::one(),
@@ -179,9 +179,9 @@ fn pt_lies_on_segment(
                         context.add(
                             context.distance_pp(
                                 field!(no-node POINT rhs, A with context),
-                                lhs.clone_without_node(),
+                                point.clone_without_node(),
                             ),
-                            context.distance_pp(field!(no-node POINT rhs, B with context), lhs),
+                            context.distance_pp(field!(no-node POINT rhs, B with context), point),
                         ),
                         context.distance_pp(
                             field!(no-node POINT rhs, A with context),
@@ -196,16 +196,16 @@ fn pt_lies_on_segment(
             weight,
         });
     } else {
-        context.point_on_line(&point, &line, weight);
+        context.point_on_line(&point, &line, weight.clone());
 
         context.push_rule(UnrolledRule {
             kind: UnrolledRuleKind::ScalarEq(
                 context.add(
                     context.distance_pp(
                         field!(no-node POINT rhs, A with context),
-                        lhs.clone_without_node(),
+                        point.clone_without_node(),
                     ),
-                    context.distance_pp(field!(no-node POINT rhs, B with context), lhs),
+                    context.distance_pp(field!(no-node POINT rhs, B with context), point),
                 ),
                 context.distance_pp(
                     field!(no-node POINT rhs, A with context),

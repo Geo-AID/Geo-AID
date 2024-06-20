@@ -27,8 +27,7 @@ pub fn register(library: &mut Library) {
         Function {
             overloads: vec![overload!(() -> POINT {
                 |context: &mut CompileContext, props| {
-                    let pt = context.add_point();
-                    context.expr_with(Point::Entity(pt), props, Vec::new())
+                    context.expr_with(Point::Free, props, Vec::new())
                 }
             })],
         },

@@ -25,7 +25,10 @@ use serde::Serialize;
 
 use crate::projector::{Output, Rendered};
 
-use crate::drawer::Json;
+#[derive(Default)]
+pub struct Json {
+    pub content: String,
+}
 
 /// Data to be serialized.
 #[derive(Serialize)]
@@ -42,12 +45,12 @@ impl Json {
     /// Possibly panics during serialization.
     pub fn draw(&mut self, target: &Path, output: &Output) -> Result<(), std::io::Error> {
         let data = Data {
-            width: self.canvas_size.0,
-            height: self.canvas_size.1,
-            rendered: &output.vec_rendered,
+            width: output.canvas_size.0,
+            height: output.canvas_size.1,
+            rendered: &output.rendered,
         };
 
-        self.content += (serde_json::to_string(&data).unwrap()).as_str();
+        self.content += serde_json::to_string(&data).unwrap().as_str();
 
         let file = File::create(target);
         
@@ -57,18 +60,3 @@ impl Json {
         }
     }
 }
-
-// # Panics
-// Panics whenever there is a filesystem problem
-/*pub fn draw(target: &Path, canvas_size: (usize, usize), output: &Output) {
-    let mut content = String::new();
-    let data = Data {
-        width: canvas_size.0,
-        height: canvas_size.1,
-        rendered: &output.vec_rendered,
-    };
-    content += (serde_json::to_string(&data).unwrap()).as_str();
-
-    let mut file = File::create(target).unwrap();
-    file.write_all(content.as_bytes()).unwrap();
-}*/
