@@ -12,11 +12,11 @@
 
 ## Interpreting names
 
-Names can be interpreted in two ways: as values or as function references. When used as values, identifiers denote variable accesses, field indices represent accesing certain fields of values, parenthised expressions represent the contained expressions and function calls are rather self-explanatory. When used as function references, idents represent global functions, field accesses represent methods and parenthised expressions, like function calls, are not allowed.
+Names can be interpreted in two ways: as values or as function references. When used as values, identifiers denote variable accesses, field indices represent accessing certain fields of values, parenthesised expressions represent the contained expressions and function calls are rather self-explanatory. When used as function references, idents represent global functions, field accesses represent methods and parenthesised expressions, like function calls, are not allowed.
 
 ## Variables
 
-Identifiers denote variables created with `let` statements. When given weight to a named identifier, it will affect the weighing of the definition after expansion (the definition itself won't be affected). When a weight is given to a point collection, it will act as though it was given to each of the referenced points. Note, however, that since point collections are simply abstracitons, there is no guarantee that each point of the collection will be used. It the vast majority of cases that can however be guaranteed.
+Identifiers denote variables created with `let` statements. When given weight to a named identifier, it will affect the weighing of the definition after expansion (the definition itself won't be affected). When a weight is given to a point collection, it will act as though it was given to each of the referenced points. Note, however, that since point collections are simply abstractions, there is no guarantee that each point of the collection will be used. It the vast majority of cases that can however be guaranteed.
 
 ## Fields
 
@@ -26,7 +26,7 @@ Weights on field accesses are treated like on variables.
 
 ## Functions
 
-The call syntax, `name(arg1, arg2, ...)` can be used to call functions with specified parameters. Functions, beyond being constructive expressions, can modify the visual output of the figure, e. g. add a line/ray. This behavior can be usually modified using display options. Some functions accept parameter groups, allowing infinite number of parameters. All functions return a single value. Implicit iterators cannot be used in function parameters, unless surrounded by parentheses.
+The call syntax, `name(arg1, arg2, ...)` can be used to call functions with specified parameters. Functions, beyond being constructive expressions, can modify the visual output of the figure, e.g. add a line/ray. This behavior can be usually modified using display options. Some functions accept parameter groups, allowing infinite number of parameters. All functions return a single value. Implicit iterators cannot be used in function parameters, unless surrounded by parentheses.
 
 The name of the function must be a function reference. If it's an ident, it's treated as a global function. If it's a field index, the function is treated like a method. Methods are special functions defined on types. They use that type as their first parameter, and are generally associated to that type. For specific examples, look at type documentations.
 
@@ -34,4 +34,4 @@ Weights given to function calls affect the parameters and the expression generat
 
 ## Parentheses
 
-Putting expressions in parentheses allows for modifying the order of operations or allowing the use of explicit iterators in contexts, where it wouldn't be normally possible. They also allow using complex expressions as names. Weights applied to parenthised expressions are applied to their contained expressions. Note, that sometimes applied weight to parenthised expressions is the only way to apply weight to the entire expression (for example: binary operations).
+Putting expressions in parentheses allows for modifying the order of operations or allowing the use of explicit iterators in contexts, where it wouldn't be normally possible. They also allow using complex expressions as names. Weights applied to parenthesised expressions are applied to their contained expressions. Note, that sometimes applied weight to parenthesised expressions is the only way to apply weight to the entire expression (for example: binary operations).

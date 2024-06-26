@@ -18,11 +18,13 @@ WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use std::fmt::{Debug, Display, Formatter};
 use geo_aid_derive::Execute;
 use serde::Serialize;
 
 use crate::geometry::{Circle, Line, ValueEnum};
 
+#[allow(clippy::wildcard_imports)]
 use self::expr::*;
 
 use super::Complex;
@@ -33,6 +35,19 @@ pub union Value {
     pub complex: Complex,
     pub line: Line,
     pub circle: Circle
+}
+
+impl Display for Value {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let precision = f.precision();
+        unsafe {
+            if let Some(precision) = precision {
+                write!(f, "{2:.*}\t{3:.*}", precision, precision, self.line.origin, self.line.direction)
+            } else {
+                write!(f, "{}\t{}", self.line.origin, self.line.direction)
+            }
+        }
+    }
 }
 
 impl From<ValueEnum> for Value {
@@ -103,10 +118,15 @@ pub trait Execute {
     unsafe fn execute(&self, memory: &mut [Value]);
 }
 
-impl<T: Execute> Execute for Vec<T> {
+impl<T: Execute + Debug> Execute for Vec<T> {
     unsafe fn execute(&self, args: &mut [Value]) {
         for item in self {
+            // println!("\nExecuting {item:?}");
             item.execute(args);
+            // println!("Memory is now");
+            // for (i, v) in args.iter().enumerate() {
+            //     println!("[{i}] = {v:.2}");
+            // }
         }
     }
 }
@@ -144,7 +164,7 @@ pub mod expr {
     }
 
     #[derive(Debug, Clone, Copy, Serialize)]
-    /// A point on a aine.
+    /// A point on a line.
     pub struct PointOnLine {
         pub line: Loc,
         pub clip: Loc,
@@ -200,7 +220,7 @@ pub mod expr {
             let product = self.params
                 .iter()
                 .map(|loc| memory.get_unchecked(*loc).complex)
-                .fold(Complex::zero(),Complex::partial_mul);
+                .fold(Complex::one(),Complex::partial_mul);
             memory.get_unchecked_mut(self.target).complex = product;
         }
     }
@@ -385,7 +405,7 @@ pub mod expr {
         Greater(a: Real, b: Real) -> Real {
             // Note that the difference is not the same as with equality. This time we have to be prepared for negative diffs.
             let diff = (a - b) / a.abs();
-            smooth_inf_inf(-54.0 * f64::cbrt(diff - 0.001))
+            smooth_inf_inf(54.0 * f64::cbrt(diff - 0.001))
         }
 
         InvertQuality(q: Real) -> Real {
@@ -409,7 +429,7 @@ pub enum Instruction {
     CircleCenter(CircleCenter),
     /// A circle given the center and the radius.
     CircleConstruct(CircleConstruct),
-    /// A line in euclidean space. defined by two points.
+    /// A line in Euclidean space. defined by two points.
     LineFromPoints(LineFromPoints),
     /// An angle bisector.
     AngleBisector(AngleBisector),

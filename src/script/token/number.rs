@@ -7,6 +7,7 @@ use num_complex::Complex;
 
 use num_rational::{BigRational, Rational64};
 use num_traits::{CheckedAdd, CheckedMul, FromPrimitive, One, ToPrimitive, Zero};
+use serde::Serialize;
 use crate::geometry;
 use crate::script::token::Number;
 
@@ -59,7 +60,7 @@ impl ParsedInt {
 }
 
 impl Display for ParsedInt {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
             "{}",
@@ -137,7 +138,7 @@ impl ParsedFloat {
 }
 
 impl Display for ParsedFloat {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
             "{}.{}",
@@ -184,62 +185,71 @@ impl ParsedFloatBuilder {
 }
 
 #[derive(Debug, Clone)]
-pub enum ParsedNumber {
+pub enum Parsed {
     Int(ParsedInt),
     Float(ParsedFloat)
 }
 
-impl Display for ParsedNumber {
+impl Display for Parsed {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            ParsedNumber::Int(v) => write!(f, "{v}"),
-            ParsedNumber::Float(v) => write!(f, "{v}")
+            Parsed::Int(v) => write!(f, "{v}"),
+            Parsed::Float(v) => write!(f, "{v}")
         }
     }
 }
 
 /// Number for processing
-#[derive(Debug, Clone, Hash)]
+#[derive(Debug, Clone, Hash, Serialize, PartialEq, Eq)]
 pub struct ProcNum(Complex<BigRational>);
 
 impl ProcNum {
+    /// # Panics
+    /// A panic is a bug
+    #[must_use]
     pub fn to_complex(self) -> geometry::Complex {
         geometry::Complex::new(self.0.re.to_f64().unwrap(), self.0.im.to_f64().unwrap())
     }
 
+    /// # Panics
+    /// A panic is a bug.
     #[must_use]
     pub fn pi() -> Self {
-        Self(Complex::acos(Complex::new(-BigRational::one(), BigRational::zero())))
-    }
-}
-
-impl SubAssign for ProcNum {
-    fn sub_assign(&mut self, rhs: Self) {
-        self.0 -= rhs.0;
-    }
-}
-
-impl AddAssign for ProcNum {
-    fn add_assign(&mut self, rhs: Self) {
-        self.0 += rhs.0;
+        Self(Complex::new(-BigRational::from_f64(std::f64::consts::PI).unwrap(), BigRational::zero()))
     }
 }
 
 impl FromPrimitive for ProcNum {
     fn from_i64(n: i64) -> Option<Self> {
-        Some(Self(Complex::from_i64(n)?))
+        Complex::from_i64(n).map(Self)
     }
 
     fn from_u64(n: u64) -> Option<Self> {
-        Some(Self(Complex::from_u64(n)?))
+        Complex::from_u64(n).map(Self)
     }
 
     fn from_f32(n: f32) -> Option<Self> {
-        Some(Self(Complex::from_f32(n)?))
+        Complex::from_f32(n).map(Self)
+    }
+
+    fn from_f64(n: f64) -> Option<Self> {
+        Complex::from_f64(n).map(Self)
     }
 }
 
-impl Add<Self> for ProcNum {
+impl SubAssign<&Self> for ProcNum {
+    fn sub_assign(&mut self, rhs: &Self) {
+        self.0 -= &rhs.0;
+    }
+}
+
+impl AddAssign<&Self> for ProcNum {
+    fn add_assign(&mut self, rhs: &Self) {
+        self.0 += &rhs.0;
+    }
+}
+
+impl Add for ProcNum {
     type Output = Self;
 
     fn add(self, rhs: Self) -> Self::Output {
@@ -247,7 +257,15 @@ impl Add<Self> for ProcNum {
     }
 }
 
-impl Mul<Self> for ProcNum {
+impl Add<&Self> for ProcNum {
+    type Output = Self;
+
+    fn add(self, rhs: &Self) -> Self::Output {
+        Self(self.0 + &rhs.0)
+    }
+}
+
+impl Mul for ProcNum {
     type Output = Self;
 
     fn mul(self, rhs: Self) -> Self::Output {
@@ -255,23 +273,31 @@ impl Mul<Self> for ProcNum {
     }
 }
 
-impl MulAssign for ProcNum {
-    fn mul_assign(&mut self, rhs: Self) {
-        self.0 *= rhs.0;
+impl Mul<&Self> for ProcNum {
+    type Output = Self;
+
+    fn mul(self, rhs: &Self) -> Self::Output {
+        Self(self.0 * &rhs.0)
     }
 }
 
-impl Div for ProcNum {
+impl MulAssign<&Self> for ProcNum {
+    fn mul_assign(&mut self, rhs: &Self) {
+        self.0 *= &rhs.0;
+    }
+}
+
+impl Div<&Self> for ProcNum {
     type Output = Self;
     
-    fn div(self, rhs: Self) -> Self::Output {
-        Self(self.0 / rhs.0)
+    fn div(self, rhs: &Self) -> Self::Output {
+        Self(self.0 / &rhs.0)
     }
 }
 
-impl DivAssign for ProcNum {
-    fn div_assign(&mut self, rhs: Self) {
-        self.0 /= rhs.0;
+impl DivAssign<&Self> for ProcNum {
+    fn div_assign(&mut self, rhs: &Self) {
+        self.0 /= &rhs.0;
     }
 }
 
@@ -302,14 +328,6 @@ impl Display for ProcNum {
         write!(f, "{}", self.0)
     }
 }
-
-impl PartialEq for ProcNum {
-    fn eq(&self, other: &Self) -> bool {
-        self.0.eq(&other.0)
-    }
-}
-
-impl Eq for ProcNum {}
 
 impl PartialOrd for ProcNum {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {

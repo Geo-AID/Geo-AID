@@ -50,6 +50,12 @@ impl Complex {
     }
 
     #[must_use]
+    #[inline]
+    pub const fn one() -> Self {
+        Self::new(1.0, 0.0)
+    }
+
+    #[must_use]
     pub fn i() -> Self {
         Self::new(0.0, 1.0)
     }
@@ -99,7 +105,7 @@ impl Complex {
     #[must_use]
     pub fn sqrt(self) -> Complex {
         // The formula used here doesn't work for negative reals. We can use a trick here to bypass that restriction.
-        // If the real part is negative, we simply negate it to get a positive part and then multiply the result by i.
+        // If the real part is negative, we simply negate it to get a positive part and then multiply the result by `i`.
         if self.real > 0.0 {
             // Use the generic formula (https://math.stackexchange.com/questions/44406/how-do-i-get-the-square-root-of-a-complex-number)
             let r = self.magnitude();
@@ -114,7 +120,7 @@ impl Complex {
     #[must_use]
     pub fn sqrt_norm(self) -> Complex {
         // The formula used here doesn't work for negative reals. We can use a trick here to bypass that restriction.
-        // If the real part is negative, we simply negate it to get a positive part and then multiply the result by i.
+        // If the real part is negative, we simply negate it to get a positive part and then multiply the result by `i`.
         if self.real > 0.0 {
             // Use the generic formula (https://math.stackexchange.com/questions/44406/how-do-i-get-the-square-root-of-a-complex-number)
             let r = self.magnitude();
@@ -157,6 +163,13 @@ impl Mul<f64> for Complex {
 
     fn mul(self, rhs: f64) -> Self::Output {
         Complex::new(self.real * rhs, self.imaginary * rhs)
+    }
+}
+
+impl MulAssign<f64> for Complex {
+    fn mul_assign(&mut self, rhs: f64) {
+        self.real *= rhs;
+        self.imaginary *= rhs;
     }
 }
 
@@ -228,7 +241,11 @@ impl MulAssign for Complex {
 
 impl Display for Complex {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} + {}i", self.real, self.imaginary)
+        if let Some(precision) = f.precision() {
+            write!(f, "{2:.*} + {3:.*}i", precision, precision, self.real, self.imaginary)
+        } else {
+            write!(f, "{} + {}i", self.real, self.imaginary)
+        }
     }
 }
 
@@ -273,7 +290,7 @@ impl Product for Complex {
     }
 }
 
-/// Represents a line in a 2D euclidean space.
+/// Represents a line in a 2D Euclidean space.
 #[derive(Debug, Clone, Copy, Serialize)]
 pub struct Line {
     /// Line's origin as a complex number.

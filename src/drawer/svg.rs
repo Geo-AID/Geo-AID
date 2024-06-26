@@ -126,7 +126,7 @@ impl Draw for Svg {
     //             .arg()
     //             .to_degrees(),
     //         Self::get_style_dashing(angle.item),
-    //         x, // It should probably be a constant. For now we will leave it like this.
+    //         x, // It should probably be a constant. For now, we will leave it like this.
     //         angle.angle_value.cos() * 45.0,
     //         -angle.angle_value.sin() * 45.0,
     //         style_width(angle.style),

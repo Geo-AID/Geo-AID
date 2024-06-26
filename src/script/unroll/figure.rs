@@ -331,12 +331,12 @@ pub struct HierarchyNode<T: Node> {
 }
 
 impl<T: Node> Node for HierarchyNode<T> {
-    fn get_display(&self) -> bool {
-        self.root.get_display()
-    }
-
     fn set_display(&mut self, display: bool) {
         self.root.set_display(display);
+    }
+
+    fn get_display(&self) -> bool {
+        self.root.get_display()
     }
 
     fn build(mut self: Box<Self>, build: &mut Build) {
@@ -704,11 +704,11 @@ impl Dummy for EmptyNode {
 }
 
 impl Node for EmptyNode {
+    fn set_display(&mut self, _display: bool) {}
+
     fn get_display(&self) -> bool {
         false
     }
-
-    fn set_display(&mut self, _display: bool) {}
 
     fn build(self: Box<Self>, _build: &mut Build) {}
 }
@@ -751,9 +751,10 @@ impl Node for PointNode {
 
     fn build(self: Box<Self>, build: &mut Build) {
         if self.display.unwrap() && !self.is_dummy() {
+            let id = build.load(&self.expr);
             build.add(
                 PointItem {
-                    id: build.load(&self.expr),
+                    id,
                     label: if self.display_label.unwrap() {
                         if self.label.as_ref().is_empty() {
                             // println!("{} as {}", self.expr, self.default_label);
@@ -830,9 +831,10 @@ impl Node for CircleNode {
 
     fn build(self: Box<Self>, build: &mut Build) {
         if self.display.unwrap() && !self.is_dummy() {
+            let id = build.load(&self.expr);
             build.add(
                 CircleItem {
-                    id: build.load(&self.expr),
+                    id,
                     label: if self.display_label.unwrap() {
                         if self.label.as_ref().is_empty() {
                             // println!("{} as {}", self.expr, self.default_label);
@@ -845,7 +847,7 @@ impl Node for CircleNode {
                     },
                     style: self.style.unwrap()
                 }
-            )
+            );
         }
     }
 }
@@ -988,16 +990,21 @@ impl Node for LineNode {
             let style = self.style.unwrap();
 
             match self.line_type.unwrap() {
-                LineType::Line => build.add(LineItem {
-                    id: build.load(&self.expr),
-                    label,
-                    style
-                }),
+                LineType::Line => {
+                    let id = build.load(&self.expr);
+                    build.add(LineItem {
+                        id,
+                        label,
+                        style,
+                    });
+                },
                 LineType::Ray => match &self.expr.data.as_ref() {
                     Line::LineFromPoints(a, b) => {
+                        let p_id = build.load(a);
+                        let q_id = build.load(b);
                         build.add(RayItem {
-                            p_id: build.load(a),
-                            q_id: build.load(b),
+                            p_id,
+                            q_id,
                             label,
                             style
                         });
@@ -1011,9 +1018,11 @@ impl Node for LineNode {
                             self.expr.clone_without_node(),
                         ));
 
+                        let p_id = build.load(b);
+                        let q_id = build.load(&x);
                         build.add(RayItem {
-                            p_id: build.load(b),
-                            q_id: build.load(&x),
+                            p_id,
+                            q_id,
                             label,
                             style
                         });
@@ -1022,9 +1031,11 @@ impl Node for LineNode {
                 },
                 LineType::Segment => match &self.expr.data.as_ref() {
                     Line::LineFromPoints(a, b) => {
+                        let p_id = build.load(a);
+                        let q_id = build.load(b);
                         build.add(RayItem {
-                            p_id: build.load(a),
-                            q_id: build.load(b),
+                            p_id,
+                            q_id,
                             label,
                             style
                         });

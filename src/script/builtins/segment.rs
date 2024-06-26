@@ -52,9 +52,10 @@ fn segment_function_point_point(
 }
 
 /// ```
+/// # use geo_aid::script::figure::Style;
 /// struct Associated {
 ///     display_segment: bool,
-///     style: Mode
+///     style: Style
 /// }
 /// ```
 #[derive(Debug)]
@@ -74,9 +75,11 @@ impl BuildAssociated<BundleNode> for Associated {
         let style = associated.get_data("style").unwrap().as_style().unwrap();
 
         if display_segment.unwrap() {
+            let p_id = build.load(associated.root.children["A"].as_point().unwrap());
+            let q_id = build.load(associated.root.children["B"].as_point().unwrap());
             build.add(SegmentItem {
-                p_id: build.load(associated.root.children["A"].as_point().unwrap()),
-                q_id: build.load(associated.root.children["B"].as_point().unwrap()),
+                p_id,
+                q_id,
                 label: MathString::new(Span::empty()),
                 style: style.unwrap()
             });

@@ -35,21 +35,21 @@ pub enum FastFloat {
 }
 
 impl FastFloat {
-    /// Returns `true` if is [`FastFloat::Zero`]. `false` otherwise.
-    #[must_use]
-    pub const fn is_zero(&self) -> bool {
-        matches!(self, Self::Zero)
-    }
+    // /// Returns `true` if is [`FastFloat::Zero`]. `false` otherwise.
+    // #[must_use]
+    // pub const fn is_zero(&self) -> bool {
+    //     matches!(self, Self::Zero)
+    // }
 
-    /// Converts the value to a standard `f64`.
-    #[must_use]
-    pub const fn to_f64(self) -> f64 {
-        match self {
-            Self::One => 1.0,
-            Self::Zero => 0.0,
-            Self::Other(v) => v,
-        }
-    }
+    // /// Converts the value to a standard `f64`.
+    // #[must_use]
+    // pub const fn to_f64(self) -> f64 {
+    //     match self {
+    //         Self::One => 1.0,
+    //         Self::Zero => 0.0,
+    //         Self::Other(v) => v,
+    //     }
+    // }
 }
 
 impl Add for FastFloat {

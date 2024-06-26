@@ -26,8 +26,8 @@ use serde::Serialize;
 use crate::geometry;
 use crate::geometry::{Circle, Complex, Line, ValueEnum};
 
-use crate::script::figure::{CircleItem, Figure, Item, LineItem, PointItem, RayItem, SegmentItem};
-use crate::script::math::{Any, Entity, Expr, Flags, Number, VarIndex};
+use crate::script::figure::{CircleItem, Generated, Item, LineItem, PointItem, RayItem, SegmentItem};
+use crate::script::math::{Entity, Expr, Flags, VarIndex};
 
 struct Projector {
     /// Transform used by the projector
@@ -159,80 +159,78 @@ impl Projector {
         let mut vec_iter = vectors.iter();
         vec_iter.next();
 
-        let mut biggest_angle = 0.0;
-        // Vectors between which the label should be located.
-        let mut label_vecs = (Complex::default(), Complex::default());
-
-        // Label's position.
-        let label_pos: Complex;
-
         if vectors.is_empty() {
             // No vectors associated with the given point.
-            label_pos = Complex::new(point.real + 2.0, point.imaginary + 2.0);
+            Complex::new(2.0, 2.0)
         } else if vectors.len() == 1 {
             // Only one vector which is associated with the given point.
-            label_pos = point - 4.0 * vectors.first().unwrap().normalize();
+            -4.0 * vectors.first().unwrap().normalize()
         } else {
+            let mut flip = false;
+            let mut biggest_angle = 0.0;
+            // Vectors between which the label should be located.
+            let mut label_vectors = (Complex::default(), Complex::default());
+
             // If there is more than one associated vector.
             for vec in &vectors {
                 if let Some(vec_next) = vec_iter.next() {
                     let angle = vec_next.arg() - vec.arg();
                     if angle > biggest_angle {
                         biggest_angle = angle;
-                        label_vecs = (*vec, *vec_next);
+                        label_vectors = (*vec, *vec_next);
                     }
                 } else {
                     let first = vectors.first().unwrap();
                     let last = vectors.last().unwrap();
-                    let angle = 2.0 * PI - (first.arg().abs() + last.arg().abs());
+                    let angle = 2.0 * PI - (last.arg() - first.arg());
                     if angle > biggest_angle {
                         biggest_angle = angle;
-                        label_vecs = (*last, *first);
+                        label_vectors = (*first, *last);
+                        flip = true; // The only case when the label offset will have to be flipped (scale -1)
                     }
                     break;
                 }
             }
-            label_pos = {
-                // We get the bisector angle.
-                let bisector_angle = ((label_vecs.1.arg() - label_vecs.0.arg()).rem_euclid(2.0 * PI)) / 2.0 + label_vecs.0.arg();
 
-                // This is just the standard complex number formula.
-                let bisector_vec = Complex::new(bisector_angle.cos(), bisector_angle.sin()).normalize();
+            // We get the bisector angle.
+            let bisector_angle = (label_vectors.1.arg() + label_vectors.0.arg()) / 2.0;
 
-                // to do -> better scaling
-                let scale = 540.0 / biggest_angle.to_degrees().abs();
+            // This is just the standard complex number formula.
+            let mut bisector_vec = Complex::new(bisector_angle.cos(), bisector_angle.sin());
 
-                Complex::new(
-                    point.real + (bisector_vec.real * 3.0 * scale),
-                    point.imaginary + (bisector_vec.imaginary * 3.0 * scale),
-                )
+            // to do -> better scaling
+            if flip {
+                biggest_angle *= -1.0;
+                bisector_vec *= -1.0;
             }
-        }
 
-        label_pos
+            let scale = 540.0 / biggest_angle.to_degrees().abs();
+
+            bisector_vec * 3.0 * scale
+        }
     }
 }
 
 trait UnVar<T> {
     /// Returns the actual variable value.
-    fn un_var(&self, id: usize) -> Option<T>;
+    fn un_var(&self, id: VarIndex) -> Option<T>;
 }
 
 impl UnVar<Complex> for Projector {
-    fn un_var(&self, id: usize) -> Option<Complex> {
-        self.variables[id].meta.as_complex()
+    fn un_var(&self, id: VarIndex) -> Option<Complex> {
+        self.variables[id.0].meta.as_complex()
     }
 }
 
 impl UnVar<Line> for Projector {
-    fn un_var(&self, id: usize) -> Option<Line> {
-        self.variables[id].meta.as_line()
+    fn un_var(&self, id: VarIndex) -> Option<Line> {
+        self.variables[id.0].meta.as_line()
     }
 }
 
 impl UnVar<Circle> for Projector {
-    fn un_var(&self, id: usize) -> Option<Circle> {
-        self.variables[id].meta.as_circle()
+    fn un_var(&self, id: VarIndex) -> Option<Circle> {
+        self.variables[id.0].meta.as_circle()
     }
 }
 
@@ -279,7 +277,7 @@ impl Rendered {
     }
 }
 
-type MathVariable = Expr<Any<VarIndex>, ValueEnum>;
+type MathVariable = Expr<ValueEnum>;
 
 /// The final product passed to the drawers.
 #[derive(Serialize)]
@@ -287,7 +285,7 @@ pub struct Output {
     /// final product of the project function
     pub rendered: Vec<Rendered>,
     /// Entities used by the figure
-    pub entities: Vec<Entity<VarIndex, ValueEnum>>,
+    pub entities: Vec<Entity<ValueEnum>>,
     /// Variables used by the figure
     pub variables: Vec<MathVariable>,
     /// Picture size
@@ -328,7 +326,7 @@ impl Project<LineItem> for Projector {
     type Result = RenderedLine;
     
     fn project(&mut self, item: LineItem) -> Self::Result {
-        let mut ln_c = self.variables[item.id].meta.as_line().unwrap();
+        let mut ln_c: Line = self.un_var(item.id).unwrap();
         ln_c.origin = self.transform(ln_c.origin);
         let points = self.get_line_ends(ln_c);
         self.segments.push(points);
@@ -429,7 +427,7 @@ impl Project<CircleItem> for Projector {
     type Result = RenderedCircle;
 
     fn project(&mut self, item: CircleItem) -> Self::Result {
-        let circle = self.un_var(item.id).unwrap();
+        let circle: Circle = self.un_var(item.id).unwrap();
         let center = self.transform(circle.center);
         let radius = circle.radius * self.transform_.scale;
         self.circles.push((center, radius));
@@ -442,55 +440,55 @@ impl Project<CircleItem> for Projector {
     }
 }
 
-/// Function getting the points defining the angle from the Expression defining it.
-///
-/// # Panics
-/// If given invalid data.
-fn get_angle_points(
-    angle: &Number<VarIndex>,
-    variables: &[Expr<Any<VarIndex>, ValueEnum>],
-) -> (Complex, Complex, Complex) {
-    match angle {
-        Number::ThreePointAngle { p, q, r } => {
-            let arm1 = variables[p.0].meta.as_complex().unwrap();
-            let origin = variables[q.0].meta.as_complex().unwrap();
-            let arm2 = variables[r.0].meta.as_complex().unwrap();
-
-            (arm1, origin, arm2)
-        }
-        Number::ThreePointAngleDir { p, q, r } => {
-            let arm1 = variables[p.0].meta.as_complex().unwrap();
-            let origin = variables[q.0].meta.as_complex().unwrap();
-            let arm2 = variables[r.0].meta.as_complex().unwrap();
-
-            (arm1, origin, arm2)
-        }
-        Number::TwoLineAngle { k, l } => {
-            let ev_ln1 = variables[k.0].meta.as_line().unwrap();
-            let ev_ln2 = variables[l.0].meta.as_line().unwrap();
-
-            let origin = geometry::get_intersection(ev_ln1, ev_ln2);
-
-            (
-                ev_ln1.origin + ev_ln1.direction,
-                origin,
-                ev_ln2.origin + ev_ln2.direction,
-            )
-        }
-        _ => unreachable!(),
-    }
-}
+// /// Function getting the points defining the angle from the Expression defining it.
+// ///
+// /// # Panics
+// /// If given invalid data.
+// fn get_angle_points(
+//     angle: &ExprKind,
+//     variables: &[Expr<ValueEnum>],
+// ) -> (Complex, Complex, Complex) {
+//     match angle {
+//         ExprKind::ThreePointAngle { p, q, r } => {
+//             let arm1 = variables[p.0].meta.as_complex().unwrap();
+//             let origin = variables[q.0].meta.as_complex().unwrap();
+//             let arm2 = variables[r.0].meta.as_complex().unwrap();
+//
+//             (arm1, origin, arm2)
+//         }
+//         ExprKind::ThreePointAngleDir { p, q, r } => {
+//             let arm1 = variables[p.0].meta.as_complex().unwrap();
+//             let origin = variables[q.0].meta.as_complex().unwrap();
+//             let arm2 = variables[r.0].meta.as_complex().unwrap();
+//
+//             (arm1, origin, arm2)
+//         }
+//         ExprKind::TwoLineAngle { k, l } => {
+//             let ev_ln1 = variables[k.0].meta.as_line().unwrap();
+//             let ev_ln2 = variables[l.0].meta.as_line().unwrap();
+//
+//             let origin = geometry::get_intersection(ev_ln1, ev_ln2);
+//
+//             (
+//                 ev_ln1.origin + ev_ln1.direction,
+//                 origin,
+//                 ev_ln2.origin + ev_ln2.direction,
+//             )
+//         }
+//         _ => unreachable!(),
+//     }
+// }
 
 struct Transform {
     offset: Complex,
     scale: f64,
-    size: Complex
+    margin: Complex
 }
 
 impl Transform {
     /// Translates generator coordinates to projector coordinates.
     fn transform(&self, pt: Complex) -> Complex {
-        (pt - self.offset) * self.scale + self.size
+        (pt + self.offset) * self.scale + self.margin
     }
 }
 
@@ -526,30 +524,17 @@ impl Transform {
 
 /// Takes the figure and rendered adjustables and attempts to design a figure that can then be rendered in chosen format.
 pub fn project(
-    figure: Figure,
-    generated_points: &[ValueEnum],
+    figure: Generated,
     _flags: &Arc<Flags>,
     canvas_size: (usize, usize)
 ) -> Output {
-    let entities: Vec<_> = figure.entities
-        .into_iter()
-        .map(|ent| Entity {
-            kind: ent.kind,
-            meta: generated_points[ent.meta]
-        })
-        .collect();
-    let variables: Vec<_> = figure.variables
-        .into_iter()
-        .map(|var| Expr {
-            kind: var.kind,
-            meta: generated_points[var.meta]
-        })
-        .collect();
+    let entities: Vec<_> = figure.entities;
+    let variables: Vec<_> = figure.variables;
     let items = figure.items;
 
-    // Collect points (currently only the actual points, in the future also some more, like circle borders etc)
-    let points: Vec<_> = items.iter().flat_map(|x| match x {
-        Item::Point(pt) => variables[pt.id].meta.as_complex(),
+    // Collect points (currently only the actual points, in the future also some more, like circle borders etc.)
+    let points: Vec<_> = items.iter().filter_map(|x| match x {
+        Item::Point(pt) => variables[pt.id.0].meta.as_complex(),
         _ => None
     }).collect();
 
@@ -566,7 +551,7 @@ pub fn project(
     let offset = -top_left;
 
     // Frame bottom right point.
-    let mut furthest = Complex::new(
+    let furthest = Complex::new(
         points.iter()
             .map(|pt| pt.real)
             .reduce(f64::max).unwrap_or_default(),
@@ -574,7 +559,11 @@ pub fn project(
             .map(|pt| pt.imaginary)
             .reduce(f64::max).unwrap_or_default()
     );
-    let total_size = furthest + offset;
+
+    // println!("{top_left}/{furthest}");
+    let mut total_size = furthest + offset;
+    total_size.real = f64::max(total_size.real, 0.1);
+    total_size.imaginary = f64::max(total_size.imaginary, 0.1);
 
     #[allow(clippy::cast_precision_loss)]
     let size1 = Complex::new(canvas_size.0 as f64, canvas_size.1 as f64);
@@ -587,12 +576,15 @@ pub fn project(
         size09.imaginary / total_size.imaginary,
     );
 
+    // println!("Scale: {scale}");
+    // println!("Frame size: {total_size}");
+
     // let points: Vec<Complex> = points.into_iter().map(|x| x * scale + size005).collect();
     let mut projector = Projector {
         transform_: Transform {
             offset,
             scale,
-            size: size005
+            margin: size005
         },
         variables,
         width: size1.real,
@@ -605,7 +597,7 @@ pub fn project(
         .map(|v| projector.project(v))
         .collect();
 
-    for point in rendered.iter_mut().flat_map(Rendered::as_point_mut) {
+    for point in rendered.iter_mut().filter_map(Rendered::as_point_mut) {
         point.label_position = projector.get_label_position(point.position);
     }
 

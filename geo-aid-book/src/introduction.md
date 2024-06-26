@@ -14,8 +14,8 @@ First, the input script is compiled into a series of rules and definitions. All 
 
 * The current version of the data passes through the Magic Box, which adjusts the points/reals (adjustables) by a random vector based on the adjustable's quality.
 * The adjusted data is then rated by the critic, which checks how well the new figure meets the given requirements (rules) and gives each adjustable a score in 0-1 range.
-* If the new data is considered better than the previous one, it replaces the current version. Otherwise it gets discarder.
+* If the new data is considered better than the previous one, it replaces the current version. Otherwise, it gets discarded.
 
-The above cycle runs for each of the 512 (by default) threads and after each cycle a new version gets chosen (or all new versions get discarded). The generation process lasts until a certain requirement is met, e. g. the average overall figure quality increase over the last few thousands of cycles does not exceed a certain value.
+The above cycle runs for each of the 512 (by default) threads and after each cycle a new version gets chosen (or all new versions get discarded). The generation process lasts until a certain requirement is met, e.g. the average overall figure quality increase over the last few thousands of cycles does not exceed a certain value.
 
 After an image is generated, the data goes to the projector, which designs how it should be rendered and passed on to the selected renderer, which creates the final output.

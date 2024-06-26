@@ -199,7 +199,7 @@ pub enum Error {
     RequiredFlagNotSet {
         flag_name: &'static str,
         required_because: Span,
-        flagdef_span: Option<Span>,
+        definition_span: Option<Span>,
         available_values: &'static [&'static str],
     },
     ComparisonDoesNotExist {
@@ -213,7 +213,7 @@ pub enum Error {
         error_span: Span,
         parsed_special: String,
     },
-    SpecialNotRecongised {
+    SpecialNotRecognised {
         error_span: Span,
         code: String,
         suggested: Option<String>,
@@ -282,10 +282,10 @@ impl Error {
             Self::InconsistentIterators {
                 first_span,
                 first_length,
-                occurred_span: occured_span,
-                occurred_length: occured_length,
+                occurred_span,
+                occurred_length,
                 error_span,
-            } => DiagnosticData::new(&"inconsitent iterator lengths")
+            } => DiagnosticData::new(&"inconsistent iterator lengths")
                 .add_span(error_span)
                 .add_annotation(
                     first_span,
@@ -293,9 +293,9 @@ impl Error {
                     &format!("First iterator with length {first_length} here."),
                 )
                 .add_annotation(
-                    occured_span,
+                    occurred_span,
                     AnnotationKind::Note,
-                    &format!("Inconsistensy (iterator with length {occured_length}) here."),
+                    &format!("Inconsistency (iterator with length {occurred_length}) here."),
                 ),
             Self::InconsistentTypes {
                 expected,
@@ -500,7 +500,7 @@ impl Error {
                         |v| format!("`{v}`")
                     ).collect::<Vec<String>>().join(", ")))
             }
-            Self::RequiredFlagNotSet { flag_name, required_because, flagdef_span, available_values } => {
+            Self::RequiredFlagNotSet { flag_name, required_because, definition_span: flagdef_span, available_values } => {
                 DiagnosticData::new(&format!("you must set a value for flag `{flag_name}`."))
                     .add_annotation(required_because, AnnotationKind::Note, &"Required because of this line.")
                     .add_annotation(required_because, AnnotationKind::Help, &format!("Possible values: {}", available_values.iter().map(
@@ -545,7 +545,7 @@ impl Error {
                                     error_span.start.line, error_span.start.column + found.len() + 1
                                 ),
                                 new_content: vec![
-                                    format!("]")
+                                    String::from("]")
                                 ]
                             }
                         ]
@@ -554,7 +554,7 @@ impl Error {
                     d
                 }
             }
-            Self::SpecialNotRecongised {
+            Self::SpecialNotRecognised {
                 error_span,
                 code,
                 suggested
@@ -584,7 +584,7 @@ impl Error {
                     .add_annotation(first_span, AnnotationKind::Help, &"first defined here")
             }
             Self::InvalidPC { error_span } => {
-                DiagnosticData::new(&"point collections in this place are amgiuous and therefore not valid")
+                DiagnosticData::new(&"point collections in this place are ambiguous and therefore not valid")
                     .add_span(error_span)
             }
             Self::ZeroDenominator { error_span } => {
@@ -622,7 +622,7 @@ const fn unit_count() -> usize {
 }
 
 /// Defines a complex unit: a product of simple units.
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Default)]
 pub struct ComplexUnit([CompExponent; unit_count()]);
 
 pub mod unit {
@@ -824,7 +824,7 @@ impl<T: ?Sized> Hash for HashableRc<T> {
 
 impl<T: ?Sized> PartialEq for HashableRc<T> {
     fn eq(&self, other: &Self) -> bool {
-        Rc::as_ptr(&self.0) == Rc::as_ptr(&other.0)
+        std::ptr::addr_eq(Rc::as_ptr(&self.0), Rc::as_ptr(&other.0))
     }
 }
 

@@ -32,8 +32,7 @@ use crate::script::figure::MathString;
 
 #[derive(Debug, Default)]
 pub struct Raw {
-    content: String,
-    canvas_size: (usize, usize),
+    content: String
 }
 
 impl Raw {

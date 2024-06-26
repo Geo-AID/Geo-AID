@@ -67,7 +67,7 @@ impl EvaluateProgram {
     /// The program must be valid.
     pub unsafe fn evaluate(&self, memory: &mut [Value], evaluation: &mut [f64]) {
         // Clear the current evaluation.
-        for x in evaluation {
+        for x in evaluation.iter_mut() {
             *x = 0.0;
         }
 
@@ -78,14 +78,13 @@ impl EvaluateProgram {
         self.base.execute(memory);
 
         // Calculate adjustable qualities (weighed mean). Qualities are expected to be normalized.
-        for rule in 0..self.rule_count {
-            let quality = memory[rule].complex.real;
+        for q in memory.iter().skip(self.base.constants.len()).take(self.rule_count) {
+            let quality = q.complex.real;
 
-            for adj in 0..self.adjustables.len() {
-                evaluation[adj] += quality * weight_it.next().unwrap();
+            for ev in evaluation.iter_mut().take(self.adjustables.len()) {
+                *ev += quality * weight_it.next().unwrap();
             }
         }
-
     }
 }
 

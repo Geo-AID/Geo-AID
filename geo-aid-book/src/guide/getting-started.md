@@ -2,7 +2,7 @@
 
 ## Installation
 
-Before you start using Geo-AID, you'll need to install it. Unfortunately, it does not come in the form of precompiled binaries and you'll need some other tools to build it. First, [install Rust and Cargo](https://www.rust-lang.org/). Once you're done, there are two ways of setting up Geo-AID:
+Before you start using Geo-AID, you'll need to install it. Unfortunately, it does not come in the form of precompiled binaries, and you'll need some other tools to build it. First, [install Rust and Cargo](https://www.rust-lang.org/). Once you're done, there are two ways of setting up Geo-AID:
 
 The first way is to simply use the `cargo install` method:
 
@@ -62,7 +62,7 @@ After a short wait a new file `figure.svg` should show up. Open it in any SVG pr
 
 Ok, but what exactly happened here? Let's take a closer look at the script we've just given to Geo-AID:
 
-First, we have the three `let` statements. These statements are used to create variables. In our case, these variables are points created with the `Point()` function. You can also add special display propertes to the variable definitions to change how they are rendered. For example, if you change the first line to the following:
+First, we have the three `let` statements. These statements are used to create variables. In our case, these variables are points created with the `Point()` function. You can also add special display properties to the variable definitions to change how they are rendered. For example, if you change the first line to the following:
 
 ```
 let A [label = G] = Point();
@@ -123,8 +123,8 @@ Geo-AID is capable of performing some implicit conversions:
 * Unknown-unit scalars (usually literals) can be converted into a scalar with a distance unit.
 * A point collection consisting of two points can be converted into a line or the distance between the two points, depending on the context.
 * A point collection of length one is always automatically converted into a point.
-* When performing mutliplication/division over a scalar with a unit and a scalar with an unknwon unit, the latter is automatically converted into a unitless scalar (standard scalar in mathematics).
-* Any variable defined with an unknown-unit scalar is assumed to be unitless.
+* When performing multiplication/division over a scalar with a unit and a scalar with an unknown unit, the latter is automatically converted into a unitless scalar (standard scalar in mathematics).
+* Any variable defined with an unknown-unit scalar is assumed to be unit-less.
 
 ## Shortening the code with iterators
 
@@ -167,7 +167,7 @@ AB < OI;
 
 To use implicit iterators inside a function call, simply put parentheses around them: `intersection(AB, (KL, XY))`
 
-Another type of an iterator is an *explicit iterator*. These are written in the following way:
+Another type of iterator is an *explicit iterator*. These are written in the following way:
 
 ```
 AB = $1(AC, BC);

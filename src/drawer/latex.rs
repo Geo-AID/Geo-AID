@@ -38,15 +38,15 @@ pub struct Latex {
 }
 
 impl Latex {
-    fn math_to_latex(&self, math: &MathString) -> String {
+    fn math_to_latex(math: &MathString) -> String {
         let mut s = String::new();
 
         for c in &math.chars {
             match c {
                 MathChar::Ascii(c) => s.push(*c),
-                MathChar::Special(special) => s += match special {
-                    MathSpecial::Quote => "\"",
-                    s => &format!("\\{}", figure::SPECIAL_MATH[s.to_usize().unwrap()])
+                MathChar::Special(special) => match special {
+                    MathSpecial::Quote => s += "\"",
+                    special => s += &format!("\\{}", figure::SPECIAL_MATH[special.to_usize().unwrap()])
                 },
                 MathChar::SetIndex(i) => s += match i {
                     MathIndex::Normal => "}",
@@ -101,7 +101,10 @@ impl Draw for Latex {
                 \begin{tikzpicture}
             ",
         );
-        self.scale = f64::min(10.0/output.canvas_size.0 as f64, 10.0/output.canvas_size.1 as f64);
+        #[allow(clippy::cast_precision_loss)]
+        let size = (output.canvas_size.0 as f64, output.canvas_size.1 as f64);
+
+        self.scale = f64::min(10.0/size.0, 10.0/size.1);
     }
 
     fn draw_point(&mut self, point: &RenderedPoint) {
@@ -109,7 +112,7 @@ impl Draw for Latex {
         let label_pos = point.label_position * self.scale + pos;
         let id = format!("expr{}", point.item.id);
 
-        let label = self.math_to_latex(&point.item.label);
+        let label = Self::math_to_latex(&point.item.label);
         self.content += &format!(
             r#"
                 \coordinate ({}) at ({}, {}); \fill[black] ({}) circle (1pt);

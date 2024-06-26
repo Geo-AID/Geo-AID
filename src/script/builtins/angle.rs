@@ -48,9 +48,10 @@ fn angle_function_point_point_point(
 }
 
 /// ```
+/// # use geo_aid::script::figure::Style;
 /// struct Associated {
 ///     display_arms: bool,
-///     amrs_style: Style
+///     arms_style: Style
 /// }
 /// ```
 #[derive(Debug)]
@@ -72,13 +73,15 @@ pub fn display_angle_arms(build: &mut Build, a_expr: &Expr<Point>, b_expr: &Expr
                 c_expr.clone_without_node(),
             ));
 
+            let id = build.load(&line_a);
             build.add(LineItem {
-                id: build.load(&line_a),
+                id,
                 label: MathString::new(Span::empty()),
                 style: arms_style
             });
+            let id = build.load(&line_c);
             build.add(LineItem {
-                id: build.load(&line_c),
+                id,
                 label: MathString::new(Span::empty()),
                 style: arms_style
             });
