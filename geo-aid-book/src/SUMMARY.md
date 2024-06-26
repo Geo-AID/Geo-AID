@@ -9,7 +9,7 @@
 - [Renderers](./renderers.md)
 - [GeoScript reference](./reference.md)
     - [Syntax](./reference/syntax.md)
-        - [Display Properties](./reference/syntax/display-properties.md)
+        - [Properties](./reference/syntax/properties.md)
         - [Expressions](./reference/syntax/expressions.md)
         - [Figure](./reference/syntax/figure.md)
         - [Flags](./reference/syntax/flags.md)

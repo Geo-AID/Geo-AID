@@ -29,10 +29,8 @@ use std::{
 use num_traits::{One, Zero};
 use serde::Serialize;
 
-use crate::generator::{expression::Weights, fast_float::FastFloat};
 use crate::{
     cli::{AnnotationKind, Change, DiagnosticData, Fix},
-    generator::expression::{AnyExpr, Expression, PointExpr, ScalarExpr},
     span,
 };
 
@@ -40,8 +38,8 @@ use self::token::{number::CompExponent, NamedIdent, Span, Token};
 use self::{figure::SPECIAL_MATH, parser::Type};
 
 mod builtins;
-pub mod compile;
 pub mod figure;
+pub mod math;
 pub mod parser;
 pub mod token;
 pub mod unroll;
@@ -201,7 +199,7 @@ pub enum Error {
     RequiredFlagNotSet {
         flag_name: &'static str,
         required_because: Span,
-        flagdef_span: Option<Span>,
+        definition_span: Option<Span>,
         available_values: &'static [&'static str],
     },
     ComparisonDoesNotExist {
@@ -215,7 +213,7 @@ pub enum Error {
         error_span: Span,
         parsed_special: String,
     },
-    SpecialNotRecongised {
+    SpecialNotRecognised {
         error_span: Span,
         code: String,
         suggested: Option<String>,
@@ -284,10 +282,10 @@ impl Error {
             Self::InconsistentIterators {
                 first_span,
                 first_length,
-                occurred_span: occured_span,
-                occurred_length: occured_length,
+                occurred_span,
+                occurred_length,
                 error_span,
-            } => DiagnosticData::new(&"inconsitent iterator lengths")
+            } => DiagnosticData::new(&"inconsistent iterator lengths")
                 .add_span(error_span)
                 .add_annotation(
                     first_span,
@@ -295,9 +293,9 @@ impl Error {
                     &format!("First iterator with length {first_length} here."),
                 )
                 .add_annotation(
-                    occured_span,
+                    occurred_span,
                     AnnotationKind::Note,
-                    &format!("Inconsistensy (iterator with length {occured_length}) here."),
+                    &format!("Inconsistency (iterator with length {occurred_length}) here."),
                 ),
             Self::InconsistentTypes {
                 expected,
@@ -502,7 +500,7 @@ impl Error {
                         |v| format!("`{v}`")
                     ).collect::<Vec<String>>().join(", ")))
             }
-            Self::RequiredFlagNotSet { flag_name, required_because, flagdef_span, available_values } => {
+            Self::RequiredFlagNotSet { flag_name, required_because, definition_span: flagdef_span, available_values } => {
                 DiagnosticData::new(&format!("you must set a value for flag `{flag_name}`."))
                     .add_annotation(required_because, AnnotationKind::Note, &"Required because of this line.")
                     .add_annotation(required_because, AnnotationKind::Help, &format!("Possible values: {}", available_values.iter().map(
@@ -547,7 +545,7 @@ impl Error {
                                     error_span.start.line, error_span.start.column + found.len() + 1
                                 ),
                                 new_content: vec![
-                                    format!("]")
+                                    String::from("]")
                                 ]
                             }
                         ]
@@ -556,7 +554,7 @@ impl Error {
                     d
                 }
             }
-            Self::SpecialNotRecongised {
+            Self::SpecialNotRecognised {
                 error_span,
                 code,
                 suggested
@@ -586,7 +584,7 @@ impl Error {
                     .add_annotation(first_span, AnnotationKind::Help, &"first defined here")
             }
             Self::InvalidPC { error_span } => {
-                DiagnosticData::new(&"point collections in this place are amgiuous and therefore not valid")
+                DiagnosticData::new(&"point collections in this place are ambiguous and therefore not valid")
                     .add_span(error_span)
             }
             Self::ZeroDenominator { error_span } => {
@@ -597,22 +595,6 @@ impl Error {
                 DiagnosticData::new(&"expected function, found, value")
                     .add_span(error_span)
             }
-        }
-    }
-}
-
-/// Defines an object with assigned weight
-#[derive(Debug, Clone, Serialize)]
-pub struct Weighed<T> {
-    pub object: T,
-    pub weight: FastFloat,
-}
-
-impl<T> Weighed<T> {
-    pub fn one(object: T) -> Self {
-        Self {
-            object,
-            weight: FastFloat::One,
         }
     }
 }
@@ -635,9 +617,13 @@ impl Mul for SimpleUnit {
     }
 }
 
+const fn unit_count() -> usize {
+    SimpleUnit::Scalar as usize
+}
+
 /// Defines a complex unit: a product of simple units.
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize)]
-pub struct ComplexUnit([CompExponent; SimpleUnit::Scalar as usize]);
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Default)]
+pub struct ComplexUnit([CompExponent; unit_count()]);
 
 pub mod unit {
     use super::{ComplexUnit, SimpleUnit};
@@ -672,7 +658,7 @@ pub mod ty {
 impl ComplexUnit {
     #[must_use]
     pub const fn new(simple: SimpleUnit) -> Self {
-        let mut arr = [CompExponent::new_raw(0, 1); SimpleUnit::Scalar as usize];
+        let mut arr = [CompExponent::new_raw(0, 1); unit_count()];
 
         match simple {
             SimpleUnit::Scalar => (),
@@ -781,7 +767,7 @@ impl Div<&ComplexUnit> for ComplexUnit {
 }
 
 impl Deref for ComplexUnit {
-    type Target = [CompExponent; SimpleUnit::Scalar as usize];
+    type Target = [CompExponent; unit_count()];
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -791,96 +777,6 @@ impl Deref for ComplexUnit {
 impl DerefMut for ComplexUnit {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
-    }
-}
-
-/// Defines the kind and information about criteria the figure must obey.
-#[derive(Debug)]
-pub enum CriteriaKind {
-    /// Equality. Quality rises quickly as two values approach each other, drops quickly as their difference grows.
-    EqualScalar(Arc<Expression<ScalarExpr>>, Arc<Expression<ScalarExpr>>),
-    /// Equality. Quality rises quickly as two values approach each other, drops quickly as their difference grows.
-    EqualPoint(Arc<Expression<PointExpr>>, Arc<Expression<PointExpr>>),
-    /// Less. Quality starts rising on equality.
-    Less(Arc<Expression<ScalarExpr>>, Arc<Expression<ScalarExpr>>),
-    /// Greater. Quality starts rising on equality.
-    Greater(Arc<Expression<ScalarExpr>>, Arc<Expression<ScalarExpr>>),
-    /// Inverts the criteria. The quality is calculated as 1 - the quality of the inverted criteria.
-    Inverse(Box<CriteriaKind>),
-    /// Bias. Always evaluates to 1.0. Artificially raises quality for everything contained  in the arc.
-    Bias(Arc<Expression<AnyExpr>>),
-    /// Maximal quality of the given rules.
-    Alternative(Vec<CriteriaKind>),
-}
-
-impl CriteriaKind {
-    pub fn collect(&self, exprs: &mut Vec<usize>) {
-        match self {
-            CriteriaKind::EqualScalar(lhs, rhs)
-            | CriteriaKind::Less(lhs, rhs)
-            | CriteriaKind::Greater(lhs, rhs) => {
-                lhs.collect(exprs);
-                rhs.collect(exprs);
-            }
-            CriteriaKind::Inverse(v) => v.collect(exprs),
-            CriteriaKind::Bias(v) => v.collect(exprs),
-            CriteriaKind::EqualPoint(lhs, rhs) => {
-                lhs.collect(exprs);
-                rhs.collect(exprs);
-            }
-            CriteriaKind::Alternative(v) => {
-                for crit in v {
-                    crit.collect(exprs);
-                }
-            }
-        }
-    }
-
-    #[must_use]
-    pub fn get_weights(&self) -> Weights {
-        match self {
-            Self::EqualScalar(lhs, rhs) | Self::Less(lhs, rhs) | Self::Greater(lhs, rhs) => {
-                lhs.weights.clone() + &rhs.weights
-            }
-            Self::Inverse(v) => v.get_weights(),
-            Self::Bias(v) => v.weights.clone(),
-            Self::EqualPoint(lhs, rhs) => lhs.weights.clone() + &rhs.weights,
-            Self::Alternative(v) => {
-                let mut weights = Weights::empty();
-
-                for crit in v {
-                    weights += &crit.get_weights();
-                }
-
-                weights
-            }
-        }
-    }
-}
-
-/// Defines a weighed piece of criteria the figure must obey.
-#[derive(Debug)]
-pub struct Criteria {
-    kind: CriteriaKind,
-    weights: Weights,
-}
-
-impl Criteria {
-    #[must_use]
-    pub fn new(kind: CriteriaKind, weight: FastFloat) -> Self {
-        let weights = kind.get_weights().normalize() * weight;
-
-        Self { kind, weights }
-    }
-
-    #[must_use]
-    pub const fn get_kind(&self) -> &CriteriaKind {
-        &self.kind
-    }
-
-    #[must_use]
-    pub const fn get_weights(&self) -> &Weights {
-        &self.weights
     }
 }
 
@@ -928,7 +824,7 @@ impl<T: ?Sized> Hash for HashableRc<T> {
 
 impl<T: ?Sized> PartialEq for HashableRc<T> {
     fn eq(&self, other: &Self) -> bool {
-        Rc::as_ptr(&self.0) == Rc::as_ptr(&other.0)
+        std::ptr::addr_eq(Rc::as_ptr(&self.0), Rc::as_ptr(&other.0))
     }
 }
 

@@ -22,13 +22,14 @@ use std::{collections::HashMap, fmt::Debug, ops::Deref};
 
 use crate::{
     script::{
-        compile::{Compile, Compiler},
-        figure::{Figure, MathString, Style},
+        figure::{MathString, Style},
         parser::{FromProperty, Parse, PropertyValue},
         Error,
     },
     span,
 };
+use crate::script::figure::{CircleItem, LineItem, PointItem, RayItem};
+use crate::script::math::Build;
 
 use super::{
     AnyExpr, Bundle, Circle, CloneWithNode, CompileContext, Displayed, Dummy, Expr, Line, Point,
@@ -41,13 +42,13 @@ pub trait Node: Debug {
 
     fn get_display(&self) -> bool;
 
-    fn build(self: Box<Self>, compiler: &mut Compiler, figure: &mut Figure);
+    fn build(self: Box<Self>, build: &mut Build);
 
-    fn build_unboxed(self, compiler: &mut Compiler, figure: &mut Figure)
+    fn build_unboxed(self, compiler: &mut Build)
     where
         Self: Sized,
     {
-        Box::new(self).build(compiler, figure);
+        Box::new(self).build(compiler);
     }
 }
 
@@ -252,10 +253,10 @@ impl Node for CollectionNode {
         self.display.get_copied()
     }
 
-    fn build(self: Box<Self>, compiler: &mut Compiler, figure: &mut Figure) {
+    fn build(self: Box<Self>, compiler: &mut Build) {
         if self.display.unwrap() {
             for child in self.children {
-                child.build(compiler, figure);
+                child.build(compiler);
             }
         }
     }
@@ -264,8 +265,7 @@ impl Node for CollectionNode {
 pub trait BuildAssociated<T: Node>: Debug {
     fn build_associated(
         self: Box<Self>,
-        compiler: &mut Compiler,
-        figure: &mut Figure,
+        build: &mut Build,
         associated: &mut HierarchyNode<T>,
     );
 }
@@ -331,24 +331,24 @@ pub struct HierarchyNode<T: Node> {
 }
 
 impl<T: Node> Node for HierarchyNode<T> {
-    fn get_display(&self) -> bool {
-        self.root.get_display()
-    }
-
     fn set_display(&mut self, display: bool) {
         self.root.set_display(display);
     }
 
-    fn build(mut self: Box<Self>, compiler: &mut Compiler, figure: &mut Figure) {
+    fn get_display(&self) -> bool {
+        self.root.get_display()
+    }
+
+    fn build(mut self: Box<Self>, build: &mut Build) {
         if self.root.get_display() {
             if let Some(associated) = self.associated.take() {
-                associated.build_associated(compiler, figure, &mut self);
+                associated.build_associated(build, &mut self);
             }
 
-            self.root.build(compiler, figure);
+            self.root.build(build);
 
             for child in self.children {
-                child.build(compiler, figure);
+                child.build(build);
             }
         }
     }
@@ -459,10 +459,10 @@ impl Node for PCNode {
         self.display.get_copied()
     }
 
-    fn build(self: Box<Self>, compiler: &mut Compiler, figure: &mut Figure) {
+    fn build(self: Box<Self>, build: &mut Build) {
         if self.display.unwrap() {
             for child in self.children.into_iter().flatten() {
-                child.build_unboxed(compiler, figure);
+                child.build_unboxed(build);
             }
         }
     }
@@ -499,7 +499,7 @@ impl_from_for_any! {Unknown}
 
 impl AnyExprNode {
     #[must_use]
-    pub fn as_dyn(self) -> Box<dyn Node> {
+    pub fn to_dyn(self) -> Box<dyn Node> {
         match self {
             Self::Point(v) => Box::new(v),
             Self::Line(v) => Box::new(v),
@@ -514,7 +514,7 @@ impl AnyExprNode {
     /// # Panics
     /// If the node is not a point node.
     #[must_use]
-    pub fn as_point(self) -> HierarchyNode<<Point as Displayed>::Node> {
+    pub fn to_point(self) -> HierarchyNode<<Point as Displayed>::Node> {
         if let Self::Point(v) = self {
             v
         } else {
@@ -525,7 +525,7 @@ impl AnyExprNode {
     /// # Panics
     /// If the node is not a line node.
     #[must_use]
-    pub fn as_line(self) -> HierarchyNode<<Line as Displayed>::Node> {
+    pub fn to_line(self) -> HierarchyNode<<Line as Displayed>::Node> {
         if let Self::Line(v) = self {
             v
         } else {
@@ -536,7 +536,7 @@ impl AnyExprNode {
     /// # Panics
     /// If the node is not a circle node.
     #[must_use]
-    pub fn as_circle(self) -> HierarchyNode<<Circle as Displayed>::Node> {
+    pub fn to_circle(self) -> HierarchyNode<<Circle as Displayed>::Node> {
         if let Self::Circle(v) = self {
             v
         } else {
@@ -547,7 +547,7 @@ impl AnyExprNode {
     /// # Panics
     /// If the node is not a scalar node.
     #[must_use]
-    pub fn as_scalar(self) -> HierarchyNode<<Scalar as Displayed>::Node> {
+    pub fn to_scalar(self) -> HierarchyNode<<Scalar as Displayed>::Node> {
         if let Self::Scalar(v) = self {
             v
         } else {
@@ -558,7 +558,7 @@ impl AnyExprNode {
     /// # Panics
     /// If the node is not a point collection node.
     #[must_use]
-    pub fn as_point_collection(self) -> HierarchyNode<<PointCollection as Displayed>::Node> {
+    pub fn to_point_collection(self) -> HierarchyNode<<PointCollection as Displayed>::Node> {
         if let Self::PointCollection(v) = self {
             v
         } else {
@@ -569,7 +569,7 @@ impl AnyExprNode {
     /// # Panics
     /// If the node is not a bundle node.
     #[must_use]
-    pub fn as_bundle(self) -> HierarchyNode<<Bundle as Displayed>::Node> {
+    pub fn to_bundle(self) -> HierarchyNode<<Bundle as Displayed>::Node> {
         if let Self::Bundle(v) = self {
             v
         } else {
@@ -580,7 +580,7 @@ impl AnyExprNode {
     /// # Panics
     /// If the node is not an unknown node.
     #[must_use]
-    pub fn as_unknown(self) -> HierarchyNode<<Unknown as Displayed>::Node> {
+    pub fn to_unknown(self) -> HierarchyNode<<Unknown as Displayed>::Node> {
         if let Self::Unknown(v) = self {
             v
         } else {
@@ -614,15 +614,15 @@ impl Node for AnyExprNode {
         }
     }
 
-    fn build(self: Box<Self>, compiler: &mut Compiler, figure: &mut Figure) {
+    fn build(self: Box<Self>, build: &mut Build) {
         match *self {
-            Self::Point(v) => v.build_unboxed(compiler, figure),
-            Self::Line(v) => v.build_unboxed(compiler, figure),
-            Self::Circle(v) => v.build_unboxed(compiler, figure),
-            Self::Scalar(v) => v.build_unboxed(compiler, figure),
-            Self::PointCollection(v) => v.build_unboxed(compiler, figure),
-            Self::Bundle(v) => v.build_unboxed(compiler, figure),
-            Self::Unknown(v) => v.build_unboxed(compiler, figure),
+            Self::Point(v) => v.build_unboxed(build),
+            Self::Line(v) => v.build_unboxed(build),
+            Self::Circle(v) => v.build_unboxed(build),
+            Self::Scalar(v) => v.build_unboxed(build),
+            Self::PointCollection(v) => v.build_unboxed(build),
+            Self::Bundle(v) => v.build_unboxed(build),
+            Self::Unknown(v) => v.build_unboxed(build),
         }
     }
 }
@@ -679,11 +679,11 @@ impl Node for BundleNode {
         self.display.get_copied()
     }
 
-    fn build(self: Box<Self>, compiler: &mut Compiler, figure: &mut Figure) {
+    fn build(self: Box<Self>, build: &mut Build) {
         if self.display.get_copied() {
             for mut child in self.children.into_values() {
                 if let Some(node) = child.replace_node(None) {
-                    node.build_unboxed(compiler, figure);
+                    node.build_unboxed(build);
                 }
             }
         }
@@ -704,13 +704,13 @@ impl Dummy for EmptyNode {
 }
 
 impl Node for EmptyNode {
+    fn set_display(&mut self, _display: bool) {}
+
     fn get_display(&self) -> bool {
         false
     }
 
-    fn set_display(&mut self, _display: bool) {}
-
-    fn build(self: Box<Self>, _compiler: &mut Compiler, _figure: &mut Figure) {}
+    fn build(self: Box<Self>, _build: &mut Build) {}
 }
 
 #[derive(Debug)]
@@ -741,35 +741,33 @@ impl Dummy for PointNode {
 }
 
 impl Node for PointNode {
-    fn get_display(&self) -> bool {
-        self.display.get_copied()
-    }
-
     fn set_display(&mut self, display: bool) {
         self.display.set(display);
     }
 
-    fn build(self: Box<Self>, compiler: &mut Compiler, figure: &mut Figure) {
-        if self.display.unwrap() && !self.is_dummy() {
-            if !self.display_label.unwrap()
-                || (self.label.as_ref().is_empty() && self.default_label.is_empty())
-            {
-                return;
-            }
+    fn get_display(&self) -> bool {
+        self.display.get_copied()
+    }
 
-            figure.points.push((
-                compiler.compile(&self.expr),
-                if self.display_label.unwrap() {
-                    if self.label.as_ref().is_empty() {
-                        // println!("{} as {}", self.expr, self.default_label);
-                        self.default_label
+    fn build(self: Box<Self>, build: &mut Build) {
+        if self.display.unwrap() && !self.is_dummy() {
+            let id = build.load(&self.expr);
+            build.add(
+                PointItem {
+                    id,
+                    label: if self.display_label.unwrap() {
+                        if self.label.as_ref().is_empty() {
+                            // println!("{} as {}", self.expr, self.default_label);
+                            self.default_label
+                        } else {
+                            self.label.unwrap()
+                        }
                     } else {
-                        self.label.unwrap()
-                    }
-                } else {
-                    MathString::new(span!(0, 0, 0, 0))
-                },
-            ));
+                        MathString::new(span!(0, 0, 0, 0))
+                    },
+                    display_dot: self.display_dot.unwrap(),
+                }
+            );
         }
     }
 }
@@ -823,30 +821,33 @@ impl Dummy for CircleNode {
 }
 
 impl Node for CircleNode {
-    fn get_display(&self) -> bool {
-        self.display.get_copied()
-    }
-
     fn set_display(&mut self, display: bool) {
         self.display.set(display);
     }
 
-    fn build(self: Box<Self>, compiler: &mut Compiler, figure: &mut Figure) {
-        if self.display.unwrap() && !self.is_dummy() {
-            figure.circles.push((
-                compiler.compile(&self.expr),
-                Style::Solid, // if self.display_label.unwrap() {
-                              //     let label = self.label.unwrap();
+    fn get_display(&self) -> bool {
+        self.display.get_copied()
+    }
 
-                              //     if label.is_empty() {
-                              //         self.default_label
-                              //     } else {
-                              //         label
-                              //     }
-                              // } else {
-                              //     MathString::new()
-                              // }
-            ));
+    fn build(self: Box<Self>, build: &mut Build) {
+        if self.display.unwrap() && !self.is_dummy() {
+            let id = build.load(&self.expr);
+            build.add(
+                CircleItem {
+                    id,
+                    label: if self.display_label.unwrap() {
+                        if self.label.as_ref().is_empty() {
+                            // println!("{} as {}", self.expr, self.default_label);
+                            self.default_label
+                        } else {
+                            self.label.unwrap()
+                        }
+                    } else {
+                        MathString::new(span!(0, 0, 0, 0))
+                    },
+                    style: self.style.unwrap()
+                }
+            );
         }
     }
 }
@@ -965,37 +966,48 @@ impl Dummy for LineNode {
 }
 
 impl Node for LineNode {
-    fn get_display(&self) -> bool {
-        self.display.get_copied()
-    }
-
     fn set_display(&mut self, display: bool) {
         self.display.set(display);
     }
 
-    fn build(self: Box<Self>, compiler: &mut Compiler, figure: &mut Figure) {
-        if self.display.unwrap() && !self.is_dummy() {
-            // if self.display_label.unwrap() {
-            //     let label = self.label.unwrap();
+    fn get_display(&self) -> bool {
+        self.display.get_copied()
+    }
 
-            //     if label.is_empty() {
-            //         self.default_label
-            //     } else {
-            //         label
-            //     }
-            // } else {
-            //     MathString::new()
-            // }
+    fn build(self: Box<Self>, build: &mut Build) {
+        if self.display.unwrap() && !self.is_dummy() {
+            let label = if self.display_label.unwrap() {
+                let label = self.label.unwrap();
+
+                if label.is_empty() {
+                    self.default_label
+                } else {
+                    label
+                }
+            } else {
+                MathString::new(span!(0, 0, 0, 0))
+            };
+            let style = self.style.unwrap();
 
             match self.line_type.unwrap() {
-                LineType::Line => figure
-                    .lines
-                    .push((compiler.compile(&self.expr), Style::Solid)),
+                LineType::Line => {
+                    let id = build.load(&self.expr);
+                    build.add(LineItem {
+                        id,
+                        label,
+                        style,
+                    });
+                },
                 LineType::Ray => match &self.expr.data.as_ref() {
                     Line::LineFromPoints(a, b) => {
-                        figure
-                            .rays
-                            .push((compiler.compile(a), compiler.compile(b), Style::Solid));
+                        let p_id = build.load(a);
+                        let q_id = build.load(b);
+                        build.add(RayItem {
+                            p_id,
+                            q_id,
+                            label,
+                            style
+                        });
                     }
                     Line::AngleBisector(a, b, c) => {
                         let x = Expr::new_spanless(Point::LineLineIntersection(
@@ -1006,19 +1018,29 @@ impl Node for LineNode {
                             self.expr.clone_without_node(),
                         ));
 
-                        figure
-                            .rays
-                            .push((compiler.compile(b), compiler.compile(&x), Style::Solid));
+                        let p_id = build.load(b);
+                        let q_id = build.load(&x);
+                        build.add(RayItem {
+                            p_id,
+                            q_id,
+                            label,
+                            style
+                        });
                     }
                     _ => unreachable!(),
                 },
                 LineType::Segment => match &self.expr.data.as_ref() {
-                    Line::LineFromPoints(a, b) => figure.segments.push((
-                        compiler.compile(a),
-                        compiler.compile(b),
-                        Style::Solid,
-                    )),
-                    _ => unreachable!(),
+                    Line::LineFromPoints(a, b) => {
+                        let p_id = build.load(a);
+                        let q_id = build.load(b);
+                        build.add(RayItem {
+                            p_id,
+                            q_id,
+                            label,
+                            style
+                        });
+                    },
+                    _ => unreachable!()
                 },
             }
         }
@@ -1077,7 +1099,7 @@ impl Node for ScalarNode {
         self.display.get_copied()
     }
 
-    fn build(self: Box<Self>, _compiler: &mut Compiler, _figure: &mut Figure) {}
+    fn build(self: Box<Self>, _build: &mut Build) {}
 }
 
 impl FromExpr<Scalar> for ScalarNode {

@@ -18,6 +18,8 @@ WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use crate::script::{figure::{LineItem, MathString, RayItem, SegmentItem}, math::Build, token::Span};
+
 use super::prelude::*;
 use geo_aid_derive::overload;
 
@@ -46,19 +48,79 @@ fn angle_function_point_point_point(
 }
 
 /// ```
+/// # use geo_aid::script::figure::Style;
 /// struct Associated {
 ///     display_arms: bool,
-///     amrs_style: Style
+///     arms_style: Style
 /// }
 /// ```
 #[derive(Debug)]
 pub struct Associated;
 
+pub fn display_angle_arms(build: &mut Build, a_expr: &Expr<Point>, b_expr: &Expr<Point>, c_expr: &Expr<Point>, arms_type: LineType, arms_style: Style) {
+    let a = build.load(a_expr);
+    let b = build.load(b_expr);
+    let c = build.load(c_expr);
+
+    match arms_type {
+        LineType::Line => {
+            let line_a = Expr::new_spanless(Line::LineFromPoints(
+                b_expr.clone_without_node(),
+                a_expr.clone_without_node(),
+            ));
+            let line_c = Expr::new_spanless(Line::LineFromPoints(
+                b_expr.clone_without_node(),
+                c_expr.clone_without_node(),
+            ));
+
+            let id = build.load(&line_a);
+            build.add(LineItem {
+                id,
+                label: MathString::new(Span::empty()),
+                style: arms_style
+            });
+            let id = build.load(&line_c);
+            build.add(LineItem {
+                id,
+                label: MathString::new(Span::empty()),
+                style: arms_style
+            });
+        }
+        LineType::Ray => {
+            build.add(RayItem {
+                p_id: b,
+                q_id: a,
+                label: MathString::new(Span::empty()),
+                style: arms_style
+            });
+            build.add(RayItem {
+                p_id: b,
+                q_id: c,
+                label: MathString::new(Span::empty()),
+                style: arms_style
+            });
+        }
+        LineType::Segment => {
+            build.add(SegmentItem {
+                p_id: b,
+                q_id: a,
+                label: MathString::new(Span::empty()),
+                style: arms_style
+            });
+            build.add(SegmentItem {
+                p_id: b,
+                q_id: c,
+                label: MathString::new(Span::empty()),
+                style: arms_style
+            });
+        }
+    }
+}
+
 impl BuildAssociated<ScalarNode> for Associated {
     fn build_associated(
         self: Box<Self>,
-        compiler: &mut Compiler,
-        figure: &mut Figure,
+        build: &mut Build,
         associated: &mut HierarchyNode<ScalarNode>,
     ) {
         let display_arms = associated
@@ -86,33 +148,7 @@ impl BuildAssociated<ScalarNode> for Associated {
             match &associated.root.expr.data.data {
                 ScalarData::ThreePointAngle(a_expr, b_expr, c_expr)
                 | ScalarData::ThreePointAngleDir(a_expr, b_expr, c_expr) => {
-                    let a = compiler.compile(a_expr);
-                    let b = compiler.compile(b_expr);
-                    let c = compiler.compile(c_expr);
-
-                    match arms_type {
-                        LineType::Line => {
-                            let line_a = Expr::new_spanless(Line::LineFromPoints(
-                                b_expr.clone_without_node(),
-                                a_expr.clone_without_node(),
-                            ));
-                            let line_c = Expr::new_spanless(Line::LineFromPoints(
-                                b_expr.clone_without_node(),
-                                c_expr.clone_without_node(),
-                            ));
-
-                            figure.lines.push((compiler.compile(&line_a), arms_style));
-                            figure.lines.push((compiler.compile(&line_c), arms_style));
-                        }
-                        LineType::Ray => {
-                            figure.rays.push((b.clone(), a, arms_style));
-                            figure.rays.push((b, c, arms_style));
-                        }
-                        LineType::Segment => {
-                            figure.segments.push((b.clone(), a, arms_style));
-                            figure.segments.push((b, c, arms_style));
-                        }
-                    }
+                    display_angle_arms(build, a_expr, b_expr, c_expr, arms_type, arms_style);
                 }
                 _ => unreachable!(),
             }

@@ -1,7 +1,15 @@
 use std::{fmt::Display, mem};
+use std::cmp::Ordering;
+use std::fmt::Formatter;
+use std::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, SubAssign};
+use num_bigint::BigInt;
+use num_complex::Complex;
 
-use num_rational::Rational64;
-use num_traits::{CheckedAdd, CheckedMul, FromPrimitive, ToPrimitive, Zero};
+use num_rational::{BigRational, Rational64};
+use num_traits::{CheckedAdd, CheckedMul, FromPrimitive, One, ToPrimitive, Zero};
+use serde::Serialize;
+use crate::geometry;
+use crate::script::token::Number;
 
 #[derive(Debug)]
 pub struct ParseIntError;
@@ -52,7 +60,7 @@ impl ParsedInt {
 }
 
 impl Display for ParsedInt {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
             "{}",
@@ -130,7 +138,7 @@ impl ParsedFloat {
 }
 
 impl Display for ParsedFloat {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
             "{}.{}",
@@ -172,6 +180,203 @@ impl ParsedFloatBuilder {
         ParsedFloat {
             integral: self.integral,
             decimal: digits,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum Parsed {
+    Int(ParsedInt),
+    Float(ParsedFloat)
+}
+
+impl Display for Parsed {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Parsed::Int(v) => write!(f, "{v}"),
+            Parsed::Float(v) => write!(f, "{v}")
+        }
+    }
+}
+
+/// Number for processing
+#[derive(Debug, Clone, Hash, Serialize, PartialEq, Eq)]
+pub struct ProcNum(Complex<BigRational>);
+
+impl ProcNum {
+    /// # Panics
+    /// A panic is a bug
+    #[must_use]
+    pub fn to_complex(self) -> geometry::Complex {
+        geometry::Complex::new(self.0.re.to_f64().unwrap(), self.0.im.to_f64().unwrap())
+    }
+
+    /// # Panics
+    /// A panic is a bug.
+    #[must_use]
+    pub fn pi() -> Self {
+        Self(Complex::new(-BigRational::from_f64(std::f64::consts::PI).unwrap(), BigRational::zero()))
+    }
+}
+
+impl FromPrimitive for ProcNum {
+    fn from_i64(n: i64) -> Option<Self> {
+        Complex::from_i64(n).map(Self)
+    }
+
+    fn from_u64(n: u64) -> Option<Self> {
+        Complex::from_u64(n).map(Self)
+    }
+
+    fn from_f32(n: f32) -> Option<Self> {
+        Complex::from_f32(n).map(Self)
+    }
+
+    fn from_f64(n: f64) -> Option<Self> {
+        Complex::from_f64(n).map(Self)
+    }
+}
+
+impl SubAssign<&Self> for ProcNum {
+    fn sub_assign(&mut self, rhs: &Self) {
+        self.0 -= &rhs.0;
+    }
+}
+
+impl AddAssign<&Self> for ProcNum {
+    fn add_assign(&mut self, rhs: &Self) {
+        self.0 += &rhs.0;
+    }
+}
+
+impl Add for ProcNum {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        Self(self.0 + rhs.0)
+    }
+}
+
+impl Add<&Self> for ProcNum {
+    type Output = Self;
+
+    fn add(self, rhs: &Self) -> Self::Output {
+        Self(self.0 + &rhs.0)
+    }
+}
+
+impl Mul for ProcNum {
+    type Output = Self;
+
+    fn mul(self, rhs: Self) -> Self::Output {
+        Self(self.0 * rhs.0)
+    }
+}
+
+impl Mul<&Self> for ProcNum {
+    type Output = Self;
+
+    fn mul(self, rhs: &Self) -> Self::Output {
+        Self(self.0 * &rhs.0)
+    }
+}
+
+impl MulAssign<&Self> for ProcNum {
+    fn mul_assign(&mut self, rhs: &Self) {
+        self.0 *= &rhs.0;
+    }
+}
+
+impl Div<&Self> for ProcNum {
+    type Output = Self;
+    
+    fn div(self, rhs: &Self) -> Self::Output {
+        Self(self.0 / &rhs.0)
+    }
+}
+
+impl DivAssign<&Self> for ProcNum {
+    fn div_assign(&mut self, rhs: &Self) {
+        self.0 /= &rhs.0;
+    }
+}
+
+impl Zero for ProcNum {
+    fn zero() -> Self {
+        Self(Complex::zero())
+    }
+
+    fn is_zero(&self) -> bool {
+        self.0.is_zero()
+    }
+}
+
+impl One for ProcNum {
+    fn one() -> Self {
+        Self(Complex::one())
+    }
+
+    fn is_one(&self) -> bool
+        where
+            Self: PartialEq, {
+        self.0.is_one()
+    }
+}
+
+impl Display for ProcNum {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl PartialOrd for ProcNum {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for ProcNum {
+    fn cmp(&self, other: &Self) -> Ordering {
+        match self.0.re.cmp(&other.0.re) {
+            Ordering::Equal => self.0.im.cmp(&other.0.im),
+            ord => ord
+        }
+    }
+}
+
+impl From<&Number> for ProcNum {
+    fn from(value: &Number) -> Self {
+        let ten = Complex::from_u8(10).unwrap();
+
+        match value {
+            Number::Integer(i) => {
+                let mut x: Complex<BigRational> = Complex::zero();
+
+                for digit in &i.parsed.digits {
+                    x *= &ten;
+                    x += Complex::from_u8(*digit).unwrap();
+                }
+
+                Self(x)
+            }
+            Number::Float(f) => {
+                let mut integral: Complex<BigRational> = Complex::zero();
+                let mut decimal: Complex<BigRational> = Complex::zero();
+                let mut denominator = BigInt::one();
+
+                for digit in &f.parsed.integral.digits {
+                    integral *= &ten;
+                    integral += Complex::from_u8(*digit).unwrap();
+                }
+
+                for digit in &f.parsed.decimal {
+                    denominator *= BigInt::from_u8(10).unwrap();
+                    decimal *= &ten;
+                    decimal += Complex::from_u8(*digit).unwrap();
+                }
+
+                Self(integral + decimal)
+            }
         }
     }
 }

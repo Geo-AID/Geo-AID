@@ -71,3 +71,8 @@
 - **GeoScript**: Added fields and methods to the language
 - **GeoScript**: Modified the syntax of negation and exponentiation
 - **Drawers**: Refactored drawers for better maintenance capability
+
+## Version 0.4.0
+- Completely changed how figures are generated, a new design around generation engines, additional processing stage.
+- Removed the current weight system, as it was hurting the generation.
+- Figures now generate way, way faster.

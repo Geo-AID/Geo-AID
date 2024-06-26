@@ -18,155 +18,25 @@ WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use geo_aid_derive::Definition;
 use paste::paste;
 use std::cell::RefCell;
 use std::mem;
 use std::rc::Rc;
 use std::{collections::HashMap, fmt::Debug};
+use num_traits::{Zero, One};
 
-use crate::generator::fast_float::FastFloat;
 use crate::script::builtins::macros::number;
-use crate::script::unroll::{AnyExpr, CloneWithNode, Simplify};
+use crate::script::unroll::{AnyExpr, CloneWithNode};
 use crate::script::{unit, ComplexUnit, Error};
+use crate::script::token::number::ProcNum;
 use crate::span;
 
 use super::figure::FromExpr;
 use super::{
-    Circle as UnrolledCircle, CollectionNode, Displayed, Expr, FlagSet, HierarchyNode,
-    Line as UnrolledLine, Node, Point as UnrolledPoint, Properties, Scalar as UnrolledScalar,
+    Circle, CollectionNode, Displayed, Expr, FlagSet, HierarchyNode,
+    Line, Node, Point, Properties, Scalar,
     ScalarData, UnrolledRule, UnrolledRuleKind,
 };
-
-/// For everything that can have an order (how modifiable the entity is).
-pub trait Definition {
-    /// Get the complexity order (how much adjustment is done to this entity).
-    fn order(&self, context: &CompileContext) -> usize;
-
-    /// Check if the object contains an entity
-    fn contains_entity(&self, entity: usize, context: &CompileContext) -> bool;
-}
-
-/// A scalar is either a bind or a free real value.
-#[derive(Debug, CloneWithNode)]
-pub enum Scalar {
-    /// A free, adjusted real.
-    Free,
-    /// A bind
-    Bind(Expr<UnrolledScalar>),
-}
-
-impl Definition for Scalar {
-    fn order(&self, context: &CompileContext) -> usize {
-        match self {
-            Self::Free => 1,
-            Self::Bind(expr) => expr.order(context),
-        }
-    }
-
-    fn contains_entity(&self, entity: usize, context: &CompileContext) -> bool {
-        match self {
-            Self::Free => false,
-            Self::Bind(expr) => expr.contains_entity(entity, context),
-        }
-    }
-}
-
-/// A point is either a bind or a free complex value.
-#[derive(Debug, CloneWithNode, Definition)]
-pub enum Point {
-    /// A free, adjusted complex.
-    #[def(order(2))]
-    Free,
-    /// A single-value clip.
-    OnCircle(Expr<UnrolledCircle>),
-    /// A single-value clip.
-    OnLine(Expr<UnrolledLine>),
-    /// A bind
-    Bind(Expr<UnrolledPoint>),
-}
-
-/// A line is always a bind.
-#[derive(Debug, CloneWithNode, Definition)]
-pub enum Line {
-    /// A bind
-    Bind(Expr<UnrolledLine>),
-}
-
-/// A circle is always a bind.
-#[derive(Debug, CloneWithNode, Definition)]
-pub enum Circle {
-    /// A bind
-    Bind(Expr<UnrolledCircle>),
-    /// A never compiled temporary value
-    #[def(order(usize::MAX))]
-    Temporary,
-}
-
-/// An entity is a single primitive on the figure plane.
-#[derive(Debug, CloneWithNode)]
-pub enum Entity {
-    /// A scalar
-    Scalar(Scalar),
-    Point(Point),
-    Line(Line),
-    Circle(Circle),
-}
-
-impl Entity {
-    #[must_use]
-    pub fn free_point() -> Self {
-        Self::Point(Point::Free)
-    }
-
-    #[must_use]
-    pub fn free_scalar() -> Self {
-        Self::Scalar(Scalar::Free)
-    }
-
-    #[must_use]
-    pub fn free_circle() -> Self {
-        Self::Circle(Circle::Temporary)
-    }
-
-    #[must_use]
-    pub fn as_point(&self) -> Option<&Point> {
-        if let Self::Point(v) = self {
-            Some(v)
-        } else {
-            None
-        }
-    }
-
-    #[must_use]
-    pub fn as_point_mut(&mut self) -> Option<&mut Point> {
-        if let Self::Point(v) = self {
-            Some(v)
-        } else {
-            None
-        }
-    }
-}
-
-impl Definition for Entity {
-    fn order(&self, context: &CompileContext) -> usize {
-        match self {
-            Self::Scalar(v) => v.order(context),
-            Self::Point(v) => v.order(context),
-            Self::Line(v) => v.order(context),
-            Self::Circle(v) => v.order(context),
-        }
-    }
-
-    fn contains_entity(&self, entity: usize, context: &CompileContext) -> bool {
-        match self {
-            Self::Scalar(v) => v.contains_entity(entity, context),
-            Self::Point(v) => v.contains_entity(entity, context),
-            Self::Line(v) => v.contains_entity(entity, context),
-            Self::Circle(v) => v.contains_entity(entity, context),
-        }
-    }
-}
 
 /// The context of compilation process.
 #[allow(clippy::module_name_repetitions)]
@@ -176,8 +46,6 @@ pub struct CompileContext {
     pub variables: HashMap<String, AnyExpr>, // We have to store variables in this form to prevent type errors.
     /// Flags
     pub flags: FlagSet,
-    /// Entities (primitives).
-    pub entities: Vec<Entity>,
     /// Unrolled rules
     pub rules: RefCell<Vec<UnrolledRule>>,
     /// Errors collected.
@@ -196,7 +64,6 @@ impl CompileContext {
         Self {
             variables: HashMap::new(),
             flags: FlagSet::default(),
-            entities: vec![],
             rules: RefCell::new(Vec::new()),
             errors: RefCell::new(Vec::new()),
         }
@@ -235,110 +102,16 @@ impl CompileContext {
     pub fn take_rules(&mut self) -> Vec<UnrolledRule> {
         mem::take(&mut self.rules.borrow_mut())
     }
-
-    /// Gets the entity of the given index.
-    #[must_use]
-    pub fn get_entity(&self, i: usize) -> &Entity {
-        &self.entities[i]
-    }
-
-    /// Gets the entity of the given index.
-    #[must_use]
-    pub fn get_entity_mut(&mut self, i: usize) -> &mut Entity {
-        &mut self.entities[i]
-    }
-
-    #[must_use]
-    pub fn add_scalar(&mut self) -> usize {
-        self.entities.push(Entity::free_scalar());
-
-        self.entities.len() - 1
-    }
-
-    #[must_use]
-    pub fn add_point(&mut self) -> usize {
-        self.entities.push(Entity::free_point());
-
-        self.entities.len() - 1
-    }
-
-    /// # Panics
-    /// Panics if given an invalid entity.
-    #[must_use]
-    pub fn get_point_by_index(&self, index: usize) -> Expr<UnrolledPoint> {
-        let entity = self.entities.get(index).unwrap();
-        if let Entity::Point(_) = entity {
-            return Expr::new_spanless(UnrolledPoint::Entity(index));
-        }
-
-        panic!("Requested entity is not a point.");
-    }
-
-    #[must_use]
-    pub fn get_point_entity_mut(&mut self, expr: &Expr<UnrolledPoint>) -> Option<&mut Point> {
-        match expr.simplify(self).data.as_ref() {
-            UnrolledPoint::Entity(i) => self.get_entity_mut(*i).as_point_mut(),
-            _ => None,
-        }
-    }
-
-    #[must_use]
-    pub fn get_point_entity(&self, expr: &Expr<UnrolledPoint>) -> Option<&Point> {
-        match expr.simplify(self).data.as_ref() {
-            UnrolledPoint::Entity(i) => self.get_entity(*i).as_point(),
-            _ => None,
-        }
-    }
-
-    pub fn add_circle(&mut self) -> usize {
-        self.entities.push(Entity::free_circle());
-
-        self.entities.len() - 1
-    }
-
-    /// # Panics
-    /// Panics if given an invalid expression.
-    #[must_use]
-    pub fn get_circle_by_index(&self, index: usize) -> Expr<UnrolledCircle> {
-        let entity = self.entities.get(index).unwrap();
-        if let Entity::Circle(_) = entity {
-            return Expr::new_spanless(UnrolledCircle::Entity(index));
-        }
-
-        panic!("Requested entity is not a circle.");
-    }
-
-    /// # Panics
-    /// Panics if given an invalid expression.
-    #[must_use]
-    pub fn get_line_by_index(&self, index: usize) -> Expr<UnrolledLine> {
-        let entity = self.entities.get(index).unwrap();
-        if let Entity::Line(_) = entity {
-            return Expr::new_spanless(UnrolledLine::Entity(index));
-        }
-
-        panic!("Requested entity is not a line.");
-    }
 }
 
 /// Everything related to circles.
 impl CompileContext {
     pub fn point_on_circle(
         &mut self,
-        lhs: &Expr<UnrolledPoint>,
-        rhs: &Expr<UnrolledCircle>,
-        weight: FastFloat,
+        lhs: &Expr<Point>,
+        rhs: &Expr<Circle>,
+        weight: ProcNum,
     ) {
-        if let Some(point) = self.get_point_entity_mut(lhs) {
-            match point {
-                Point::Free => {
-                    *point = Point::OnCircle(rhs.clone_without_node());
-                    return;
-                }
-                Point::OnCircle(_) | Point::OnLine(_) | Point::Bind(_) => (),
-            }
-        }
-
         self.push_rule(UnrolledRule {
             kind: UnrolledRuleKind::ScalarEq(
                 self.distance_pp(
@@ -354,36 +127,14 @@ impl CompileContext {
 
     pub fn point_on_line(
         &mut self,
-        lhs: &Expr<UnrolledPoint>,
-        rhs: &Expr<UnrolledLine>,
-        weight: FastFloat,
+        lhs: &Expr<Point>,
+        rhs: &Expr<Line>,
+        weight: ProcNum,
     ) {
-        if let Some(point) = self.get_point_entity_mut(lhs) {
-            match point {
-                Point::Free => {
-                    *point = Point::OnLine(rhs.clone_without_node());
-                    return;
-                }
-                Point::OnLine(k) => {
-                    *point = Point::Bind(Expr {
-                        span: span!(0, 0, 0, 0),
-                        weight: FastFloat::One,
-                        node: None,
-                        data: Rc::new(UnrolledPoint::LineLineIntersection(
-                            k.clone_without_node(),
-                            rhs.clone_without_node(),
-                        )),
-                    });
-                    return;
-                }
-                Point::OnCircle(_) | Point::Bind(_) => (),
-            }
-        }
-
         self.push_rule(UnrolledRule {
             kind: UnrolledRuleKind::ScalarEq(
                 self.distance_pl(lhs.clone_without_node(), rhs.clone_without_node()),
-                number!(=0.0),
+                number!(=ProcNum::zero()),
             ),
             inverted: false,
             weight,
@@ -393,6 +144,9 @@ impl CompileContext {
 
 #[macro_export]
 macro_rules! take_nodes {
+    () => {
+        Vec::new()
+    };
     ($($x:ident),* $(,)?) => {
         {
             let mut nodes = Vec::new();
@@ -436,19 +190,19 @@ macro_rules! generic_expr {
             }
 
             pub fn $f(&self, $($v: Expr<super::$t>),*) -> Expr<super::Scalar> {
-                self.[<$f _display>]($($v),*, Properties::default())
+                self.[<$f _display>]($($v,)* Properties::default())
             }
         }
     };
     {$f:ident($($v:ident : $t:ident),* $(,)?) -> $r:ident :: $k:ident} => {
         paste! {
-            pub fn [<$f _display>](&self, $(mut $v: Expr<super::$t>),*, display: Properties) -> Expr<super::$r> {
+            pub fn [<$f _display>](&self, $(mut $v: Expr<super::$t>,)* display: Properties) -> Expr<super::$r> {
                 let nodes = take_nodes!($($v),*);
                 self.expr_with(super::$r::$k($($v),*), display, nodes)
             }
 
             pub fn $f(&self, $($v: Expr<super::$t>),*) -> Expr<super::$r> {
-                self.[<$f _display>]($($v),*, Properties::default())
+                self.[<$f _display>]($($v,)* Properties::default())
             }
         }
     }
@@ -459,14 +213,13 @@ impl CompileContext {
     pub fn expr_with<T: Displayed>(
         &self,
         content: T,
-        mut display: Properties,
+        display: Properties,
         nodes: Vec<Box<dyn Node>>,
     ) -> Expr<T>
     where
         T::Node: FromExpr<T>,
     {
         let mut expr = Expr {
-            weight: display.get("weight").get_or(FastFloat::One),
             span: span!(0, 0, 0, 0),
             data: Rc::new(content),
             node: None,
@@ -482,33 +235,33 @@ impl CompileContext {
 
     pub fn average_p_display(
         &self,
-        mut points: Vec<Expr<UnrolledPoint>>,
+        mut points: Vec<Expr<Point>>,
         display: Properties,
-    ) -> Expr<UnrolledPoint> {
+    ) -> Expr<Point> {
         let nodes = points
             .iter_mut()
             .filter_map(|v| v.take_node().map(|v| Box::new(v) as Box<dyn Node>))
             .collect();
 
-        self.expr_with(UnrolledPoint::Average(points.into()), display, nodes)
+        self.expr_with(Point::Average(points.into()), display, nodes)
     }
 
-    pub fn average_p(&self, points: Vec<Expr<UnrolledPoint>>) -> Expr<UnrolledPoint> {
+    pub fn average_p(&self, points: Vec<Expr<Point>>) -> Expr<Point> {
         self.average_p_display(points, Properties::from(None))
     }
 
     pub fn average_s_display(
         &self,
-        mut values: Vec<Expr<UnrolledScalar>>,
+        mut values: Vec<Expr<Scalar>>,
         display: Properties,
-    ) -> Expr<UnrolledScalar> {
+    ) -> Expr<Scalar> {
         let nodes = values
             .iter_mut()
             .filter_map(|v| v.take_node().map(|v| Box::new(v) as Box<dyn Node>))
             .collect();
 
         self.expr_with(
-            UnrolledScalar {
+            Scalar {
                 unit: values[0].data.unit,
                 data: ScalarData::Average(values.into()),
             },
@@ -517,38 +270,19 @@ impl CompileContext {
         )
     }
 
-    pub fn average_s(&self, points: Vec<Expr<UnrolledScalar>>) -> Expr<UnrolledScalar> {
+    pub fn average_s(&self, points: Vec<Expr<Scalar>>) -> Expr<Scalar> {
         self.average_s_display(points, Properties::from(None))
-    }
-
-    pub fn entity_p(&self, index: usize) -> Expr<UnrolledPoint> {
-        self.expr_with(
-            UnrolledPoint::Entity(index),
-            Properties::default(),
-            Vec::new(),
-        )
-    }
-
-    pub fn entity_s(&self, index: usize, unit: ComplexUnit) -> Expr<UnrolledScalar> {
-        self.expr_with(
-            UnrolledScalar {
-                unit: Some(unit),
-                data: ScalarData::Entity(index),
-            },
-            Properties::default(),
-            Vec::new(),
-        )
     }
 
     pub fn set_unit_display(
         &self,
-        mut v: Expr<UnrolledScalar>,
+        mut v: Expr<Scalar>,
         unit: ComplexUnit,
         display: Properties,
-    ) -> Expr<UnrolledScalar> {
+    ) -> Expr<Scalar> {
         let node = v.take_node();
         self.expr_with(
-            UnrolledScalar {
+            Scalar {
                 unit: Some(unit),
                 data: ScalarData::SetUnit(v, unit),
             },
@@ -559,8 +293,27 @@ impl CompileContext {
         )
     }
 
-    pub fn set_unit(&self, v: Expr<UnrolledScalar>, unit: ComplexUnit) -> Expr<UnrolledScalar> {
+    pub fn set_unit(&self, v: Expr<Scalar>, unit: ComplexUnit) -> Expr<Scalar> {
         self.set_unit_display(v, unit, Properties::default())
+    }
+
+    pub fn free_point_display(&self, display: Properties) -> Expr<Point> {
+        self.expr_with(Point::Free, display, Vec::new())
+    }
+
+    pub fn free_point(&self) -> Expr<Point> {
+        self.free_point_display(Properties::default())
+    }
+
+    pub fn free_scalar_display(&self, display: Properties) -> Expr<Scalar> {
+        self.expr_with(Scalar {
+            unit: Some(unit::SCALAR),
+            data: ScalarData::Free,
+        }, display, Vec::new())
+    }
+
+    pub fn free_scalar(&self) -> Expr<Scalar> {
+        self.free_scalar_display(Properties::default())
     }
 
     generic_expr! {intersection(k: Line, l: Line) -> Point::LineLineIntersection}
@@ -593,7 +346,7 @@ macro_rules! generic_rule {
                 display: Properties
             ) -> Box<dyn Node> {
                 let (lhs_node, rhs_node) = (lhs.take_node(), rhs.take_node());
-                self.rule_with(UnrolledRuleKind::$r(lhs, rhs), lhs_node, rhs_node, inverted, display, FastFloat::One)
+                self.rule_with(UnrolledRuleKind::$r(lhs, rhs), lhs_node, rhs_node, inverted, display, ProcNum::one())
             }
 
             pub fn $f(
@@ -618,7 +371,7 @@ impl CompileContext {
         rhs: Option<M>,
         inverted: bool,
         mut display: Properties,
-        def_weight: FastFloat,
+        def_weight: ProcNum,
     ) -> Box<dyn Node> {
         let weight = display.get("weight").get_or(def_weight);
         let mut node = CollectionNode::from_display(display, self);

@@ -46,7 +46,7 @@ AB < OI;
 
 To use implicit iterators inside a function call, simply put parentheses around them: `intersection(AB, (KL, XY))`
 
-Another type of an iterator is an *explicit iterator*. These are written in the following way:
+Another type of iterator is an *explicit iterator*. These are written in the following way:
 
 ```
 AB = $1(AC, BC);

@@ -38,8 +38,7 @@ pub mod segment;
 pub mod prelude {
     pub(crate) use crate::script::{
         builtins::macros::*,
-        compile::{Compile, Compiler},
-        figure::{Figure, Style},
+        figure::Style,
         unit,
         unroll::{
             context::CompileContext,
@@ -48,7 +47,7 @@ pub mod prelude {
                 PointNode, ScalarNode,
             },
             Bundle, Circle, CloneWithNode, Expr, Function, Library, Line, Point, PointCollection,
-            Properties, Rule, Scalar, ScalarData, Simplify, UnrolledRule, UnrolledRuleKind,
+            Properties, Rule, Scalar, ScalarData, UnrolledRule, UnrolledRuleKind,
         },
     };
 }
@@ -131,7 +130,6 @@ pub mod macros {
         };
         (=$v:expr) => {
             $crate::script::unroll::Expr {
-                weight: $crate::generator::fast_float::FastFloat::One,
                 span: $crate::span!(0, 0, 0, 0),
                 data: std::rc::Rc::new($crate::script::unroll::Scalar {
                     unit: Some($crate::script::unit::DISTANCE),
@@ -144,7 +142,6 @@ pub mod macros {
         };
         ($t:ident $v:expr) => {
             $crate::script::unroll::Expr {
-                weight: $crate::generator::fast_float::FastFloat::One,
                 span: $crate::span!(0, 0, 0, 0),
                 data: std::rc::Rc::new($crate::script::unroll::Scalar {
                     unit: Some($crate::script::unit::$t),
@@ -167,7 +164,6 @@ pub mod macros {
             )*
 
             $crate::script::unroll::Expr {
-                weight: $crate::generator::fast_float::FastFloat::One,
                 span: $crate::span!(0, 0, 0, 0),
                 data: std::rc::Rc::new($crate::script::unroll::Bundle {
                     name: stringify!($t),

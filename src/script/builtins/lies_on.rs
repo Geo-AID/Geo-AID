@@ -19,10 +19,11 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
 use geo_aid_derive::overload;
+use num_traits::{One, Zero};
 use std::rc::Rc;
 
 use super::prelude::*;
-use crate::generator::fast_float::FastFloat;
+use crate::script::token::number::ProcNum;
 
 fn pt_lies_on_circle(
     mut lhs: Expr<Point>,
@@ -30,14 +31,14 @@ fn pt_lies_on_circle(
     context: &mut CompileContext,
     display: Properties,
     inverted: bool,
-    weight: FastFloat,
+    weight: ProcNum,
 ) -> CollectionNode {
     let mut node = CollectionNode::from_display(display, context);
     node.extend(lhs.node.take());
     node.extend(rhs.node.take());
 
-    let point = lhs.simplify(context);
-    let circle = rhs.simplify(context);
+    let point = lhs;
+    let circle = rhs;
 
     if inverted {
         context.push_rule(UnrolledRule {
@@ -61,18 +62,18 @@ fn pt_lies_on_line(
     context: &mut CompileContext,
     display: Properties,
     inverted: bool,
-    weight: FastFloat,
+    weight: ProcNum,
 ) -> CollectionNode {
     let mut node = CollectionNode::from_display(display, context);
     node.extend(lhs.node.take());
     node.extend(rhs.node.take());
 
-    let point = lhs.simplify(context);
-    let line = rhs.simplify(context);
+    let point = lhs;
+    let line = rhs;
 
     if inverted {
         context.push_rule(UnrolledRule {
-            kind: UnrolledRuleKind::ScalarEq(number!(=0.0), context.distance_pl(point, line)),
+            kind: UnrolledRuleKind::ScalarEq(number!(=ProcNum::zero()), context.distance_pl(point, line)),
             inverted: true,
             weight,
         });
@@ -83,13 +84,14 @@ fn pt_lies_on_line(
     node
 }
 
+#[allow(clippy::needless_pass_by_value)]
 fn col_lies_on_circle(
     mut lhs: Expr<PointCollection>,
     mut rhs: Expr<Circle>,
     context: &mut CompileContext,
     display: Properties,
     inverted: bool,
-    weight: FastFloat,
+    weight: ProcNum,
 ) -> CollectionNode {
     let len = lhs.data.length;
 
@@ -102,7 +104,7 @@ fn col_lies_on_circle(
             context,
             Properties::default(),
             inverted,
-            weight,
+            weight.clone(),
         ));
     }
 
@@ -117,7 +119,7 @@ fn col_lies_on_circle(
             let i_plus_2 = (i + 2) % len;
 
             context.push_rule(UnrolledRule {
-                kind: UnrolledRuleKind::ScalarEq(
+                kind: UnrolledRuleKind::Gt(
                     context.mult(
                         context.angle_dir(
                             index!(no-node lhs, i),
@@ -130,10 +132,10 @@ fn col_lies_on_circle(
                             index!(no-node lhs, i_plus_2),
                         ),
                     ),
-                    number!(ANGLE 0.0),
+                    number!(ANGLE ProcNum::zero()),
                 ),
                 inverted: false,
-                weight,
+                weight: weight.clone(),
             });
         }
     }
@@ -147,40 +149,39 @@ fn pt_lies_on_segment(
     context: &mut CompileContext,
     display: Properties,
     inverted: bool,
-    weight: FastFloat,
+    weight: ProcNum,
 ) -> CollectionNode {
     let mut node = CollectionNode::from_display(display, context);
     node.extend(lhs.node.take());
     node.extend(rhs.node.take());
 
-    let point = lhs.simplify(context);
+    let point = lhs;
     let line = context
         .line(
             field!(node POINT rhs, A with context),
             field!(node POINT rhs, B with context),
-        )
-        .simplify(context);
+        );
 
     if inverted {
-        // not on line or not between A, B
+        // not on the line or not between A, B
         context.push_rule(UnrolledRule {
             kind: UnrolledRuleKind::Alternative(vec![
                 UnrolledRule {
                     kind: UnrolledRuleKind::ScalarEq(
-                        number!(=0.0),
-                        context.distance_pl(point, line),
+                        number!(=ProcNum::zero()),
+                        context.distance_pl(point.clone_without_node(), line),
                     ),
                     inverted: true,
-                    weight: FastFloat::One,
+                    weight: ProcNum::one(),
                 },
                 UnrolledRule {
                     kind: UnrolledRuleKind::ScalarEq(
                         context.add(
                             context.distance_pp(
                                 field!(no-node POINT rhs, A with context),
-                                lhs.clone_without_node(),
+                                point.clone_without_node(),
                             ),
-                            context.distance_pp(field!(no-node POINT rhs, B with context), lhs),
+                            context.distance_pp(field!(no-node POINT rhs, B with context), point),
                         ),
                         context.distance_pp(
                             field!(no-node POINT rhs, A with context),
@@ -188,23 +189,23 @@ fn pt_lies_on_segment(
                         ),
                     ),
                     inverted: true,
-                    weight: FastFloat::One,
+                    weight: ProcNum::one(),
                 },
             ]),
             inverted: false,
             weight,
         });
     } else {
-        context.point_on_line(&point, &line, weight);
+        context.point_on_line(&point, &line, weight.clone());
 
         context.push_rule(UnrolledRule {
             kind: UnrolledRuleKind::ScalarEq(
                 context.add(
                     context.distance_pp(
                         field!(no-node POINT rhs, A with context),
-                        lhs.clone_without_node(),
+                        point.clone_without_node(),
                     ),
-                    context.distance_pp(field!(no-node POINT rhs, B with context), lhs),
+                    context.distance_pp(field!(no-node POINT rhs, B with context), point),
                 ),
                 context.distance_pp(
                     field!(no-node POINT rhs, A with context),

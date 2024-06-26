@@ -74,7 +74,7 @@ impl Span {
     }
 
     #[must_use]
-    pub const fn is_singleline(&self) -> bool {
+    pub const fn is_single_line(&self) -> bool {
         self.start.line == self.end.line
     }
 
@@ -976,7 +976,7 @@ fn tokenize_special<I: Iterator<Item = char>>(
 /// Tokenizes the given script.
 ///
 /// # Errors
-/// Emits an appropiate error if the script is invalid and tokenization fails.
+/// Emits an appropriate error if the script is invalid and tokenization fails.
 pub fn tokenize(input: &str) -> Result<Vec<Token>, Error> {
     let mut it = input.chars().peekable();
     let mut tokens = vec![];

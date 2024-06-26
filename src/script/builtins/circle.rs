@@ -42,16 +42,16 @@ pub fn register(library: &mut Library) {
                 }),
                 overload!(() -> CIRCLE {
                     |context: &mut CompileContext, display| {
-                        let pt = context.add_point();
-                        let sc = context.add_scalar();
+                        let mut center = context.free_point();
+                        let mut radius = context.free_scalar();
 
-                        let mut pt_expr = context.entity_p(pt);
-                        pt_expr.take_node();
+                        center.take_node();
+                        radius.take_node();
 
                         call!(
                             context:circle_function(
-                                pt_expr,
-                                context.entity_s(sc, unit::DISTANCE)
+                                center,
+                                context.set_unit(radius, unit::DISTANCE)
                             ) with display
                         )
                     }

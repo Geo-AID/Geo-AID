@@ -31,15 +31,15 @@ use std::{
 use clap::{Parser, ValueEnum};
 use crossterm::{cursor, terminal, ExecutableCommand, QueueableCommand};
 use geo_aid::{
-    cli::{Diagnostic, DiagnosticKind},
-    drawer::{Draw, Latex, Svg, Json, Raw},
-    generator::GenerationArgs,
+    cli::{Diagnostic, DiagnosticKind}, drawer::Draw, engine::{rage::Rage, Engine}, script::math
 };
-use geo_aid::{
-    generator::Generator,
-    projector,
-    script::compile,
-};
+use geo_aid::drawer::json::Json;
+use geo_aid::drawer::latex::Latex;
+use geo_aid::drawer::raw::Raw;
+use geo_aid::drawer::svg::Svg;
+use geo_aid::projector;
+use geo_aid::engine::GenerateResult;
+use geo_aid::engine::rage::GenParams;
 
 #[derive(Debug, Parser)]
 #[command(name = "Geo-AID")]
@@ -104,9 +104,7 @@ fn main() {
     };
     let canvas_size = (args.width, args.height);
 
-    let result = compile::compile(&script, canvas_size);
-
-    let compiled = match result {
+    let intermediate = match math::load_script(&script) {
         Ok(v) => v,
         Err(errors) => {
             for err in errors {
@@ -128,26 +126,26 @@ fn main() {
         }
     };
 
-    let flags = Arc::new(compiled.flags);
-    let mut gen = Generator::new(
-        &compiled.template,
-        args.count_of_workers,
-        &GenerationArgs {
-            criteria: Arc::new(compiled.criteria),
-            point_count: compiled.template.len(),
-        },
-        &flags,
-    );
+    // println!("{intermediate:#?}");
+
+    let rage = Rage::new(args.count_of_workers);
+    let compiled = rage.compile(&intermediate, ());
+    let flags = Arc::new(intermediate.flags);
 
     let mut stdout = io::stdout();
 
     stdout.execute(cursor::Hide).unwrap();
 
-    let duration = gen.cycle_until_mean_delta(
-        args.adjustment_max,
-        args.mean_count,
-        args.delta_max_mean,
-        |quality| {
+    let GenerateResult {
+        time,
+        generated,
+        total_quality
+    } = rage.generate(compiled, intermediate.figure, GenParams {
+        max_adjustment: args.adjustment_max,
+        mean_count: args.mean_count,
+        delta_max_mean: args.delta_max_mean,
+        progress_update: Box::new(|quality| {
+            let mut stdout = io::stdout();
             stdout
                 .queue(terminal::Clear(terminal::ClearType::FromCursorDown))
                 .unwrap();
@@ -158,40 +156,26 @@ fn main() {
                 .unwrap();
             stdout.queue(cursor::RestorePosition).unwrap();
             stdout.flush().unwrap();
-        },
-    );
+        })
+    });
 
     stdout.execute(cursor::Show).unwrap();
 
-    let rendered = projector::project(&compiled.figure, gen.get_state(), &flags);
-
-    #[allow(clippy::cast_precision_loss)]
-    let mut latex = Latex {
-        content: String::default(),
-        canvas_size,
-        scale: f64::min(10.0/canvas_size.0 as f64, 10.0/canvas_size.1 as f64),
-    };
-
-    let mut svg = Svg {
-        content: String::default(),
-        canvas_size,
-    };
-
-    let mut json = Json {
-        content: String::default(),
-        canvas_size,
-    };
-
-    let mut raw = Raw {
-        content: String::default(),
-        canvas_size,
-    };
+    let rendered = projector::project(generated, &flags, canvas_size);
     
     match args.renderer {
-        Renderer::Latex => latex.draw(&args.output, &rendered).unwrap(),
-        Renderer::Json => json.draw(&args.output, &rendered).unwrap(),
-        Renderer::Svg => svg.draw(&args.output, &rendered).unwrap(),
-        Renderer::Raw => raw.draw(&args.output, &rendered).unwrap(),
+        Renderer::Latex => {
+            Latex::default().draw(&args.output, &rendered).unwrap();
+        },
+        Renderer::Json => {
+            Json::default().draw(&args.output, &rendered).unwrap();
+        },
+        Renderer::Svg => {
+            Svg::default().draw(&args.output, &rendered).unwrap();
+        },
+        Renderer::Raw => {
+            Raw::default().draw(&args.output, &rendered).unwrap();
+        },
         //Renderer::Latex => latex::draw(&args.output, canvas_size, &rendered),
         //Renderer::Json => json::draw(&args.output, canvas_size, &rendered),
     }
@@ -204,15 +188,15 @@ fn main() {
 
     println!(
         "Finished rendering with total quality {:.2}% in {:.2} seconds.",
-        gen.get_total_quality() * 100.0,
-        duration.as_secs_f64()
+        total_quality * 100.0,
+        time.as_secs_f64()
     );
 
     if let Some(path) = &args.log {
         let mut log = File::create(path)
             .unwrap_or_else(|_| panic!("Failed to create log file at {}", path.display()));
 
-        let full = format!("0\n{}\n{}", gen.get_total_quality(), duration.as_secs_f64());
+        let full = format!("0\n{}\n{}", total_quality, time.as_secs_f64());
         log.write_all(full.as_bytes())
             .expect("Writing to log file failed.");
     }

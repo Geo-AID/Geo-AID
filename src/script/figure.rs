@@ -18,30 +18,23 @@ WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use std::{fmt::Display, str::FromStr, sync::Arc};
+use std::{fmt::Display, str::FromStr};
 
-use num_derive::FromPrimitive;
+use num_derive::{FromPrimitive, ToPrimitive};
 use num_traits::FromPrimitive;
 use serde::Serialize;
+use crate::geometry::ValueEnum;
+use crate::script::math::{EntityKind, IndexMap, Reconstruct, ReconstructCtx, Reindex, VarIndex};
 
-use crate::{
-    generator::expression::{CircleExpr, Expression, LineExpr, PointExpr, ScalarExpr},
-    span,
-};
+use crate::span;
 
-use super::{
-    parser::{FromProperty, Parse, PropertyValue},
-    token::{Ident, PointCollectionItem, Span},
-    unroll::most_similar,
-    Error,
-};
-
-type Point = Arc<Expression<PointExpr>>;
+use super::math::Entity;
+use super::{parser::{FromProperty, Parse, PropertyValue}, token::{Ident, PointCollectionItem, Span}, unroll::most_similar, Error, math};
 
 pub const SPECIAL_MATH: [&str; 49] = [
     "alpha", "Alpha", "beta", "Beta", "gamma", "Gamma", "delta", "Delta", "epsilon", "Epsilon",
     "zeta", "Zeta", "eta", "Eta", "theta", "Theta", "iota", "Iota", "kappa", "Kappa", "lambda",
-    "Lambda", "mu", "Mu", "nu", "Nu", "xi", "Xi", "omicron", "Omicorn", "phi", "Phi", "rho", "Rho",
+    "Lambda", "mu", "Mu", "nu", "Nu", "xi", "Xi", "omicron", "Omicron", "phi", "Phi", "rho", "Rho",
     "sigma", "Sigma", "tau", "Tau", "upsilon", "Upsilon", "phi", "Phi", "chi", "Chi", "psi", "Psi",
     "omega", "Omega", "quote",
 ];
@@ -56,23 +49,205 @@ pub enum Style {
     Solid,
 }
 
+#[derive(Debug, Clone, Serialize)]
+pub struct PointItem {
+    pub id: VarIndex,
+    pub label: MathString,
+    pub display_dot: bool
+}
+
+impl Reindex for PointItem {
+    fn reindex(&mut self, map: &IndexMap) {
+        self.id.reindex(map);
+    }
+}
+
+impl Reconstruct for PointItem {
+    fn reconstruct(self, ctx: &mut ReconstructCtx) -> Self {
+        Self {
+            id: self.id.reconstruct(ctx),
+            ..self
+        }
+    }
+}
+
+impl From<PointItem> for Item {
+    fn from(value: PointItem) -> Self {
+        Self::Point(value)
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct CircleItem {
+    pub id: VarIndex,
+    pub label: MathString,
+    pub style: Style
+}
+
+impl Reindex for CircleItem {
+    fn reindex(&mut self, map: &IndexMap) {
+        self.id.reindex(map);
+    }
+}
+
+impl Reconstruct for CircleItem {
+    fn reconstruct(self, ctx: &mut ReconstructCtx) -> Self {
+        Self {
+            id: self.id.reconstruct(ctx),
+            ..self
+        }
+    }
+}
+
+impl From<CircleItem> for Item {
+    fn from(value: CircleItem) -> Self {
+        Self::Circle(value)
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct LineItem {
+    pub id: VarIndex,
+    pub label: MathString,
+    pub style: Style
+}
+
+impl Reindex for LineItem {
+    fn reindex(&mut self, map: &IndexMap) {
+        self.id.reindex(map);
+    }
+}
+
+impl Reconstruct for LineItem {
+    fn reconstruct(self, ctx: &mut ReconstructCtx) -> Self {
+        Self {
+            id: self.id.reconstruct(ctx),
+            ..self
+        }
+    }
+}
+
+impl From<LineItem> for Item {
+    fn from(value: LineItem) -> Self {
+        Self::Line(value)
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct RayItem {
+    pub p_id: VarIndex,
+    pub q_id: VarIndex,
+    pub label: MathString,
+    pub style: Style
+}
+
+impl Reindex for RayItem {
+    fn reindex(&mut self, map: &IndexMap) {
+        self.p_id.reindex(map);
+        self.q_id.reindex(map);
+    }
+}
+
+impl Reconstruct for RayItem {
+    fn reconstruct(self, ctx: &mut ReconstructCtx) -> Self {
+        Self {
+            p_id: self.p_id.reconstruct(ctx),
+            q_id: self.q_id.reconstruct(ctx),
+            ..self
+        }
+    }
+}
+
+impl From<RayItem> for Item {
+    fn from(value: RayItem) -> Self {
+        Self::Ray(value)
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct SegmentItem {
+    pub p_id: VarIndex,
+    pub q_id: VarIndex,
+    pub label: MathString,
+    pub style: Style
+}
+
+impl From<SegmentItem> for Item {
+    fn from(value: SegmentItem) -> Self {
+        Self::Segment(value)
+    }
+}
+
+impl Reindex for SegmentItem {
+    fn reindex(&mut self, map: &IndexMap) {
+        self.p_id.reindex(map);
+        self.q_id.reindex(map);
+    }
+}
+
+impl Reconstruct for SegmentItem {
+    fn reconstruct(self, ctx: &mut ReconstructCtx) -> Self {
+        Self {
+            p_id: self.p_id.reconstruct(ctx),
+            q_id: self.q_id.reconstruct(ctx),
+            ..self
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum Item {
+    Point(PointItem),
+    Circle(CircleItem),
+    Line(LineItem),
+    Ray(RayItem),
+    Segment(SegmentItem)
+}
+
+impl Reindex for Item {
+    fn reindex(&mut self, map: &IndexMap) {
+        match self {
+            Self::Point(v) => v.reindex(map),
+            Self::Circle(v) => v.reindex(map),
+            Self::Line(v) => v.reindex(map),
+            Self::Ray(v) => v.reindex(map),
+            Self::Segment(v) => v.reindex(map),
+        }
+    }
+}
+
+impl Reconstruct for Item {
+    fn reconstruct(self, ctx: &mut ReconstructCtx) -> Self {
+        match self {
+            Self::Point(v) => Self::Point(v.reconstruct(ctx)),
+            Self::Circle(v) => Self::Circle(v.reconstruct(ctx)),
+            Self::Line(v) => Self::Line(v.reconstruct(ctx)),
+            Self::Ray(v) => Self::Ray(v.reconstruct(ctx)),
+            Self::Segment(v) => Self::Segment(v.reconstruct(ctx))
+        }
+    }
+}
+
 /// Defines the visual data of the figure.
 #[derive(Debug, Default)]
 pub struct Figure {
-    /// Points to be displayed
-    pub points: Vec<(Arc<Expression<PointExpr>>, MathString)>,
-    /// Lines to be displayed
-    pub lines: Vec<(Arc<Expression<LineExpr>>, Style)>,
-    /// Angles to be displayed
-    pub angles: Vec<(Arc<Expression<ScalarExpr>>, u8, Style)>, // This u8 refers to number of arcs in an angle!
-    /// Segments to be displayed
-    pub segments: Vec<(Point, Point, Style)>,
-    /// Rays to be displayed
-    pub rays: Vec<(Point, Point, Style)>,
-    /// Circles to be displayed
-    pub circles: Vec<(Arc<Expression<CircleExpr>>, Style)>,
-    /// The canvas size.
-    pub canvas_size: (usize, usize),
+    /// Entities used by the figure
+    pub entities: Vec<EntityKind>,
+    /// Variables used by the figure
+    pub variables: Vec<math::Expr<()>>,
+    /// Drawn items with meta
+    pub items: Vec<Item>
+}
+
+/// Generated figure, created by the engine
+#[derive(Debug, Clone)]
+pub struct Generated {
+    /// Entities used by the figure
+    pub entities: Vec<Entity<ValueEnum>>,
+    /// Variables used by the figure
+    pub variables: Vec<math::Expr<ValueEnum>>,
+    /// Drawn items with meta
+    pub items: Vec<Item>
 }
 
 /// Normal/lower index in math text.
@@ -116,7 +291,7 @@ impl Display for MathChar {
 }
 
 /// A special character.
-#[derive(Debug, Clone, Copy, FromPrimitive, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, FromPrimitive, ToPrimitive, PartialEq, Eq, Serialize)]
 pub enum MathSpecial {
     Alpha,
     AlphaUpper,
@@ -179,19 +354,19 @@ impl MathSpecial {
     /// Returns an error on parsing error.
     ///
     /// # Panics
-    /// Panics in this function are a bug.
-    pub fn parse(charcode: &str, content_span: Span) -> Result<Self, Error> {
+    /// Any panic in this function are a bug.
+    pub fn parse(char_code: &str, content_span: Span) -> Result<Self, Error> {
         SPECIAL_MATH
             .iter()
             .enumerate()
-            .find(|x| *x.1 == charcode)
+            .find(|x| *x.1 == char_code)
             .map(|x| MathSpecial::from_usize(x.0).unwrap())
             .ok_or_else(|| {
-                let best = most_similar(SPECIAL_MATH, charcode);
+                let best = most_similar(SPECIAL_MATH, char_code);
 
-                Error::SpecialNotRecongised {
+                Error::SpecialNotRecognised {
                     error_span: content_span,
-                    code: charcode.to_string(),
+                    code: char_code.to_string(),
                     suggested: best,
                 }
             })

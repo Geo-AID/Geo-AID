@@ -19,7 +19,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
 use crate::{
-    script::{parser::PropertyValue, token::StrLit},
+    script::{figure::{MathString, SegmentItem}, math::Build, parser::PropertyValue, token::{Span, StrLit}},
     span,
 };
 
@@ -52,9 +52,10 @@ fn segment_function_point_point(
 }
 
 /// ```
+/// # use geo_aid::script::figure::Style;
 /// struct Associated {
 ///     display_segment: bool,
-///     style: Mode
+///     style: Style
 /// }
 /// ```
 #[derive(Debug)]
@@ -63,8 +64,7 @@ pub struct Associated;
 impl BuildAssociated<BundleNode> for Associated {
     fn build_associated(
         self: Box<Self>,
-        compiler: &mut Compiler,
-        figure: &mut Figure,
+        build: &mut Build,
         associated: &mut HierarchyNode<BundleNode>,
     ) {
         let display_segment = associated
@@ -75,11 +75,14 @@ impl BuildAssociated<BundleNode> for Associated {
         let style = associated.get_data("style").unwrap().as_style().unwrap();
 
         if display_segment.unwrap() {
-            figure.segments.push((
-                compiler.compile(associated.root.children["A"].as_point().unwrap()),
-                compiler.compile(associated.root.children["B"].as_point().unwrap()),
-                style.unwrap(),
-            ));
+            let p_id = build.load(associated.root.children["A"].as_point().unwrap());
+            let q_id = build.load(associated.root.children["B"].as_point().unwrap());
+            build.add(SegmentItem {
+                p_id,
+                q_id,
+                label: MathString::new(Span::empty()),
+                style: style.unwrap()
+            });
         }
     }
 }
