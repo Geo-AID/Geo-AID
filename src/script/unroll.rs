@@ -1060,19 +1060,20 @@ impl Displayed for Point {
     type Node = PointNode;
 }
 
-impl Expr<Point> {
-    #[must_use]
-    pub fn get_data(&self) -> &Point {
-        match self.data.as_ref() {
+impl GetData for Point {
+    fn get_data(&self) -> &Self {
+        match self {
             Point::Generic(v) => match v {
                 Generic::Boxed(v) => v.get_data(),
                 Generic::VariableAccess(v) => v.definition.get_data(),
-                Generic::Dummy => self.data.as_ref()
+                Generic::Dummy => self
             },
-            v => v
+            _ => self
         }
     }
+}
 
+impl Expr<Point> {
     #[must_use]
     pub fn boxed(mut self, span: Span) -> Self {
         let node = self.node.take();
@@ -1237,19 +1238,20 @@ impl Displayed for Circle {
     type Node = CircleNode;
 }
 
-impl Expr<Circle> {
-    #[must_use]
-    pub fn get_data(&self) -> &Circle {
-        match self.data.as_ref() {
+impl GetData for Circle {
+    fn get_data(&self) -> &Self {
+        match self {
             Circle::Generic(v) => match v {
                 Generic::Boxed(v) => v.get_data(),
                 Generic::VariableAccess(v) => v.definition.get_data(),
-                Generic::Dummy => self.data.as_ref()
+                Generic::Dummy => self
             },
-            v @ Circle::Circle(..) => v
+            Circle::Circle(..) => self
         }
     }
+}
 
+impl Expr<Circle> {
     #[must_use]
     pub fn boxed(mut self, span: Span) -> Self {
         let node = self.node.take();
@@ -1346,19 +1348,20 @@ impl Displayed for Line {
     type Node = LineNode;
 }
 
-impl Expr<Line> {
-    #[must_use]
-    pub fn get_data(&self) -> &Line {
-        match self.data.as_ref() {
+impl GetData for Line {
+    fn get_data(&self) -> &Self {
+        match self {
             Line::Generic(v) => match v {
                 Generic::Boxed(v) => v.get_data(),
                 Generic::VariableAccess(v) => v.definition.get_data(),
-                Generic::Dummy => self.data.as_ref()
+                Generic::Dummy => self
             },
-            v => v
+            _ => self
         }
     }
+}
 
+impl Expr<Line> {
     #[must_use]
     pub fn boxed(mut self, span: Span) -> Self {
         let node = self.node.take();
@@ -1587,19 +1590,20 @@ impl Scalar {
     }
 }
 
-impl Expr<Scalar> {
-    #[must_use]
-    pub fn get_data(&self) -> &ScalarData {
-        match &self.data.data {
+impl GetData for Scalar {
+    fn get_data(&self) -> &Self {
+        match &self.data {
             ScalarData::Generic(v) => match v {
                 Generic::Boxed(v) => v.get_data(),
                 Generic::VariableAccess(v) => v.definition.get_data(),
-                Generic::Dummy => &self.data.data
+                Generic::Dummy => self
             },
-            v => v
+            _ => self
         }
     }
+}
 
+impl Expr<Scalar> {
     #[must_use]
     pub fn boxed(mut self, span: Span) -> Self {
         let node = self.node.take();
@@ -2475,6 +2479,11 @@ pub trait Displayed: Sized {
     type Node: Node;
 }
 
+pub trait GetData {
+    #[must_use]
+    fn get_data(&self) -> &Self;
+}
+
 pub trait CloneWithNode {
     #[must_use]
     fn clone_with_node(&mut self) -> Self;
@@ -2578,6 +2587,13 @@ pub struct Expr<T: ?Sized + Displayed> {
     pub data: Rc<T>,
     pub span: Span,
     pub node: Option<HierarchyNode<T::Node>>,
+}
+
+impl<T: GetData + ?Sized + Displayed> Expr<T> {
+    #[must_use]
+    pub fn get_data(&self) -> &T {
+        self.data.get_data()
+    }
 }
 
 impl<T: ?Sized + Displayed> CloneWithNode for Expr<T> {

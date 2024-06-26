@@ -50,6 +50,12 @@ impl Complex {
     }
 
     #[must_use]
+    #[inline]
+    pub const fn one() -> Self {
+        Self::new(1.0, 0.0)
+    }
+
+    #[must_use]
     pub fn i() -> Self {
         Self::new(0.0, 1.0)
     }
@@ -160,6 +166,13 @@ impl Mul<f64> for Complex {
     }
 }
 
+impl MulAssign<f64> for Complex {
+    fn mul_assign(&mut self, rhs: f64) {
+        self.real *= rhs;
+        self.imaginary *= rhs;
+    }
+}
+
 impl Add<f64> for Complex {
     type Output = Complex;
 
@@ -228,7 +241,11 @@ impl MulAssign for Complex {
 
 impl Display for Complex {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} + {}i", self.real, self.imaginary)
+        if let Some(precision) = f.precision() {
+            write!(f, "{2:.*} + {3:.*}i", precision, precision, self.real, self.imaginary)
+        } else {
+            write!(f, "{} + {}i", self.real, self.imaginary)
+        }
     }
 }
 

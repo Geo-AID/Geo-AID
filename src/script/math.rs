@@ -18,6 +18,7 @@
  CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
+use std::any::Any;
 use std::cell::OnceCell;
 use std::collections::{hash_map, HashMap, HashSet};
 use std::fmt::{Debug, Display, Formatter};
@@ -26,6 +27,7 @@ use std::iter::Peekable;
 use std::mem;
 use std::cmp::Ordering;
 use std::ops::{Deref, DerefMut};
+use std::rc::Rc;
 use derive_recursive::Recursive;
 use num_traits::{FromPrimitive, One, Zero};
 use serde::Serialize;
@@ -37,7 +39,7 @@ use crate::script::unroll::figure::Node;
 
 use self::optimizations::{EqExpressions, EqPointDst, RightAngle};
 
-use super::unroll::Flag;
+use super::unroll::{Flag, GetData};
 use super::{figure::Figure, unroll::{self, Displayed, Expr as Unrolled, UnrolledRule, UnrolledRuleKind,
                                      Point as UnrolledPoint, Line as UnrolledLine, Circle as UnrolledCircle, ScalarData as UnrolledScalar}, Error, ComplexUnit, SimpleUnit};
 
@@ -156,15 +158,21 @@ impl<T: ContainsEntity> ContainsEntity for Vec<T> {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum EntityBehavior {
+    MapEntity(EntityId),
+    MapVar(VarIndex)
+}
+
 pub struct ReconstructCtx<'r> {
-    entity_replacement: &'r [VarIndex],
+    entity_replacement: &'r [EntityBehavior],
     old_vars: &'r [Expr<()>],
     new_vars: Vec<Expr<()>>
 }
 
 impl<'r> ReconstructCtx<'r> {
     #[must_use]
-    fn new(entity_replacement: &'r [VarIndex], old_vars: &'r [Expr<()>]) -> Self {
+    fn new(entity_replacement: &'r [EntityBehavior], old_vars: &'r [Expr<()>]) -> Self {
         Self {
             entity_replacement,
             old_vars,
@@ -179,7 +187,10 @@ pub trait Reconstruct {
 }
 
 fn reconstruct_entity(entity_id: EntityId, ctx: &mut ReconstructCtx) -> ExprKind {
-    ctx.old_vars[ctx.entity_replacement[entity_id.0].0].kind.clone().reconstruct(ctx)
+    match ctx.entity_replacement[entity_id.0] {
+        EntityBehavior::MapEntity(id) => ExprKind::Entity { id },
+        EntityBehavior::MapVar(index) => ctx.old_vars[index.0].kind.clone().reconstruct(ctx)
+    }
 }
 
 impl Reconstruct for ProcNum {
@@ -603,7 +614,7 @@ impl FromUnrolled<UnrolledPoint> for ExprKind {
             },
             UnrolledPoint::CircleCenter(circle) => {
                 match circle.get_data() {
-                    UnrolledCircle::Circle(center, _) => return Self::load(center, math),
+                    UnrolledCircle::Circle(center, _) => return math.load_no_store(center),
                     UnrolledCircle::Generic(_) => unreachable!()
                 }
             },
@@ -618,7 +629,7 @@ impl FromUnrolled<UnrolledPoint> for ExprKind {
 
 impl FromUnrolled<unroll::Scalar> for ExprKind {
     fn load(expr: &Unrolled<unroll::Scalar>, math: &mut Expand) -> Self {
-        let mut kind = match expr.get_data() {
+        let mut kind = match &expr.get_data().data {
             UnrolledScalar::Add(a, b) => ExprKind::Sum {
                 plus: vec![math.load(a), math.load(b)],
                 minus: Vec::new()
@@ -649,7 +660,7 @@ impl FromUnrolled<unroll::Scalar> for ExprKind {
             },
             UnrolledScalar::CircleRadius(circle) => {
                 match circle.get_data() {
-                    UnrolledCircle::Circle(_, radius) => Self::load(radius, math),
+                    UnrolledCircle::Circle(_, radius) => math.load_no_store(radius),
                     UnrolledCircle::Generic(_) => unreachable!()
                 }
             }
@@ -658,7 +669,7 @@ impl FromUnrolled<unroll::Scalar> for ExprKind {
                 ExprKind::Const { value: x.clone() }, expr.data.unit, math
             ),
             UnrolledScalar::DstLiteral(x) => ExprKind::Const { value: x.clone() },
-            UnrolledScalar::SetUnit(x, unit) => return fix_dst(Self::load(x, math), Some(*unit), math),
+            UnrolledScalar::SetUnit(x, unit) => return fix_dst(math.load_no_store(x), Some(*unit), math),
             UnrolledScalar::PointPointDistance(p, q) => ExprKind::PointPointDistance {
                 p: math.load(p),
                 q: math.load(q)
@@ -783,7 +794,7 @@ impl FromUnrolled<UnrolledCircle> for ExprKind {
 impl Normalize for ExprKind {
     fn normalize(&mut self, math: &mut Math) {
         let cmp_and_swap = |a: &mut VarIndex, b: &mut VarIndex| {
-            if math.compare(*a, *b) == Ordering::Less {
+            if math.compare(*a, *b) == Ordering::Greater {
                 mem::swap(a, b);
             }
         };
@@ -798,13 +809,13 @@ impl Normalize for ExprKind {
             | Self::Power { .. }
             | Self::ConstructCircle { .. }
             | Self::Const { .. }
+            | Self::ThreePointAngleDir { .. } // DO NOT NORMALIZE DIRECTED ANGLES
             | Self::Entity { .. } => (),
             Self::LineLineIntersection { k: a, l: b }
             | Self::PointPoint { p: a, q: b }
             | Self::TwoLineAngle { k: a, l: b }
             | Self::AngleBisector { p: a, r: b, .. }
             | Self::ThreePointAngle { p: a, r: b, .. }
-            | Self::ThreePointAngleDir { p: a, r: b, .. }
             | Self::PointPointDistance {p: a, q: b} => {
                 cmp_and_swap(a, b);
             }
@@ -1213,15 +1224,16 @@ impl Normalize for RuleKind {
     fn normalize(&mut self, math: &mut Math) {
         match self {
             | Self::PointEq(a, b)
-            | Self::NumberEq(a, b)
-            | Self::Gt(a, b)
-            | Self::Lt(a, b) => {
-                if math.at(*a).kind > math.at(*b).kind {
+            | Self::NumberEq(a, b) => {
+                if math.compare(*a, *b) == Ordering::Greater {
                     mem::swap(a, b);
                 }
             }
             Self::Alternative(v) => v.sort(),
-            Self::Invert(_) | Self::Bias => ()
+            Self::Invert(_)
+            | Self::Bias
+            | Self::Gt(_, _)
+            | Self::Lt(_, _) => ()
         }
     }
 }
@@ -1236,7 +1248,7 @@ impl Normalize for Rule {
 pub struct Adjusted {
     pub variables: Vec<Expr<()>>,
     pub rules: Vec<Rule>,
-    pub entities: Vec<Entity<()>>
+    pub entities: Vec<EntityKind>
 }
 
 #[derive(Debug)]
@@ -1322,9 +1334,15 @@ impl ContainsEntity for EntityId {
 #[derive(Debug, Clone, Default)]
 pub struct Expand {
     /// Expressions are mapped to the record entries.
-    pub expr_map: HashMap<usize, VarIndex>,
+    pub expr_map: HashMap<usize, Expr<()>>,
     /// Processing context
-    pub math: Math
+    pub math: Math,
+    /// Used to keep pointers with the data we need alive, so that no memory issues occur.
+    /// Normally, an address add to `expr_map` as a key had the risk of expiring and a collision
+    /// occurring. This way, this should be prevented. It will also increase memory usage, but shhh.
+    /// It's an ugly solution, but it works. I'm most likely going to come back to this one with some
+    /// new ideas for solving the issue.
+    pub rc_keepalive: Vec<Rc<dyn Any>>
 }
 
 impl Deref for Expand {
@@ -1352,22 +1370,27 @@ pub struct Math {
 }
 
 impl Expand {
-    pub fn load<T: Displayed + GetMathType>(&mut self, expr: &Unrolled<T>) -> VarIndex
+    pub fn load<T: Displayed + GetMathType + Debug + GetData + 'static>(&mut self, unrolled: &Unrolled<T>) -> VarIndex
     where ExprKind: FromUnrolled<T> {
-        let key = (expr.data.as_ref() as *const _) as usize;
-        let loaded = self.expr_map.get_mut(&key).copied();
+        let expr = self.load_no_store(unrolled);
+        self.store(expr, T::get_math_type())
+    }
+
+    pub fn load_no_store<T: Displayed + GetMathType + GetData + Debug + 'static>(&mut self, unrolled: &Unrolled<T>) -> ExprKind
+    where ExprKind: FromUnrolled<T> {
+        // Keep the smart pointer inside `unrolled` alive.
+        self.rc_keepalive.push(Rc::clone(&unrolled.data) as Rc<dyn Any>);
+
+        let key = (unrolled.get_data() as *const _) as usize;
+        let loaded = self.expr_map.get(&key).cloned();
 
         if let Some(loaded) = loaded {
-            // Shallow clone here is weirs but necessary.
-            let expr = self.at(loaded).kind.clone().deep_clone(self);
-            let ty = self.at(loaded).ty;
-            self.store(expr, ty)
+            loaded.kind.deep_clone(self)
         } else {
             // If expression has not been mathed yet, math it and put it into the record.
-            let loaded = ExprKind::load(expr, self);
-            let index = self.store(loaded, T::get_math_type());
-            self.expr_map.insert(key, index);
-            index
+            let loaded = ExprKind::load(unrolled, self);
+            self.expr_map.insert(key, Expr::new(loaded.clone(), T::get_math_type()));
+            loaded
         }
     }
 }
@@ -1428,13 +1451,14 @@ pub struct Build {
 }
 
 impl Build {
-    pub fn load<T: Displayed + GetMathType>(&mut self, expr: &Unrolled<T>) -> VarIndex
+    pub fn load<T: Displayed + GetMathType + Debug + GetData + 'static>(&mut self, expr: &Unrolled<T>) -> VarIndex
     where ExprKind: FromUnrolled<T> {
         self.expand.load(expr)
     }
 
     pub fn add<I: Into<Item>>(&mut self, item: I) {
-        self.items.push(item.into());
+        let item = item.into();
+        self.items.push(item);
     }
 }
 
@@ -1446,12 +1470,13 @@ fn optimize_rules(rules: &mut Vec<Option<Rule>>, math: &mut Math) -> bool {
     let mut performed = false;
     
     for rule in rules.iter_mut() {
-        performed = performed
-            | ZeroLineDst::process(rule, math)
+        let rule_performed = ZeroLineDst::process(rule, math)
             | RightAngle::process(rule, math)
             | EqPointDst::process(rule, math)
             | EqExpressions::process(rule, math)
             ;
+
+        performed |= rule_performed;
     }
 
     if performed {
@@ -1464,65 +1489,39 @@ fn optimize_rules(rules: &mut Vec<Option<Rule>>, math: &mut Math) -> bool {
 /// Constructs a map between two sets of numbers A -> B.
 #[derive(Debug, Clone, Default)]
 pub struct IndexMap {
-    /// The main map
-    a_to_b: HashMap<usize, usize>,
-    /// An inverse map
-    b_to_a: HashMap<usize, usize>
+    /// Consecutive mappings. Not incredibly efficient, but simple and infallible.
+    mappings: Vec<(usize, usize)>
 }
 
 impl IndexMap {
     #[must_use]
     pub fn new() -> Self {
         Self {
-            a_to_b: HashMap::new(),
-            b_to_a: HashMap::new()
+            mappings: Vec::new()
         }
     }
 
     #[must_use]
-    pub fn get(&self, a: usize) -> usize {
-        self.a_to_b.get(&a).copied().unwrap_or(a)
+    pub fn get(&self, mut a: usize) -> usize {
+        for m in &self.mappings {
+            if a == m.0 {
+                a = m.1;
+            }
+        }
+
+        a
     }
 
     /// Creates a mapping from a to b (works like function composition).
     pub fn map(&mut self, a: usize, b: usize) {
-        // Before everything, if a == b, nothing happens.
-        if a == b {
-            return;
-        }
-
-        // If `a` is present in `b->a`, that means there exists a direct mapping a->b which we should override and remove the `b->a` map.
-        // Otherwise, if `a` is not present in `a->b`, we should add it along with a `b->a` mapping.
-        // If `a` is present in `a->b` but not present in `b->a`, `a` is not reachable, thus nothing should happen.
-        let a_key = self.b_to_a.get(&a).copied();
-        if let Some(a_key) = a_key {
-            // There's a mapping `a_key -> a`
-            // Remove the inverse mapping `a -> a_key`
-            self.b_to_a.remove(&a);
-
-            if a_key == b {
-                // Also remove a -> b
-                self.a_to_b.remove(&a_key);
-            } else {
-                // Make the mapping a_key -> b
-                if let Some(current) = self.a_to_b.get_mut(&a_key) {
-                    *current = b;
-                }
-                // Insert the new mapping b -> a_key
-                self.b_to_a.insert(b, a_key);
-            }
-        } else if let hash_map::Entry::Vacant(e) = self.a_to_b.entry(a) {
-            // There is no a -> ?.
-            e.insert(b);
-            self.b_to_a.insert(b, a);
+        if a != b {
+            self.mappings.push((a, b));
         }
     }
 
     /// Composes two index maps: any get call will be functionally equivalent to self.get(other.get(i)).
     pub fn compose(lhs: Self, rhs: &mut Self) {
-        for (a, b) in lhs.a_to_b {
-            rhs.map(a, b);
-        }
+        rhs.mappings.extend(lhs.mappings);
     }
 }
 
@@ -1562,37 +1561,45 @@ fn fold(matrix: &mut Vec<Expr<()>>) -> IndexMap {
     let mut target = Vec::new();
     let mut final_map = IndexMap::new();
     let mut record = HashMap::new();
-    target.resize_with(matrix.len(), Expr::default);
 
     loop {
+        // println!("Folding...");
         let mut map = IndexMap::new();
         let mut folded = false;
         for (i, expr) in matrix.iter_mut().enumerate() {
             let mut expr = mem::take(expr);
+            // print!("Found {expr:?}. Remapping to ");
             expr.reindex(&map);
+            // println!("{expr:?}");
             match record.entry(expr) {
                 hash_map::Entry::Vacant(entry) => {
                     target.push(entry.key().clone());
                     let new_i = target.len() - 1;
+                    // println!("Not recorded, mapping {i} -> {new_i}");
                     map.map(i, new_i);
                     entry.insert(new_i);
                 },
                 hash_map::Entry::Occupied(entry) => {
                     // We have to update the index map. No push into target happens.
-                    map.map(i, *entry.get());
+                    let j = *entry.get();
+                    map.map(i, j);
+                    // println!("Already recorded at {j}. Mapping {i} -> {j}");
                     folded = true;
                 }
             }
         }
+        // println!();
+        // println!("We've build a map: {map:#?}");
 
         // We have to also build the final map.
         IndexMap::compose(map, &mut final_map);
+        // println!("After composition, it became {final_map:#?}");
 
         // Swap target with matrix before next loop.
         mem::swap(matrix, &mut target);
-
-        // And truncate target to match matrix.
-        target.truncate(matrix.len());
+        // And clear aux variables.
+        target.clear();
+        record.clear();
 
         if !folded {
             break final_map;
@@ -1628,12 +1635,12 @@ fn optimize_cycle(rules: &mut Vec<Option<Rule>>, math: &mut Math, items: &mut Ve
         for (i, entity) in entities.iter().enumerate() {
             entity_map.push(match entity {
                 EntityKind::FreePoint
+                | EntityKind::FreeReal
                 | EntityKind::PointOnCircle { .. }
-                | EntityKind::PointOnLine { .. } => math.store(ExprKind::Entity { id: EntityId(i - offset) }, ExprType::Point),
-                EntityKind::FreeReal => math.store(ExprKind::Entity { id: EntityId(i - offset) }, ExprType::Number),
+                | EntityKind::PointOnLine { .. } => EntityBehavior::MapEntity(EntityId(i - offset)),
                 EntityKind::Bind(expr) => {
                     offset += 1;
-                    *expr
+                    EntityBehavior::MapVar(*expr)
                 }
             });
         }
@@ -1691,6 +1698,10 @@ pub fn load_script(input: &str) -> Result<Intermediate, Vec<Error>> {
     // Unroll script
     let (mut unrolled, nodes) = unroll::unroll(input)?;
 
+    // for rule in unrolled.rules.borrow().iter() {
+    //     println!("{rule}");
+    // }
+
     // Expand & normalize figure
     let mut build = Build::default();
     Box::new(nodes).build(&mut build);
@@ -1698,12 +1709,22 @@ pub fn load_script(input: &str) -> Result<Intermediate, Vec<Error>> {
     // Move expand base
     let mut expand = build.expand;
 
+    // for (i, v) in expand.expr_record.iter().enumerate() {
+    //     println!("[{i}] = {:?}", v.kind);
+    // }
+    //
+    // println!("{:#?}", build.items);
+
     // Expand & normalize rules
     let mut rules = Vec::new();
 
     for rule in unrolled.take_rules() {
         rules.push(Some(Rule::load(&rule, &mut expand)));
     }
+
+    // for (i, ent) in expand.entities.iter().enumerate() {
+    //     println!("[{i}] = {ent:?}");
+    // }
 
     // Get the math out of the `Expand`.
     let mut math = expand.math;
@@ -1715,27 +1736,45 @@ pub fn load_script(input: &str) -> Result<Intermediate, Vec<Error>> {
     // This means we have to fix it. And the easiest way to fix it is to reconstruct it once more.
 
     let old_entities = mem::take(&mut math.entities);
-    let entity_map: Vec<_> = old_entities
-        .iter()
-        .enumerate()
-        .map(|(i, ent)| match ent {
-            EntityKind::FreePoint
-            | EntityKind::PointOnLine { .. }
-            | EntityKind::PointOnCircle { .. } => math.store(ExprKind::Entity { id: EntityId(i) }, ExprType::Point),
-            EntityKind::FreeReal => math.store(ExprKind::Entity { id: EntityId(i) }, ExprType::Number),
-            EntityKind::Bind(_) => unreachable!()
-        })
+    let entity_map: Vec<_> = (0..old_entities.len())
+        .map(|i| EntityBehavior::MapEntity(EntityId(i)))
         .collect();
 
     let old_vars = mem::take(&mut math.expr_record);
     let mut ctx = ReconstructCtx::new(&entity_map, &old_vars);
-    math.entities = old_entities.reconstruct(&mut ctx);
+    let new_entities = old_entities.reconstruct(&mut ctx);
     build.items = build.items.reconstruct(&mut ctx);
     rules = rules.reconstruct(&mut ctx);
     math.expr_record = ctx.new_vars;
 
     // We can also finalize rules:
     let mut rules: Vec<_> = rules.into_iter().flatten().collect();
+
+    // And add point inequalities
+    for i in new_entities
+        .iter()
+        .enumerate()
+        .filter(|ent| matches!(ent.1, EntityKind::PointOnLine { .. } | EntityKind::FreePoint | EntityKind::PointOnCircle { .. }))
+        .map(|x| x.0)
+    {
+        for j in new_entities
+            .iter()
+            .enumerate()
+            .skip(i+1)
+            .filter(|ent| matches!(ent.1, EntityKind::PointOnLine { .. } | EntityKind::FreePoint | EntityKind::PointOnCircle { .. }))
+            .map(|x| x.0)
+        {
+            let ent1 = math.store(ExprKind::Entity { id: EntityId(i) }, ExprType::Point);
+            let ent2 = math.store(ExprKind::Entity { id: EntityId(j) }, ExprType::Point);
+            rules.push(Rule {
+                weight: ProcNum::one(),
+                entities: Vec::new(),
+                kind: RuleKind::Invert(Box::new(RuleKind::PointEq(ent1, ent2)))
+            });
+        }
+    }
+
+    math.entities = new_entities;
 
     // THE FOLDING STEP
     // We perform similar expression elimination multiple times
@@ -1749,7 +1788,7 @@ pub fn load_script(input: &str) -> Result<Intermediate, Vec<Error>> {
     let mut entities = math.entities;
     let mut variables = math.expr_record;
     let mut fig_variables = variables.clone();
-    let adj_entities = entities.clone();
+    let mut fig_entities = entities.clone();
 
     let index_map = fold(&mut variables);
     entities.reindex(&index_map);
@@ -1767,39 +1806,43 @@ pub fn load_script(input: &str) -> Result<Intermediate, Vec<Error>> {
         rule.entities = entities.into_iter().collect();
     }
 
-    let mut counter = 0..;
-
-    // Give metas to entities.
-    let entities = entities
-        .into_iter()
-        .map(|ent| Entity {
-            kind: ent,
-            meta: counter.next().unwrap_or_default()
-        })
-        .collect();
-
     // Fold figure variables
+    // println!("PRE-FOLD");
+    //
+    // for (i, v) in fig_variables.iter().enumerate() {
+    //     println!("[{i}] = {:?}", v.kind);
+    // }
+
+    // println!("{:#?}", build.items);
+
     let index_map = fold(&mut fig_variables);
+    // println!("POST-FOLD");
+
+    // println!("{index_map:#?}");
+
+    // for (i, v) in fig_variables.iter().enumerate() {
+    //     println!("[{i}] = {:?}", v.kind);
+    // }
     let mut items = build.items;
     items.reindex(&index_map);
+    fig_entities.reindex(&index_map);
 
-    let fig_variables = fig_variables
-        .into_iter()
-        .map(|expr| Expr {
-            kind: expr.kind,
-            meta: counter.next().unwrap_or_default(),
-            ty: expr.ty
-        })
-        .collect();
+    // for (i, v) in fig_variables.iter().enumerate() {
+    //     println!("[{i}] = {:?}", v.kind);
+    // }
+    // 
+    // for rule in &rules {
+    //     println!("\n{:?}", rule.kind);
+    // }
 
     Ok(Intermediate {
         adjusted: Adjusted {
-            variables: variables.into_iter().map(|expr| Expr { kind: expr.kind, ty: expr.ty, meta: () }).collect(),
+            variables,
             rules,
-            entities: adj_entities.into_iter().map(|kind| Entity { kind, meta: () }).collect()
+            entities
         },
         figure: Figure {
-            entities,
+            entities: fig_entities,
             variables: fig_variables,
             items
         },

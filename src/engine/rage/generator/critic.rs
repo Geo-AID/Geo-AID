@@ -78,14 +78,13 @@ impl EvaluateProgram {
         self.base.execute(memory);
 
         // Calculate adjustable qualities (weighed mean). Qualities are expected to be normalized.
-        for q in memory.iter().take(self.rule_count) {
+        for q in memory.iter().skip(self.base.constants.len()).take(self.rule_count) {
             let quality = q.complex.real;
 
             for ev in evaluation.iter_mut().take(self.adjustables.len()) {
                 *ev += quality * weight_it.next().unwrap();
             }
         }
-
     }
 }
 

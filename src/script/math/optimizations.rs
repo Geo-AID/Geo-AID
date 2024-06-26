@@ -18,7 +18,7 @@ WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use crate::script::math::{EntityKind, ExprKind, ContainsEntity, ExprType, DeepClone, Math};
+use crate::script::math::{EntityKind, ExprKind, ContainsEntity, ExprType, DeepClone, Math, VarIndex};
 use crate::script::token::number::ProcNum;
 use num_traits::Zero;
 
@@ -125,10 +125,46 @@ impl EqExpressions {
     }
 }
 
-/// If two points are equally distant from a certain single point, they lie on a circle with the point as the origin.
+/// If a distance between two points is equal to something, maybe we can turn this into a circle.
 pub struct EqPointDst;
 
 impl EqPointDst {
+    // Assumes that if rule has an entity, it's on the left of dst(a, b) = c
+    fn process_pp_of_ent_x(a: VarIndex, b: VarIndex, c: VarIndex, math: &mut Math) -> bool {
+        let &ExprKind::Entity { id } = &math.at(a).kind else {
+            return false;
+        };
+
+        if b.contains_entity(id, math) || c.contains_entity(id, math) {
+            return false;
+        }
+
+        // Check if `id` is viable for encircling
+        let ent = math.entities[id.0].clone();
+        if !matches!(ent, EntityKind::FreePoint) {
+            return false;
+        }
+
+        // We can make it a circle now.
+        let circle = math.store(ExprKind::ConstructCircle {
+            center: b, // We're moving b
+            radius: c // We're also moving c
+        }, ExprType::Circle);
+        math.entities[id.0] = EntityKind::PointOnCircle { circle };
+
+        true
+    }
+
+    // Assumes that if rule compares a pp distance, the distance on left of a = b
+    fn process_pp_x(a: VarIndex, b: VarIndex, math: &mut Math) -> bool {
+        let &ExprKind::PointPointDistance { p, q } = &math.at(a).kind else {
+            return false;
+        };
+
+        // Check both ways
+        Self::process_pp_of_ent_x(p, q, b, math) || Self::process_pp_of_ent_x(q, p, b, math)
+    }
+
     pub fn process(rule: &mut Option<Rule>, math: &mut Math) -> bool {
         let Some(Rule {
             kind: RuleKind::NumberEq(a, b),
@@ -138,46 +174,12 @@ impl EqPointDst {
             return false;
         };
 
-        let &ExprKind::PointPointDistance { p, q } = &math.at(*a).kind else {
-            return false;
-        };
-        let &ExprKind::PointPointDistance { p: r, q: s } = &math.at(*b).kind else {
-            return false;
-        };
-
-        // q = s?
-        let (r, s) = if math.compare(q, s).is_eq() {
-            (r, s)
-        } else if math.compare(q, r).is_eq() {
-            // If not, check q=r? and if so, swap r and s.
-            (s, r)
+        if Self::process_pp_x(*a, *b, math) || Self::process_pp_x(*b, *a, math) {
+            *rule = None;
+            true
         } else {
-            return false;
-        };
-
-        // p must be an entity (if there is one, it's definitely p, because normalization and ordering)
-        let &ExprKind::Entity { id: p_id } = &math.at(p).kind else {
-            return false;
-        };
-
-        // p must be a free point, otherwise it won't work.
-        if !matches!(math.entities[p_id.0], EntityKind::FreePoint) {
-            return false;
+            false
         }
-
-        // p is an entity that is as distant to q=s as r.
-
-        let radius = math.store(ExprKind::PointPointDistance {
-            p: r, // "moving" r here
-            q, // "moving" q
-        }, ExprType::Number);
-        let circle = math.store(ExprKind::ConstructCircle {
-            center: s, // "moving" s=q
-            radius,
-        }, ExprType::Circle);
-        math.entities[p_id.0] = EntityKind::PointOnCircle { circle };
-        *rule = None;
-        true
     }
 }
 

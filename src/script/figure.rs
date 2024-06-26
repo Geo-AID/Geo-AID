@@ -23,7 +23,8 @@ use std::{fmt::Display, str::FromStr};
 use num_derive::{FromPrimitive, ToPrimitive};
 use num_traits::FromPrimitive;
 use serde::Serialize;
-use crate::script::math::{IndexMap, Reconstruct, ReconstructCtx, Reindex, VarIndex};
+use crate::geometry::ValueEnum;
+use crate::script::math::{EntityKind, IndexMap, Reconstruct, ReconstructCtx, Reindex, VarIndex};
 
 use crate::span;
 
@@ -231,9 +232,20 @@ impl Reconstruct for Item {
 #[derive(Debug, Default)]
 pub struct Figure {
     /// Entities used by the figure
-    pub entities: Vec<Entity<usize>>,
+    pub entities: Vec<EntityKind>,
     /// Variables used by the figure
-    pub variables: Vec<math::Expr<usize>>,
+    pub variables: Vec<math::Expr<()>>,
+    /// Drawn items with meta
+    pub items: Vec<Item>
+}
+
+/// Generated figure, created by the engine
+#[derive(Debug, Clone)]
+pub struct Generated {
+    /// Entities used by the figure
+    pub entities: Vec<Entity<ValueEnum>>,
+    /// Variables used by the figure
+    pub variables: Vec<math::Expr<ValueEnum>>,
     /// Drawn items with meta
     pub items: Vec<Item>
 }

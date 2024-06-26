@@ -126,6 +126,8 @@ fn main() {
         }
     };
 
+    // println!("{intermediate:#?}");
+
     let rage = Rage::new(args.count_of_workers);
     let compiled = rage.compile(&intermediate, ());
     let flags = Arc::new(intermediate.flags);
@@ -136,9 +138,9 @@ fn main() {
 
     let GenerateResult {
         time,
-        values,
+        generated,
         total_quality
-    } = rage.generate(compiled, GenParams {
+    } = rage.generate(compiled, intermediate.figure, GenParams {
         max_adjustment: args.adjustment_max,
         mean_count: args.mean_count,
         delta_max_mean: args.delta_max_mean,
@@ -159,7 +161,7 @@ fn main() {
 
     stdout.execute(cursor::Show).unwrap();
 
-    let rendered = projector::project(intermediate.figure, &values, &flags, canvas_size);
+    let rendered = projector::project(generated, &flags, canvas_size);
     
     match args.renderer {
         Renderer::Latex => {

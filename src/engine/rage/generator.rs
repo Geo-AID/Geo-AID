@@ -281,6 +281,7 @@ impl Generator {
         }
 
         if best.total_quality > self.get_total_quality() {
+            // println!("Success!");
             unsafe {
                 let mut_ref = self.current_state.as_mut().get_unchecked_mut();
                 mut_ref.qualities.clone_from_slice(&*best.qualities.0);

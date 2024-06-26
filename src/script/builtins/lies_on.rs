@@ -119,7 +119,7 @@ fn col_lies_on_circle(
             let i_plus_2 = (i + 2) % len;
 
             context.push_rule(UnrolledRule {
-                kind: UnrolledRuleKind::ScalarEq(
+                kind: UnrolledRuleKind::Gt(
                     context.mult(
                         context.angle_dir(
                             index!(no-node lhs, i),

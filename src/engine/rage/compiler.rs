@@ -20,7 +20,7 @@
 
 use std::collections::HashMap;
 use std::mem;
-use num_traits::ToPrimitive;
+use num_traits::{One, ToPrimitive};
 use crate::engine::rage::generator::AdjustableTemplate;
 use crate::engine::rage::generator::critic::{EvaluateProgram, FigureProgram};
 use crate::engine::rage::generator::program::{Instruction, Loc, Program, ValueType};
@@ -52,7 +52,14 @@ pub struct Compiler<'i> {
     entities: Vec<Loc>,
     variables: Vec<Loc>,
     alt_mode: bool,
-    biases: Vec<Loc>
+    biases: Vec<Loc>,
+    mode: Mode
+}
+
+#[derive(Debug, Clone, Copy)]
+enum Mode {
+    Adjustable,
+    Figure
 }
 
 impl<'i> Compiler<'i> {
@@ -68,7 +75,8 @@ impl<'i> Compiler<'i> {
             entities: Vec::new(),
             variables: Vec::new(),
             alt_mode: false,
-            biases: Vec::new()
+            biases: Vec::new(),
+            mode: Mode::Adjustable
         }
     }
 
@@ -104,16 +112,18 @@ impl<'i> Compiler<'i> {
 
         let adjustables: Vec<_> = self.intermediate.figure.entities
             .iter()
-            .map(|ent| AdjustableTemplate::from(&ent.kind))
+            .map(AdjustableTemplate::from)
             .collect();
         let adj_count = adjustables.len();
+        self.mode = Mode::Adjustable;
 
         // 1b. Figure out constants
 
         // The first constants are adjustable values
         self.prepare_constants(adj_count, self.intermediate.adjusted.variables.iter().map(|x| &x.kind));
 
-        let rule_count = self.intermediate.adjusted.rules.len();
+        // We'll add a bias rule for entities with no bounds.
+        let rule_count = self.intermediate.adjusted.rules.len() + 1;
         let program_zero = self.constants.len() + rule_count;
 
         // 1c. Compile all instructions
@@ -127,6 +137,12 @@ impl<'i> Compiler<'i> {
         for rule in &self.intermediate.adjusted.rules {
             self.compile(rule);
         }
+        // The bias rule...
+        self.compile(&Rule {
+            kind: RuleKind::Bias,
+            weight: ProcNum::one(),
+            entities: Vec::new()
+        });
 
         let memory_size = self.cursor.next();
 
@@ -134,13 +150,46 @@ impl<'i> Compiler<'i> {
         let mut weights = Vec::new();
         weights.resize(rule_count * adjustables.len(), 0.0);
 
-        for (i, rule) in self.intermediate.adjusted.rules.iter().enumerate() {
+        let mut affecting_rules = Vec::new();
+        affecting_rules.resize(adjustables.len(), 0.0);
+
+        // First, for each entity we count how many rules affect it and how much.
+        for rule in &self.intermediate.adjusted.rules {
             for EntityId(adj) in &rule.entities {
-                #[allow(clippy::cast_precision_loss)]
-                let ent_count = rule.entities.len() as f64;
-                weights[i * adjustables.len() + *adj] = 1.0 / ent_count;
+                affecting_rules[*adj] += rule.weight.clone().to_complex().real;
             }
         }
+
+        // If an entity has no weight from any, rule, we give it a weight of 1 from the special bias.
+        let mut biased_entities = Vec::new();
+        biased_entities.resize(adjustables.len(), false);
+
+        for (weight, affected) in affecting_rules.iter().zip(biased_entities.iter_mut()) {
+            if *weight < 1e-4 {
+                *affected = true;
+            }
+        }
+
+        // Then, we go through each entity's weights and normalize them so that they add up to 1.
+        for (i, rule) in self.intermediate.adjusted.rules.iter().enumerate() {
+            for EntityId(adj) in &rule.entities {
+                weights[i * adjustables.len() + *adj] = rule.weight.clone().to_complex().real / affecting_rules[*adj];
+            }
+        }
+
+        // We go through all biased entities and assign them a weight of one, as they will be biased.
+        for i in biased_entities.into_iter().enumerate().filter_map(|v| v.1.then_some(v.0)) {
+            weights[(rule_count - 1) * adjustables.len() + i] = 1.0;
+        }
+
+        // for i in 0..rule_count {
+        //     print!("Rule {i}:");
+        //
+        //     for j in 0..adjustables.len() {
+        //         print!("\t{:.2}", weights[i*adjustables.len() + j]);
+        //     }
+        //     println!();
+        // }
 
         let evaluate = EvaluateProgram {
             base: Program {
@@ -154,13 +203,9 @@ impl<'i> Compiler<'i> {
             weights
         };
 
-        let variable_types: Vec<_> = self.intermediate.figure.variables.iter()
-            .map(|expr| Self::get_value_type(expr.ty))
-            .collect();
-
         let entity_types: Vec<_> = self.intermediate.figure.entities.iter()
             .map(|ent| {
-                match &ent.kind {
+                match ent {
                     EntityKind::FreeReal
                     | EntityKind::FreePoint
                     | EntityKind::PointOnCircle { .. }
@@ -174,6 +219,9 @@ impl<'i> Compiler<'i> {
         self.variables.clear();
         self.entities.clear();
 
+        self.mode = Mode::Figure;
+        self.variables.resize(self.intermediate.figure.variables.len(), usize::MAX);
+
         // 2a. Figure out constants
 
         // The first constants are adjustable values
@@ -182,8 +230,14 @@ impl<'i> Compiler<'i> {
         let program_zero = evaluate.adjustables.len();
         self.cursor.current = program_zero;
 
-        for expr in &self.intermediate.figure.variables {
-            self.compile(expr);
+        let mut final_variables = Vec::new();
+        for (i, expr) in self.intermediate.figure.variables.iter().enumerate() {
+            final_variables.push((Self::get_value_type(expr.ty), self.compile(&VarIndex(i))));
+        }
+
+        let mut final_entities = Vec::new();
+        for (i, ent) in entity_types.into_iter().enumerate() {
+            final_entities.push((ent, self.compile(&EntityId(i))));
         }
 
         let figure = FigureProgram {
@@ -192,9 +246,11 @@ impl<'i> Compiler<'i> {
                 constants: self.constants,
                 instructions: self.instructions
             },
-            variables: variable_types.into_iter().zip(self.variables).collect(),
-            entities: entity_types.into_iter().zip(self.entities).collect()
+            variables: final_variables,
+            entities: final_entities
         };
+
+        // println!("{figure:#?}");
 
         (evaluate, figure)
     }
@@ -227,7 +283,11 @@ impl<'i> Compile<VarIndex> for Compiler<'i> {
             return loc;
         }
 
-        let loc = self.compile(&self.intermediate.adjusted.variables[value.0]);
+        let r = match self.mode {
+            Mode::Adjustable => &self.intermediate.adjusted.variables[value.0].kind,
+            Mode::Figure => &self.intermediate.figure.variables[value.0].kind
+        };
+        let loc = self.compile(r);
         self.variables[value.0] = loc;
         loc
     }
@@ -325,19 +385,25 @@ impl<'i> Compile<ExprKind> for Compiler<'i> {
             ExprKind::Sum { plus, minus } => {
                 let target = self.cursor.next();
 
-                let instruction = Instruction::Sum(Sum {
-                    params: minus.iter().map(|x| self.compile(x)).collect(),
-                    target
-                });
-                self.instructions.push(instruction);
+                let first_param = if minus.is_empty() {
+                    None
+                } else {
+                    let instruction = Instruction::Sum(Sum {
+                        params: minus.iter().map(|x| self.compile(x)).collect(),
+                        target
+                    });
+                    self.instructions.push(instruction);
 
-                self.instructions.push(Instruction::Negation(Negation {
-                    x: target,
-                    target
-                }));
+                    self.instructions.push(Instruction::Negation(Negation {
+                        x: target,
+                        target
+                    }));
+
+                    Some(target)
+                };
 
                 let instruction = Instruction::Sum(Sum {
-                    params: Some(target)
+                    params: first_param
                         .into_iter()
                         .chain(plus.iter().map(|x| self.compile(x)))
                         .collect(),
@@ -350,20 +416,26 @@ impl<'i> Compile<ExprKind> for Compiler<'i> {
             ExprKind::Product { times, by } => {
                 let target = self.cursor.next();
 
-                let instruction = Instruction::PartialProduct(PartialProduct {
-                    params: by.iter().map(|x| self.compile(x)).collect(),
-                    target
-                });
-                self.instructions.push(instruction);
+                let first_param = if by.is_empty() {
+                    None
+                } else {
+                    let instruction = Instruction::PartialProduct(PartialProduct {
+                        params: by.iter().map(|x| self.compile(x)).collect(),
+                        target,
+                    });
+                    self.instructions.push(instruction);
 
-                self.instructions.push(Instruction::Pow(PartialPow {
-                    value: target,
-                    exponent: -1.0,
-                    target
-                }));
+                    self.instructions.push(Instruction::Pow(PartialPow {
+                        value: target,
+                        exponent: -1.0,
+                        target,
+                    }));
+
+                    Some(target)
+                };
 
                 let instruction = Instruction::PartialProduct(PartialProduct {
-                    params: Some(target)
+                    params: first_param
                         .into_iter()
                         .chain(times.iter().map(|x| self.compile(x)))
                         .collect(),
@@ -489,8 +561,11 @@ impl<'i> Compile<EntityId> for Compiler<'i> {
             return loc;
         }
 
-        let ent = self.intermediate.adjusted.entities[value.0].clone();
-        let loc = match ent.kind {
+        let ent = match self.mode {
+            Mode::Adjustable => self.intermediate.adjusted.entities[value.0].clone(),
+            Mode::Figure => self.intermediate.figure.entities[value.0].clone()
+        };
+        let loc = match ent {
             EntityKind::FreeReal
             | EntityKind::FreePoint => {
                 // The first constants are entities.

@@ -75,3 +75,4 @@
 ## Version 0.4.0
 - Completely changed how figures are generated, a new design around generation engines, additional processing stage.
 - Removed the current weight system, as it was hurting the generation.
+- Figures now generate way, way faster.
