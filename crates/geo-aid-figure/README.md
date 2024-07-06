@@ -1,0 +1,1 @@
+Rust type definitions based on Geo-AID's JSON export format. Automatically generated.
