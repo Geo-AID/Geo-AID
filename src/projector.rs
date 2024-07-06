@@ -115,30 +115,30 @@ impl Projector {
         // Checking the lines for proximity.
         for (a, b) in &self.segments {
             // Identifying the "first" point by the real axis.
-            let (seg1, seg2) = if a.real < b.real {
+            let (a, b) = if a.real < b.real {
                 (*a, *b)
             } else {
                 (*b, *a)
             };
 
-            let ln = geometry::get_line(seg1, seg2);
+            let ln = geometry::get_line(a, b);
             let distance = geometry::distance_pt_ln(point, ln);
 
-            // Defining the little nudge applied to the seg1 and seg2 to also include the points defining the segment.
-            let unit = ln.direction * 1e-2;
-            let u1 = unit.real;
-            let u2 = unit.imaginary;
+            // Check if the point lies on the line.
+            // If so, we have 4 cases:
+            // A - point lies close to point A. In that case, we only apply the AB vector.
+            // B - point lies close to point B. In that case, we only apply the BA vector.
+            // C - point lies on the segment AB. In that case, we apply both vectors.
+            // D - point lies far from the segment AB. We do nothing.
 
-            if distance < 1e-2 && seg1.real - u1 < point.real
-                    && point.real < seg2.real + u1
-                    && seg1.imaginary - u2 < point.imaginary && point.imaginary < seg2.imaginary + u2 {
-                if geometry::distance_pt_pt(point, seg1) < 1.0 {
-                    vectors.push(ln.direction);
-                } else if geometry::distance_pt_pt(point, seg2) < 1.0 {
-                    vectors.push(-ln.direction);
-                } else {
-                    vectors.push(ln.direction);
-                    vectors.push(-ln.direction);
+            if distance < 1e-2 {
+                if geometry::distance_pt_pt(point, a) < 1e-2 {
+                    vectors.push((b - a).normalize());
+                } else if geometry::distance_pt_pt(point, b) < 1e-2 {
+                    vectors.push((a - b).normalize());
+                } else if a.real < point.real && point.real < b.real {
+                    let v = (a - b).normalize();
+                    vectors.extend([v, -v]);
                 }
             }
         }
@@ -146,7 +146,7 @@ impl Projector {
         // Checking the circles for associated vectors.
         for &(center, radius) in &self.circles {
             if (geometry::distance_pt_pt(center, point) - radius).abs() < 1e-4 {
-                let direction = (center - point).normalize().mul_i();
+                let direction = (center - point).mul_i().normalize();
 
                 vectors.push(direction);
                 vectors.push(-direction);
@@ -159,12 +159,14 @@ impl Projector {
         let mut vec_iter = vectors.iter();
         vec_iter.next();
 
+        let radius = 10.0;
+
         if vectors.is_empty() {
             // No vectors associated with the given point.
-            Complex::new(2.0, 2.0)
+            Complex::polar(PI / 4.0, radius)
         } else if vectors.len() == 1 {
             // Only one vector which is associated with the given point.
-            -4.0 * vectors.first().unwrap().normalize()
+            -radius * vectors.first().copied().unwrap()
         } else {
             let mut flip = false;
             let mut biggest_angle = 0.0;
@@ -196,17 +198,17 @@ impl Projector {
             let bisector_angle = (label_vectors.1.arg() + label_vectors.0.arg()) / 2.0;
 
             // This is just the standard complex number formula.
-            let mut bisector_vec = Complex::new(bisector_angle.cos(), bisector_angle.sin());
+            let bisector_vec = Complex::polar(
+                bisector_angle,
+                (radius / (biggest_angle / 2.0).sin()).min(radius)
+            );
 
             // to do -> better scaling
             if flip {
-                biggest_angle *= -1.0;
-                bisector_vec *= -1.0;
+                bisector_vec * -1.0
+            } else {
+                bisector_vec
             }
-
-            let scale = 540.0 / biggest_angle.to_degrees().abs();
-
-            bisector_vec * 3.0 * scale
         }
     }
 }
@@ -523,6 +525,9 @@ impl Transform {
 // }
 
 /// Takes the figure and rendered adjustables and attempts to design a figure that can then be rendered in chosen format.
+///
+/// # Panics
+/// Any panic is a bug.
 pub fn project(
     figure: Generated,
     _flags: &Arc<Flags>,
@@ -532,11 +537,24 @@ pub fn project(
     let variables: Vec<_> = figure.variables;
     let items = figure.items;
 
-    // Collect points (currently only the actual points, in the future also some more, like circle borders etc.)
-    let points: Vec<_> = items.iter().filter_map(|x| match x {
-        Item::Point(pt) => variables[pt.id.0].meta.as_complex(),
-        _ => None
-    }).collect();
+    let mut points = Vec::new();
+
+    for item in &items {
+        match item {
+            Item::Point(pt) => points.push(variables[pt.id.0].meta.as_complex().unwrap()),
+            Item::Circle(c) => {
+                let circle = variables[c.id.0].meta.as_circle().unwrap();
+
+                points.extend([
+                    circle.center - circle.radius,
+                    circle.center + circle.radius,
+                    circle.center - circle.radius * Complex::i(),
+                    circle.center + circle.radius * Complex::i()
+                ]);
+            }
+            _ => ()
+        }
+    }
 
     // Frame top left point.
     let top_left = Complex::new(

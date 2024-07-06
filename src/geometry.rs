@@ -44,6 +44,11 @@ impl Complex {
     }
 
     #[must_use]
+    pub fn polar(theta: f64, radius: f64) -> Self {
+        Self::new(theta.cos(), theta.sin()) * radius
+    }
+
+    #[must_use]
     #[inline]
     pub const fn zero() -> Self {
         Self::new(0.0, 0.0)
