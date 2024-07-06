@@ -2,11 +2,10 @@
 name = "geo_aid_derive"
 description = "Derive crate for geo-aid"
 version = "0.1.5"
-authors = ["DragonGamesStudios <margos.michal@gmail.com>"]
 keywords = ["template", "proc_macro", "procmacro", "geo-aid"]
 edition = "2018"
 license = "MIT"
-repository = "https://www.github.com/DragonGamesStudios/geo_aid_derive"
+repository = "https://www.github.com/Geo-AID/geo-aid"
 
 [lib]
 proc-macro = true

@@ -4,6 +4,6 @@ version = "0.4.1"
 edition = "2021"
 description = "Definitions for Geo-AID's JSON export format."
 license = "MIT"
-repository = "https://github.com/Geo-AID/geo-aid-figure"
+repository = "https://github.com/Geo-AID/geo-aid"
 
 [dependencies]
