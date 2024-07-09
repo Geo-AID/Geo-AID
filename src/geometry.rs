@@ -1,6 +1,7 @@
 use std::{fmt::Display, iter::{Product, Sum}, ops::{Add, AddAssign, Div, Mul, MulAssign, Neg, Sub, SubAssign}};
 
 use serde::Serialize;
+use geo_aid_figure::Position;
 
 /// Represents a complex number located on a "unit" plane.
 #[derive(Debug, Clone, Copy, Serialize)]
@@ -121,6 +122,30 @@ impl Complex {
     #[must_use]
     pub fn inverse(self) -> Self {
         self.conjugate() / self.len_squared()
+    }
+}
+
+impl From<Complex> for Position {
+    fn from(value: Complex) -> Self {
+        Self {
+            x: value.real,
+            y: value.imaginary
+        }
+    }
+}
+
+impl From<Complex> for geo_aid_figure::Complex {
+    fn from(value: Complex) -> Self {
+        Self {
+            real: value.real,
+            imaginary: value.imaginary
+        }
+    }
+}
+
+impl From<Position> for Complex {
+    fn from(value: Position) -> Self {
+        Self::new(value.x, value.y)
     }
 }
 
@@ -291,6 +316,15 @@ impl Line {
     }
 }
 
+impl From<Line> for geo_aid_figure::Line {
+    fn from(value: Line) -> Self {
+        Self {
+            origin: value.origin.into(),
+            direction: value.direction.into()
+        }
+    }
+}
+
 /// Represents a circle in a 2D euclidean space.
 #[derive(Debug, Clone, Copy, Serialize)]
 pub struct Circle {
@@ -298,6 +332,15 @@ pub struct Circle {
     pub center: Complex,
     /// Its radius
     pub radius: f64,
+}
+
+impl From<Circle> for geo_aid_figure::Circle {
+    fn from(value: Circle) -> Self {
+        Self {
+            center: value.center.into(),
+            radius: value.radius
+        }
+    }
 }
 
 /// Enumerated value type for serialization.
@@ -330,6 +373,16 @@ impl ValueEnum {
         match self {
             Self::Circle(l) => Some(l),
             _ => None
+        }
+    }
+}
+
+impl From<ValueEnum> for geo_aid_figure::Value {
+    fn from(value: ValueEnum) -> Self {
+        match value {
+            ValueEnum::Complex(c) => Self::Complex(c.into()),
+            ValueEnum::Line(ln) => Self::Line(ln.into()),
+            ValueEnum::Circle(c) => Self::Circle(c.into())
         }
     }
 }

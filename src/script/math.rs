@@ -1,7 +1,7 @@
 use std::any::Any;
 use std::cell::OnceCell;
 use std::collections::{hash_map, HashMap, HashSet};
-use std::fmt::{Debug, Display, Formatter};
+use std::fmt::Debug;
 use std::hash::Hash;
 use std::iter::Peekable;
 use std::mem;
@@ -11,7 +11,7 @@ use std::rc::Rc;
 use derive_recursive::Recursive;
 use num_traits::{FromPrimitive, One, Zero};
 use serde::Serialize;
-
+use geo_aid_figure::{VarIndex, EntityIndex as EntityId};
 use crate::script::figure::Item;
 use crate::script::math::optimizations::ZeroLineDst;
 use crate::script::token::number::{CompExponent, ProcNum};
@@ -221,15 +221,6 @@ trait Normalize {
     fn normalize(&mut self, math: &mut Math);
 }
 
-#[derive(Debug, Clone, Copy, Hash, Ord, PartialOrd, Eq, PartialEq, Serialize)]
-pub struct VarIndex(pub usize);
-
-impl Display for VarIndex {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
 impl Reconstruct for VarIndex {
     fn reconstruct(self, ctx: &mut ReconstructCtx) -> Self {
         let expr = ctx.old_vars[self.0].clone();
@@ -264,20 +255,6 @@ impl Reindex for VarIndex {
 impl ContainsEntity for VarIndex {
     fn contains_entity(&self, entity: EntityId, math: &Math) -> bool {
         math.at(*self).contains_entity(entity, math)
-    }
-}
-
-impl Deref for VarIndex {
-    type Target = usize;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl DerefMut for VarIndex {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
     }
 }
 
@@ -526,6 +503,33 @@ impl ExprKind {
                 ) => self_p.compare(other_p, math).then_with(|| self_q.compare(other_q, math)).then_with(|| self_r.compare(other_r, math)),
                 (_, _) => Ordering::Equal
             })
+    }
+}
+
+impl From<ExprKind> for geo_aid_figure::ExpressionKind {
+    fn from(value: ExprKind) -> Self {
+        match value {
+            ExprKind::Entity { id } => Self::Entity {id: id.into()},
+            ExprKind::LineLineIntersection { k, l } => Self::LineLineIntersection {k, l},
+            ExprKind::AveragePoint { items } => Self::AveragePoint {items},
+            ExprKind::CircleCenter { circle } => Self::CircleCenter {circle},
+            ExprKind::Sum { plus, minus } => Self::Sum {plus, minus},
+            ExprKind::Product { times, by } => Self::Product {times,by},
+            ExprKind::Const { value } => Self::Const {value: value.to_complex().into()},
+            ExprKind::Power { value, exponent } => Self::Power {value, exponent: exponent.into()},
+            ExprKind::PointPointDistance { p, q } => Self::PointPointDistance {p,q},
+            ExprKind::PointLineDistance { point, line } => Self::PointLineDistance {point,line},
+            ExprKind::ThreePointAngle { p, q, r } => Self::ThreePointAngle {a:p,b:q,c:r},
+            ExprKind::ThreePointAngleDir { p, q, r } => Self::ThreePointAngleDir {a:p, b:q, c:r},
+            ExprKind::TwoLineAngle { k, l } => Self::TwoLineAngle {k,l},
+            ExprKind::PointX { point } => Self::PointX {point},
+            ExprKind::PointY { point } => Self::PointY {point},
+            ExprKind::PointPoint { p, q } => Self::PointPoint {p,q},
+            ExprKind::AngleBisector { p, q, r } => Self::AngleBisector {p,q,r},
+            ExprKind::ParallelThrough { point, line } => Self::ParallelThrough {point,line},
+            ExprKind::PerpendicularThrough { point, line } => Self::PerpendicularThrough {point, line},
+            ExprKind::ConstructCircle { center, radius } => Self::ConstructCircle {center, radius}
+        }
     }
 }
 
@@ -1279,6 +1283,18 @@ pub enum EntityKind {
     Bind(VarIndex)
 }
 
+impl From<EntityKind> for geo_aid_figure::EntityKind {
+    fn from(value: EntityKind) -> Self {
+        match value {
+            EntityKind::FreePoint => Self::FreePoint,
+            EntityKind::PointOnLine { line } => Self::PointOnLine { line },
+            EntityKind::PointOnCircle { circle } => Self::PointOnCircle { circle },
+            EntityKind::FreeReal => Self::FreeReal,
+            EntityKind::Bind(_) => unreachable!()
+        }
+    }
+}
+
 impl Reindex for EntityKind {
     fn reindex(&mut self, map: &IndexMap) {
         match self {
@@ -1290,9 +1306,6 @@ impl Reindex for EntityKind {
         }
     }
 }
-
-#[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Hash, Serialize)]
-pub struct EntityId(pub usize);
 
 impl Reindex for EntityId {
     fn reindex(&mut self, _map: &IndexMap) {}

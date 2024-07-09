@@ -18,7 +18,6 @@ pub mod segment;
 pub mod prelude {
     pub(crate) use crate::script::{
         builtins::macros::*,
-        figure::Style,
         unit,
         unroll::{
             context::CompileContext,
@@ -30,6 +29,7 @@ pub mod prelude {
             Properties, Rule, Scalar, ScalarData, UnrolledRule, UnrolledRuleKind,
         },
     };
+    pub(crate) use geo_aid_figure::Style;
 }
 
 /// Returns what size of point collection can the given bundle type be cast onto.

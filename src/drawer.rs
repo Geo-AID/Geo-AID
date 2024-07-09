@@ -1,6 +1,5 @@
 use std::{path::Path, fs::File, io::Write};
-
-use crate::projector::{Output, RenderedPoint, RenderedLine, RenderedAngle, RenderedSegment, RenderedRay, RenderedCircle, Rendered};
+use geo_aid_figure::{CircleItem, Figure, Item, PointItem, TwoPointItem, LineItem};
 
 pub mod json;
 pub mod latex;
@@ -10,17 +9,17 @@ pub mod svg;
 pub trait Draw {
     /// # Errors
     /// In case of io failure.
-    fn draw(&mut self, target: &Path, output: &Output) -> Result<(), std::io::Error> {
-        self.begin(output);
+    fn draw(&mut self, target: &Path, figure: &Figure) -> Result<(), std::io::Error> {
+        self.begin(figure);
 
-        for item in &output.rendered {
+        for item in &figure.items {
             match item {
-                Rendered::Point(point) => self.draw_point(point),
-                Rendered::Line(line) => self.draw_line(line),
-                Rendered::Angle(angle) => self.draw_angle(angle),
-                Rendered::Segment(segment) => self.draw_segment(segment),
-                Rendered::Ray(ray) => self.draw_ray(ray),
-                Rendered::Circle(circle) => self.draw_circle(circle),
+                Item::Point(point) => self.draw_point(point),
+                Item::Line(line) => self.draw_line(line),
+                // Rendered::Angle(angle) => self.draw_angle(angle),
+                Item::Segment(segment) => self.draw_segment(segment),
+                Item::Ray(ray) => self.draw_ray(ray),
+                Item::Circle(circle) => self.draw_circle(circle),
             }
         }
 
@@ -34,23 +33,29 @@ pub trait Draw {
         }
     }
 
-    fn begin(&mut self, _output: &Output) {}
-    fn draw_point(&mut self, _point: &RenderedPoint) {
+    fn begin(&mut self, _output: &Figure) {}
+
+    fn draw_point(&mut self, _point: &PointItem) {
         unimplemented!("support for point rendering not implemented")
     }
-    fn draw_line(&mut self, _line: &RenderedLine) {
+
+    fn draw_line(&mut self, _line: &LineItem) {
         unimplemented!("support for line rendering not implemented")
     }
-    fn draw_ray(&mut self, _ray: &RenderedRay) {
+
+    fn draw_ray(&mut self, _ray: &TwoPointItem) {
         unimplemented!("support for ray rendering not implemented")
     }
-    fn draw_segment(&mut self, _segment: &RenderedSegment) {
+
+    fn draw_segment(&mut self, _segment: &TwoPointItem) {
         unimplemented!("support for segment rendering not implemented")
     }
-    fn draw_angle(&mut self, _angle: &RenderedAngle) {
-        unimplemented!("support for angle rendering not implemented")
-    }
-    fn draw_circle(&mut self, _circle: &RenderedCircle) {
+
+    // fn draw_angle(&mut self, _angle: &RenderedAngle) {
+    //     unimplemented!("support for angle rendering not implemented")
+    // }
+
+    fn draw_circle(&mut self, _circle: &CircleItem) {
         unimplemented!("support for circle rendering not implemented")
     }
 

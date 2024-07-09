@@ -1,7 +1,8 @@
-use crate::script::{figure::{LineItem, MathString, RayItem, SegmentItem}, math::Build, token::Span};
+use crate::script::{figure::{LineItem, RayItem, SegmentItem}, math::Build};
 
 use super::prelude::*;
 use geo_aid_derive::overload;
+use geo_aid_figure::math_string::MathString;
 
 /// angle(point, point, point) - angle depicted by 3 points.
 fn angle_function_point_point_point(
@@ -56,13 +57,13 @@ pub fn display_angle_arms(build: &mut Build, a_expr: &Expr<Point>, b_expr: &Expr
             let id = build.load(&line_a);
             build.add(LineItem {
                 id,
-                label: MathString::new(Span::empty()),
+                label: MathString::new(),
                 style: arms_style
             });
             let id = build.load(&line_c);
             build.add(LineItem {
                 id,
-                label: MathString::new(Span::empty()),
+                label: MathString::new(),
                 style: arms_style
             });
         }
@@ -70,13 +71,13 @@ pub fn display_angle_arms(build: &mut Build, a_expr: &Expr<Point>, b_expr: &Expr
             build.add(RayItem {
                 p_id: b,
                 q_id: a,
-                label: MathString::new(Span::empty()),
+                label: MathString::new(),
                 style: arms_style
             });
             build.add(RayItem {
                 p_id: b,
                 q_id: c,
-                label: MathString::new(Span::empty()),
+                label: MathString::new(),
                 style: arms_style
             });
         }
@@ -84,13 +85,13 @@ pub fn display_angle_arms(build: &mut Build, a_expr: &Expr<Point>, b_expr: &Expr
             build.add(SegmentItem {
                 p_id: b,
                 q_id: a,
-                label: MathString::new(Span::empty()),
+                label: MathString::new(),
                 style: arms_style
             });
             build.add(SegmentItem {
                 p_id: b,
                 q_id: c,
-                label: MathString::new(Span::empty()),
+                label: MathString::new(),
                 style: arms_style
             });
         }

@@ -26,7 +26,7 @@
             "$ref": "#/$defs/value"
           },
           "kind": {
-            "description": "The kind of an expression this is",
+            "description": "The kind of expression this is",
             "oneOf": [
               {
                 "type": "object",
@@ -137,7 +137,7 @@
               },
               {
                 "type": "object",
-                "description": "Distance between p and q",
+                "description": "Distance between `p` and `q`",
                 "properties": {
                   "type": { "const": "point-point-distance" },
                   "p": { "$ref": "#/$defs/index" },
@@ -147,7 +147,7 @@
               },
               {
                 "type": "object",
-                "description": "Distance between point and line",
+                "description": "Distance between `point` and `line`",
                 "properties": {
                   "type": { "const": "point-line-distance" },
                   "point": { "$ref": "#/$defs/index" },
@@ -157,7 +157,7 @@
               },
               {
                 "type": "object",
-                "description": "Angle abc",
+                "description": "Angle `abc`",
                 "properties": {
                   "type": { "const": "three-point-angle" },
                   "a": { "$ref": "#/$defs/index" },
@@ -168,7 +168,7 @@
               },
               {
                 "type": "object",
-                "description": "Directed angle abc",
+                "description": "Directed angle `abc`",
                 "properties": {
                   "type": { "const": "three-point-angle-dir" },
                   "a": { "$ref": "#/$defs/index" },
@@ -179,7 +179,7 @@
               },
               {
                 "type": "object",
-                "description": "Angle between k and l",
+                "description": "Angle between `k` and `l`",
                 "properties": {
                   "type": { "const": "two-line-angle" },
                   "k": { "$ref": "#/$defs/index" },
@@ -207,7 +207,7 @@
               },
               {
                 "type": "object",
-                "description": "Line pq",
+                "description": "Line `pq`",
                 "properties": {
                   "type": { "const": "point-point-line" },
                   "p": { "$ref": "#/$defs/index" },
@@ -217,7 +217,7 @@
               },
               {
                 "type": "object",
-                "description": "Bisector of angle abc",
+                "description": "Bisector of angle `abc`",
                 "properties": {
                   "type": { "const": "angle-bisector" },
                   "a": { "$ref": "#/$defs/index" },
@@ -238,7 +238,7 @@
               },
               {
                 "type": "object",
-                "description": "Parallel line going through point",
+                "description": "Parallel line going through `point`",
                 "properties": {
                   "type": { "const": "parallel-through" },
                   "point": { "$ref": "#/$defs/index" },
@@ -318,6 +318,7 @@
     },
     "items": {
       "type": "array",
+      "description": "Items drawn on the image",
       "items": {
         "oneOf": [
           {
@@ -450,7 +451,7 @@
                 "default": "solid"
               }
             },
-            "required": ["type", "points", "p-id", "q-id"]
+            "required": ["type", "center", "radius", "id"]
           }
         ]
       }
@@ -467,8 +468,16 @@
       "type": "object",
       "description": "A complex number real + i*imaginary",
       "properties": {
-        "real": {"type": "number", "default": 0},
-        "imaginary": {"type": "number", "default": 0}
+        "real": {
+          "type": "number",
+          "default": 0,
+          "description": "The real component"
+        },
+        "imaginary": {
+          "type": "number",
+          "default": 0,
+          "description": "The imaginary component"
+        }
       }
     },
     "ratio": {
@@ -479,12 +488,14 @@
         },
         "denom": {
           "type": "integer",
-          "default": 1
+          "default": 1,
+          "exclusiveMinimum": 0
         }
       },
       "required": ["nom"]
     },
     "value": {
+      "description": "A value of an expression or an entity",
       "oneOf": [
         {
           "type": "object",

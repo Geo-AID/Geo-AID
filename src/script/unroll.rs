@@ -11,10 +11,11 @@ use std::{
     rc::Rc,
     write,
 };
-
+use geo_aid_figure::Style;
 use crate::span;
 
 use crate::script::builtins::macros::index;
+use crate::script::figure::SpannedMathString;
 use crate::script::ty;
 
 use self::context::CompileContext;
@@ -23,7 +24,6 @@ use self::figure::{
     LineNode, LineType, MaybeUnset, Node, PCNode, PointNode, ScalarNode,
 };
 
-use super::figure::{MathString, Style};
 use super::parser::{
     ExprBinop, ExprCall, FieldIndex, FromProperty, InputStream, Name, PointCollectionConstructor,
     RefStatement,
@@ -1160,7 +1160,7 @@ impl ConvertFrom<Expr<PointCollection>> for Point {
                         pt_node.root.display_label = props.get("display_label").maybe_unset(true);
                         pt_node.root.label = props
                             .get("label")
-                            .maybe_unset(MathString::new(span!(0, 0, 0, 0)));
+                            .maybe_unset(SpannedMathString::new(span!(0, 0, 0, 0)));
                         pt_node.root.display_dot = props.get("display_dot").maybe_unset(true);
                     }
 
@@ -1371,7 +1371,7 @@ impl ConvertFrom<Expr<PointCollection>> for Line {
             if let Some(pc_node) = value.node {
                 if let Some(mut props) = pc_node.root.props {
                     if let Some(ln_node) = &mut expr.node {
-                        let _ = props.get::<MathString>("default-label");
+                        let _ = props.get::<SpannedMathString>("default-label");
 
                         ln_node.children = pc_node.children;
                         ln_node.root.display = pc_node.root.display;
@@ -1379,10 +1379,10 @@ impl ConvertFrom<Expr<PointCollection>> for Line {
                         ln_node.root.display_label = props.get("display_label").maybe_unset(true);
                         ln_node.root.label = props
                             .get("label")
-                            .maybe_unset(MathString::new(span!(0, 0, 0, 0)));
+                            .maybe_unset(SpannedMathString::new(span!(0, 0, 0, 0)));
                         ln_node.root.default_label = props
                             .get("default-label")
-                            .get_or(MathString::new(span!(0, 0, 0, 0)));
+                            .get_or(SpannedMathString::new(span!(0, 0, 0, 0)));
                         ln_node.root.line_type = props.get("line_type").maybe_unset(LineType::Line);
                         ln_node.root.style = props.get("style").maybe_unset(Style::default());
                     }
@@ -3591,7 +3591,7 @@ fn create_variable_named(
     if let AnyExpr::PointCollection(pc) = &mut rhs_unrolled {
         if let Some(node) = &mut pc.node {
             if let Some(mut props) = node.root.props.take() {
-                let _ = props.get::<MathString>("default-label");
+                let _ = props.get::<SpannedMathString>("default-label");
                 props.finish(context);
             }
         }

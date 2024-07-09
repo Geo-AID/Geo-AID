@@ -8,14 +8,14 @@ use std::{
 
 use num_traits::{One, Zero};
 use serde::Serialize;
-
+use geo_aid_figure::math_string::SPECIAL_MATH;
 use crate::{
     cli::{AnnotationKind, Change, DiagnosticData, Fix},
     span,
 };
 
 use self::token::{number::CompExponent, NamedIdent, Span, Token};
-use self::{figure::SPECIAL_MATH, parser::Type};
+use self::parser::Type;
 
 mod builtins;
 pub mod figure;

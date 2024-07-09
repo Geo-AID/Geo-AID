@@ -1,8 +1,8 @@
 use std::{collections::HashMap, fmt::Debug, ops::Deref};
-
+use geo_aid_figure::Style;
 use crate::{
     script::{
-        figure::{MathString, Style},
+        figure::SpannedMathString as MathString,
         parser::{FromProperty, Parse, PropertyValue},
         Error,
     },
@@ -744,7 +744,7 @@ impl Node for PointNode {
                         }
                     } else {
                         MathString::new(span!(0, 0, 0, 0))
-                    },
+                    }.string,
                     display_dot: self.display_dot.unwrap(),
                 }
             );
@@ -824,7 +824,7 @@ impl Node for CircleNode {
                         }
                     } else {
                         MathString::new(span!(0, 0, 0, 0))
-                    },
+                    }.string,
                     style: self.style.unwrap()
                 }
             );
@@ -974,7 +974,7 @@ impl Node for LineNode {
                     let id = build.load(&self.expr);
                     build.add(LineItem {
                         id,
-                        label,
+                        label: label.string,
                         style,
                     });
                 },
@@ -985,7 +985,7 @@ impl Node for LineNode {
                         build.add(RayItem {
                             p_id,
                             q_id,
-                            label,
+                            label: label.string,
                             style
                         });
                     }
@@ -1003,7 +1003,7 @@ impl Node for LineNode {
                         build.add(RayItem {
                             p_id,
                             q_id,
-                            label,
+                            label: label.string,
                             style
                         });
                     }
@@ -1016,7 +1016,7 @@ impl Node for LineNode {
                         build.add(RayItem {
                             p_id,
                             q_id,
-                            label,
+                            label: label.string,
                             style
                         });
                     },

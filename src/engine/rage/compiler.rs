@@ -1,12 +1,13 @@
 use std::collections::HashMap;
 use std::mem;
 use num_traits::{One, ToPrimitive};
+use geo_aid_figure::{VarIndex, EntityIndex as EntityId};
 use crate::engine::rage::generator::AdjustableTemplate;
 use crate::engine::rage::generator::critic::{EvaluateProgram, FigureProgram};
 use crate::engine::rage::generator::program::{Instruction, Loc, Program, ValueType};
 use crate::engine::rage::generator::program::expr::{AngleBisector, AngleLine, AnglePoint, AnglePointDir, Average, CircleConstruct, EqualComplex, EqualReal, Greater, InvertQuality, Less, LineFromPoints, LineLineIntersection, Max, Negation, ParallelThrough, PartialPow, PartialProduct, PerpendicularThrough, PointLineDistance, PointOnCircle, PointOnLine, PointPointDistance, Sum, SwapParts};
 use crate::geometry::{Complex, ValueEnum};
-use crate::script::math::{EntityKind, EntityId, Expr, Intermediate, ExprKind, Rule, RuleKind, VarIndex, ExprType};
+use crate::script::math::{EntityKind, Expr, Intermediate, ExprKind, Rule, RuleKind, ExprType};
 use crate::script::token::number::ProcNum;
 
 #[derive(Debug, Default)]
@@ -217,7 +218,8 @@ impl<'i> Compiler<'i> {
 
         let mut final_entities = Vec::new();
         for (i, ent) in entity_types.into_iter().enumerate() {
-            final_entities.push((ent, self.compile(&EntityId(i))));
+            // Here, we're pushing the adjusted value itself. Thus, we're using `i` as a constant id.
+            final_entities.push((ent, i));
         }
 
         let figure = FigureProgram {

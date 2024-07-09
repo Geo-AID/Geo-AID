@@ -1,10 +1,11 @@
 use crate::{
-    script::{figure::{MathString, SegmentItem}, math::Build, parser::PropertyValue, token::{Span, StrLit}},
+    script::{figure::SegmentItem, math::Build, parser::PropertyValue, token::StrLit},
     span,
 };
 
 use super::prelude::*;
 use geo_aid_derive::overload;
+use geo_aid_figure::math_string::MathString;
 
 fn segment_function_point_point(
     mut a: Expr<Point>,
@@ -60,7 +61,7 @@ impl BuildAssociated<BundleNode> for Associated {
             build.add(SegmentItem {
                 p_id,
                 q_id,
-                label: MathString::new(Span::empty()),
+                label: MathString::new(),
                 style: style.unwrap()
             });
         }

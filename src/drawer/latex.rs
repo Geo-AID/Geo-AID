@@ -1,15 +1,8 @@
 use std::string::String;
 use num_traits::ToPrimitive;
-
-use crate::projector::{
-    Output, RenderedCircle, RenderedLine, RenderedPoint, RenderedRay,
-    RenderedSegment,
-};
-
-use crate::script::figure::Style::{self, Bold, Dashed, Dotted, Solid};
-use crate::script::figure::{self, MathChar, MathIndex, MathSpecial, MathString};
+use geo_aid_figure::math_string::{MathChar, MathIndex, MathSpecial, MathString, SPECIAL_MATH};
+use geo_aid_figure::{CircleItem, Figure, LineItem, PointItem, Position, Style, TwoPointItem};
 use crate::drawer::Draw;
-use crate::geometry::Complex;
 
 #[derive(Debug, Default)]
 pub struct Latex {
@@ -21,12 +14,12 @@ impl Latex {
     fn math_to_latex(math: &MathString) -> String {
         let mut s = String::new();
 
-        for c in &math.chars {
+        for c in math.iter().copied() {
             match c {
-                MathChar::Ascii(c) => s.push(*c),
+                MathChar::Ascii(c) => s.push(c),
                 MathChar::Special(special) => match special {
                     MathSpecial::Quote => s += "\"",
-                    special => s += &format!("\\{}", figure::SPECIAL_MATH[special.to_usize().unwrap()])
+                    special => s += &format!("\\{}", SPECIAL_MATH[special.to_usize().unwrap()])
                 },
                 MathChar::SetIndex(i) => s += match i {
                     MathIndex::Normal => "}",
@@ -41,14 +34,14 @@ impl Latex {
 
     fn get_style_name(style: Style) -> &'static str {
         match style {
-            Dotted => "dotted",
-            Dashed => "dashed",
-            Bold => "ultra thick",
-            Solid => "thin",
+            Style::Dotted => "dotted",
+            Style::Dashed => "dashed",
+            Style::Bold => "ultra thick",
+            Style::Solid => "thin",
         }
     }
 
-    fn draw_simple_segment(&mut self, points: &(Complex, Complex), style: Style) {
+    fn draw_simple_segment(&mut self, points: &(Position, Position), style: Style) {
         let pos1 = points.0 * self.scale;
         let pos2 = points.1 * self.scale;
 
@@ -60,17 +53,17 @@ impl Latex {
                     \tkzDrawSegment[{}](A,B)
                 \end{{scope}}
             "#,
-            pos1.real,
-            pos1.imaginary,
-            pos2.real,
-            pos2.imaginary,
+            pos1.x,
+            pos1.y,
+            pos2.x,
+            pos2.y,
             Self::get_style_name(style)
         );
     }
 }
 
 impl Draw for Latex {
-    fn begin(&mut self, output: &Output) {
+    fn begin(&mut self, figure: &Figure) {
         self.content = String::from(
             r"
                 \documentclass{article}
@@ -82,36 +75,44 @@ impl Draw for Latex {
             ",
         );
         #[allow(clippy::cast_precision_loss)]
-        let size = (output.canvas_size.0 as f64, output.canvas_size.1 as f64);
+        let size = (figure.width.get() as f64, figure.height.get() as f64);
 
         self.scale = f64::min(10.0/size.0, 10.0/size.1);
     }
 
-    fn draw_point(&mut self, point: &RenderedPoint) {
+    fn draw_point(&mut self, point: &PointItem) {
         let pos = point.position * self.scale;
-        let label_pos = point.label_position * self.scale + pos;
-        let id = format!("expr{}", point.item.id);
+        let id = format!("expr{}", point.id);
 
-        let label = Self::math_to_latex(&point.item.label);
         self.content += &format!(
             r#"
                 \coordinate ({}) at ({}, {}); \fill[black] ({}) circle (1pt);
-                \node at ({}, {}) {{${}$}}; 
             "#,
-            id, pos.real, pos.imaginary, id, label_pos.real, label_pos.imaginary, label
+            id, pos.x, pos.y, id
         );
+
+        if let Some(label) =& point.label {
+            let label_pos = label.position * self.scale;
+
+            self.content += &format!(
+                r#"
+                \node at ({}, {}) {{${}$}};
+            "#,
+                label_pos.x, label_pos.y, Self::math_to_latex(&label.content)
+            );
+        }
     }
 
-    fn draw_line(&mut self, line: &RenderedLine) {
-        self.draw_simple_segment(&line.points, line.item.style);
+    fn draw_line(&mut self, line: &LineItem) {
+        self.draw_simple_segment(&line.points, line.style);
     }
 
-    fn draw_ray(&mut self, ray: &RenderedRay) {
-        self.draw_simple_segment(&ray.points, ray.item.style);
+    fn draw_ray(&mut self, ray: &TwoPointItem) {
+        self.draw_simple_segment(&ray.points, ray.style);
     }
 
-    fn draw_segment(&mut self, segment: &RenderedSegment) {
-        self.draw_simple_segment(&segment.points, segment.item.style);
+    fn draw_segment(&mut self, segment: &TwoPointItem) {
+        self.draw_simple_segment(&segment.points, segment.style);
     }
 
     // fn draw_angle(&mut self, angle: &RenderedAngle) {
@@ -200,9 +201,9 @@ impl Draw for Latex {
     //     };
     // }
 
-    fn draw_circle(&mut self, circle: &RenderedCircle) {
+    fn draw_circle(&mut self, circle: &CircleItem) {
         let pos1 = circle.center * self.scale;
-        let pos2 = (circle.center + circle.radius) * self.scale;
+        let pos2 = (circle.center + Position { x: circle.radius, y: 0.0 }) * self.scale;
         
         self.content += &format!(
             r#"
@@ -212,11 +213,11 @@ impl Draw for Latex {
                     \tkzDrawCircle[{}](A,B)
             \end{{scope}}
             "#,
-            pos1.real,
-            pos1.imaginary,
-            pos2.real,
-            pos2.imaginary,
-            Self::get_style_name(circle.item.style)
+            pos1.x,
+            pos1.y,
+            pos2.x,
+            pos2.y,
+            Self::get_style_name(circle.style)
         );
     }
 

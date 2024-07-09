@@ -1,14 +1,5 @@
-use crate::{
-    projector::{
-        Output, RenderedCircle, RenderedLine, RenderedPoint, RenderedRay,
-        RenderedSegment,
-    },
-    script::figure::Style,
-};
-
+use geo_aid_figure::{Figure, Label, LineItem, PointItem, Position, Style, TwoPointItem, CircleItem};
 use crate::drawer::Draw;
-use crate::geometry::Complex;
-use crate::script::figure::MathString;
 
 #[derive(Debug, Default)]
 pub struct Raw {
@@ -25,40 +16,43 @@ impl Raw {
         }
     }
 
-    fn draw_simple_segment(&mut self, (p1, p2): (Complex, Complex), style: Style, label: &MathString) {
+    fn draw_simple_segment(&mut self, (p1, p2): (Position, Position), style: Style, label: Option<&Label>) {
+        let label = label.map(|l| l.content.to_string()).unwrap_or_default();
+
         self.content += &format!(
             "{} line \"{}\" from ({:.3}, {:.3}) to ({:.3}, {:.3})\n",
             Self::get_style_name(style),
             label,
-            p1.real,
-            p1.imaginary,
-            p2.real,
-            p2.imaginary
+            p1.x,
+            p1.y,
+            p2.x,
+            p2.y
         );
     }
 }
 
 impl Draw for Raw {
-    fn begin(&mut self, _output: &Output) {}
+    fn begin(&mut self, _output: &Figure) {}
 
-    fn draw_point(&mut self, point: &RenderedPoint) {
-        self.content += &format!("point \"{}\" at ({:.3}, {:.3})\n",
-            point.item.label,
-            point.position.real,
-            point.position.imaginary
+    fn draw_point(&mut self, point: &PointItem) {
+        let label = point.label.as_ref().map(|x| format!("\"{}\"", x.content)).unwrap_or_default();
+
+        self.content += &format!("point \"{label}\" at ({:.3}, {:.3})\n",
+            point.position.x,
+            point.position.y
         );
     }
 
-    fn draw_line(&mut self, line: &RenderedLine) {
-        self.draw_simple_segment(line.points, line.item.style, &line.item.label);
+    fn draw_line(&mut self, line: &LineItem) {
+        self.draw_simple_segment(line.points, line.style, line.label.as_ref());
     }
 
-    fn draw_ray(&mut self, ray: &RenderedRay) {
-        self.draw_simple_segment(ray.points, ray.item.style, &ray.item.label);
+    fn draw_ray(&mut self, ray: &TwoPointItem) {
+        self.draw_simple_segment(ray.points, ray.style, ray.label.as_ref());
     }
 
-    fn draw_segment(&mut self, segment: &RenderedSegment) {
-        self.draw_simple_segment(segment.points, segment.item.style, &segment.item.label);
+    fn draw_segment(&mut self, segment: &TwoPointItem) {
+        self.draw_simple_segment(segment.points, segment.style, segment.label.as_ref());
     }
 
     // fn draw_angle(&mut self, angle: &RenderedAngle, output: &Output) {
@@ -81,12 +75,12 @@ impl Draw for Raw {
     //     }
     // }
 
-    fn draw_circle(&mut self, circle: &RenderedCircle) {
+    fn draw_circle(&mut self, circle: &CircleItem) {
         self.content += &format!(
             "{} circle at ({:.3}, {:.3}) with radius {:.3}\n",
-            Self::get_style_name(circle.item.style),
-            circle.center.real,
-            circle.center.imaginary,
+            Self::get_style_name(circle.style),
+            circle.center.x,
+            circle.center.y,
             circle.radius,
         );
     }

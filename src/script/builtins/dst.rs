@@ -1,7 +1,8 @@
-use crate::script::{figure::{MathString, SegmentItem}, math::Build, token::Span, unroll::Convert};
+use crate::script::{figure::SegmentItem, math::Build, unroll::Convert};
 
 use super::prelude::*;
 use geo_aid_derive::overload;
+use geo_aid_figure::math_string::MathString;
 
 pub fn distance_function_pp(
     a: Expr<Point>,
@@ -91,7 +92,7 @@ impl BuildAssociated<ScalarNode> for Associated {
                     build.add(SegmentItem {
                         p_id,
                         q_id,
-                        label: MathString::new(Span::empty()),
+                        label: MathString::new(),
                         style: style.unwrap(),
                     });
                 }
@@ -110,7 +111,7 @@ impl BuildAssociated<ScalarNode> for Associated {
                     build.add(SegmentItem {
                         p_id,
                         q_id,
-                        label: MathString::new(Span::empty()),
+                        label: MathString::new(),
                         style: style.unwrap(),
                     });
                 }
