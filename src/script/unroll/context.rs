@@ -1,41 +1,20 @@
-/*
-Copyright (c) 2023 Michał Wilczek, Michał Margos
-
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
-associated documentation files (the “Software”), to deal in the Software without restriction,
-including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
-and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do
-so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all copies or substantial
-portions of the Software.
-
-THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
-FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS
-OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
-WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
-CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-*/
-
+use num_traits::{One, Zero};
 use paste::paste;
 use std::cell::RefCell;
 use std::mem;
 use std::rc::Rc;
 use std::{collections::HashMap, fmt::Debug};
-use num_traits::{Zero, One};
 
 use crate::script::builtins::macros::number;
+use crate::script::token::number::ProcNum;
 use crate::script::unroll::{AnyExpr, CloneWithNode};
 use crate::script::{unit, ComplexUnit, Error};
-use crate::script::token::number::ProcNum;
 use crate::span;
 
 use super::figure::FromExpr;
 use super::{
-    Circle, CollectionNode, Displayed, Expr, FlagSet, HierarchyNode,
-    Line, Node, Point, Properties, Scalar,
-    ScalarData, UnrolledRule, UnrolledRuleKind,
+    Circle, CollectionNode, Displayed, Expr, FlagSet, HierarchyNode, Line, Node, Point, Properties,
+    Scalar, ScalarData, UnrolledRule, UnrolledRuleKind,
 };
 
 /// The context of compilation process.
@@ -106,12 +85,7 @@ impl CompileContext {
 
 /// Everything related to circles.
 impl CompileContext {
-    pub fn point_on_circle(
-        &mut self,
-        lhs: &Expr<Point>,
-        rhs: &Expr<Circle>,
-        weight: ProcNum,
-    ) {
+    pub fn point_on_circle(&mut self, lhs: &Expr<Point>, rhs: &Expr<Circle>, weight: ProcNum) {
         self.push_rule(UnrolledRule {
             kind: UnrolledRuleKind::ScalarEq(
                 self.distance_pp(
@@ -125,12 +99,7 @@ impl CompileContext {
         });
     }
 
-    pub fn point_on_line(
-        &mut self,
-        lhs: &Expr<Point>,
-        rhs: &Expr<Line>,
-        weight: ProcNum,
-    ) {
+    pub fn point_on_line(&mut self, lhs: &Expr<Point>, rhs: &Expr<Line>, weight: ProcNum) {
         self.push_rule(UnrolledRule {
             kind: UnrolledRuleKind::ScalarEq(
                 self.distance_pl(lhs.clone_without_node(), rhs.clone_without_node()),
@@ -306,10 +275,14 @@ impl CompileContext {
     }
 
     pub fn free_scalar_display(&self, display: Properties) -> Expr<Scalar> {
-        self.expr_with(Scalar {
-            unit: Some(unit::SCALAR),
-            data: ScalarData::Free,
-        }, display, Vec::new())
+        self.expr_with(
+            Scalar {
+                unit: Some(unit::SCALAR),
+                data: ScalarData::Free,
+            },
+            display,
+            Vec::new(),
+        )
     }
 
     pub fn free_scalar(&self) -> Expr<Scalar> {

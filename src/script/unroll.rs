@@ -1,24 +1,6 @@
-/*
-Copyright (c) 2023 Michał Wilczek, Michał Margos
-
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
-associated documentation files (the “Software”), to deal in the Software without restriction,
-including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
-and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do
-so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all copies or substantial
-portions of the Software.
-
-THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
-FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS
-OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
-WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
-CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-*/
-
+use crate::span;
 use geo_aid_derive::CloneWithNode;
+use geo_aid_figure::Style;
 use num_traits::{One, Zero};
 use std::collections::HashSet;
 use std::fmt::Formatter;
@@ -32,9 +14,8 @@ use std::{
     write,
 };
 
-use crate::span;
-
 use crate::script::builtins::macros::index;
+use crate::script::figure::SpannedMathString;
 use crate::script::ty;
 
 use self::context::CompileContext;
@@ -43,7 +24,6 @@ use self::figure::{
     LineNode, LineType, MaybeUnset, Node, PCNode, PointNode, ScalarNode,
 };
 
-use super::figure::{MathString, Style};
 use super::parser::{
     ExprBinop, ExprCall, FieldIndex, FromProperty, InputStream, Name, PointCollectionConstructor,
     RefStatement,
@@ -402,11 +382,7 @@ impl Function {
     /// # Panics
     /// Never. Shut up, clippy.
     #[must_use]
-    pub fn match_params(
-        expected: &[Type],
-        received: &[Type],
-        param_group: Option<&Type>,
-    ) -> bool {
+    pub fn match_params(expected: &[Type], received: &[Type], param_group: Option<&Type>) -> bool {
         if let Some(ty) = param_group {
             if expected.len() < received.len() {
                 let mut received = received.iter();
@@ -959,13 +935,11 @@ macro_rules! impl_make_variable {
 
                 Expr {
                     span: sp,
-                    data: Rc::new($what::Generic(Generic::VariableAccess(Rc::new(
-                        Variable {
-                            name,
-                            definition: self,
-                            definition_span: sp,
-                        },
-                    )))),
+                    data: Rc::new($what::Generic(Generic::VariableAccess(Rc::new(Variable {
+                        name,
+                        definition: self,
+                        definition_span: sp,
+                    })))),
                     node: None, // Variable references are NEVER displayed
                 }
             }
@@ -981,13 +955,11 @@ macro_rules! impl_make_variable {
                     span: sp,
                     data: Rc::new($what {
                         $other: self.data.$other,
-                        data: $data::Generic(Generic::VariableAccess(Rc::new(
-                            Variable {
-                                name,
-                                definition: self,
-                                definition_span: sp,
-                            },
-                        ))),
+                        data: $data::Generic(Generic::VariableAccess(Rc::new(Variable {
+                            name,
+                            definition: self,
+                            definition_span: sp,
+                        }))),
                     }),
                     node: None, // Variable references are NEVER displayed
                 }
@@ -1036,7 +1008,7 @@ pub enum Point {
     Average(ClonedVec<Expr<Point>>),
     LineLineIntersection(Expr<Line>, Expr<Line>),
     CircleCenter(Expr<Circle>),
-    Free
+    Free,
 }
 
 impl Point {
@@ -1066,9 +1038,9 @@ impl GetData for Point {
             Point::Generic(v) => match v {
                 Generic::Boxed(v) => v.get_data(),
                 Generic::VariableAccess(v) => v.definition.get_data(),
-                Generic::Dummy => self
+                Generic::Dummy => self,
             },
-            _ => self
+            _ => self,
         }
     }
 }
@@ -1086,12 +1058,7 @@ impl Expr<Point> {
     }
 
     #[must_use]
-    pub fn x(
-        self,
-        span: Span,
-        display: Properties,
-        context: &CompileContext,
-    ) -> Expr<Scalar> {
+    pub fn x(self, span: Span, display: Properties, context: &CompileContext) -> Expr<Scalar> {
         let mut expr = Expr {
             span,
             node: None,
@@ -1106,12 +1073,7 @@ impl Expr<Point> {
     }
 
     #[must_use]
-    pub fn y(
-        self,
-        span: Span,
-        display: Properties,
-        context: &CompileContext,
-    ) -> Expr<Scalar> {
+    pub fn y(self, span: Span, display: Properties, context: &CompileContext) -> Expr<Scalar> {
         let mut expr = Expr {
             span,
             node: None,
@@ -1151,7 +1113,7 @@ impl Display for Point {
             Self::CircleCenter(circle) => {
                 write!(f, "{circle}.center")
             }
-            Self::Free => write!(f, "Free point")
+            Self::Free => write!(f, "Free point"),
         }
     }
 }
@@ -1180,7 +1142,7 @@ impl ConvertFrom<Expr<PointCollection>> for Point {
                         pt_node.root.display_label = props.get("display_label").maybe_unset(true);
                         pt_node.root.label = props
                             .get("label")
-                            .maybe_unset(MathString::new(span!(0, 0, 0, 0)));
+                            .maybe_unset(SpannedMathString::new(span!(0, 0, 0, 0)));
                         pt_node.root.display_dot = props.get("display_dot").maybe_unset(true);
                     }
 
@@ -1244,9 +1206,9 @@ impl GetData for Circle {
             Circle::Generic(v) => match v {
                 Generic::Boxed(v) => v.get_data(),
                 Generic::VariableAccess(v) => v.definition.get_data(),
-                Generic::Dummy => self
+                Generic::Dummy => self,
             },
-            Circle::Circle(..) => self
+            Circle::Circle(..) => self,
         }
     }
 }
@@ -1264,12 +1226,7 @@ impl Expr<Circle> {
     }
 
     #[must_use]
-    pub fn center(
-        self,
-        span: Span,
-        display: Properties,
-        context: &CompileContext,
-    ) -> Expr<Point> {
+    pub fn center(self, span: Span, display: Properties, context: &CompileContext) -> Expr<Point> {
         let mut expr = Expr {
             span,
             node: None,
@@ -1281,12 +1238,7 @@ impl Expr<Circle> {
     }
 
     #[must_use]
-    pub fn radius(
-        self,
-        span: Span,
-        display: Properties,
-        context: &CompileContext,
-    ) -> Expr<Scalar> {
+    pub fn radius(self, span: Span, display: Properties, context: &CompileContext) -> Expr<Scalar> {
         let mut expr = Expr {
             span,
             node: None,
@@ -1354,9 +1306,9 @@ impl GetData for Line {
             Line::Generic(v) => match v {
                 Generic::Boxed(v) => v.get_data(),
                 Generic::VariableAccess(v) => v.definition.get_data(),
-                Generic::Dummy => self
+                Generic::Dummy => self,
             },
-            _ => self
+            _ => self,
         }
     }
 }
@@ -1391,7 +1343,7 @@ impl ConvertFrom<Expr<PointCollection>> for Line {
             if let Some(pc_node) = value.node {
                 if let Some(mut props) = pc_node.root.props {
                     if let Some(ln_node) = &mut expr.node {
-                        let _ = props.get::<MathString>("default-label");
+                        let _ = props.get::<SpannedMathString>("default-label");
 
                         ln_node.children = pc_node.children;
                         ln_node.root.display = pc_node.root.display;
@@ -1399,10 +1351,10 @@ impl ConvertFrom<Expr<PointCollection>> for Line {
                         ln_node.root.display_label = props.get("display_label").maybe_unset(true);
                         ln_node.root.label = props
                             .get("label")
-                            .maybe_unset(MathString::new(span!(0, 0, 0, 0)));
+                            .maybe_unset(SpannedMathString::new(span!(0, 0, 0, 0)));
                         ln_node.root.default_label = props
                             .get("default-label")
-                            .get_or(MathString::new(span!(0, 0, 0, 0)));
+                            .get_or(SpannedMathString::new(span!(0, 0, 0, 0)));
                         ln_node.root.line_type = props.get("line_type").maybe_unset(LineType::Line);
                         ln_node.root.style = props.get("style").maybe_unset(Style::default());
                     }
@@ -1467,7 +1419,7 @@ pub enum ScalarData {
     Pow(Expr<Scalar>, CompExponent),
     PointX(Expr<Point>),
     PointY(Expr<Point>),
-    Free
+    Free,
 }
 
 impl Display for ScalarData {
@@ -1508,7 +1460,7 @@ impl Display for ScalarData {
             Self::Pow(base, exponent) => write!(f, "({base})^{exponent}"),
             Self::PointX(expr) => write!(f, "{expr}.x"),
             Self::PointY(expr) => write!(f, "{expr}.y"),
-            Self::Free => write!(f, "Free scalar")
+            Self::Free => write!(f, "Free scalar"),
         }
     }
 }
@@ -1596,9 +1548,9 @@ impl GetData for Scalar {
             ScalarData::Generic(v) => match v {
                 Generic::Boxed(v) => v.get_data(),
                 Generic::VariableAccess(v) => v.definition.get_data(),
-                Generic::Dummy => self
+                Generic::Dummy => self,
             },
-            _ => self
+            _ => self,
         }
     }
 }
@@ -1657,9 +1609,7 @@ impl Expr<Scalar> {
                             )),
                             Generic::Dummy => ScalarData::Generic(Generic::Dummy),
                         },
-                        v @ ScalarData::Number(_) => {
-                            v.clone_without_node()
-                        }
+                        v @ ScalarData::Number(_) => v.clone_without_node(),
                         ScalarData::Free => {
                             ScalarData::SetUnit(self.clone_without_node(), unit.unwrap_or_default())
                         }
@@ -2398,9 +2348,7 @@ impl AnyExpr {
                 _ => panic!("not a variable"),
             },
             Self::PointCollection(v) => match &v.data.data {
-                PointCollectionData::Generic(Generic::VariableAccess(var)) => {
-                    var.definition_span
-                }
+                PointCollectionData::Generic(Generic::VariableAccess(var)) => var.definition_span,
                 _ => panic!("not a variable"),
             },
             Self::Bundle(v) => match &v.data.data {
@@ -2710,11 +2658,7 @@ pub fn unroll_parameters(
     definition(params, context, display)
 }
 
-fn fetch_variable(
-    context: &CompileContext,
-    name: &str,
-    variable_span: Span,
-) -> AnyExpr {
+fn fetch_variable(context: &CompileContext, name: &str, variable_span: Span) -> AnyExpr {
     let mut var = if let Some(var) = context.variables.get(name) {
         var.clone_without_node()
     } else {
@@ -2958,12 +2902,8 @@ impl Unroll for FieldIndex {
         match name {
             AnyExpr::Circle(circle) => match &self.field {
                 Ident::Named(named) => match named.ident.as_str() {
-                    "center" => circle
-                        .center(self.get_span(), display, context)
-                        .into(),
-                    "radius" => circle
-                        .radius(self.get_span(), display, context)
-                        .into(),
+                    "center" => circle.center(self.get_span(), display, context).into(),
+                    "radius" => circle.radius(self.get_span(), display, context).into(),
                     x => {
                         display.finish(context);
 
@@ -3611,7 +3551,7 @@ fn create_variable_named(
     if let AnyExpr::PointCollection(pc) = &mut rhs_unrolled {
         if let Some(node) = &mut pc.node {
             if let Some(mut props) = node.root.props.take() {
-                let _ = props.get::<MathString>("default-label");
+                let _ = props.get::<SpannedMathString>("default-label");
                 props.finish(context);
             }
         }

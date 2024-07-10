@@ -1,37 +1,20 @@
-/*
-Copyright (c) 2023 Michał Wilczek, Michał Margos
-
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
-associated documentation files (the “Software”), to deal in the Software without restriction,
-including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
-and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do
-so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all copies or substantial
-portions of the Software.
-
-THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
-FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS
-OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
-WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
-CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-*/
-
-use std::sync::Arc;
-use std::f64::consts::PI;
-
-use serde::Serialize;
-
 use crate::geometry;
 use crate::geometry::{Circle, Complex, Line, ValueEnum};
+use geo_aid_figure::{
+    CircleItem as RenderedCircle, Entity, Expression, Figure, Item as Rendered, Label,
+    LineItem as RenderedLine, PointItem as RenderedPoint, Position,
+    TwoPointItem as RenderedTwoPoint, VarIndex,
+};
+use std::f64::consts::PI;
+use std::num::NonZeroU64;
+use std::sync::Arc;
 
-use crate::script::figure::{CircleItem, Generated, Item, LineItem, PointItem, RayItem, SegmentItem};
-use crate::script::math::{Entity, Expr, Flags, VarIndex};
+use crate::script::figure::{
+    CircleItem, Generated, Item, LineItem, PointItem, RayItem, SegmentItem,
+};
+use crate::script::math::{EntityKind, Expr, ExprType, Flags};
 
 struct Projector {
-    /// Transform used by the projector
-    pub transform_: Transform,
     /// Variables used by the figure
     pub variables: Vec<MathVariable>,
     /// Picture width
@@ -41,14 +24,10 @@ struct Projector {
     /// Segments visible on the picture.
     pub segments: Vec<(Complex, Complex)>,
     /// Circles visible on the picture.
-    pub circles: Vec<(Complex, f64)>
+    pub circles: Vec<Circle>,
 }
 
 impl Projector {
-    fn transform(&self, c: Complex) -> Complex {
-        self.transform_.transform(c)
-    }
-
     /// Gets the intersection points of the line with the picture's frame.
     fn get_line_ends(&self, ln_c: Line) -> (Complex, Complex) {
         fn choose_intersection(i: usize, j: usize) -> impl Fn(f64, &[Complex]) -> Complex {
@@ -72,7 +51,10 @@ impl Projector {
         let intersections = [
             geometry::get_intersection(
                 ln_c,
-                geometry::get_line(Complex::new(0.0, self.height), Complex::new(1.0, self.height)),
+                geometry::get_line(
+                    Complex::new(0.0, self.height),
+                    Complex::new(1.0, self.height),
+                ),
             ),
             geometry::get_intersection(
                 ln_c,
@@ -109,44 +91,40 @@ impl Projector {
         }
     }
 
-    fn get_label_position(&self, point: Complex) -> Complex {
+    fn get_label_position_rel(&self, point: Complex) -> Position {
         let mut vectors = Vec::new();
 
         // Checking the lines for proximity.
         for (a, b) in &self.segments {
             // Identifying the "first" point by the real axis.
-            let (seg1, seg2) = if a.real < b.real {
-                (*a, *b)
-            } else {
-                (*b, *a)
-            };
+            let (a, b) = if a.real < b.real { (*a, *b) } else { (*b, *a) };
 
-            let ln = geometry::get_line(seg1, seg2);
+            let ln = geometry::get_line(a, b);
             let distance = geometry::distance_pt_ln(point, ln);
 
-            // Defining the little nudge applied to the seg1 and seg2 to also include the points defining the segment.
-            let unit = ln.direction * 1e-2;
-            let u1 = unit.real;
-            let u2 = unit.imaginary;
+            // Check if the point lies on the line.
+            // If so, we have 4 cases:
+            // A - point lies close to point A. In that case, we only apply the AB vector.
+            // B - point lies close to point B. In that case, we only apply the BA vector.
+            // C - point lies on the segment AB. In that case, we apply both vectors.
+            // D - point lies far from the segment AB. We do nothing.
 
-            if distance < 1e-2 && seg1.real - u1 < point.real
-                    && point.real < seg2.real + u1
-                    && seg1.imaginary - u2 < point.imaginary && point.imaginary < seg2.imaginary + u2 {
-                if geometry::distance_pt_pt(point, seg1) < 1.0 {
-                    vectors.push(ln.direction);
-                } else if geometry::distance_pt_pt(point, seg2) < 1.0 {
-                    vectors.push(-ln.direction);
-                } else {
-                    vectors.push(ln.direction);
-                    vectors.push(-ln.direction);
+            if distance < 1e-2 {
+                if geometry::distance_pt_pt(point, a) < 1e-2 {
+                    vectors.push((b - a).normalize());
+                } else if geometry::distance_pt_pt(point, b) < 1e-2 {
+                    vectors.push((a - b).normalize());
+                } else if a.real < point.real && point.real < b.real {
+                    let v = (a - b).normalize();
+                    vectors.extend([v, -v]);
                 }
             }
         }
 
         // Checking the circles for associated vectors.
-        for &(center, radius) in &self.circles {
+        for &Circle { center, radius } in &self.circles {
             if (geometry::distance_pt_pt(center, point) - radius).abs() < 1e-4 {
-                let direction = (center - point).normalize().mul_i();
+                let direction = (center - point).mul_i().normalize();
 
                 vectors.push(direction);
                 vectors.push(-direction);
@@ -159,12 +137,14 @@ impl Projector {
         let mut vec_iter = vectors.iter();
         vec_iter.next();
 
+        let radius = 10.0;
+
         if vectors.is_empty() {
             // No vectors associated with the given point.
-            Complex::new(2.0, 2.0)
+            Complex::polar(PI / 4.0, radius).into()
         } else if vectors.len() == 1 {
             // Only one vector which is associated with the given point.
-            -4.0 * vectors.first().unwrap().normalize()
+            (-radius * vectors.first().copied().unwrap()).into()
         } else {
             let mut flip = false;
             let mut biggest_angle = 0.0;
@@ -196,17 +176,18 @@ impl Projector {
             let bisector_angle = (label_vectors.1.arg() + label_vectors.0.arg()) / 2.0;
 
             // This is just the standard complex number formula.
-            let mut bisector_vec = Complex::new(bisector_angle.cos(), bisector_angle.sin());
+            let bisector_vec = Complex::polar(
+                bisector_angle,
+                (radius / (biggest_angle / 2.0).sin()).min(radius),
+            );
 
             // to do -> better scaling
             if flip {
-                biggest_angle *= -1.0;
-                bisector_vec *= -1.0;
+                bisector_vec * -1.0
+            } else {
+                bisector_vec
             }
-
-            let scale = 540.0 / biggest_angle.to_degrees().abs();
-
-            bisector_vec * 3.0 * scale
+            .into()
         }
     }
 }
@@ -254,137 +235,85 @@ impl Project<Item> for Projector {
     }
 }
 
-/// Enum representing the things that are later drawn in the drawers.
-#[derive(Serialize)]
-#[serde(tag = "type")]
-#[serde(rename_all = "snake_case")]
-pub enum Rendered {
-    Point(RenderedPoint),
-    Line(RenderedLine),
-    Angle(RenderedAngle),
-    Segment(RenderedSegment),
-    Ray(RenderedRay),
-    Circle(RenderedCircle),
-}
-
-impl Rendered {
-    #[must_use]
-    pub fn as_point_mut(&mut self) -> Option<&mut RenderedPoint> {
-        match self {
-            Self::Point(p) => Some(p),
-            _ => None
-        }
-    }
-}
-
 type MathVariable = Expr<ValueEnum>;
-
-/// The final product passed to the drawers.
-#[derive(Serialize)]
-pub struct Output {
-    /// final product of the project function
-    pub rendered: Vec<Rendered>,
-    /// Entities used by the figure
-    pub entities: Vec<Entity<ValueEnum>>,
-    /// Variables used by the figure
-    pub variables: Vec<MathVariable>,
-    /// Picture size
-    pub canvas_size: (usize, usize)
-}
-
-#[derive(Debug, Serialize)]
-pub struct RenderedPoint {
-    /// Label's position relative to point's
-    pub label_position: Complex,
-    /// Point's position on the canvas.
-    pub position: Complex,
-    /// Point's defining item.
-    pub item: PointItem,
-}
 
 impl Project<PointItem> for Projector {
     type Result = RenderedPoint;
 
     fn project(&mut self, item: PointItem) -> Self::Result {
         RenderedPoint {
-            label_position: Complex::zero(),
-            position: self.transform(self.un_var(item.id).unwrap()),
-            item
+            position: <Projector as UnVar<Complex>>::un_var(self, item.id)
+                .unwrap()
+                .into(),
+            id: item.id,
+            display_dot: item.display_dot,
+            label: if item.label.is_empty() {
+                None
+            } else {
+                Some(Label {
+                    content: item.label,
+                    position: Position { x: 0.0, y: 0.0 },
+                })
+            },
         }
     }
-}
-
-#[derive(Serialize)]
-pub struct RenderedLine {
-    /// Two ends of the line (calculated f)
-    pub points: (Complex, Complex),
-    /// Line's defining item.
-    pub item: LineItem
 }
 
 impl Project<LineItem> for Projector {
     type Result = RenderedLine;
-    
+
     fn project(&mut self, item: LineItem) -> Self::Result {
-        let mut ln_c: Line = self.un_var(item.id).unwrap();
-        ln_c.origin = self.transform(ln_c.origin);
+        let ln_c: Line = self.un_var(item.id).unwrap();
         let points = self.get_line_ends(ln_c);
         self.segments.push(points);
 
         RenderedLine {
-            points,
-            item
+            id: item.id,
+            style: item.style,
+            points: (points.0.into(), points.1.into()),
+            label: if item.label.is_empty() {
+                None
+            } else {
+                Some(Label {
+                    content: item.label,
+                    position: Position { x: 0.0, y: 0.0 },
+                })
+            },
         }
     }
-}
-
-#[derive(Serialize)]
-pub struct RenderedAngle {
-    /// Points defining the angle
-    pub points: (Complex, Complex, Complex),
-    /// Self-explanatory
-    pub angle_value: f64,
-    /// The defining item.
-    pub item: () // placeholder
-}
-
-#[derive(Serialize)]
-pub struct RenderedSegment {
-    /// Points defining the segment
-    pub points: (Complex, Complex),
-    /// The defining item.
-    pub item: SegmentItem
 }
 
 impl Project<SegmentItem> for Projector {
-    type Result = RenderedSegment;
+    type Result = RenderedTwoPoint;
 
     fn project(&mut self, item: SegmentItem) -> Self::Result {
-        let seg1 = self.transform(self.un_var(item.p_id).unwrap());
-        let seg2 = self.transform(self.un_var(item.q_id).unwrap());
+        let seg1 = self.un_var(item.p_id).unwrap();
+        let seg2 = self.un_var(item.q_id).unwrap();
         self.segments.push((seg1, seg2));
 
-        RenderedSegment {
-            points: (seg1, seg2),
-            item
+        RenderedTwoPoint {
+            points: (seg1.into(), seg2.into()),
+            p_id: item.p_id,
+            q_id: item.q_id,
+            style: item.style,
+            label: if item.label.is_empty() {
+                None
+            } else {
+                Some(Label {
+                    content: item.label,
+                    position: Position { x: 0.0, y: 0.0 },
+                })
+            },
         }
     }
 }
 
-#[derive(Serialize)]
-pub struct RenderedRay {
-    /// Points defining the ray
-    pub points: (Complex, Complex),
-    /// The defining item.
-    pub item: RayItem
-}
-
 impl Project<RayItem> for Projector {
-    type Result = RenderedRay;
+    type Result = RenderedTwoPoint;
 
     fn project(&mut self, item: RayItem) -> Self::Result {
-        let ray_a = self.transform(self.un_var(item.p_id).unwrap());
-        let ray_b = self.transform(self.un_var(item.q_id).unwrap());
+        let ray_a = self.un_var(item.p_id).unwrap();
+        let ray_b = self.un_var(item.q_id).unwrap();
 
         let line = geometry::get_line(ray_a, ray_b);
         let ends = self.get_line_ends(line);
@@ -406,21 +335,21 @@ impl Project<RayItem> for Projector {
         }
         self.segments.push((ray_a, second_point));
 
-        RenderedRay {
-            points: (ray_a, second_point),
-            item
+        RenderedTwoPoint {
+            points: (ray_a.into(), second_point.into()),
+            p_id: item.p_id,
+            q_id: item.q_id,
+            style: item.style,
+            label: if item.label.is_empty() {
+                None
+            } else {
+                Some(Label {
+                    content: item.label,
+                    position: Position { x: 0.0, y: 0.0 },
+                })
+            },
         }
     }
-}
-
-#[derive(Serialize)]
-pub struct RenderedCircle {
-    /// Center of the circle
-    pub center: Complex,
-    /// Self-explanatory
-    pub radius: f64,
-    /// The defining item.
-    pub item: CircleItem
 }
 
 impl Project<CircleItem> for Projector {
@@ -428,14 +357,23 @@ impl Project<CircleItem> for Projector {
 
     fn project(&mut self, item: CircleItem) -> Self::Result {
         let circle: Circle = self.un_var(item.id).unwrap();
-        let center = self.transform(circle.center);
-        let radius = circle.radius * self.transform_.scale;
-        self.circles.push((center, radius));
+        let center = circle.center;
+        let radius = circle.radius;
+        self.circles.push(circle);
 
         RenderedCircle {
-            center,
+            id: item.id,
+            center: center.into(),
             radius,
-            item
+            style: item.style,
+            label: if item.label.is_empty() {
+                None
+            } else {
+                Some(Label {
+                    content: item.label,
+                    position: Position { x: 0.0, y: 0.0 },
+                })
+            },
         }
     }
 }
@@ -482,13 +420,31 @@ impl Project<CircleItem> for Projector {
 struct Transform {
     offset: Complex,
     scale: f64,
-    margin: Complex
+    margin: Complex,
 }
 
 impl Transform {
     /// Translates generator coordinates to projector coordinates.
-    fn transform(&self, pt: Complex) -> Complex {
+    fn transform_point(&self, pt: Complex) -> Complex {
         (pt + self.offset) * self.scale + self.margin
+    }
+
+    fn transform_line(&self, ln: Line) -> Line {
+        Line {
+            origin: self.transform_point(ln.origin),
+            ..ln
+        }
+    }
+
+    fn transform_circle(&self, circle: Circle) -> Circle {
+        Circle {
+            center: self.transform_point(circle.center),
+            radius: self.transform_dst(circle.radius),
+        }
+    }
+
+    fn transform_dst(&self, dst: f64) -> f64 {
+        dst * self.scale
     }
 }
 
@@ -523,41 +479,62 @@ impl Transform {
 // }
 
 /// Takes the figure and rendered adjustables and attempts to design a figure that can then be rendered in chosen format.
-pub fn project(
-    figure: Generated,
-    _flags: &Arc<Flags>,
-    canvas_size: (usize, usize)
-) -> Output {
-    let entities: Vec<_> = figure.entities;
-    let variables: Vec<_> = figure.variables;
+///
+/// # Panics
+/// Any panic is a bug.
+#[allow(clippy::too_many_lines)]
+pub fn project(figure: Generated, _flags: &Arc<Flags>, canvas_size: (usize, usize)) -> Figure {
+    let mut entities: Vec<_> = figure.entities;
+    let mut expressions: Vec<_> = figure.variables;
     let items = figure.items;
 
-    // Collect points (currently only the actual points, in the future also some more, like circle borders etc.)
-    let points: Vec<_> = items.iter().filter_map(|x| match x {
-        Item::Point(pt) => variables[pt.id.0].meta.as_complex(),
-        _ => None
-    }).collect();
+    let mut points = Vec::new();
+
+    for item in &items {
+        match item {
+            Item::Point(pt) => points.push(expressions[pt.id.0].meta.as_complex().unwrap()),
+            Item::Circle(c) => {
+                let circle = expressions[c.id.0].meta.as_circle().unwrap();
+
+                points.extend([
+                    circle.center - circle.radius,
+                    circle.center + circle.radius,
+                    circle.center - circle.radius * Complex::i(),
+                    circle.center + circle.radius * Complex::i(),
+                ]);
+            }
+            _ => (),
+        }
+    }
 
     // Frame top left point.
     let top_left = Complex::new(
-        points.iter()
+        points
+            .iter()
             .map(|pt| pt.real)
-            .reduce(f64::min).unwrap_or_default(),
-        points.iter()
+            .reduce(f64::min)
+            .unwrap_or_default(),
+        points
+            .iter()
             .map(|pt| pt.imaginary)
-            .reduce(f64::min).unwrap_or_default()
+            .reduce(f64::min)
+            .unwrap_or_default(),
     );
 
     let offset = -top_left;
 
     // Frame bottom right point.
     let furthest = Complex::new(
-        points.iter()
+        points
+            .iter()
             .map(|pt| pt.real)
-            .reduce(f64::max).unwrap_or_default(),
-        points.iter()
+            .reduce(f64::max)
+            .unwrap_or_default(),
+        points
+            .iter()
             .map(|pt| pt.imaginary)
-            .reduce(f64::max).unwrap_or_default()
+            .reduce(f64::max)
+            .unwrap_or_default(),
     );
 
     // println!("{top_left}/{furthest}");
@@ -576,35 +553,91 @@ pub fn project(
         size09.imaginary / total_size.imaginary,
     );
 
+    let transform = Transform {
+        offset,
+        scale,
+        margin: size005,
+    };
+
+    let ent_types: Vec<_> = entities
+        .iter()
+        .map(|t| t.get_type(&expressions, &entities))
+        .collect();
+    for (ent, ty) in entities.iter_mut().zip(ent_types) {
+        match &mut ent.meta {
+            ValueEnum::Circle(circle) => *circle = transform.transform_circle(*circle),
+            ValueEnum::Line(line) => *line = transform.transform_line(*line),
+            ValueEnum::Complex(complex) => match ty {
+                ExprType::Point => *complex = transform.transform_point(*complex),
+                ExprType::Number => {
+                    if matches!(ent.kind, EntityKind::DistanceUnit) {
+                        complex.real = transform.transform_dst(complex.real);
+                    }
+                }
+                _ => unreachable!(),
+            },
+        }
+    }
+
+    let expr_types: Vec<_> = expressions
+        .iter()
+        .map(|t| t.get_type(&expressions, &entities))
+        .collect();
+    for (expr, ty) in expressions.iter_mut().zip(expr_types) {
+        match &mut expr.meta {
+            ValueEnum::Circle(circle) => *circle = transform.transform_circle(*circle),
+            ValueEnum::Line(line) => *line = transform.transform_line(*line),
+            ValueEnum::Complex(complex) => {
+                if ExprType::Point == ty {
+                    *complex = transform.transform_point(*complex);
+                }
+            }
+        }
+    }
+
     // println!("Scale: {scale}");
     // println!("Frame size: {total_size}");
 
     // let points: Vec<Complex> = points.into_iter().map(|x| x * scale + size005).collect();
     let mut projector = Projector {
-        transform_: Transform {
-            offset,
-            scale,
-            margin: size005
-        },
-        variables,
+        variables: expressions,
         width: size1.real,
         height: size1.imaginary,
         segments: Vec::new(),
-        circles: Vec::new()
+        circles: Vec::new(),
     };
 
-    let mut rendered: Vec<_> = items.into_iter()
-        .map(|v| projector.project(v))
-        .collect();
+    let mut rendered: Vec<_> = items.into_iter().map(|v| projector.project(v)).collect();
 
     for point in rendered.iter_mut().filter_map(Rendered::as_point_mut) {
-        point.label_position = projector.get_label_position(point.position);
+        let pos = point.position;
+        if let Some(label) = &mut point.label {
+            label.position = pos + projector.get_label_position_rel(pos.into());
+        }
     }
 
-    Output {
-        rendered,
-        entities,
-        variables: projector.variables,
-        canvas_size
+    Figure {
+        width: u64::try_from(canvas_size.0)
+            .and_then(NonZeroU64::try_from)
+            .unwrap(),
+        height: u64::try_from(canvas_size.1)
+            .and_then(NonZeroU64::try_from)
+            .unwrap(),
+        expressions: projector
+            .variables
+            .into_iter()
+            .map(|expr| Expression {
+                hint: expr.meta.into(),
+                kind: expr.kind.into(),
+            })
+            .collect(),
+        entities: entities
+            .into_iter()
+            .map(|ent| Entity {
+                hint: ent.meta.into(),
+                kind: ent.kind.into(),
+            })
+            .collect(),
+        items: rendered,
     }
 }

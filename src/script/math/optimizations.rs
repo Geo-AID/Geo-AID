@@ -1,24 +1,6 @@
-/*
-Copyright (c) 2024 Michał Wilczek, Michał Margos
-
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
-associated documentation files (the “Software”), to deal in the Software without restriction,
-including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
-and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do
-so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all copies or substantial
-portions of the Software.
-
-THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
-FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS
-OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
-WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
-CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-*/
-
-use crate::script::math::{EntityKind, ExprKind, ContainsEntity, ExprType, DeepClone, Math, VarIndex};
+use crate::script::math::{
+    ContainsEntity, DeepClone, EntityKind, ExprKind, ExprType, Math, VarIndex,
+};
 use crate::script::token::number::ProcNum;
 use num_traits::Zero;
 
@@ -28,10 +10,7 @@ use super::{Rule, RuleKind};
 pub struct ZeroLineDst;
 
 impl ZeroLineDst {
-    pub fn process(
-        rule: &mut Option<Rule>,
-        math: &mut Math,
-    ) -> bool {
+    pub fn process(rule: &mut Option<Rule>, math: &mut Math) -> bool {
         let Some(Rule {
             kind: RuleKind::NumberEq(a, b),
             ..
@@ -88,13 +67,16 @@ impl ZeroLineDst {
                 math.entities[a.0] = EntityKind::PointOnLine { line: ln }; // The rule is going to be removed, so this is essentially like moving.
             }
             EntityKind::PointOnLine { .. } => {
-                let expr = math.store(ExprKind::LineLineIntersection {
-                    k: on_line.unwrap(),
-                    l: ln, // We're moving ln here
-                }, ExprType::Point);
+                let expr = math.store(
+                    ExprKind::LineLineIntersection {
+                        k: on_line.unwrap(),
+                        l: ln, // We're moving ln here
+                    },
+                    ExprType::Point,
+                );
                 math.entities[a.0] = EntityKind::Bind(expr);
             }
-            EntityKind::FreeReal => unreachable!(),
+            EntityKind::DistanceUnit | EntityKind::FreeReal => unreachable!(),
             EntityKind::PointOnCircle { .. } | EntityKind::Bind(_) => return false,
         }
 
@@ -146,10 +128,13 @@ impl EqPointDst {
         }
 
         // We can make it a circle now.
-        let circle = math.store(ExprKind::ConstructCircle {
-            center: b, // We're moving b
-            radius: c // We're also moving c
-        }, ExprType::Circle);
+        let circle = math.store(
+            ExprKind::ConstructCircle {
+                center: b, // We're moving b
+                radius: c, // We're also moving c
+            },
+            ExprType::Circle,
+        );
         math.entities[id.0] = EntityKind::PointOnCircle { circle };
 
         true
@@ -209,16 +194,22 @@ impl RightAngle {
 
         let p_cloned = p.deep_clone(math);
 
-        let mid = math.store(ExprKind::AveragePoint {
-            items: vec![p, r], // Here again, moving the values
-        }, ExprType::Point);
+        let mid = math.store(
+            ExprKind::AveragePoint {
+                items: vec![p, r], // Here again, moving the values
+            },
+            ExprType::Point,
+        );
         let mid_cloned = mid.deep_clone(math);
         let p = p_cloned;
 
         if let Some(rule) = rule {
             rule.kind = RuleKind::NumberEq(
                 math.store(ExprKind::PointPointDistance { p: mid, q }, ExprType::Number),
-                math.store(ExprKind::PointPointDistance { p, q: mid_cloned }, ExprType::Number),
+                math.store(
+                    ExprKind::PointPointDistance { p, q: mid_cloned },
+                    ExprType::Number,
+                ),
             );
         }
 

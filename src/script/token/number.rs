@@ -1,15 +1,15 @@
-use std::{fmt::Display, mem};
+use num_bigint::BigInt;
+use num_complex::Complex;
 use std::cmp::Ordering;
 use std::fmt::Formatter;
 use std::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, SubAssign};
-use num_bigint::BigInt;
-use num_complex::Complex;
+use std::{fmt::Display, mem};
 
+use crate::geometry;
+use crate::script::token::Number;
 use num_rational::{BigRational, Rational64};
 use num_traits::{CheckedAdd, CheckedMul, FromPrimitive, One, ToPrimitive, Zero};
 use serde::Serialize;
-use crate::geometry;
-use crate::script::token::Number;
 
 #[derive(Debug)]
 pub struct ParseIntError;
@@ -187,14 +187,14 @@ impl ParsedFloatBuilder {
 #[derive(Debug, Clone)]
 pub enum Parsed {
     Int(ParsedInt),
-    Float(ParsedFloat)
+    Float(ParsedFloat),
 }
 
 impl Display for Parsed {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Parsed::Int(v) => write!(f, "{v}"),
-            Parsed::Float(v) => write!(f, "{v}")
+            Parsed::Float(v) => write!(f, "{v}"),
         }
     }
 }
@@ -215,7 +215,10 @@ impl ProcNum {
     /// A panic is a bug.
     #[must_use]
     pub fn pi() -> Self {
-        Self(Complex::new(-BigRational::from_f64(std::f64::consts::PI).unwrap(), BigRational::zero()))
+        Self(Complex::new(
+            -BigRational::from_f64(std::f64::consts::PI).unwrap(),
+            BigRational::zero(),
+        ))
     }
 }
 
@@ -289,7 +292,7 @@ impl MulAssign<&Self> for ProcNum {
 
 impl Div<&Self> for ProcNum {
     type Output = Self;
-    
+
     fn div(self, rhs: &Self) -> Self::Output {
         Self(self.0 / &rhs.0)
     }
@@ -317,8 +320,9 @@ impl One for ProcNum {
     }
 
     fn is_one(&self) -> bool
-        where
-            Self: PartialEq, {
+    where
+        Self: PartialEq,
+    {
         self.0.is_one()
     }
 }
@@ -339,7 +343,7 @@ impl Ord for ProcNum {
     fn cmp(&self, other: &Self) -> Ordering {
         match self.0.re.cmp(&other.0.re) {
             Ordering::Equal => self.0.im.cmp(&other.0.im),
-            ord => ord
+            ord => ord,
         }
     }
 }

@@ -1,27 +1,11 @@
-/*
-Copyright (c) 2023 Michał Wilczek, Michał Margos
-
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
-associated documentation files (the “Software”), to deal in the Software without restriction,
-including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
-and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do
-so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all copies or substantial
-portions of the Software.
-
-THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
-FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS
-OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
-WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
-CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-*/
-
-use crate::script::{figure::{LineItem, MathString, RayItem, SegmentItem}, math::Build, token::Span};
+use crate::script::{
+    figure::{LineItem, RayItem, SegmentItem},
+    math::Build,
+};
 
 use super::prelude::*;
 use geo_aid_derive::overload;
+use geo_aid_figure::math_string::MathString;
 
 /// angle(point, point, point) - angle depicted by 3 points.
 fn angle_function_point_point_point(
@@ -57,7 +41,14 @@ fn angle_function_point_point_point(
 #[derive(Debug)]
 pub struct Associated;
 
-pub fn display_angle_arms(build: &mut Build, a_expr: &Expr<Point>, b_expr: &Expr<Point>, c_expr: &Expr<Point>, arms_type: LineType, arms_style: Style) {
+pub fn display_angle_arms(
+    build: &mut Build,
+    a_expr: &Expr<Point>,
+    b_expr: &Expr<Point>,
+    c_expr: &Expr<Point>,
+    arms_type: LineType,
+    arms_style: Style,
+) {
     let a = build.load(a_expr);
     let b = build.load(b_expr);
     let c = build.load(c_expr);
@@ -76,42 +67,42 @@ pub fn display_angle_arms(build: &mut Build, a_expr: &Expr<Point>, b_expr: &Expr
             let id = build.load(&line_a);
             build.add(LineItem {
                 id,
-                label: MathString::new(Span::empty()),
-                style: arms_style
+                label: MathString::new(),
+                style: arms_style,
             });
             let id = build.load(&line_c);
             build.add(LineItem {
                 id,
-                label: MathString::new(Span::empty()),
-                style: arms_style
+                label: MathString::new(),
+                style: arms_style,
             });
         }
         LineType::Ray => {
             build.add(RayItem {
                 p_id: b,
                 q_id: a,
-                label: MathString::new(Span::empty()),
-                style: arms_style
+                label: MathString::new(),
+                style: arms_style,
             });
             build.add(RayItem {
                 p_id: b,
                 q_id: c,
-                label: MathString::new(Span::empty()),
-                style: arms_style
+                label: MathString::new(),
+                style: arms_style,
             });
         }
         LineType::Segment => {
             build.add(SegmentItem {
                 p_id: b,
                 q_id: a,
-                label: MathString::new(Span::empty()),
-                style: arms_style
+                label: MathString::new(),
+                style: arms_style,
             });
             build.add(SegmentItem {
                 p_id: b,
                 q_id: c,
-                label: MathString::new(Span::empty()),
-                style: arms_style
+                label: MathString::new(),
+                style: arms_style,
             });
         }
     }

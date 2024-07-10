@@ -1,30 +1,11 @@
-/*
-Copyright (c) 2023 Michał Wilczek, Michał Margos
-
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
-associated documentation files (the “Software”), to deal in the Software without restriction,
-including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
-and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do
-so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all copies or substantial
-portions of the Software.
-
-THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
-FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS
-OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
-WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
-CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-*/
-
 use crate::{
-    script::{figure::{MathString, SegmentItem}, math::Build, parser::PropertyValue, token::{Span, StrLit}},
+    script::{figure::SegmentItem, math::Build, parser::PropertyValue, token::StrLit},
     span,
 };
 
 use super::prelude::*;
 use geo_aid_derive::overload;
+use geo_aid_figure::math_string::MathString;
 
 fn segment_function_point_point(
     mut a: Expr<Point>,
@@ -80,8 +61,8 @@ impl BuildAssociated<BundleNode> for Associated {
             build.add(SegmentItem {
                 p_id,
                 q_id,
-                label: MathString::new(Span::empty()),
-                style: style.unwrap()
+                label: MathString::new(),
+                style: style.unwrap(),
             });
         }
     }

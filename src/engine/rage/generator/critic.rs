@@ -1,31 +1,14 @@
-/*
-Copyright (c) 2023 Michał Wilczek, Michał Margos
-
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
-associated documentation files (the “Software”), to deal in the Software without restriction,
-including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
-and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do
-so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all copies or substantial
-portions of the Software.
-
-THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
-FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS
-OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
-WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
-CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-*/
-
-use serde::Serialize;
 use crate::engine::rage::generator::program::{Loc, ValueType};
 use crate::geometry::Complex;
+use serde::Serialize;
 
-use super::{program::{Program, Execute, Value}, AdjustableTemplate};
+use super::{
+    program::{Execute, Program, Value},
+    AdjustableTemplate,
+};
 
 /// Program used for evaluation
-/// 
+///
 /// # Safety
 /// The program is considered safe iff:
 /// * the `base` is a safe program.
@@ -46,7 +29,7 @@ pub struct EvaluateProgram {
     /// `rule_count` registers after that are expected to contain rule qualities.
     /// Everything beyond that point is active program memory with no layout guarantees.
     /// Weight of rule `i` on adjustable `j` is at index `i * adjustables.len() + j`.
-    pub weights: Vec<f64>
+    pub weights: Vec<f64>,
 }
 
 impl EvaluateProgram {
@@ -62,7 +45,7 @@ impl EvaluateProgram {
     }
 
     /// Evaluates the qualities of adjustables.
-    /// 
+    ///
     /// # Safety
     /// The program must be valid.
     pub unsafe fn evaluate(&self, memory: &mut [Value], evaluation: &mut [f64]) {
@@ -78,7 +61,11 @@ impl EvaluateProgram {
         self.base.execute(memory);
 
         // Calculate adjustable qualities (weighed mean). Qualities are expected to be normalized.
-        for q in memory.iter().skip(self.base.constants.len()).take(self.rule_count) {
+        for q in memory
+            .iter()
+            .skip(self.base.constants.len())
+            .take(self.rule_count)
+        {
             let quality = q.complex.real;
 
             for ev in evaluation.iter_mut().take(self.adjustables.len()) {
@@ -100,7 +87,7 @@ pub struct FigureProgram {
     /// Expression values.
     pub variables: Vec<(ValueType, Loc)>,
     /// Entity values.
-    pub entities: Vec<(ValueType, Loc)>
+    pub entities: Vec<(ValueType, Loc)>,
 }
 
 impl FigureProgram {

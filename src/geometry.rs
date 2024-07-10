@@ -1,25 +1,10 @@
-/*
-Copyright (c) 2023 Michał Wilczek, Michał Margos
+use std::{
+    fmt::Display,
+    iter::{Product, Sum},
+    ops::{Add, AddAssign, Div, Mul, MulAssign, Neg, Sub, SubAssign},
+};
 
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
-associated documentation files (the “Software”), to deal in the Software without restriction,
-including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
-and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do
-so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all copies or substantial
-portions of the Software.
-
-THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
-FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS
-OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
-WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
-CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-*/
-
-use std::{fmt::Display, iter::{Product, Sum}, ops::{Add, AddAssign, Div, Mul, MulAssign, Neg, Sub, SubAssign}};
-
+use geo_aid_figure::Position;
 use serde::Serialize;
 
 /// Represents a complex number located on a "unit" plane.
@@ -41,6 +26,11 @@ impl Complex {
     #[must_use]
     pub const fn real(real: f64) -> Self {
         Self::new(real, 0.0)
+    }
+
+    #[must_use]
+    pub fn polar(theta: f64, radius: f64) -> Self {
+        Self::new(theta.cos(), theta.sin()) * radius
     }
 
     #[must_use]
@@ -136,6 +126,30 @@ impl Complex {
     #[must_use]
     pub fn inverse(self) -> Self {
         self.conjugate() / self.len_squared()
+    }
+}
+
+impl From<Complex> for Position {
+    fn from(value: Complex) -> Self {
+        Self {
+            x: value.real,
+            y: value.imaginary,
+        }
+    }
+}
+
+impl From<Complex> for geo_aid_figure::Complex {
+    fn from(value: Complex) -> Self {
+        Self {
+            real: value.real,
+            imaginary: value.imaginary,
+        }
+    }
+}
+
+impl From<Position> for Complex {
+    fn from(value: Position) -> Self {
+        Self::new(value.x, value.y)
     }
 }
 
@@ -242,7 +256,11 @@ impl MulAssign for Complex {
 impl Display for Complex {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if let Some(precision) = f.precision() {
-            write!(f, "{2:.*} + {3:.*}i", precision, precision, self.real, self.imaginary)
+            write!(
+                f,
+                "{2:.*} + {3:.*}i",
+                precision, precision, self.real, self.imaginary
+            )
         } else {
             write!(f, "{} + {}i", self.real, self.imaginary)
         }
@@ -306,6 +324,15 @@ impl Line {
     }
 }
 
+impl From<Line> for geo_aid_figure::Line {
+    fn from(value: Line) -> Self {
+        Self {
+            origin: value.origin.into(),
+            direction: value.direction.into(),
+        }
+    }
+}
+
 /// Represents a circle in a 2D euclidean space.
 #[derive(Debug, Clone, Copy, Serialize)]
 pub struct Circle {
@@ -315,12 +342,21 @@ pub struct Circle {
     pub radius: f64,
 }
 
+impl From<Circle> for geo_aid_figure::Circle {
+    fn from(value: Circle) -> Self {
+        Self {
+            center: value.center.into(),
+            radius: value.radius,
+        }
+    }
+}
+
 /// Enumerated value type for serialization.
 #[derive(Debug, Clone, Copy, Serialize)]
 pub enum ValueEnum {
     Complex(Complex),
     Line(Line),
-    Circle(Circle)
+    Circle(Circle),
 }
 
 impl ValueEnum {
@@ -328,7 +364,7 @@ impl ValueEnum {
     pub fn as_complex(self) -> Option<Complex> {
         match self {
             Self::Complex(c) => Some(c),
-            _ => None
+            _ => None,
         }
     }
 
@@ -336,7 +372,7 @@ impl ValueEnum {
     pub fn as_line(self) -> Option<Line> {
         match self {
             Self::Line(l) => Some(l),
-            _ => None
+            _ => None,
         }
     }
 
@@ -344,7 +380,17 @@ impl ValueEnum {
     pub fn as_circle(self) -> Option<Circle> {
         match self {
             Self::Circle(l) => Some(l),
-            _ => None
+            _ => None,
+        }
+    }
+}
+
+impl From<ValueEnum> for geo_aid_figure::Value {
+    fn from(value: ValueEnum) -> Self {
+        match value {
+            ValueEnum::Complex(c) => Self::Complex(c.into()),
+            ValueEnum::Line(ln) => Self::Line(ln.into()),
+            ValueEnum::Circle(c) => Self::Circle(c.into()),
         }
     }
 }

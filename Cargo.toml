@@ -1,19 +1,20 @@
 [package]
 name = "geo-aid"
 description = "A tool designed to generate geometrical figures based on given rules."
-version = "0.4.0"
+version = "0.4.1"
 edition = "2021"
 license = "MIT"
-repository = "https://github.com/DragonGamesStudios/Geo-AID/tree/v0.4"
+repository = "https://github.com/Geo-AID/geo-aid/"
 
 [dependencies]
+geo_aid_derive = { version = "0.4.1", path = "crates/geo_aid_derive" }
+geo-aid-figure = { version = "0.4.1", path = "crates/geo-aid-figure" }
 rand = "0.8.5"
 clap = {version = "4.5.7", features = ["derive"]}
 crossterm = "0.27.0"
 serde = {version = "1.0.203", features = ["derive", "rc"]}
 serde_json = "1.0"
 strsim = "0.11"
-geo_aid_derive = { version = "0.1.5", path = "../geo_aid_derive" }
 clap-markdown = "0.1.4"
 num-traits = "0.2.19"
 num-derive = "0.4.2"

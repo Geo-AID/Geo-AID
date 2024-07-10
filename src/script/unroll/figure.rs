@@ -1,35 +1,15 @@
-/*
-Copyright (c) 2023 Michał Wilczek, Michał Margos
-
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
-associated documentation files (the “Software”), to deal in the Software without restriction,
-including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
-and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do
-so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all copies or substantial
-portions of the Software.
-
-THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
-FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS
-OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
-WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
-CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-*/
-
-use std::{collections::HashMap, fmt::Debug, ops::Deref};
-
+use crate::script::figure::{CircleItem, LineItem, PointItem, RayItem};
+use crate::script::math::Build;
 use crate::{
     script::{
-        figure::{MathString, Style},
+        figure::SpannedMathString as MathString,
         parser::{FromProperty, Parse, PropertyValue},
         Error,
     },
     span,
 };
-use crate::script::figure::{CircleItem, LineItem, PointItem, RayItem};
-use crate::script::math::Build;
+use geo_aid_figure::Style;
+use std::{collections::HashMap, fmt::Debug, ops::Deref};
 
 use super::{
     AnyExpr, Bundle, Circle, CloneWithNode, CompileContext, Displayed, Dummy, Expr, Line, Point,
@@ -263,11 +243,7 @@ impl Node for CollectionNode {
 }
 
 pub trait BuildAssociated<T: Node>: Debug {
-    fn build_associated(
-        self: Box<Self>,
-        build: &mut Build,
-        associated: &mut HierarchyNode<T>,
-    );
+    fn build_associated(self: Box<Self>, build: &mut Build, associated: &mut HierarchyNode<T>);
 }
 
 #[derive(Debug)]
@@ -752,22 +728,21 @@ impl Node for PointNode {
     fn build(self: Box<Self>, build: &mut Build) {
         if self.display.unwrap() && !self.is_dummy() {
             let id = build.load(&self.expr);
-            build.add(
-                PointItem {
-                    id,
-                    label: if self.display_label.unwrap() {
-                        if self.label.as_ref().is_empty() {
-                            // println!("{} as {}", self.expr, self.default_label);
-                            self.default_label
-                        } else {
-                            self.label.unwrap()
-                        }
+            build.add(PointItem {
+                id,
+                label: if self.display_label.unwrap() {
+                    if self.label.as_ref().is_empty() {
+                        // println!("{} as {}", self.expr, self.default_label);
+                        self.default_label
                     } else {
-                        MathString::new(span!(0, 0, 0, 0))
-                    },
-                    display_dot: self.display_dot.unwrap(),
+                        self.label.unwrap()
+                    }
+                } else {
+                    MathString::new(span!(0, 0, 0, 0))
                 }
-            );
+                .string,
+                display_dot: self.display_dot.unwrap(),
+            });
         }
     }
 }
@@ -832,22 +807,21 @@ impl Node for CircleNode {
     fn build(self: Box<Self>, build: &mut Build) {
         if self.display.unwrap() && !self.is_dummy() {
             let id = build.load(&self.expr);
-            build.add(
-                CircleItem {
-                    id,
-                    label: if self.display_label.unwrap() {
-                        if self.label.as_ref().is_empty() {
-                            // println!("{} as {}", self.expr, self.default_label);
-                            self.default_label
-                        } else {
-                            self.label.unwrap()
-                        }
+            build.add(CircleItem {
+                id,
+                label: if self.display_label.unwrap() {
+                    if self.label.as_ref().is_empty() {
+                        // println!("{} as {}", self.expr, self.default_label);
+                        self.default_label
                     } else {
-                        MathString::new(span!(0, 0, 0, 0))
-                    },
-                    style: self.style.unwrap()
+                        self.label.unwrap()
+                    }
+                } else {
+                    MathString::new(span!(0, 0, 0, 0))
                 }
-            );
+                .string,
+                style: self.style.unwrap(),
+            });
         }
     }
 }
@@ -994,10 +968,10 @@ impl Node for LineNode {
                     let id = build.load(&self.expr);
                     build.add(LineItem {
                         id,
-                        label,
+                        label: label.string,
                         style,
                     });
-                },
+                }
                 LineType::Ray => match &self.expr.data.as_ref() {
                     Line::LineFromPoints(a, b) => {
                         let p_id = build.load(a);
@@ -1005,8 +979,8 @@ impl Node for LineNode {
                         build.add(RayItem {
                             p_id,
                             q_id,
-                            label,
-                            style
+                            label: label.string,
+                            style,
                         });
                     }
                     Line::AngleBisector(a, b, c) => {
@@ -1023,8 +997,8 @@ impl Node for LineNode {
                         build.add(RayItem {
                             p_id,
                             q_id,
-                            label,
-                            style
+                            label: label.string,
+                            style,
                         });
                     }
                     _ => unreachable!(),
@@ -1036,11 +1010,11 @@ impl Node for LineNode {
                         build.add(RayItem {
                             p_id,
                             q_id,
-                            label,
-                            style
+                            label: label.string,
+                            style,
                         });
-                    },
-                    _ => unreachable!()
+                    }
+                    _ => unreachable!(),
                 },
             }
         }

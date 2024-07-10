@@ -1,23 +1,3 @@
-/*
-Copyright (c) 2023 Michał Wilczek, Michał Margos
-
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
-associated documentation files (the “Software”), to deal in the Software without restriction,
-including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
-and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do
-so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all copies or substantial
-portions of the Software.
-
-THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
-FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS
-OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
-WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
-CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-*/
-
 use geo_aid_derive::overload;
 use num_traits::{One, Zero};
 use std::rc::Rc;
@@ -73,7 +53,10 @@ fn pt_lies_on_line(
 
     if inverted {
         context.push_rule(UnrolledRule {
-            kind: UnrolledRuleKind::ScalarEq(number!(=ProcNum::zero()), context.distance_pl(point, line)),
+            kind: UnrolledRuleKind::ScalarEq(
+                number!(=ProcNum::zero()),
+                context.distance_pl(point, line),
+            ),
             inverted: true,
             weight,
         });
@@ -156,11 +139,10 @@ fn pt_lies_on_segment(
     node.extend(rhs.node.take());
 
     let point = lhs;
-    let line = context
-        .line(
-            field!(node POINT rhs, A with context),
-            field!(node POINT rhs, B with context),
-        );
+    let line = context.line(
+        field!(node POINT rhs, A with context),
+        field!(node POINT rhs, B with context),
+    );
 
     if inverted {
         // not on the line or not between A, B

@@ -1,0 +1,17 @@
+[package]
+name = "geo_aid_derive"
+description = "Derive crate for geo-aid"
+version = "0.4.1"
+keywords = ["template", "proc_macro", "procmacro", "geo-aid"]
+edition = "2018"
+license = "MIT"
+repository = "https://www.github.com/Geo-AID/geo-aid"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+quote = "1"
+proc-macro2 = "1.0"
+syn = { version = "2.0.37", features = ["full", "extra-traits"] }
+

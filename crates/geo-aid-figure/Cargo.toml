@@ -1,0 +1,13 @@
+[package]
+name = "geo-aid-figure"
+version = "0.4.1"
+edition = "2021"
+description = "Definitions for Geo-AID's JSON export format."
+license = "MIT"
+repository = "https://github.com/Geo-AID/geo-aid"
+
+[dependencies]
+serde = { version = "1.0.203", features = ["derive"] }
+num-traits = "0.2.19"
+num-derive = "0.4.2"
+num-rational = "0.4.2"

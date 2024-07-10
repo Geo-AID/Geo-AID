@@ -1,34 +1,10 @@
-/*
-Copyright (c) 2023 Michał Wilczek, Michał Margos
-
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
-associated documentation files (the “Software”), to deal in the Software without restriction,
-including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
-and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do
-so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all copies or substantial
-portions of the Software.
-
-THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
-FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS
-OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
-WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
-CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-*/
-
-use crate::{projector::{
-    Output, RenderedCircle, RenderedLine, RenderedPoint, RenderedRay,
-    RenderedSegment,
-}, script::figure::Style};
+use geo_aid_figure::{CircleItem, Figure, LineItem, PointItem, Position, Style, TwoPointItem};
 
 use crate::drawer::Draw;
-use crate::geometry::Complex;
 
 #[derive(Debug, Default)]
 pub struct Svg {
-    content: String
+    content: String,
 }
 
 impl Svg {
@@ -48,23 +24,23 @@ impl Svg {
         }
     }
 
-    fn draw_simple_segment(&mut self, (p1, p2): (Complex, Complex), style: Style) {
+    fn draw_simple_segment(&mut self, (p1, p2): (Position, Position), style: Style) {
         self.content += &format!(
             r#"
                 <line stroke-width="{}" stroke-dasharray="{}" stroke="black" x1="{}" x2="{}" y1="{}" y2="{}"/>
             "#,
             Self::get_style_width(style),
             Self::get_style_dashing(style),
-            p1.real,
-            p2.real,
-            p1.imaginary,
-            p2.imaginary
+            p1.x,
+            p2.x,
+            p1.y,
+            p2.y
         );
     }
 }
 
 impl Draw for Svg {
-    fn begin(&mut self, output: &Output) {
+    fn begin(&mut self, figure: &Figure) {
         self.content += &format!(
             r#"
                 <svg height="{}" width="{}" xmlns="http://www.w3.org/2000/svg">
@@ -75,40 +51,41 @@ impl Draw for Svg {
                 <g transform="translate(0,{})">
                 <g transform="scale(1,-1)">
             "#,
-            output.canvas_size.0, output.canvas_size.1, output.canvas_size.0,
+            figure.width, figure.height, figure.width,
         );
     }
 
-    fn draw_point(&mut self, point: &RenderedPoint) {
+    fn draw_point(&mut self, point: &PointItem) {
         let pos = point.position;
-        let label_pos = pos + point.label_position;
         self.content += &format!(
-            r#"
-                <circle cx="{}" cy="{}" fill="black" r="1"/>
+            r#"<circle cx="{}" cy="{}" fill="black" r="1"/>"#,
+            pos.x, pos.y
+        );
+
+        if let Some(label) = &point.label {
+            self.content += &format!(
+                r#"
                 <text transform="scale(1,-1)"
                     text-anchor="middle" dominant-baseline="middle"
                     style="font-family: 'Computer Modern'" font-size="10px"
                     stroke="black" stroke-width="0" x="{}" y="-{}">{}
                 </text>
             "#,
-            pos.real,
-            pos.imaginary,
-            label_pos.real,
-            label_pos.imaginary,
-            point.item.label
-        );
+                label.position.x, label.position.y, label.content
+            );
+        }
     }
 
-    fn draw_line(&mut self, line: &RenderedLine) {
-        self.draw_simple_segment(line.points, line.item.style);
+    fn draw_line(&mut self, line: &LineItem) {
+        self.draw_simple_segment(line.points, line.style);
     }
 
-    fn draw_ray(&mut self, ray: &RenderedRay) {
-        self.draw_simple_segment(ray.points, ray.item.style);
+    fn draw_ray(&mut self, ray: &TwoPointItem) {
+        self.draw_simple_segment(ray.points, ray.style);
     }
 
-    fn draw_segment(&mut self, segment: &RenderedSegment) {
-        self.draw_simple_segment(segment.points, segment.item.style);
+    fn draw_segment(&mut self, segment: &TwoPointItem) {
+        self.draw_simple_segment(segment.points, segment.style);
     }
 
     // fn draw_angle(&mut self, angle: &RenderedAngle) {
@@ -133,16 +110,16 @@ impl Draw for Svg {
     //     );
     // }
 
-    fn draw_circle(&mut self, circle: &RenderedCircle) {
+    fn draw_circle(&mut self, circle: &CircleItem) {
         self.content += &format!(
             r#"
                 <circle cx="{}" cy="{}" r="{}" stroke="black" stroke-width="{}" stroke-dasharray="{}" fill="transparent"/>
             "#,
-            circle.center.real,
-            circle.center.imaginary,
+            circle.center.x,
+            circle.center.y,
             circle.radius,
-            Self::get_style_width(circle.item.style),
-            Self::get_style_dashing(circle.item.style),
+            Self::get_style_width(circle.style),
+            Self::get_style_dashing(circle.style),
         );
     }
 

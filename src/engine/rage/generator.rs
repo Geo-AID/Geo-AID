@@ -1,29 +1,10 @@
-/*
-Copyright (c) 2023 Michał Wilczek, Michał Margos
-
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
-associated documentation files (the “Software”), to deal in the Software without restriction,
-including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
-and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do
-so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all copies or substantial
-portions of the Software.
-
-THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
-FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS
-OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
-WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
-CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-*/
-
 use std::{
     collections::VecDeque,
     mem,
+    pin::Pin,
     sync::{mpsc, Arc},
     thread::{self, JoinHandle},
-    time::{Duration, Instant}, pin::Pin,
+    time::{Duration, Instant},
 };
 
 use serde::Serialize;
@@ -35,8 +16,8 @@ use self::{critic::EvaluateProgram, program::Value};
 
 pub mod critic;
 pub mod fast_float;
-pub mod program;
 mod magic_box;
+pub mod program;
 
 // pub type Logger = Vec<String>;
 
@@ -99,7 +80,7 @@ unsafe fn generation_cycle(
     receiver: &mpsc::Receiver<Message>,
     sender: &mpsc::Sender<CycleState>,
     program: &Arc<EvaluateProgram>,
-    current_state: SendPtr<State>
+    current_state: SendPtr<State>,
 ) {
     let mut memory = program.setup();
     let mut qualities = Vec::new();
@@ -116,7 +97,11 @@ unsafe fn generation_cycle(
         match receiver.recv().unwrap() {
             Message::Generate(adjustment_magnitude) => {
                 {
-                    magic_box::adjust(&*current_state.0, &mut memory[0..program.adjustables.len()], adjustment_magnitude);
+                    magic_box::adjust(
+                        &*current_state.0,
+                        &mut memory[0..program.adjustables.len()],
+                        adjustment_magnitude,
+                    );
                 }
 
                 program.evaluate(&mut memory, &mut qualities);
@@ -124,11 +109,13 @@ unsafe fn generation_cycle(
                 #[allow(clippy::cast_precision_loss)]
                 let total_quality = qualities.iter().copied().sum::<f64>() / qualities.len() as f64;
 
-                sender.send(CycleState {
-                    adjustables: SendPtr(memory.as_slice()),
-                    qualities: SendPtr(qualities.as_slice()),
-                    total_quality
-                }).unwrap();
+                sender
+                    .send(CycleState {
+                        adjustables: SendPtr(memory.as_slice()),
+                        qualities: SendPtr(qualities.as_slice()),
+                        total_quality,
+                    })
+                    .unwrap();
             }
             Message::Terminate => return,
         }
@@ -139,14 +126,14 @@ unsafe fn generation_cycle(
 pub struct State {
     pub adjustables: Vec<Adjustable>,
     pub qualities: Vec<f64>,
-    pub total_quality: f64
+    pub total_quality: f64,
 }
 
 #[derive(Clone, Copy)]
 struct CycleState {
     pub adjustables: SendPtr<[Value]>,
     pub qualities: SendPtr<[f64]>,
-    pub total_quality: f64
+    pub total_quality: f64,
 }
 
 /// A structure responsible for generating a figure based on criteria and given points.
@@ -187,8 +174,8 @@ impl From<&EntityKind> for AdjustableTemplate {
             EntityKind::FreePoint => AdjustableTemplate::Point,
             EntityKind::PointOnLine { .. } => AdjustableTemplate::PointOnLine,
             EntityKind::PointOnCircle { .. } => AdjustableTemplate::PointOnCircle,
-            EntityKind::FreeReal => AdjustableTemplate::Real,
-            EntityKind::Bind(_) => unreachable!()
+            EntityKind::FreeReal | EntityKind::DistanceUnit => AdjustableTemplate::Real,
+            EntityKind::Bind(_) => unreachable!(),
         }
     }
 }
@@ -197,10 +184,7 @@ impl Generator {
     /// # Safety
     /// The `program` MUST be safe.
     #[must_use]
-    pub unsafe fn new(
-        workers: usize,
-        program: EvaluateProgram,
-    ) -> Self {
+    pub unsafe fn new(workers: usize, program: EvaluateProgram) -> Self {
         let (input_senders, input_receivers): (
             Vec<mpsc::Sender<Message>>,
             Vec<mpsc::Receiver<Message>>,
@@ -209,18 +193,17 @@ impl Generator {
         let (output_sender, output_receiver) = mpsc::channel();
 
         let current_state = State {
-            adjustables: program.adjustables
+            adjustables: program
+                .adjustables
                 .iter()
-                .map(|temp| {
-                    match temp {
-                        AdjustableTemplate::Point => {
-                            Adjustable::Point(Complex::new(rand::random(), rand::random()))
-                        }
-                        AdjustableTemplate::PointOnCircle | AdjustableTemplate::PointOnLine => {
-                            Adjustable::Clip1D(rand::random())
-                        }
-                        AdjustableTemplate::Real => Adjustable::Real(rand::random()),
+                .map(|temp| match temp {
+                    AdjustableTemplate::Point => {
+                        Adjustable::Point(Complex::new(rand::random(), rand::random()))
                     }
+                    AdjustableTemplate::PointOnCircle | AdjustableTemplate::PointOnLine => {
+                        Adjustable::Clip1D(rand::random())
+                    }
+                    AdjustableTemplate::Real => Adjustable::Real(rand::random()),
                 })
                 .collect(),
             qualities: {
@@ -229,7 +212,7 @@ impl Generator {
                 v.resize(program.adjustables.len(), 0.0);
                 v
             },
-            total_quality: 0.0
+            total_quality: 0.0,
         };
         let current_state = Box::pin(current_state);
         let state_ptr: &State = &current_state;
@@ -244,7 +227,9 @@ impl Generator {
                 .map(|rec| {
                     let sender = mpsc::Sender::clone(&output_sender);
                     let program = Arc::clone(&program);
-                    thread::spawn(move || unsafe { generation_cycle(&rec, &sender, &program, state_ptr) })
+                    thread::spawn(move || unsafe {
+                        generation_cycle(&rec, &sender, &program, state_ptr)
+                    })
                 })
                 .collect(),
             senders: input_senders,
@@ -262,9 +247,7 @@ impl Generator {
 
         // Send data to each worker
         for (i, sender) in self.senders.iter().enumerate() {
-            sender
-                .send(Message::Generate(magnitudes[i]))
-                .unwrap();
+            sender.send(Message::Generate(magnitudes[i])).unwrap();
         }
 
         let first_state = self.receiver.recv().unwrap();
@@ -289,8 +272,7 @@ impl Generator {
                 for (adj, value) in mut_ref.adjustables.iter_mut().zip(&*best.adjustables.0) {
                     match adj {
                         Adjustable::Point(x) => *x = value.complex,
-                        Adjustable::Real(x)
-                        | Adjustable::Clip1D(x) => *x = value.complex.real,
+                        Adjustable::Real(x) | Adjustable::Clip1D(x) => *x = value.complex.real,
                     }
                 }
 

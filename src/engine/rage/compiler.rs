@@ -1,37 +1,23 @@
-/*
- Copyright (c) 2024 Michał Wilczek, Michał Margos
- 
- Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
- associated documentation files (the “Software”), to deal in the Software without restriction,
- including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
- and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do
- so, subject to the following conditions:
- 
- The above copyright notice and this permission notice shall be included in all copies or substantial
- portions of the Software.
- 
- THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
- FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS
- OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
- WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
- CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- */
-
+use crate::engine::rage::generator::critic::{EvaluateProgram, FigureProgram};
+use crate::engine::rage::generator::program::expr::{
+    AngleBisector, AngleLine, AnglePoint, AnglePointDir, Average, CircleConstruct, EqualComplex,
+    EqualReal, Greater, InvertQuality, Less, LineFromPoints, LineLineIntersection, Max, Negation,
+    ParallelThrough, PartialPow, PartialProduct, PerpendicularThrough, PointLineDistance,
+    PointOnCircle, PointOnLine, PointPointDistance, Sum, SwapParts,
+};
+use crate::engine::rage::generator::program::{Instruction, Loc, Program, ValueType};
+use crate::engine::rage::generator::AdjustableTemplate;
+use crate::geometry::{Complex, ValueEnum};
+use crate::script::math::{EntityKind, Expr, ExprKind, ExprType, Intermediate, Rule, RuleKind};
+use crate::script::token::number::ProcNum;
+use geo_aid_figure::{EntityIndex as EntityId, VarIndex};
+use num_traits::{One, ToPrimitive};
 use std::collections::HashMap;
 use std::mem;
-use num_traits::{One, ToPrimitive};
-use crate::engine::rage::generator::AdjustableTemplate;
-use crate::engine::rage::generator::critic::{EvaluateProgram, FigureProgram};
-use crate::engine::rage::generator::program::{Instruction, Loc, Program, ValueType};
-use crate::engine::rage::generator::program::expr::{AngleBisector, AngleLine, AnglePoint, AnglePointDir, Average, CircleConstruct, EqualComplex, EqualReal, Greater, InvertQuality, Less, LineFromPoints, LineLineIntersection, Max, Negation, ParallelThrough, PartialPow, PartialProduct, PerpendicularThrough, PointLineDistance, PointOnCircle, PointOnLine, PointPointDistance, Sum, SwapParts};
-use crate::geometry::{Complex, ValueEnum};
-use crate::script::math::{EntityKind, EntityId, Expr, Intermediate, ExprKind, Rule, RuleKind, VarIndex, ExprType};
-use crate::script::token::number::ProcNum;
 
 #[derive(Debug, Default)]
 struct Cursor {
-    current: Loc
+    current: Loc,
 }
 
 impl Cursor {
@@ -53,13 +39,13 @@ pub struct Compiler<'i> {
     variables: Vec<Loc>,
     alt_mode: bool,
     biases: Vec<Loc>,
-    mode: Mode
+    mode: Mode,
 }
 
 #[derive(Debug, Clone, Copy)]
 enum Mode {
     Adjustable,
-    Figure
+    Figure,
 }
 
 impl<'i> Compiler<'i> {
@@ -76,20 +62,26 @@ impl<'i> Compiler<'i> {
             variables: Vec::new(),
             alt_mode: false,
             biases: Vec::new(),
-            mode: Mode::Adjustable
+            mode: Mode::Adjustable,
         }
     }
 
-    fn prepare_constants<'r, I: IntoIterator<Item = &'r ExprKind>>(&mut self, adjustable_count: usize, exprs: I) {
+    fn prepare_constants<'r, I: IntoIterator<Item = &'r ExprKind>>(
+        &mut self,
+        adjustable_count: usize,
+        exprs: I,
+    ) {
         self.constants_indices.clear();
         self.constants.clear();
         self.entities.clear();
-        self.constants.resize(adjustable_count, ValueEnum::Complex(Complex::zero()));
+        self.constants
+            .resize(adjustable_count, ValueEnum::Complex(Complex::zero()));
         self.entities.resize(adjustable_count, usize::MAX);
 
         for expr in exprs {
             if let ExprKind::Const { value } = expr {
-                self.constants.push(ValueEnum::Complex(value.clone().to_complex()));
+                self.constants
+                    .push(ValueEnum::Complex(value.clone().to_complex()));
                 let index = self.constants.len() - 1;
                 self.constants_indices.insert(value.clone(), index);
             }
@@ -98,10 +90,9 @@ impl<'i> Compiler<'i> {
 
     fn get_value_type(ty: ExprType) -> ValueType {
         match ty {
-            ExprType::Number
-            | ExprType::Point => ValueType::Complex,
+            ExprType::Number | ExprType::Point => ValueType::Complex,
             ExprType::Line => ValueType::Line,
-            ExprType::Circle => ValueType::Circle
+            ExprType::Circle => ValueType::Circle,
         }
     }
 
@@ -110,7 +101,10 @@ impl<'i> Compiler<'i> {
 
         // 1a. Figure out adjustables
 
-        let adjustables: Vec<_> = self.intermediate.figure.entities
+        let adjustables: Vec<_> = self
+            .intermediate
+            .figure
+            .entities
             .iter()
             .map(AdjustableTemplate::from)
             .collect();
@@ -120,7 +114,10 @@ impl<'i> Compiler<'i> {
         // 1b. Figure out constants
 
         // The first constants are adjustable values
-        self.prepare_constants(adj_count, self.intermediate.adjusted.variables.iter().map(|x| &x.kind));
+        self.prepare_constants(
+            adj_count,
+            self.intermediate.adjusted.variables.iter().map(|x| &x.kind),
+        );
 
         // We'll add a bias rule for entities with no bounds.
         let rule_count = self.intermediate.adjusted.rules.len() + 1;
@@ -132,7 +129,8 @@ impl<'i> Compiler<'i> {
         self.cursor.current = program_zero;
         self.rule_cursor.current = self.constants.len();
 
-        self.variables.resize(self.intermediate.adjusted.variables.len(), usize::MAX);
+        self.variables
+            .resize(self.intermediate.adjusted.variables.len(), usize::MAX);
 
         for rule in &self.intermediate.adjusted.rules {
             self.compile(rule);
@@ -141,7 +139,7 @@ impl<'i> Compiler<'i> {
         self.compile(&Rule {
             kind: RuleKind::Bias,
             weight: ProcNum::one(),
-            entities: Vec::new()
+            entities: Vec::new(),
         });
 
         let memory_size = self.cursor.next();
@@ -173,12 +171,17 @@ impl<'i> Compiler<'i> {
         // Then, we go through each entity's weights and normalize them so that they add up to 1.
         for (i, rule) in self.intermediate.adjusted.rules.iter().enumerate() {
             for EntityId(adj) in &rule.entities {
-                weights[i * adjustables.len() + *adj] = rule.weight.clone().to_complex().real / affecting_rules[*adj];
+                weights[i * adjustables.len() + *adj] =
+                    rule.weight.clone().to_complex().real / affecting_rules[*adj];
             }
         }
 
         // We go through all biased entities and assign them a weight of one, as they will be biased.
-        for i in biased_entities.into_iter().enumerate().filter_map(|v| v.1.then_some(v.0)) {
+        for i in biased_entities
+            .into_iter()
+            .enumerate()
+            .filter_map(|v| v.1.then_some(v.0))
+        {
             weights[(rule_count - 1) * adjustables.len() + i] = 1.0;
         }
 
@@ -195,23 +198,26 @@ impl<'i> Compiler<'i> {
             base: Program {
                 req_memory_size: memory_size,
                 constants: mem::take(&mut self.constants),
-                instructions: mem::take(&mut self.instructions)
+                instructions: mem::take(&mut self.instructions),
             },
             adjustables,
             rule_count,
             biases: mem::take(&mut self.biases),
-            weights
+            weights,
         };
 
-        let entity_types: Vec<_> = self.intermediate.figure.entities.iter()
-            .map(|ent| {
-                match ent {
-                    EntityKind::FreeReal
-                    | EntityKind::FreePoint
-                    | EntityKind::PointOnCircle { .. }
-                    | EntityKind::PointOnLine { .. } => ValueType::Complex,
-                    EntityKind::Bind(_) => unreachable!(),
-                }
+        let entity_types: Vec<_> = self
+            .intermediate
+            .figure
+            .entities
+            .iter()
+            .map(|ent| match ent {
+                EntityKind::FreeReal
+                | EntityKind::FreePoint
+                | EntityKind::DistanceUnit
+                | EntityKind::PointOnCircle { .. }
+                | EntityKind::PointOnLine { .. } => ValueType::Complex,
+                EntityKind::Bind(_) => unreachable!(),
             })
             .collect();
 
@@ -220,12 +226,16 @@ impl<'i> Compiler<'i> {
         self.entities.clear();
 
         self.mode = Mode::Figure;
-        self.variables.resize(self.intermediate.figure.variables.len(), usize::MAX);
+        self.variables
+            .resize(self.intermediate.figure.variables.len(), usize::MAX);
 
         // 2a. Figure out constants
 
         // The first constants are adjustable values
-        self.prepare_constants(adj_count, self.intermediate.figure.variables.iter().map(|x| &x.kind));
+        self.prepare_constants(
+            adj_count,
+            self.intermediate.figure.variables.iter().map(|x| &x.kind),
+        );
 
         let program_zero = evaluate.adjustables.len();
         self.cursor.current = program_zero;
@@ -237,17 +247,18 @@ impl<'i> Compiler<'i> {
 
         let mut final_entities = Vec::new();
         for (i, ent) in entity_types.into_iter().enumerate() {
-            final_entities.push((ent, self.compile(&EntityId(i))));
+            // Here, we're pushing the adjusted value itself. Thus, we're using `i` as a constant id.
+            final_entities.push((ent, i));
         }
 
         let figure = FigureProgram {
             base: Program {
                 req_memory_size: self.cursor.next(),
                 constants: self.constants,
-                instructions: self.instructions
+                instructions: self.instructions,
             },
             variables: final_variables,
-            entities: final_entities
+            entities: final_entities,
         };
 
         // println!("{figure:#?}");
@@ -285,7 +296,7 @@ impl<'i> Compile<VarIndex> for Compiler<'i> {
 
         let r = match self.mode {
             Mode::Adjustable => &self.intermediate.adjusted.variables[value.0].kind,
-            Mode::Figure => &self.intermediate.figure.variables[value.0].kind
+            Mode::Figure => &self.intermediate.figure.variables[value.0].kind,
         };
         let loc = self.compile(r);
         self.variables[value.0] = loc;
@@ -309,7 +320,7 @@ impl<'i> Compile<ExprKind> for Compiler<'i> {
                 let instruction = Instruction::LineLineIntersection(LineLineIntersection {
                     k: self.compile(k),
                     l: self.compile(l),
-                    target
+                    target,
                 });
                 self.instructions.push(instruction);
 
@@ -320,7 +331,7 @@ impl<'i> Compile<ExprKind> for Compiler<'i> {
 
                 let instruction = Instruction::Average(Average {
                     params: items.iter().map(|i| self.compile(i)).collect(),
-                    target
+                    target,
                 });
                 self.instructions.push(instruction);
 
@@ -330,16 +341,14 @@ impl<'i> Compile<ExprKind> for Compiler<'i> {
                 // It should be enough to just move the circle.
                 self.compile(circle)
             }
-            ExprKind::Entity { id } => {
-                self.compile(id)
-            }
+            ExprKind::Entity { id } => self.compile(id),
             ExprKind::PointPoint { p, q } => {
                 let target = self.cursor.next();
 
                 let instruction = Instruction::LineFromPoints(LineFromPoints {
                     a: self.compile(p),
                     b: self.compile(q),
-                    target
+                    target,
                 });
                 self.instructions.push(instruction);
 
@@ -352,7 +361,7 @@ impl<'i> Compile<ExprKind> for Compiler<'i> {
                     arm1: self.compile(p),
                     origin: self.compile(q),
                     arm2: self.compile(r),
-                    target
+                    target,
                 });
                 self.instructions.push(instruction);
 
@@ -364,7 +373,7 @@ impl<'i> Compile<ExprKind> for Compiler<'i> {
                 let instruction = Instruction::ParallelThrough(ParallelThrough {
                     point: self.compile(point),
                     line: self.compile(line),
-                    target
+                    target,
                 });
                 self.instructions.push(instruction);
 
@@ -376,7 +385,7 @@ impl<'i> Compile<ExprKind> for Compiler<'i> {
                 let instruction = Instruction::PerpendicularThrough(PerpendicularThrough {
                     point: self.compile(point),
                     line: self.compile(line),
-                    target
+                    target,
                 });
                 self.instructions.push(instruction);
 
@@ -390,14 +399,12 @@ impl<'i> Compile<ExprKind> for Compiler<'i> {
                 } else {
                     let instruction = Instruction::Sum(Sum {
                         params: minus.iter().map(|x| self.compile(x)).collect(),
-                        target
+                        target,
                     });
                     self.instructions.push(instruction);
 
-                    self.instructions.push(Instruction::Negation(Negation {
-                        x: target,
-                        target
-                    }));
+                    self.instructions
+                        .push(Instruction::Negation(Negation { x: target, target }));
 
                     Some(target)
                 };
@@ -407,7 +414,7 @@ impl<'i> Compile<ExprKind> for Compiler<'i> {
                         .into_iter()
                         .chain(plus.iter().map(|x| self.compile(x)))
                         .collect(),
-                    target
+                    target,
                 });
                 self.instructions.push(instruction);
 
@@ -439,22 +446,20 @@ impl<'i> Compile<ExprKind> for Compiler<'i> {
                         .into_iter()
                         .chain(times.iter().map(|x| self.compile(x)))
                         .collect(),
-                    target
+                    target,
                 });
                 self.instructions.push(instruction);
 
                 target
             }
-            ExprKind::Const { value } => {
-                self.locate_const(value)
-            }
+            ExprKind::Const { value } => self.locate_const(value),
             ExprKind::Power { value, exponent } => {
                 let target = self.cursor.next();
 
                 let instruction = Instruction::Pow(PartialPow {
                     value: self.compile(value),
                     exponent: exponent.to_f64().unwrap(),
-                    target
+                    target,
                 });
                 self.instructions.push(instruction);
 
@@ -466,7 +471,7 @@ impl<'i> Compile<ExprKind> for Compiler<'i> {
                 let instruction = Instruction::PointPointDistance(PointPointDistance {
                     a: self.compile(p),
                     b: self.compile(q),
-                    target
+                    target,
                 });
                 self.instructions.push(instruction);
 
@@ -478,7 +483,7 @@ impl<'i> Compile<ExprKind> for Compiler<'i> {
                 let instruction = Instruction::PointLineDistance(PointLineDistance {
                     point: self.compile(point),
                     line: self.compile(line),
-                    target
+                    target,
                 });
                 self.instructions.push(instruction);
 
@@ -491,7 +496,7 @@ impl<'i> Compile<ExprKind> for Compiler<'i> {
                     arm1: self.compile(p),
                     origin: self.compile(q),
                     arm2: self.compile(r),
-                    target
+                    target,
                 });
                 self.instructions.push(instruction);
 
@@ -504,7 +509,7 @@ impl<'i> Compile<ExprKind> for Compiler<'i> {
                     arm1: self.compile(p),
                     origin: self.compile(q),
                     arm2: self.compile(r),
-                    target
+                    target,
                 });
                 self.instructions.push(instruction);
 
@@ -516,7 +521,7 @@ impl<'i> Compile<ExprKind> for Compiler<'i> {
                 let instruction = Instruction::AngleLine(AngleLine {
                     k: self.compile(k),
                     l: self.compile(l),
-                    target
+                    target,
                 });
                 self.instructions.push(instruction);
 
@@ -532,7 +537,7 @@ impl<'i> Compile<ExprKind> for Compiler<'i> {
 
                 let instruction = Instruction::SwapParts(SwapParts {
                     x: self.compile(point),
-                    target
+                    target,
                 });
                 self.instructions.push(instruction);
 
@@ -544,7 +549,7 @@ impl<'i> Compile<ExprKind> for Compiler<'i> {
                 let instruction = Instruction::CircleConstruct(CircleConstruct {
                     center: self.compile(center),
                     radius: self.compile(radius),
-                    target
+                    target,
                 });
                 self.instructions.push(instruction);
 
@@ -563,11 +568,10 @@ impl<'i> Compile<EntityId> for Compiler<'i> {
 
         let ent = match self.mode {
             Mode::Adjustable => self.intermediate.adjusted.entities[value.0].clone(),
-            Mode::Figure => self.intermediate.figure.entities[value.0].clone()
+            Mode::Figure => self.intermediate.figure.entities[value.0].clone(),
         };
         let loc = match ent {
-            EntityKind::FreeReal
-            | EntityKind::FreePoint => {
+            EntityKind::FreeReal | EntityKind::DistanceUnit | EntityKind::FreePoint => {
                 // The first constants are entities.
                 value.0
             }
@@ -577,7 +581,7 @@ impl<'i> Compile<EntityId> for Compiler<'i> {
                 let instruction = Instruction::OnLine(PointOnLine {
                     line: self.compile(&line),
                     clip: value.0,
-                    target
+                    target,
                 });
                 self.instructions.push(instruction);
 
@@ -589,13 +593,13 @@ impl<'i> Compile<EntityId> for Compiler<'i> {
                 let instruction = Instruction::OnCircle(PointOnCircle {
                     circle: self.compile(&circle),
                     clip: value.0,
-                    target
+                    target,
                 });
                 self.instructions.push(instruction);
 
                 target
             }
-            EntityKind::Bind(_) => unreachable!()
+            EntityKind::Bind(_) => unreachable!(),
         };
         self.entities[value.0] = loc;
         loc
@@ -617,7 +621,7 @@ impl<'i> Compile<RuleKind> for Compiler<'i> {
                 let instruction = Instruction::EqualComplex(EqualComplex {
                     a: self.compile(a),
                     b: self.compile(b),
-                    target
+                    target,
                 });
                 self.instructions.push(instruction);
 
@@ -629,7 +633,7 @@ impl<'i> Compile<RuleKind> for Compiler<'i> {
                 let instruction = Instruction::EqualReal(EqualReal {
                     a: self.compile(a),
                     b: self.compile(b),
-                    target
+                    target,
                 });
                 self.instructions.push(instruction);
 
@@ -641,7 +645,7 @@ impl<'i> Compile<RuleKind> for Compiler<'i> {
                 let instruction = Instruction::Less(Less {
                     a: self.compile(a),
                     b: self.compile(b),
-                    target
+                    target,
                 });
                 self.instructions.push(instruction);
 
@@ -653,7 +657,7 @@ impl<'i> Compile<RuleKind> for Compiler<'i> {
                 let instruction = Instruction::Greater(Greater {
                     a: self.compile(a),
                     b: self.compile(b),
-                    target
+                    target,
                 });
                 self.instructions.push(instruction);
 
@@ -669,7 +673,7 @@ impl<'i> Compile<RuleKind> for Compiler<'i> {
 
                 let instruction = Instruction::MaxReal(Max {
                     params: items.iter().map(|x| self.compile(x)).collect(),
-                    target
+                    target,
                 });
                 self.instructions.push(instruction);
 
@@ -682,10 +686,11 @@ impl<'i> Compile<RuleKind> for Compiler<'i> {
             RuleKind::Invert(rule) => {
                 let target = self.compile(rule.as_ref());
 
-                self.instructions.push(Instruction::InvertQuality(InvertQuality {
-                    q: target,
-                    target
-                }));
+                self.instructions
+                    .push(Instruction::InvertQuality(InvertQuality {
+                        q: target,
+                        target,
+                    }));
 
                 target
             }

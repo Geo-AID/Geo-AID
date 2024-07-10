@@ -1,23 +1,3 @@
-/*
-Copyright (c) 2023 Michał Wilczek, Michał Margos
-
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
-associated documentation files (the “Software”), to deal in the Software without restriction,
-including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
-and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do
-so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all copies or substantial
-portions of the Software.
-
-THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
-FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS
-OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
-WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
-CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-*/
-
 #![warn(clippy::pedantic)]
 
 use std::{
@@ -30,16 +10,19 @@ use std::{
 
 use clap::{Parser, ValueEnum};
 use crossterm::{cursor, terminal, ExecutableCommand, QueueableCommand};
-use geo_aid::{
-    cli::{Diagnostic, DiagnosticKind}, drawer::Draw, engine::{rage::Rage, Engine}, script::math
-};
 use geo_aid::drawer::json::Json;
 use geo_aid::drawer::latex::Latex;
 use geo_aid::drawer::raw::Raw;
 use geo_aid::drawer::svg::Svg;
-use geo_aid::projector;
-use geo_aid::engine::GenerateResult;
 use geo_aid::engine::rage::GenParams;
+use geo_aid::engine::GenerateResult;
+use geo_aid::projector;
+use geo_aid::{
+    cli::{Diagnostic, DiagnosticKind},
+    drawer::Draw,
+    engine::{rage::Rage, Engine},
+    script::math,
+};
 
 #[derive(Debug, Parser)]
 #[command(name = "Geo-AID")]
@@ -139,43 +122,47 @@ fn main() {
     let GenerateResult {
         time,
         generated,
-        total_quality
-    } = rage.generate(compiled, intermediate.figure, GenParams {
-        max_adjustment: args.adjustment_max,
-        mean_count: args.mean_count,
-        delta_max_mean: args.delta_max_mean,
-        progress_update: Box::new(|quality| {
-            let mut stdout = io::stdout();
-            stdout
-                .queue(terminal::Clear(terminal::ClearType::FromCursorDown))
-                .unwrap();
+        total_quality,
+    } = rage.generate(
+        compiled,
+        intermediate.figure,
+        GenParams {
+            max_adjustment: args.adjustment_max,
+            mean_count: args.mean_count,
+            delta_max_mean: args.delta_max_mean,
+            progress_update: Box::new(|quality| {
+                let mut stdout = io::stdout();
+                stdout
+                    .queue(terminal::Clear(terminal::ClearType::FromCursorDown))
+                    .unwrap();
 
-            stdout.queue(cursor::SavePosition).unwrap();
-            stdout
-                .write_all(format!("Quality: {:.2}% ", quality * 100.0).as_bytes())
-                .unwrap();
-            stdout.queue(cursor::RestorePosition).unwrap();
-            stdout.flush().unwrap();
-        })
-    });
+                stdout.queue(cursor::SavePosition).unwrap();
+                stdout
+                    .write_all(format!("Quality: {:.2}% ", quality * 100.0).as_bytes())
+                    .unwrap();
+                stdout.queue(cursor::RestorePosition).unwrap();
+                stdout.flush().unwrap();
+            }),
+        },
+    );
 
     stdout.execute(cursor::Show).unwrap();
 
     let rendered = projector::project(generated, &flags, canvas_size);
-    
+
     match args.renderer {
         Renderer::Latex => {
             Latex::default().draw(&args.output, &rendered).unwrap();
-        },
+        }
         Renderer::Json => {
-            Json::default().draw(&args.output, &rendered).unwrap();
-        },
+            Json.draw(&args.output, &rendered).unwrap();
+        }
         Renderer::Svg => {
             Svg::default().draw(&args.output, &rendered).unwrap();
-        },
+        }
         Renderer::Raw => {
             Raw::default().draw(&args.output, &rendered).unwrap();
-        },
+        }
         //Renderer::Latex => latex::draw(&args.output, canvas_size, &rendered),
         //Renderer::Json => json::draw(&args.output, canvas_size, &rendered),
     }
