@@ -74,7 +74,8 @@ impl ZeroLineDst {
                 }, ExprType::Point);
                 math.entities[a.0] = EntityKind::Bind(expr);
             }
-            EntityKind::FreeReal => unreachable!(),
+            EntityKind::DistanceUnit
+            | EntityKind::FreeReal => unreachable!(),
             EntityKind::PointOnCircle { .. } | EntityKind::Bind(_) => return false,
         }
 

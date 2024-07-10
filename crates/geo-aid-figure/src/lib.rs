@@ -371,7 +371,9 @@ pub enum EntityKind {
         circle: VarIndex
     },
     /// A free real
-    FreeReal
+    FreeReal,
+    /// A distance unit
+    DistanceUnit
 }
 
 /// An item drawn on the image

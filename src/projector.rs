@@ -6,11 +6,9 @@ use crate::geometry;
 use crate::geometry::{Circle, Complex, Line, ValueEnum};
 
 use crate::script::figure::{CircleItem, Generated, Item, LineItem, PointItem, RayItem, SegmentItem};
-use crate::script::math::{Expr, Flags};
+use crate::script::math::{EntityKind, Expr, ExprType, Flags};
 
 struct Projector {
-    /// Transform used by the projector
-    pub transform_: Transform,
     /// Variables used by the figure
     pub variables: Vec<MathVariable>,
     /// Picture width
@@ -20,14 +18,10 @@ struct Projector {
     /// Segments visible on the picture.
     pub segments: Vec<(Complex, Complex)>,
     /// Circles visible on the picture.
-    pub circles: Vec<(Complex, f64)>
+    pub circles: Vec<Circle>
 }
 
 impl Projector {
-    fn transform(&self, c: Complex) -> Complex {
-        self.transform_.transform(c)
-    }
-
     /// Gets the intersection points of the line with the picture's frame.
     fn get_line_ends(&self, ln_c: Line) -> (Complex, Complex) {
         fn choose_intersection(i: usize, j: usize) -> impl Fn(f64, &[Complex]) -> Complex {
@@ -123,7 +117,7 @@ impl Projector {
         }
 
         // Checking the circles for associated vectors.
-        for &(center, radius) in &self.circles {
+        for &Circle {center, radius} in &self.circles {
             if (geometry::distance_pt_pt(center, point) - radius).abs() < 1e-4 {
                 let direction = (center - point).mul_i().normalize();
 
@@ -242,7 +236,7 @@ impl Project<PointItem> for Projector {
 
     fn project(&mut self, item: PointItem) -> Self::Result {
         RenderedPoint {
-            position: self.transform(self.un_var(item.id).unwrap()).into(),
+            position: <Projector as UnVar<Complex>>::un_var(self, item.id).unwrap().into(),
             id: item.id,
             display_dot: item.display_dot,
             label: if item.label.is_empty() {
@@ -261,8 +255,7 @@ impl Project<LineItem> for Projector {
     type Result = RenderedLine;
     
     fn project(&mut self, item: LineItem) -> Self::Result {
-        let mut ln_c: Line = self.un_var(item.id).unwrap();
-        ln_c.origin = self.transform(ln_c.origin);
+        let ln_c: Line = self.un_var(item.id).unwrap();
         let points = self.get_line_ends(ln_c);
         self.segments.push(points);
 
@@ -286,8 +279,8 @@ impl Project<SegmentItem> for Projector {
     type Result = RenderedTwoPoint;
 
     fn project(&mut self, item: SegmentItem) -> Self::Result {
-        let seg1 = self.transform(self.un_var(item.p_id).unwrap());
-        let seg2 = self.transform(self.un_var(item.q_id).unwrap());
+        let seg1 = self.un_var(item.p_id).unwrap();
+        let seg2 = self.un_var(item.q_id).unwrap();
         self.segments.push((seg1, seg2));
 
         RenderedTwoPoint {
@@ -311,8 +304,8 @@ impl Project<RayItem> for Projector {
     type Result = RenderedTwoPoint;
 
     fn project(&mut self, item: RayItem) -> Self::Result {
-        let ray_a = self.transform(self.un_var(item.p_id).unwrap());
-        let ray_b = self.transform(self.un_var(item.q_id).unwrap());
+        let ray_a = self.un_var(item.p_id).unwrap();
+        let ray_b = self.un_var(item.q_id).unwrap();
 
         let line = geometry::get_line(ray_a, ray_b);
         let ends = self.get_line_ends(line);
@@ -356,9 +349,9 @@ impl Project<CircleItem> for Projector {
 
     fn project(&mut self, item: CircleItem) -> Self::Result {
         let circle: Circle = self.un_var(item.id).unwrap();
-        let center = self.transform(circle.center);
-        let radius = circle.radius * self.transform_.scale;
-        self.circles.push((center, radius));
+        let center = circle.center;
+        let radius = circle.radius;
+        self.circles.push(circle);
 
         RenderedCircle {
             id: item.id,
@@ -424,8 +417,26 @@ struct Transform {
 
 impl Transform {
     /// Translates generator coordinates to projector coordinates.
-    fn transform(&self, pt: Complex) -> Complex {
+    fn transform_point(&self, pt: Complex) -> Complex {
         (pt + self.offset) * self.scale + self.margin
+    }
+
+    fn transform_line(&self, ln: Line) -> Line {
+        Line {
+            origin: self.transform_point(ln.origin),
+            ..ln
+        }
+    }
+
+    fn transform_circle(&self, circle: Circle) -> Circle {
+        Circle {
+            center: self.transform_point(circle.center),
+            radius: self.transform_dst(circle.radius)
+        }
+    }
+
+    fn transform_dst(&self, dst: f64) -> f64 {
+        dst * self.scale
     }
 }
 
@@ -468,8 +479,8 @@ pub fn project(
     _flags: &Arc<Flags>,
     canvas_size: (usize, usize)
 ) -> Figure {
-    let entities: Vec<_> = figure.entities;
-    let expressions: Vec<_> = figure.variables;
+    let mut entities: Vec<_> = figure.entities;
+    let mut expressions: Vec<_> = figure.variables;
     let items = figure.items;
 
     let mut points = Vec::new();
@@ -529,16 +540,47 @@ pub fn project(
         size09.imaginary / total_size.imaginary,
     );
 
+    let transform = Transform {
+        offset,
+        scale,
+        margin: size005
+    };
+
+    let ent_types: Vec<_> = entities.iter().map(|t| t.get_type(&expressions, &entities)).collect();
+    for (ent, ty) in entities.iter_mut().zip(ent_types) {
+        match &mut ent.meta {
+            ValueEnum::Circle(circle) => *circle = transform.transform_circle(*circle),
+            ValueEnum::Line(line) => *line = transform.transform_line(*line),
+            ValueEnum::Complex(complex) => {
+                match ty {
+                    ExprType::Point => *complex = transform.transform_point(*complex),
+                    ExprType::Number => if matches!(ent.kind, EntityKind::DistanceUnit) {
+                        complex.real = transform.transform_dst(complex.real);
+                    },
+                    _ => unreachable!()
+                }
+            }
+        }
+    }
+
+    let expr_types: Vec<_> = expressions.iter().map(|t| t.get_type(&expressions, &entities)).collect();
+    for (expr, ty) in expressions.iter_mut().zip(expr_types) {
+        match &mut expr.meta {
+            ValueEnum::Circle(circle) => *circle = transform.transform_circle(*circle),
+            ValueEnum::Line(line) => *line = transform.transform_line(*line),
+            ValueEnum::Complex(complex) => {
+                if ExprType::Point == ty {
+                    *complex = transform.transform_point(*complex)
+                }
+            }
+        }
+    }
+
     // println!("Scale: {scale}");
     // println!("Frame size: {total_size}");
 
     // let points: Vec<Complex> = points.into_iter().map(|x| x * scale + size005).collect();
     let mut projector = Projector {
-        transform_: Transform {
-            offset,
-            scale,
-            margin: size005
-        },
         variables: expressions,
         width: size1.real,
         height: size1.imaginary,

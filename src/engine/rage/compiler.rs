@@ -189,6 +189,7 @@ impl<'i> Compiler<'i> {
                 match ent {
                     EntityKind::FreeReal
                     | EntityKind::FreePoint
+                    | EntityKind::DistanceUnit
                     | EntityKind::PointOnCircle { .. }
                     | EntityKind::PointOnLine { .. } => ValueType::Complex,
                     EntityKind::Bind(_) => unreachable!(),
@@ -549,6 +550,7 @@ impl<'i> Compile<EntityId> for Compiler<'i> {
         };
         let loc = match ent {
             EntityKind::FreeReal
+            | EntityKind::DistanceUnit
             | EntityKind::FreePoint => {
                 // The first constants are entities.
                 value.0

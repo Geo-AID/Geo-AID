@@ -504,6 +504,32 @@ impl ExprKind {
                 (_, _) => Ordering::Equal
             })
     }
+
+    #[must_use]
+    pub fn get_type<M>(&self, expressions: &[Expr<M>], entities: &[Entity<M>]) -> ExprType {
+        match self {
+            Self::Entity { id } => entities[id.0].get_type(expressions, entities),
+            Self::LineLineIntersection { .. }
+            | Self::AveragePoint { .. }
+            | Self::CircleCenter { .. } => ExprType::Point,
+            Self::Sum { .. }
+            | Self::Product { .. }
+            | Self::Const { .. }
+            | Self::Power { .. }
+            | Self::PointPointDistance { .. }
+            | Self::PointLineDistance { .. }
+            | Self::ThreePointAngle { .. }
+            | Self::ThreePointAngleDir { .. }
+            | Self::TwoLineAngle { .. }
+            | Self::PointX { .. }
+            | Self::PointY { .. } => ExprType::Number,
+            Self::PointPoint { .. }
+            | Self::AngleBisector { .. }
+            | Self::ParallelThrough { .. }
+            | Self::PerpendicularThrough { .. } => ExprType::Line,
+            Self::ConstructCircle { .. } => ExprType::Circle
+        }
+    }
 }
 
 impl From<ExprKind> for geo_aid_figure::ExpressionKind {
@@ -1018,6 +1044,13 @@ pub struct Expr<M> {
     pub ty: ExprType
 }
 
+impl<M> Expr<M> {
+    #[must_use]
+    pub fn get_type(&self, expressions: &[Expr<M>], entities: &[Entity<M>]) -> ExprType {
+        self.kind.get_type(expressions, entities)
+    }
+}
+
 impl<M> FindEntities for Expr<M> {
     fn find_entities(&self, previous: &[HashSet<EntityId>]) -> HashSet<EntityId> {
         self.kind.find_entities(previous)
@@ -1255,6 +1288,20 @@ pub struct Entity<M> {
     pub meta: M
 }
 
+impl<M> Entity<M> {
+    #[must_use]
+    pub fn get_type(&self, expressions: &[Expr<M>], entities: &[Entity<M>]) -> ExprType {
+        match &self.kind {
+            EntityKind::FreePoint
+            | EntityKind::PointOnLine { .. }
+            | EntityKind::PointOnCircle { .. } => ExprType::Point,
+            EntityKind::FreeReal
+            | EntityKind::DistanceUnit => ExprType::Number,
+            EntityKind::Bind(expr) => expressions[expr.0].get_type(expressions, entities)
+        }
+    }
+}
+
 #[derive(Debug, Clone, Recursive, Serialize)]
 #[recursive(
     impl ContainsEntity for Self {
@@ -1280,6 +1327,7 @@ pub enum EntityKind {
         circle: VarIndex
     },
     FreeReal,
+    DistanceUnit,
     Bind(VarIndex)
 }
 
@@ -1290,6 +1338,7 @@ impl From<EntityKind> for geo_aid_figure::EntityKind {
             EntityKind::PointOnLine { line } => Self::PointOnLine { line },
             EntityKind::PointOnCircle { circle } => Self::PointOnCircle { circle },
             EntityKind::FreeReal => Self::FreeReal,
+            EntityKind::DistanceUnit => Self::DistanceUnit,
             EntityKind::Bind(_) => unreachable!()
         }
     }
@@ -1298,11 +1347,12 @@ impl From<EntityKind> for geo_aid_figure::EntityKind {
 impl Reindex for EntityKind {
     fn reindex(&mut self, map: &IndexMap) {
         match self {
-            EntityKind::FreePoint
-            | EntityKind::FreeReal => {}
-            EntityKind::PointOnLine { line } => line.reindex(map),
-            EntityKind::PointOnCircle { circle } => circle.reindex(map),
-            EntityKind::Bind(_) => unreachable!("Should not appear")
+            Self::FreePoint
+            | Self::DistanceUnit
+            | Self::FreeReal => {}
+            Self::PointOnLine { line } => line.reindex(map),
+            Self::PointOnCircle { circle } => circle.reindex(map),
+            Self::Bind(_) => unreachable!("Should not appear")
         }
     }
 }
@@ -1410,7 +1460,7 @@ impl Math {
         let id = *if is_some {
             id.unwrap()
         } else {
-            let real = self.add_real();
+            let real = self.add_entity(EntityKind::DistanceUnit);
             self.dst_var.get_or_init(|| real)
         };
 
@@ -1629,6 +1679,7 @@ fn optimize_cycle(rules: &mut Vec<Option<Rule>>, math: &mut Math, items: &mut Ve
             entity_map.push(match entity {
                 EntityKind::FreePoint
                 | EntityKind::FreeReal
+                | EntityKind::DistanceUnit
                 | EntityKind::PointOnCircle { .. }
                 | EntityKind::PointOnLine { .. } => EntityBehavior::MapEntity(EntityId(i - offset)),
                 EntityKind::Bind(expr) => {

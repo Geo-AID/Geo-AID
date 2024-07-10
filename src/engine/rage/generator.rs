@@ -168,6 +168,7 @@ impl From<&EntityKind> for AdjustableTemplate {
             EntityKind::PointOnLine { .. } => AdjustableTemplate::PointOnLine,
             EntityKind::PointOnCircle { .. } => AdjustableTemplate::PointOnCircle,
             EntityKind::FreeReal => AdjustableTemplate::Real,
+            EntityKind::DistanceUnit => AdjustableTemplate::Real,
             EntityKind::Bind(_) => unreachable!()
         }
     }
