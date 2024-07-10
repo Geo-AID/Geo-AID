@@ -1,5 +1,5 @@
-use std::{collections::HashMap, fmt::Debug, ops::Deref};
-use geo_aid_figure::Style;
+use crate::script::figure::{CircleItem, LineItem, PointItem, RayItem};
+use crate::script::math::Build;
 use crate::{
     script::{
         figure::SpannedMathString as MathString,
@@ -8,8 +8,8 @@ use crate::{
     },
     span,
 };
-use crate::script::figure::{CircleItem, LineItem, PointItem, RayItem};
-use crate::script::math::Build;
+use geo_aid_figure::Style;
+use std::{collections::HashMap, fmt::Debug, ops::Deref};
 
 use super::{
     AnyExpr, Bundle, Circle, CloneWithNode, CompileContext, Displayed, Dummy, Expr, Line, Point,
@@ -243,11 +243,7 @@ impl Node for CollectionNode {
 }
 
 pub trait BuildAssociated<T: Node>: Debug {
-    fn build_associated(
-        self: Box<Self>,
-        build: &mut Build,
-        associated: &mut HierarchyNode<T>,
-    );
+    fn build_associated(self: Box<Self>, build: &mut Build, associated: &mut HierarchyNode<T>);
 }
 
 #[derive(Debug)]
@@ -732,22 +728,21 @@ impl Node for PointNode {
     fn build(self: Box<Self>, build: &mut Build) {
         if self.display.unwrap() && !self.is_dummy() {
             let id = build.load(&self.expr);
-            build.add(
-                PointItem {
-                    id,
-                    label: if self.display_label.unwrap() {
-                        if self.label.as_ref().is_empty() {
-                            // println!("{} as {}", self.expr, self.default_label);
-                            self.default_label
-                        } else {
-                            self.label.unwrap()
-                        }
+            build.add(PointItem {
+                id,
+                label: if self.display_label.unwrap() {
+                    if self.label.as_ref().is_empty() {
+                        // println!("{} as {}", self.expr, self.default_label);
+                        self.default_label
                     } else {
-                        MathString::new(span!(0, 0, 0, 0))
-                    }.string,
-                    display_dot: self.display_dot.unwrap(),
+                        self.label.unwrap()
+                    }
+                } else {
+                    MathString::new(span!(0, 0, 0, 0))
                 }
-            );
+                .string,
+                display_dot: self.display_dot.unwrap(),
+            });
         }
     }
 }
@@ -812,22 +807,21 @@ impl Node for CircleNode {
     fn build(self: Box<Self>, build: &mut Build) {
         if self.display.unwrap() && !self.is_dummy() {
             let id = build.load(&self.expr);
-            build.add(
-                CircleItem {
-                    id,
-                    label: if self.display_label.unwrap() {
-                        if self.label.as_ref().is_empty() {
-                            // println!("{} as {}", self.expr, self.default_label);
-                            self.default_label
-                        } else {
-                            self.label.unwrap()
-                        }
+            build.add(CircleItem {
+                id,
+                label: if self.display_label.unwrap() {
+                    if self.label.as_ref().is_empty() {
+                        // println!("{} as {}", self.expr, self.default_label);
+                        self.default_label
                     } else {
-                        MathString::new(span!(0, 0, 0, 0))
-                    }.string,
-                    style: self.style.unwrap()
+                        self.label.unwrap()
+                    }
+                } else {
+                    MathString::new(span!(0, 0, 0, 0))
                 }
-            );
+                .string,
+                style: self.style.unwrap(),
+            });
         }
     }
 }
@@ -977,7 +971,7 @@ impl Node for LineNode {
                         label: label.string,
                         style,
                     });
-                },
+                }
                 LineType::Ray => match &self.expr.data.as_ref() {
                     Line::LineFromPoints(a, b) => {
                         let p_id = build.load(a);
@@ -986,7 +980,7 @@ impl Node for LineNode {
                             p_id,
                             q_id,
                             label: label.string,
-                            style
+                            style,
                         });
                     }
                     Line::AngleBisector(a, b, c) => {
@@ -1004,7 +998,7 @@ impl Node for LineNode {
                             p_id,
                             q_id,
                             label: label.string,
-                            style
+                            style,
                         });
                     }
                     _ => unreachable!(),
@@ -1017,10 +1011,10 @@ impl Node for LineNode {
                             p_id,
                             q_id,
                             label: label.string,
-                            style
+                            style,
                         });
-                    },
-                    _ => unreachable!()
+                    }
+                    _ => unreachable!(),
                 },
             }
         }

@@ -1,27 +1,33 @@
+use crate::script::figure::Item;
+use crate::script::math::optimizations::ZeroLineDst;
+use crate::script::token::number::{CompExponent, ProcNum};
+use crate::script::unroll::figure::Node;
+use derive_recursive::Recursive;
+use geo_aid_figure::{EntityIndex as EntityId, VarIndex};
+use num_traits::{FromPrimitive, One, Zero};
+use serde::Serialize;
 use std::any::Any;
 use std::cell::OnceCell;
+use std::cmp::Ordering;
 use std::collections::{hash_map, HashMap, HashSet};
 use std::fmt::Debug;
 use std::hash::Hash;
 use std::iter::Peekable;
 use std::mem;
-use std::cmp::Ordering;
 use std::ops::{Deref, DerefMut};
 use std::rc::Rc;
-use derive_recursive::Recursive;
-use num_traits::{FromPrimitive, One, Zero};
-use serde::Serialize;
-use geo_aid_figure::{VarIndex, EntityIndex as EntityId};
-use crate::script::figure::Item;
-use crate::script::math::optimizations::ZeroLineDst;
-use crate::script::token::number::{CompExponent, ProcNum};
-use crate::script::unroll::figure::Node;
 
 use self::optimizations::{EqExpressions, EqPointDst, RightAngle};
 
 use super::unroll::{Flag, GetData};
-use super::{figure::Figure, unroll::{self, Displayed, Expr as Unrolled, UnrolledRule, UnrolledRuleKind,
-                                     Point as UnrolledPoint, Line as UnrolledLine, Circle as UnrolledCircle, ScalarData as UnrolledScalar}, Error, ComplexUnit, SimpleUnit};
+use super::{
+    figure::Figure,
+    unroll::{
+        self, Circle as UnrolledCircle, Displayed, Expr as Unrolled, Line as UnrolledLine,
+        Point as UnrolledPoint, ScalarData as UnrolledScalar, UnrolledRule, UnrolledRuleKind,
+    },
+    ComplexUnit, Error, SimpleUnit,
+};
 
 mod optimizations;
 
@@ -141,13 +147,13 @@ impl<T: ContainsEntity> ContainsEntity for Vec<T> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum EntityBehavior {
     MapEntity(EntityId),
-    MapVar(VarIndex)
+    MapVar(VarIndex),
 }
 
 pub struct ReconstructCtx<'r> {
     entity_replacement: &'r [EntityBehavior],
     old_vars: &'r [Expr<()>],
-    new_vars: Vec<Expr<()>>
+    new_vars: Vec<Expr<()>>,
 }
 
 impl<'r> ReconstructCtx<'r> {
@@ -156,7 +162,7 @@ impl<'r> ReconstructCtx<'r> {
         Self {
             entity_replacement,
             old_vars,
-            new_vars: Vec::new()
+            new_vars: Vec::new(),
         }
     }
 }
@@ -169,7 +175,7 @@ pub trait Reconstruct {
 fn reconstruct_entity(entity_id: EntityId, ctx: &mut ReconstructCtx) -> ExprKind {
     match ctx.entity_replacement[entity_id.0] {
         EntityBehavior::MapEntity(id) => ExprKind::Entity { id },
-        EntityBehavior::MapVar(index) => ctx.old_vars[index.0].kind.clone().reconstruct(ctx)
+        EntityBehavior::MapVar(index) => ctx.old_vars[index.0].kind.clone().reconstruct(ctx),
     }
 }
 
@@ -209,7 +215,9 @@ trait FindEntities {
 
 impl FindEntities for Vec<VarIndex> {
     fn find_entities(&self, previous: &[HashSet<EntityId>]) -> HashSet<EntityId> {
-        self.iter().flat_map(|x| previous[x.0].iter().copied()).collect()
+        self.iter()
+            .flat_map(|x| previous[x.0].iter().copied())
+            .collect()
     }
 }
 
@@ -264,7 +272,7 @@ pub enum ExprType {
     #[default]
     Point,
     Line,
-    Circle
+    Circle,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Recursive, Hash, Serialize)]
@@ -300,106 +308,102 @@ pub enum ExprType {
 pub enum ExprKind {
     #[recursive(override_reconstruct = reconstruct_entity)]
     Entity {
-        id: EntityId
+        id: EntityId,
     },
 
     // POINT
-
     /// k and l must be ordered
     LineLineIntersection {
         k: VarIndex,
-        l: VarIndex
+        l: VarIndex,
     },
     /// Items must be sorted
     AveragePoint {
-        items: Vec<VarIndex>
+        items: Vec<VarIndex>,
     },
     CircleCenter {
-        circle: VarIndex
+        circle: VarIndex,
     },
 
     // NUMBER
-
     /// plus and minus must be sorted and must not contain other sums. An aggregated constant, if any, must be at the end.
     Sum {
         plus: Vec<VarIndex>,
-        minus: Vec<VarIndex>
+        minus: Vec<VarIndex>,
     },
     /// times and by must be sorted and must not contain other sums. An aggregated constant, if any, must be at the end.
     Product {
         times: Vec<VarIndex>,
-        by: Vec<VarIndex>
+        by: Vec<VarIndex>,
     },
     Const {
-        value: ProcNum
+        value: ProcNum,
     },
     Power {
         value: VarIndex,
-        exponent: CompExponent
+        exponent: CompExponent,
     },
     /// p and q must be ordered
     PointPointDistance {
         p: VarIndex,
-        q: VarIndex
+        q: VarIndex,
     },
     PointLineDistance {
         point: VarIndex,
-        line: VarIndex
+        line: VarIndex,
     },
     /// p and r must be ordered
     ThreePointAngle {
         p: VarIndex,
         q: VarIndex,
-        r: VarIndex
+        r: VarIndex,
     },
     /// p and r must be ordered
     ThreePointAngleDir {
         p: VarIndex,
         q: VarIndex,
-        r: VarIndex
+        r: VarIndex,
     },
     /// k and l must be ordered
     TwoLineAngle {
         k: VarIndex,
-        l: VarIndex
+        l: VarIndex,
     },
     PointX {
-        point: VarIndex
+        point: VarIndex,
     },
     PointY {
-        point: VarIndex
+        point: VarIndex,
     },
 
     // Line
-
     /// Normalized iff `p` and `q` are in ascending order
     PointPoint {
         p: VarIndex,
-        q: VarIndex
+        q: VarIndex,
     },
     /// Normalized iff `a` and `c` are in ascending order (`b` must stay in the middle)
     AngleBisector {
         p: VarIndex,
         q: VarIndex,
-        r: VarIndex
+        r: VarIndex,
     },
     /// Always normalized
     ParallelThrough {
         point: VarIndex,
-        line: VarIndex
+        line: VarIndex,
     },
     /// Always normalized
     PerpendicularThrough {
         point: VarIndex,
-        line: VarIndex
+        line: VarIndex,
     },
 
     // Circle
-
     ConstructCircle {
         center: VarIndex,
-        radius: VarIndex
-    }
+        radius: VarIndex,
+    },
 }
 
 impl ExprKind {
@@ -434,74 +438,177 @@ impl ExprKind {
         self.variant_id()
             .cmp(&other.variant_id())
             .then_with(|| match (self, other) {
+                (Self::Entity { id: self_id }, Self::Entity { id: other_id }) => {
+                    self_id.cmp(other_id)
+                }
                 (
-                    Self::Entity { id: self_id }, Self::Entity { id: other_id }
-                ) => self_id.cmp(other_id),
-                (
-                    Self::LineLineIntersection { k: self_a, l: self_b },
-                    Self::LineLineIntersection { k: other_a, l: other_b },
-                ) | (
-                    Self::PointPointDistance { p: self_a, q: self_b },
-                    Self::PointPointDistance { p: other_a, q: other_b },
-                ) | (
-                    Self::PointLineDistance { point: self_a, line: self_b },
-                    Self::PointLineDistance { point: other_a, line: other_b },
-                ) | (
-                    Self::TwoLineAngle { k: self_a, l: self_b },
-                    Self::TwoLineAngle { k: other_a, l: other_b },
-                ) | (
-                    Self::PointPoint { p: self_a, q: self_b },
-                    Self::PointPoint { p: other_a, q: other_b },
-                ) | (
-                    Self::ParallelThrough { point: self_a, line: self_b },
-                    Self::ParallelThrough { point: other_a, line: other_b },
-                ) | (
-                    Self::PerpendicularThrough { point: self_a, line: self_b },
-                    Self::PerpendicularThrough { point: other_a, line: other_b },
-                ) | (
-                    Self::ConstructCircle { center: self_a, radius: self_b },
-                    Self::ConstructCircle { center: other_a, radius: other_b },
-                ) => self_a.compare(other_a, math).then_with(|| self_b.compare(other_b, math)),
+                    Self::LineLineIntersection {
+                        k: self_a,
+                        l: self_b,
+                    },
+                    Self::LineLineIntersection {
+                        k: other_a,
+                        l: other_b,
+                    },
+                )
+                | (
+                    Self::PointPointDistance {
+                        p: self_a,
+                        q: self_b,
+                    },
+                    Self::PointPointDistance {
+                        p: other_a,
+                        q: other_b,
+                    },
+                )
+                | (
+                    Self::PointLineDistance {
+                        point: self_a,
+                        line: self_b,
+                    },
+                    Self::PointLineDistance {
+                        point: other_a,
+                        line: other_b,
+                    },
+                )
+                | (
+                    Self::TwoLineAngle {
+                        k: self_a,
+                        l: self_b,
+                    },
+                    Self::TwoLineAngle {
+                        k: other_a,
+                        l: other_b,
+                    },
+                )
+                | (
+                    Self::PointPoint {
+                        p: self_a,
+                        q: self_b,
+                    },
+                    Self::PointPoint {
+                        p: other_a,
+                        q: other_b,
+                    },
+                )
+                | (
+                    Self::ParallelThrough {
+                        point: self_a,
+                        line: self_b,
+                    },
+                    Self::ParallelThrough {
+                        point: other_a,
+                        line: other_b,
+                    },
+                )
+                | (
+                    Self::PerpendicularThrough {
+                        point: self_a,
+                        line: self_b,
+                    },
+                    Self::PerpendicularThrough {
+                        point: other_a,
+                        line: other_b,
+                    },
+                )
+                | (
+                    Self::ConstructCircle {
+                        center: self_a,
+                        radius: self_b,
+                    },
+                    Self::ConstructCircle {
+                        center: other_a,
+                        radius: other_b,
+                    },
+                ) => self_a
+                    .compare(other_a, math)
+                    .then_with(|| self_b.compare(other_b, math)),
                 (
                     Self::AveragePoint { items: self_items },
-                    Self::AveragePoint { items: other_items }
+                    Self::AveragePoint { items: other_items },
                 ) => self_items.compare(other_items, math),
+                (Self::CircleCenter { circle: self_x }, Self::CircleCenter { circle: other_x })
+                | (Self::PointX { point: self_x }, Self::PointX { point: other_x })
+                | (Self::PointY { point: self_x }, Self::PointY { point: other_x }) => {
+                    self_x.compare(other_x, math)
+                }
                 (
-                    Self::CircleCenter { circle: self_x },
-                    Self::CircleCenter { circle: other_x }
-                ) | (
-                    Self::PointX { point: self_x },
-                    Self::PointX { point: other_x }
-                ) | (
-                    Self::PointY { point: self_x },
-                    Self::PointY { point: other_x }
-                ) => self_x.compare(other_x, math),
+                    Self::Sum {
+                        plus: self_v,
+                        minus: self_u,
+                    },
+                    Self::Sum {
+                        plus: other_v,
+                        minus: other_u,
+                    },
+                )
+                | (
+                    Self::Product {
+                        times: self_v,
+                        by: self_u,
+                    },
+                    Self::Product {
+                        times: other_v,
+                        by: other_u,
+                    },
+                ) => self_v
+                    .compare(other_v, math)
+                    .then_with(|| self_u.compare(other_u, math)),
+                (Self::Const { value: self_v }, Self::Const { value: other_v }) => {
+                    self_v.cmp(other_v)
+                }
                 (
-                    Self::Sum { plus: self_v, minus: self_u },
-                    Self::Sum { plus: other_v, minus: other_u }
-                ) | (
-                    Self::Product { times: self_v, by: self_u },
-                    Self::Product { times: other_v, by: other_u }
-                ) => self_v.compare(other_v, math).then_with(|| self_u.compare(other_u, math)),
+                    Self::Power {
+                        value: self_v,
+                        exponent: self_exp,
+                    },
+                    Self::Power {
+                        value: other_v,
+                        exponent: other_exp,
+                    },
+                ) => self_v
+                    .compare(other_v, math)
+                    .then_with(|| self_exp.cmp(other_exp)),
                 (
-                    Self::Const { value: self_v },
-                    Self::Const { value: other_v }
-                ) => self_v.cmp(other_v),
-                (
-                    Self::Power { value: self_v, exponent: self_exp },
-                    Self::Power { value: other_v, exponent: other_exp },
-                ) => self_v.compare(other_v, math).then_with(|| self_exp.cmp(other_exp)),
-                (
-                    Self::ThreePointAngle { p: self_p, q: self_q, r: self_r },
-                    Self::ThreePointAngle { p: other_p, q: other_q, r: other_r },
-                ) | (
-                    Self::ThreePointAngleDir { p: self_p, q: self_q, r: self_r },
-                    Self::ThreePointAngleDir { p: other_p, q: other_q, r: other_r },
-                )| (
-                    Self::AngleBisector { p: self_p, q: self_q, r: self_r },
-                    Self::AngleBisector { p: other_p, q: other_q, r: other_r },
-                ) => self_p.compare(other_p, math).then_with(|| self_q.compare(other_q, math)).then_with(|| self_r.compare(other_r, math)),
-                (_, _) => Ordering::Equal
+                    Self::ThreePointAngle {
+                        p: self_p,
+                        q: self_q,
+                        r: self_r,
+                    },
+                    Self::ThreePointAngle {
+                        p: other_p,
+                        q: other_q,
+                        r: other_r,
+                    },
+                )
+                | (
+                    Self::ThreePointAngleDir {
+                        p: self_p,
+                        q: self_q,
+                        r: self_r,
+                    },
+                    Self::ThreePointAngleDir {
+                        p: other_p,
+                        q: other_q,
+                        r: other_r,
+                    },
+                )
+                | (
+                    Self::AngleBisector {
+                        p: self_p,
+                        q: self_q,
+                        r: self_r,
+                    },
+                    Self::AngleBisector {
+                        p: other_p,
+                        q: other_q,
+                        r: other_r,
+                    },
+                ) => self_p
+                    .compare(other_p, math)
+                    .then_with(|| self_q.compare(other_q, math))
+                    .then_with(|| self_r.compare(other_r, math)),
+                (_, _) => Ordering::Equal,
             })
     }
 
@@ -527,7 +634,7 @@ impl ExprKind {
             | Self::AngleBisector { .. }
             | Self::ParallelThrough { .. }
             | Self::PerpendicularThrough { .. } => ExprType::Line,
-            Self::ConstructCircle { .. } => ExprType::Circle
+            Self::ConstructCircle { .. } => ExprType::Circle,
         }
     }
 }
@@ -535,26 +642,37 @@ impl ExprKind {
 impl From<ExprKind> for geo_aid_figure::ExpressionKind {
     fn from(value: ExprKind) -> Self {
         match value {
-            ExprKind::Entity { id } => Self::Entity {id: id.into()},
-            ExprKind::LineLineIntersection { k, l } => Self::LineLineIntersection {k, l},
-            ExprKind::AveragePoint { items } => Self::AveragePoint {items},
-            ExprKind::CircleCenter { circle } => Self::CircleCenter {circle},
-            ExprKind::Sum { plus, minus } => Self::Sum {plus, minus},
-            ExprKind::Product { times, by } => Self::Product {times,by},
-            ExprKind::Const { value } => Self::Const {value: value.to_complex().into()},
-            ExprKind::Power { value, exponent } => Self::Power {value, exponent: exponent.into()},
-            ExprKind::PointPointDistance { p, q } => Self::PointPointDistance {p,q},
-            ExprKind::PointLineDistance { point, line } => Self::PointLineDistance {point,line},
-            ExprKind::ThreePointAngle { p, q, r } => Self::ThreePointAngle {a:p,b:q,c:r},
-            ExprKind::ThreePointAngleDir { p, q, r } => Self::ThreePointAngleDir {a:p, b:q, c:r},
-            ExprKind::TwoLineAngle { k, l } => Self::TwoLineAngle {k,l},
-            ExprKind::PointX { point } => Self::PointX {point},
-            ExprKind::PointY { point } => Self::PointY {point},
-            ExprKind::PointPoint { p, q } => Self::PointPoint {p,q},
-            ExprKind::AngleBisector { p, q, r } => Self::AngleBisector {p,q,r},
-            ExprKind::ParallelThrough { point, line } => Self::ParallelThrough {point,line},
-            ExprKind::PerpendicularThrough { point, line } => Self::PerpendicularThrough {point, line},
-            ExprKind::ConstructCircle { center, radius } => Self::ConstructCircle {center, radius}
+            ExprKind::Entity { id } => Self::Entity { id: id },
+            ExprKind::LineLineIntersection { k, l } => Self::LineLineIntersection { k, l },
+            ExprKind::AveragePoint { items } => Self::AveragePoint { items },
+            ExprKind::CircleCenter { circle } => Self::CircleCenter { circle },
+            ExprKind::Sum { plus, minus } => Self::Sum { plus, minus },
+            ExprKind::Product { times, by } => Self::Product { times, by },
+            ExprKind::Const { value } => Self::Const {
+                value: value.to_complex().into(),
+            },
+            ExprKind::Power { value, exponent } => Self::Power {
+                value,
+                exponent: exponent.into(),
+            },
+            ExprKind::PointPointDistance { p, q } => Self::PointPointDistance { p, q },
+            ExprKind::PointLineDistance { point, line } => Self::PointLineDistance { point, line },
+            ExprKind::ThreePointAngle { p, q, r } => Self::ThreePointAngle { a: p, b: q, c: r },
+            ExprKind::ThreePointAngleDir { p, q, r } => {
+                Self::ThreePointAngleDir { a: p, b: q, c: r }
+            }
+            ExprKind::TwoLineAngle { k, l } => Self::TwoLineAngle { k, l },
+            ExprKind::PointX { point } => Self::PointX { point },
+            ExprKind::PointY { point } => Self::PointY { point },
+            ExprKind::PointPoint { p, q } => Self::PointPoint { p, q },
+            ExprKind::AngleBisector { p, q, r } => Self::AngleBisector { p, q, r },
+            ExprKind::ParallelThrough { point, line } => Self::ParallelThrough { point, line },
+            ExprKind::PerpendicularThrough { point, line } => {
+                Self::PerpendicularThrough { point, line }
+            }
+            ExprKind::ConstructCircle { center, radius } => {
+                Self::ConstructCircle { center, radius }
+            }
         }
     }
 }
@@ -573,13 +691,24 @@ impl FindEntities for ExprKind {
             Self::CircleCenter { circle: x }
             | Self::PointX { point: x }
             | Self::PointY { point: x }
-            | Self::Power { value: x, .. }=> {
+            | Self::Power { value: x, .. } => {
                 set.extend(previous[x.0].iter().copied());
             }
-            Self::Sum { plus: v1, minus: v2 }
+            Self::Sum {
+                plus: v1,
+                minus: v2,
+            }
             | Self::Product { times: v1, by: v2 } => {
-                set.extend(v1.iter().copied().flat_map(|x| previous[x.0].iter().copied()));
-                set.extend(v2.iter().copied().flat_map(|x| previous[x.0].iter().copied()));
+                set.extend(
+                    v1.iter()
+                        .copied()
+                        .flat_map(|x| previous[x.0].iter().copied()),
+                );
+                set.extend(
+                    v2.iter()
+                        .copied()
+                        .flat_map(|x| previous[x.0].iter().copied()),
+                );
             }
             Self::PointPointDistance { p: a, q: b }
             | Self::PointLineDistance { point: a, line: b }
@@ -588,7 +717,10 @@ impl FindEntities for ExprKind {
             | Self::ParallelThrough { point: a, line: b }
             | Self::PerpendicularThrough { point: a, line: b }
             | Self::PointPoint { p: a, q: b }
-            | Self::ConstructCircle { center: a, radius: b } => {
+            | Self::ConstructCircle {
+                center: a,
+                radius: b,
+            } => {
                 set.extend(previous[a.0].iter().copied());
                 set.extend(previous[b.0].iter().copied());
             }
@@ -617,19 +749,19 @@ impl FromUnrolled<UnrolledPoint> for ExprKind {
         let mut kind = match expr.get_data() {
             UnrolledPoint::LineLineIntersection(a, b) => ExprKind::LineLineIntersection {
                 k: math.load(a),
-                l: math.load(b)
+                l: math.load(b),
             },
             UnrolledPoint::Average(exprs) => ExprKind::AveragePoint {
-                items: exprs.iter().map(|x| math.load(x)).collect()
+                items: exprs.iter().map(|x| math.load(x)).collect(),
             },
-            UnrolledPoint::CircleCenter(circle) => {
-                match circle.get_data() {
-                    UnrolledCircle::Circle(center, _) => return math.load_no_store(center),
-                    UnrolledCircle::Generic(_) => unreachable!()
-                }
+            UnrolledPoint::CircleCenter(circle) => match circle.get_data() {
+                UnrolledCircle::Circle(center, _) => return math.load_no_store(center),
+                UnrolledCircle::Generic(_) => unreachable!(),
             },
-            UnrolledPoint::Free => ExprKind::Entity { id: math.add_point() },
-            UnrolledPoint::Generic(_) => unreachable!()
+            UnrolledPoint::Free => ExprKind::Entity {
+                id: math.add_point(),
+            },
+            UnrolledPoint::Generic(_) => unreachable!(),
         };
 
         kind.normalize(math);
@@ -642,81 +774,85 @@ impl FromUnrolled<unroll::Scalar> for ExprKind {
         let mut kind = match &expr.get_data().data {
             UnrolledScalar::Add(a, b) => ExprKind::Sum {
                 plus: vec![math.load(a), math.load(b)],
-                minus: Vec::new()
+                minus: Vec::new(),
             },
             UnrolledScalar::Subtract(a, b) => ExprKind::Sum {
                 plus: vec![math.load(a)],
-                minus: vec![math.load(b)]
+                minus: vec![math.load(b)],
             },
             UnrolledScalar::Multiply(a, b) => ExprKind::Product {
                 times: vec![math.load(a), math.load(b)],
-                by: Vec::new()
+                by: Vec::new(),
             },
             UnrolledScalar::Divide(a, b) => ExprKind::Product {
                 times: vec![math.load(a)],
-                by: vec![math.load(b)]
+                by: vec![math.load(b)],
             },
             UnrolledScalar::Average(exprs) => {
                 let times = ExprKind::Sum {
                     plus: exprs.iter().map(|x| math.load(x)).collect(),
                     minus: Vec::new(),
                 };
-                let by = ExprKind::Const { value: ProcNum::from_usize(exprs.len()).unwrap() };
+                let by = ExprKind::Const {
+                    value: ProcNum::from_usize(exprs.len()).unwrap(),
+                };
 
                 ExprKind::Product {
                     times: vec![math.store(times, ExprType::Number)],
                     by: vec![math.store(by, ExprType::Number)],
                 }
-            },
-            UnrolledScalar::CircleRadius(circle) => {
-                match circle.get_data() {
-                    UnrolledCircle::Circle(_, radius) => math.load_no_store(radius),
-                    UnrolledCircle::Generic(_) => unreachable!()
-                }
             }
-            UnrolledScalar::Free => ExprKind::Entity { id: math.add_real() },
-            UnrolledScalar::Number(x) => return fix_dst(
-                ExprKind::Const { value: x.clone() }, expr.data.unit, math
-            ),
+            UnrolledScalar::CircleRadius(circle) => match circle.get_data() {
+                UnrolledCircle::Circle(_, radius) => math.load_no_store(radius),
+                UnrolledCircle::Generic(_) => unreachable!(),
+            },
+            UnrolledScalar::Free => ExprKind::Entity {
+                id: math.add_real(),
+            },
+            UnrolledScalar::Number(x) => {
+                return fix_dst(ExprKind::Const { value: x.clone() }, expr.data.unit, math)
+            }
             UnrolledScalar::DstLiteral(x) => ExprKind::Const { value: x.clone() },
-            UnrolledScalar::SetUnit(x, unit) => return fix_dst(math.load_no_store(x), Some(*unit), math),
+            UnrolledScalar::SetUnit(x, unit) => {
+                return fix_dst(math.load_no_store(x), Some(*unit), math)
+            }
             UnrolledScalar::PointPointDistance(p, q) => ExprKind::PointPointDistance {
                 p: math.load(p),
-                q: math.load(q)
+                q: math.load(q),
             },
             UnrolledScalar::PointLineDistance(point, line) => ExprKind::PointLineDistance {
                 point: math.load(point),
-                line: math.load(line)
+                line: math.load(line),
             },
             UnrolledScalar::Negate(x) => ExprKind::Sum {
                 plus: Vec::new(),
-                minus: vec![math.load(x)]
+                minus: vec![math.load(x)],
             },
             UnrolledScalar::ThreePointAngle(p, q, r) => ExprKind::ThreePointAngle {
                 p: math.load(p),
                 q: math.load(q),
-                r: math.load(r)
+                r: math.load(r),
             },
             UnrolledScalar::ThreePointAngleDir(p, q, r) => ExprKind::ThreePointAngleDir {
                 p: math.load(p),
                 q: math.load(q),
-                r: math.load(r)
+                r: math.load(r),
             },
             UnrolledScalar::TwoLineAngle(k, l) => ExprKind::TwoLineAngle {
                 k: math.load(k),
-                l: math.load(l)
+                l: math.load(l),
             },
             UnrolledScalar::Pow(base, exponent) => ExprKind::Power {
                 value: math.load(base),
-                exponent: *exponent
+                exponent: *exponent,
             },
             UnrolledScalar::PointX(point) => ExprKind::PointX {
-                point: math.load(point)
+                point: math.load(point),
             },
             UnrolledScalar::PointY(point) => ExprKind::PointY {
-                point: math.load(point)
+                point: math.load(point),
             },
-            UnrolledScalar::Generic(_) => unreachable!()
+            UnrolledScalar::Generic(_) => unreachable!(),
         };
 
         kind.normalize(math);
@@ -729,7 +865,7 @@ impl FromUnrolled<UnrolledLine> for ExprKind {
         let mut kind = match expr.get_data() {
             UnrolledLine::LineFromPoints(a, b) => Self::PointPoint {
                 p: math.load(a),
-                q: math.load(b)
+                q: math.load(b),
             },
             UnrolledLine::AngleBisector(a, b, c) => Self::AngleBisector {
                 p: math.load(a),
@@ -739,46 +875,38 @@ impl FromUnrolled<UnrolledLine> for ExprKind {
             UnrolledLine::PerpendicularThrough(k, p) => {
                 // Remove unnecessary intermediates
                 match k.get_data() {
-                    UnrolledLine::PerpendicularThrough(l, _) => {
-                        Self::ParallelThrough {
-                            point: math.load(p),
-                            line: math.load(l)
-                        }
+                    UnrolledLine::PerpendicularThrough(l, _) => Self::ParallelThrough {
+                        point: math.load(p),
+                        line: math.load(l),
                     },
-                    UnrolledLine::ParallelThrough(l, _) => {
-                        Self::PerpendicularThrough {
-                            point: math.load(p),
-                            line: math.load(l)
-                        }
+                    UnrolledLine::ParallelThrough(l, _) => Self::PerpendicularThrough {
+                        point: math.load(p),
+                        line: math.load(l),
                     },
                     _ => Self::PerpendicularThrough {
                         point: math.load(p),
-                        line: math.load(k)
-                    }
+                        line: math.load(k),
+                    },
                 }
             }
             UnrolledLine::ParallelThrough(k, p) => {
                 // Remove unnecessary intermediates
                 match k.get_data() {
-                    UnrolledLine::PerpendicularThrough(l, _) => {
-                        Self::PerpendicularThrough {
-                            point: math.load(p),
-                            line: math.load(l)
-                        }
+                    UnrolledLine::PerpendicularThrough(l, _) => Self::PerpendicularThrough {
+                        point: math.load(p),
+                        line: math.load(l),
                     },
-                    UnrolledLine::ParallelThrough(l, _) => {
-                        Self::ParallelThrough {
-                            point: math.load(p),
-                            line: math.load(l)
-                        }
+                    UnrolledLine::ParallelThrough(l, _) => Self::ParallelThrough {
+                        point: math.load(p),
+                        line: math.load(l),
                     },
                     _ => Self::ParallelThrough {
                         point: math.load(p),
-                        line: math.load(k)
-                    }
+                        line: math.load(k),
+                    },
                 }
-            },
-            UnrolledLine::Generic(_) => unreachable!()
+            }
+            UnrolledLine::Generic(_) => unreachable!(),
         };
 
         kind.normalize(math);
@@ -791,9 +919,9 @@ impl FromUnrolled<UnrolledCircle> for ExprKind {
         let mut kind = match expr.data.as_ref() {
             UnrolledCircle::Circle(center, radius) => Self::ConstructCircle {
                 center: math.load(center),
-                radius: math.load(radius)
+                radius: math.load(radius),
             },
-            UnrolledCircle::Generic(_) => unreachable!()
+            UnrolledCircle::Generic(_) => unreachable!(),
         };
 
         kind.normalize(math);
@@ -871,12 +999,15 @@ fn fix_dst(expr: ExprKind, unit: Option<ComplexUnit>, math: &mut Expand) -> Expr
                 ExprKind::Product {
                     times: vec![
                         math.store(expr, ExprType::Number),
-                        math.store(ExprKind::Power {
-                            value: dst_var,
-                            exponent: unit.0[SimpleUnit::Distance as usize]
-                        }, ExprType::Number)
+                        math.store(
+                            ExprKind::Power {
+                                value: dst_var,
+                                exponent: unit.0[SimpleUnit::Distance as usize],
+                            },
+                            ExprType::Number,
+                        ),
                     ],
-                    by: Vec::new()
+                    by: Vec::new(),
                 }
             }
         }
@@ -885,37 +1016,57 @@ fn fix_dst(expr: ExprKind, unit: Option<ComplexUnit>, math: &mut Expand) -> Expr
 
 #[derive(Debug, Clone)]
 pub struct Merge<T, I, J, F>
-    where I: Iterator<Item = T>, J: Iterator<Item = T>, F: FnMut(&T, &T) -> Ordering {
+where
+    I: Iterator<Item = T>,
+    J: Iterator<Item = T>,
+    F: FnMut(&T, &T) -> Ordering,
+{
     i: Peekable<I>,
     j: Peekable<J>,
-    f: F
+    f: F,
 }
 
-impl<T, I: Iterator<Item = T>, J: Iterator<Item = T>, F: FnMut(&T, &T) -> Ordering> Merge<T, I, J, F> {
+impl<T, I: Iterator<Item = T>, J: Iterator<Item = T>, F: FnMut(&T, &T) -> Ordering>
+    Merge<T, I, J, F>
+{
     #[must_use]
-    pub fn new<A: IntoIterator<IntoIter = I>, B: IntoIterator<IntoIter = J>>(a: A, b: B, f: F) -> Self {
+    pub fn new<A: IntoIterator<IntoIter = I>, B: IntoIterator<IntoIter = J>>(
+        a: A,
+        b: B,
+        f: F,
+    ) -> Self {
         Self {
             i: a.into_iter().peekable(),
             j: b.into_iter().peekable(),
-            f
+            f,
         }
     }
 
     #[must_use]
-    pub fn merge_with<It: IntoIterator<Item = T>>(self, other: It) -> Merge<T, Self, It::IntoIter, F> where F: Clone {
+    pub fn merge_with<It: IntoIterator<Item = T>>(
+        self,
+        other: It,
+    ) -> Merge<T, Self, It::IntoIter, F>
+    where
+        F: Clone,
+    {
         let f_cloned = self.f.clone();
         Merge::new(self, other, f_cloned)
     }
 }
 
-impl<T, F: FnMut(&T, &T) -> Ordering> Merge<T, std::option::IntoIter<T>, std::option::IntoIter<T>, F> {
+impl<T, F: FnMut(&T, &T) -> Ordering>
+    Merge<T, std::option::IntoIter<T>, std::option::IntoIter<T>, F>
+{
     #[must_use]
     pub fn empty(f: F) -> Self {
         Self::new(None, None, f)
     }
 }
 
-impl<T, I: Iterator<Item = T>, J: Iterator<Item = T>, F: FnMut(&T, &T) -> Ordering> Iterator for Merge<T, I, J, F> {
+impl<T, I: Iterator<Item = T>, J: Iterator<Item = T>, F: FnMut(&T, &T) -> Ordering> Iterator
+    for Merge<T, I, J, F>
+{
     type Item = T;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -944,15 +1095,11 @@ fn normalize_sum(plus: &mut Vec<VarIndex>, minus: &mut Vec<VarIndex>, math: &mut
     let mut plus_final = Vec::new();
     let mut minus_final = Vec::new();
 
-    let cmp = |a: &VarIndex, b: &VarIndex| {
-        math.compare(*a, *b)
-    };
+    let cmp = |a: &VarIndex, b: &VarIndex| math.compare(*a, *b);
 
     for item in plus_v {
         match &math.at(item).kind {
-            ExprKind::Sum {
-                plus, minus
-            } => {
+            ExprKind::Sum { plus, minus } => {
                 plus_final = Merge::new(plus_final, plus.iter().copied(), &cmp).collect();
                 minus_final = Merge::new(minus_final, minus.iter().copied(), &cmp).collect();
             }
@@ -965,9 +1112,7 @@ fn normalize_sum(plus: &mut Vec<VarIndex>, minus: &mut Vec<VarIndex>, math: &mut
 
     for item in minus_v {
         match &math.at(item).kind {
-            ExprKind::Sum {
-                plus, minus
-            } => {
+            ExprKind::Sum { plus, minus } => {
                 plus_final = Merge::new(plus_final, minus.iter().copied(), &cmp).collect();
                 minus_final = Merge::new(minus_final, plus.iter().copied(), &cmp).collect();
             }
@@ -995,15 +1140,11 @@ fn normalize_product(times: &mut Vec<VarIndex>, by: &mut Vec<VarIndex>, math: &m
     let mut times_final = Vec::new();
     let mut by_final = Vec::new();
 
-    let cmp = |a: &VarIndex, b: &VarIndex| {
-        math.compare(*a, *b)
-    };
+    let cmp = |a: &VarIndex, b: &VarIndex| math.compare(*a, *b);
 
     for item in times_v {
         match &math.at(item).kind {
-            ExprKind::Product {
-                times, by
-            } => {
+            ExprKind::Product { times, by } => {
                 times_final = Merge::new(times_final, times.iter().copied(), &cmp).collect();
                 by_final = Merge::new(by_final, by.iter().copied(), &cmp).collect();
             }
@@ -1016,9 +1157,7 @@ fn normalize_product(times: &mut Vec<VarIndex>, by: &mut Vec<VarIndex>, math: &m
 
     for item in by_v {
         match &math.at(item).kind {
-            ExprKind::Product {
-                times, by
-            } => {
+            ExprKind::Product { times, by } => {
                 times_final = Merge::new(times_final, by.iter().copied(), &cmp).collect();
                 by_final = Merge::new(by_final, times.iter().copied(), &cmp).collect();
             }
@@ -1041,7 +1180,7 @@ fn normalize_product(times: &mut Vec<VarIndex>, by: &mut Vec<VarIndex>, math: &m
 pub struct Expr<M> {
     pub meta: M,
     pub kind: ExprKind,
-    pub ty: ExprType
+    pub ty: ExprType,
 }
 
 impl<M> Expr<M> {
@@ -1078,11 +1217,7 @@ impl<M> Normalize for Expr<M> {
 impl Expr<()> {
     #[must_use]
     pub fn new(kind: ExprKind, ty: ExprType) -> Self {
-        Self {
-            kind,
-            meta: (),
-            ty
-        }
+        Self { kind, meta: (), ty }
     }
 }
 
@@ -1113,7 +1248,7 @@ pub enum RuleKind {
     Gt(VarIndex, VarIndex),
     Alternative(Vec<RuleKind>),
     Invert(Box<RuleKind>),
-    Bias
+    Bias,
 }
 
 impl FindEntities for RuleKind {
@@ -1121,20 +1256,20 @@ impl FindEntities for RuleKind {
         let mut set = HashSet::new();
 
         match self {
-            Self::PointEq(a, b)
-            | Self::NumberEq(a, b)
-            | Self::Lt(a, b)
-            | Self::Gt(a, b) => {
+            Self::PointEq(a, b) | Self::NumberEq(a, b) | Self::Lt(a, b) | Self::Gt(a, b) => {
                 set.extend(previous[a.0].iter().copied());
                 set.extend(previous[b.0].iter().copied());
-            },
+            }
             Self::Alternative(items) => {
-                return items.iter().flat_map(|x| x.find_entities(previous).into_iter()).collect();
+                return items
+                    .iter()
+                    .flat_map(|x| x.find_entities(previous).into_iter())
+                    .collect();
             }
             Self::Invert(rule) => {
                 return rule.find_entities(previous);
             }
-            Self::Bias => unreachable!()
+            Self::Bias => unreachable!(),
         }
 
         set
@@ -1145,7 +1280,7 @@ impl FindEntities for RuleKind {
 pub struct Rule {
     pub kind: RuleKind,
     pub weight: ProcNum,
-    pub entities: Vec<EntityId>
+    pub entities: Vec<EntityId>,
 }
 
 impl ContainsEntity for Rule {
@@ -1166,10 +1301,7 @@ impl Reconstruct for Rule {
 impl Reindex for RuleKind {
     fn reindex(&mut self, map: &IndexMap) {
         match self {
-            Self::PointEq(a, b)
-            | Self::NumberEq(a, b)
-            | Self::Lt(a, b)
-            | Self::Gt(a, b) => {
+            Self::PointEq(a, b) | Self::NumberEq(a, b) | Self::Lt(a, b) | Self::Gt(a, b) => {
                 a.reindex(map);
                 b.reindex(map);
             }
@@ -1193,26 +1325,14 @@ impl RuleKind {
     /// A normalized rule.
     fn load(rule: &UnrolledRule, math: &mut Expand) -> Self {
         let mut mathed = match &rule.kind {
-            UnrolledRuleKind::PointEq(a, b) => Self::PointEq(
-                math.load(a),
-                math.load(b)
-            ),
-            UnrolledRuleKind::ScalarEq(a, b) => Self::NumberEq(
-                math.load(a),
-                math.load(b)
-            ),
-            UnrolledRuleKind::Gt(a, b) => Self::Gt(
-                math.load(a),
-                math.load(b)
-            ),
-            UnrolledRuleKind::Lt(a, b) => Self::Lt(
-                math.load(a),
-                math.load(b)
-            ),
-            UnrolledRuleKind::Alternative(rules) => Self::Alternative(
-                rules.iter().map(|x| Self::load(x, math)).collect()
-            ),
-            UnrolledRuleKind::Bias(_) => Self::Bias
+            UnrolledRuleKind::PointEq(a, b) => Self::PointEq(math.load(a), math.load(b)),
+            UnrolledRuleKind::ScalarEq(a, b) => Self::NumberEq(math.load(a), math.load(b)),
+            UnrolledRuleKind::Gt(a, b) => Self::Gt(math.load(a), math.load(b)),
+            UnrolledRuleKind::Lt(a, b) => Self::Lt(math.load(a), math.load(b)),
+            UnrolledRuleKind::Alternative(rules) => {
+                Self::Alternative(rules.iter().map(|x| Self::load(x, math)).collect())
+            }
+            UnrolledRuleKind::Bias(_) => Self::Bias,
         };
 
         mathed.normalize(math);
@@ -1232,7 +1352,7 @@ impl Rule {
         Self {
             kind: RuleKind::load(rule, math),
             weight: rule.weight.clone(),
-            entities: Vec::new()
+            entities: Vec::new(),
         }
     }
 }
@@ -1240,17 +1360,13 @@ impl Rule {
 impl Normalize for RuleKind {
     fn normalize(&mut self, math: &mut Math) {
         match self {
-            | Self::PointEq(a, b)
-            | Self::NumberEq(a, b) => {
+            Self::PointEq(a, b) | Self::NumberEq(a, b) => {
                 if math.compare(*a, *b) == Ordering::Greater {
                     mem::swap(a, b);
                 }
             }
             Self::Alternative(v) => v.sort(),
-            Self::Invert(_)
-            | Self::Bias
-            | Self::Gt(_, _)
-            | Self::Lt(_, _) => ()
+            Self::Invert(_) | Self::Bias | Self::Gt(_, _) | Self::Lt(_, _) => (),
         }
     }
 }
@@ -1265,7 +1381,7 @@ impl Normalize for Rule {
 pub struct Adjusted {
     pub variables: Vec<Expr<()>>,
     pub rules: Vec<Rule>,
-    pub entities: Vec<EntityKind>
+    pub entities: Vec<EntityKind>,
 }
 
 #[derive(Debug)]
@@ -1273,19 +1389,19 @@ pub struct Intermediate {
     pub figure: Figure,
     /// Ready for generation
     pub adjusted: Adjusted,
-    pub flags: Flags
+    pub flags: Flags,
 }
 
 #[derive(Debug, Clone)]
 pub struct Entry {
     pub expr: Expr<()>,
-    pub uses: usize
+    pub uses: usize,
 }
 
 #[derive(Debug, Clone, Serialize)]
 pub struct Entity<M> {
     pub kind: EntityKind,
-    pub meta: M
+    pub meta: M,
 }
 
 impl<M> Entity<M> {
@@ -1295,9 +1411,8 @@ impl<M> Entity<M> {
             EntityKind::FreePoint
             | EntityKind::PointOnLine { .. }
             | EntityKind::PointOnCircle { .. } => ExprType::Point,
-            EntityKind::FreeReal
-            | EntityKind::DistanceUnit => ExprType::Number,
-            EntityKind::Bind(expr) => expressions[expr.0].get_type(expressions, entities)
+            EntityKind::FreeReal | EntityKind::DistanceUnit => ExprType::Number,
+            EntityKind::Bind(expr) => expressions[expr.0].get_type(expressions, entities),
         }
     }
 }
@@ -1320,15 +1435,11 @@ impl<M> Entity<M> {
 )]
 pub enum EntityKind {
     FreePoint,
-    PointOnLine {
-        line: VarIndex
-    },
-    PointOnCircle {
-        circle: VarIndex
-    },
+    PointOnLine { line: VarIndex },
+    PointOnCircle { circle: VarIndex },
     FreeReal,
     DistanceUnit,
-    Bind(VarIndex)
+    Bind(VarIndex),
 }
 
 impl From<EntityKind> for geo_aid_figure::EntityKind {
@@ -1339,7 +1450,7 @@ impl From<EntityKind> for geo_aid_figure::EntityKind {
             EntityKind::PointOnCircle { circle } => Self::PointOnCircle { circle },
             EntityKind::FreeReal => Self::FreeReal,
             EntityKind::DistanceUnit => Self::DistanceUnit,
-            EntityKind::Bind(_) => unreachable!()
+            EntityKind::Bind(_) => unreachable!(),
         }
     }
 }
@@ -1347,12 +1458,10 @@ impl From<EntityKind> for geo_aid_figure::EntityKind {
 impl Reindex for EntityKind {
     fn reindex(&mut self, map: &IndexMap) {
         match self {
-            Self::FreePoint
-            | Self::DistanceUnit
-            | Self::FreeReal => {}
+            Self::FreePoint | Self::DistanceUnit | Self::FreeReal => {}
             Self::PointOnLine { line } => line.reindex(map),
             Self::PointOnCircle { circle } => circle.reindex(map),
-            Self::Bind(_) => unreachable!("Should not appear")
+            Self::Bind(_) => unreachable!("Should not appear"),
         }
     }
 }
@@ -1385,7 +1494,7 @@ pub struct Expand {
     /// occurring. This way, this should be prevented. It will also increase memory usage, but shhh.
     /// It's an ugly solution, but it works. I'm most likely going to come back to this one with some
     /// new ideas for solving the issue.
-    pub rc_keepalive: Vec<Rc<dyn Any>>
+    pub rc_keepalive: Vec<Rc<dyn Any>>,
 }
 
 impl Deref for Expand {
@@ -1409,20 +1518,31 @@ pub struct Math {
     /// Dst variable
     pub dst_var: OnceCell<EntityId>,
     /// Collected expressions
-    pub expr_record: Vec<Expr<()>>
+    pub expr_record: Vec<Expr<()>>,
 }
 
 impl Expand {
-    pub fn load<T: Displayed + GetMathType + Debug + GetData + 'static>(&mut self, unrolled: &Unrolled<T>) -> VarIndex
-    where ExprKind: FromUnrolled<T> {
+    pub fn load<T: Displayed + GetMathType + Debug + GetData + 'static>(
+        &mut self,
+        unrolled: &Unrolled<T>,
+    ) -> VarIndex
+    where
+        ExprKind: FromUnrolled<T>,
+    {
         let expr = self.load_no_store(unrolled);
         self.store(expr, T::get_math_type())
     }
 
-    pub fn load_no_store<T: Displayed + GetMathType + GetData + Debug + 'static>(&mut self, unrolled: &Unrolled<T>) -> ExprKind
-    where ExprKind: FromUnrolled<T> {
+    pub fn load_no_store<T: Displayed + GetMathType + GetData + Debug + 'static>(
+        &mut self,
+        unrolled: &Unrolled<T>,
+    ) -> ExprKind
+    where
+        ExprKind: FromUnrolled<T>,
+    {
         // Keep the smart pointer inside `unrolled` alive.
-        self.rc_keepalive.push(Rc::clone(&unrolled.data) as Rc<dyn Any>);
+        self.rc_keepalive
+            .push(Rc::clone(&unrolled.data) as Rc<dyn Any>);
 
         let key = (unrolled.get_data() as *const _) as usize;
         let loaded = self.expr_map.get(&key).cloned();
@@ -1432,7 +1552,8 @@ impl Expand {
         } else {
             // If expression has not been mathed yet, math it and put it into the record.
             let loaded = ExprKind::load(unrolled, self);
-            self.expr_map.insert(key, Expr::new(loaded.clone(), T::get_math_type()));
+            self.expr_map
+                .insert(key, Expr::new(loaded.clone(), T::get_math_type()));
             loaded
         }
     }
@@ -1490,12 +1611,17 @@ impl Math {
 #[derive(Debug, Clone, Default)]
 pub struct Build {
     expand: Expand,
-    items: Vec<Item>
+    items: Vec<Item>,
 }
 
 impl Build {
-    pub fn load<T: Displayed + GetMathType + Debug + GetData + 'static>(&mut self, expr: &Unrolled<T>) -> VarIndex
-    where ExprKind: FromUnrolled<T> {
+    pub fn load<T: Displayed + GetMathType + Debug + GetData + 'static>(
+        &mut self,
+        expr: &Unrolled<T>,
+    ) -> VarIndex
+    where
+        ExprKind: FromUnrolled<T>,
+    {
         self.expand.load(expr)
     }
 
@@ -1511,13 +1637,12 @@ impl Build {
 /// `true` if an optimization was performed. `false` otherwise.
 fn optimize_rules(rules: &mut Vec<Option<Rule>>, math: &mut Math) -> bool {
     let mut performed = false;
-    
+
     for rule in rules.iter_mut() {
         let rule_performed = ZeroLineDst::process(rule, math)
             | RightAngle::process(rule, math)
             | EqPointDst::process(rule, math)
-            | EqExpressions::process(rule, math)
-            ;
+            | EqExpressions::process(rule, math);
 
         performed |= rule_performed;
     }
@@ -1533,14 +1658,14 @@ fn optimize_rules(rules: &mut Vec<Option<Rule>>, math: &mut Math) -> bool {
 #[derive(Debug, Clone, Default)]
 pub struct IndexMap {
     /// Consecutive mappings. Not incredibly efficient, but simple and infallible.
-    mappings: Vec<(usize, usize)>
+    mappings: Vec<(usize, usize)>,
 }
 
 impl IndexMap {
     #[must_use]
     pub fn new() -> Self {
         Self {
-            mappings: Vec::new()
+            mappings: Vec::new(),
         }
     }
 
@@ -1621,7 +1746,7 @@ fn fold(matrix: &mut Vec<Expr<()>>) -> IndexMap {
                     // println!("Not recorded, mapping {i} -> {new_i}");
                     map.map(i, new_i);
                     entry.insert(new_i);
-                },
+                }
                 hash_map::Entry::Occupied(entry) => {
                     // We have to update the index map. No push into target happens.
                     let j = *entry.get();
@@ -1659,7 +1784,7 @@ fn read_flags(flags: &HashMap<String, Flag>) -> Flags {
 
 /// Optimize, Normalize, Repeat
 fn optimize_cycle(rules: &mut Vec<Option<Rule>>, math: &mut Math, items: &mut Vec<Item>) {
-    let mut entity_map = Vec::new() ;
+    let mut entity_map = Vec::new();
     loop {
         if !optimize_rules(rules, math) {
             break;
@@ -1798,14 +1923,28 @@ pub fn load_script(input: &str) -> Result<Intermediate, Vec<Error>> {
     for i in new_entities
         .iter()
         .enumerate()
-        .filter(|ent| matches!(ent.1, EntityKind::PointOnLine { .. } | EntityKind::FreePoint | EntityKind::PointOnCircle { .. }))
+        .filter(|ent| {
+            matches!(
+                ent.1,
+                EntityKind::PointOnLine { .. }
+                    | EntityKind::FreePoint
+                    | EntityKind::PointOnCircle { .. }
+            )
+        })
         .map(|x| x.0)
     {
         for j in new_entities
             .iter()
             .enumerate()
-            .skip(i+1)
-            .filter(|ent| matches!(ent.1, EntityKind::PointOnLine { .. } | EntityKind::FreePoint | EntityKind::PointOnCircle { .. }))
+            .skip(i + 1)
+            .filter(|ent| {
+                matches!(
+                    ent.1,
+                    EntityKind::PointOnLine { .. }
+                        | EntityKind::FreePoint
+                        | EntityKind::PointOnCircle { .. }
+                )
+            })
             .map(|x| x.0)
         {
             let ent1 = math.store(ExprKind::Entity { id: EntityId(i) }, ExprType::Point);
@@ -1813,7 +1952,7 @@ pub fn load_script(input: &str) -> Result<Intermediate, Vec<Error>> {
             rules.push(Rule {
                 weight: ProcNum::one(),
                 entities: Vec::new(),
-                kind: RuleKind::Invert(Box::new(RuleKind::PointEq(ent1, ent2)))
+                kind: RuleKind::Invert(Box::new(RuleKind::PointEq(ent1, ent2))),
             });
         }
     }
@@ -1874,7 +2013,7 @@ pub fn load_script(input: &str) -> Result<Intermediate, Vec<Error>> {
     // for (i, v) in fig_variables.iter().enumerate() {
     //     println!("[{i}] = {:?}", v.kind);
     // }
-    // 
+    //
     // for rule in &rules {
     //     println!("\n{:?}", rule.kind);
     // }
@@ -1883,13 +2022,13 @@ pub fn load_script(input: &str) -> Result<Intermediate, Vec<Error>> {
         adjusted: Adjusted {
             variables,
             rules,
-            entities
+            entities,
         },
         figure: Figure {
             entities: fig_entities,
             variables: fig_variables,
-            items
+            items,
         },
-        flags: read_flags(&unrolled.flags)
+        flags: read_flags(&unrolled.flags),
     })
 }

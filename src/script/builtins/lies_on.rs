@@ -53,7 +53,10 @@ fn pt_lies_on_line(
 
     if inverted {
         context.push_rule(UnrolledRule {
-            kind: UnrolledRuleKind::ScalarEq(number!(=ProcNum::zero()), context.distance_pl(point, line)),
+            kind: UnrolledRuleKind::ScalarEq(
+                number!(=ProcNum::zero()),
+                context.distance_pl(point, line),
+            ),
             inverted: true,
             weight,
         });
@@ -136,11 +139,10 @@ fn pt_lies_on_segment(
     node.extend(rhs.node.take());
 
     let point = lhs;
-    let line = context
-        .line(
-            field!(node POINT rhs, A with context),
-            field!(node POINT rhs, B with context),
-        );
+    let line = context.line(
+        field!(node POINT rhs, A with context),
+        field!(node POINT rhs, B with context),
+    );
 
     if inverted {
         // not on the line or not between A, B

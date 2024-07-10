@@ -1,8 +1,8 @@
-use std::string::String;
-use num_traits::ToPrimitive;
+use crate::drawer::Draw;
 use geo_aid_figure::math_string::{MathChar, MathIndex, MathSpecial, MathString, SPECIAL_MATH};
 use geo_aid_figure::{CircleItem, Figure, LineItem, PointItem, Position, Style, TwoPointItem};
-use crate::drawer::Draw;
+use num_traits::ToPrimitive;
+use std::string::String;
 
 #[derive(Debug, Default)]
 pub struct Latex {
@@ -19,13 +19,15 @@ impl Latex {
                 MathChar::Ascii(c) => s.push(c),
                 MathChar::Special(special) => match special {
                     MathSpecial::Quote => s += "\"",
-                    special => s += &format!("\\{}", SPECIAL_MATH[special.to_usize().unwrap()])
+                    special => s += &format!("\\{}", SPECIAL_MATH[special.to_usize().unwrap()]),
                 },
-                MathChar::SetIndex(i) => s += match i {
-                    MathIndex::Normal => "}",
-                    MathIndex::Lower => "_{"
-                },
-                MathChar::Prime => s += "^{\\prime}"
+                MathChar::SetIndex(i) => {
+                    s += match i {
+                        MathIndex::Normal => "}",
+                        MathIndex::Lower => "_{",
+                    }
+                }
+                MathChar::Prime => s += "^{\\prime}",
             }
         }
 
@@ -77,7 +79,7 @@ impl Draw for Latex {
         #[allow(clippy::cast_precision_loss)]
         let size = (figure.width.get() as f64, figure.height.get() as f64);
 
-        self.scale = f64::min(10.0/size.0, 10.0/size.1);
+        self.scale = f64::min(10.0 / size.0, 10.0 / size.1);
     }
 
     fn draw_point(&mut self, point: &PointItem) {
@@ -91,14 +93,16 @@ impl Draw for Latex {
             id, pos.x, pos.y, id
         );
 
-        if let Some(label) =& point.label {
+        if let Some(label) = &point.label {
             let label_pos = label.position * self.scale;
 
             self.content += &format!(
                 r#"
                 \node at ({}, {}) {{${}$}};
             "#,
-                label_pos.x, label_pos.y, Self::math_to_latex(&label.content)
+                label_pos.x,
+                label_pos.y,
+                Self::math_to_latex(&label.content)
             );
         }
     }
@@ -203,8 +207,13 @@ impl Draw for Latex {
 
     fn draw_circle(&mut self, circle: &CircleItem) {
         let pos1 = circle.center * self.scale;
-        let pos2 = (circle.center + Position { x: circle.radius, y: 0.0 }) * self.scale;
-        
+        let pos2 = (circle.center
+            + Position {
+                x: circle.radius,
+                y: 0.0,
+            })
+            * self.scale;
+
         self.content += &format!(
             r#"
             \begin{{scope}}

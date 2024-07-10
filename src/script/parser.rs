@@ -2,13 +2,13 @@ use geo_aid_derive::Parse;
 use num_traits::Zero;
 
 use crate::script::builtins;
+use crate::script::token::number::ProcNum;
+use std::fmt::Formatter;
 use std::{
     fmt::{Debug, Display},
     iter::Peekable,
     marker::PhantomData,
 };
-use std::fmt::Formatter;
-use crate::script::token::number::ProcNum;
 
 use crate::span;
 
@@ -1062,7 +1062,7 @@ impl FromProperty for ProcNum {
             }),
             PropertyValue::Ident(ident) => Err(Error::NumberExpected {
                 error_span: ident.get_span(),
-            })
+            }),
         }
     }
 }

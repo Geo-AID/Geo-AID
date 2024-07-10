@@ -6,16 +6,16 @@ use std::{
     sync::{self, Arc},
 };
 
-use num_traits::{One, Zero};
-use serde::Serialize;
-use geo_aid_figure::math_string::SPECIAL_MATH;
 use crate::{
     cli::{AnnotationKind, Change, DiagnosticData, Fix},
     span,
 };
+use geo_aid_figure::math_string::SPECIAL_MATH;
+use num_traits::{One, Zero};
+use serde::Serialize;
 
-use self::token::{number::CompExponent, NamedIdent, Span, Token};
 use self::parser::Type;
+use self::token::{number::CompExponent, NamedIdent, Span, Token};
 
 mod builtins;
 pub mod figure;

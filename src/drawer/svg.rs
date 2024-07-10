@@ -4,7 +4,7 @@ use crate::drawer::Draw;
 
 #[derive(Debug, Default)]
 pub struct Svg {
-    content: String
+    content: String,
 }
 
 impl Svg {
@@ -71,9 +71,7 @@ impl Draw for Svg {
                     stroke="black" stroke-width="0" x="{}" y="-{}">{}
                 </text>
             "#,
-                label.position.x,
-                label.position.y,
-                label.content
+                label.position.x, label.position.y, label.content
             );
         }
     }

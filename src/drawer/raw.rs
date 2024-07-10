@@ -1,9 +1,11 @@
-use geo_aid_figure::{Figure, Label, LineItem, PointItem, Position, Style, TwoPointItem, CircleItem};
 use crate::drawer::Draw;
+use geo_aid_figure::{
+    CircleItem, Figure, Label, LineItem, PointItem, Position, Style, TwoPointItem,
+};
 
 #[derive(Debug, Default)]
 pub struct Raw {
-    content: String
+    content: String,
 }
 
 impl Raw {
@@ -16,7 +18,12 @@ impl Raw {
         }
     }
 
-    fn draw_simple_segment(&mut self, (p1, p2): (Position, Position), style: Style, label: Option<&Label>) {
+    fn draw_simple_segment(
+        &mut self,
+        (p1, p2): (Position, Position),
+        style: Style,
+        label: Option<&Label>,
+    ) {
         let label = label.map(|l| l.content.to_string()).unwrap_or_default();
 
         self.content += &format!(
@@ -35,11 +42,15 @@ impl Draw for Raw {
     fn begin(&mut self, _output: &Figure) {}
 
     fn draw_point(&mut self, point: &PointItem) {
-        let label = point.label.as_ref().map(|x| format!("\"{}\"", x.content)).unwrap_or_default();
+        let label = point
+            .label
+            .as_ref()
+            .map(|x| format!("\"{}\"", x.content))
+            .unwrap_or_default();
 
-        self.content += &format!("point \"{label}\" at ({:.3}, {:.3})\n",
-            point.position.x,
-            point.position.y
+        self.content += &format!(
+            "point \"{label}\" at ({:.3}, {:.3})\n",
+            point.position.x, point.position.y
         );
     }
 

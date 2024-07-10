@@ -1,5 +1,5 @@
-use std::{path::Path, fs::File, io::Write};
-use geo_aid_figure::{CircleItem, Figure, Item, PointItem, TwoPointItem, LineItem};
+use geo_aid_figure::{CircleItem, Figure, Item, LineItem, PointItem, TwoPointItem};
+use std::{fs::File, io::Write, path::Path};
 
 pub mod json;
 pub mod latex;
@@ -26,7 +26,7 @@ pub trait Draw {
         let content = self.end();
 
         let file = File::create(target);
-        
+
         match file {
             Ok(mut file) => file.write_all(content.as_bytes()),
             Err(error) => Err(error),

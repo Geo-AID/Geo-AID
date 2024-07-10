@@ -1,6 +1,6 @@
-use std::fmt::{Debug, Display, Formatter};
 use geo_aid_derive::Execute;
 use serde::Serialize;
+use std::fmt::{Debug, Display, Formatter};
 
 use crate::geometry::{Circle, Line, ValueEnum};
 
@@ -14,7 +14,7 @@ use super::Complex;
 pub union Value {
     pub complex: Complex,
     pub line: Line,
-    pub circle: Circle
+    pub circle: Circle,
 }
 
 impl Display for Value {
@@ -22,7 +22,11 @@ impl Display for Value {
         let precision = f.precision();
         unsafe {
             if let Some(precision) = precision {
-                write!(f, "{2:.*}\t{3:.*}", precision, precision, self.line.origin, self.line.direction)
+                write!(
+                    f,
+                    "{2:.*}\t{3:.*}",
+                    precision, precision, self.line.origin, self.line.direction
+                )
             } else {
                 write!(f, "{}\t{}", self.line.origin, self.line.direction)
             }
@@ -44,7 +48,7 @@ impl From<ValueEnum> for Value {
 pub enum ValueType {
     Complex,
     Line,
-    Circle
+    Circle,
 }
 
 /// # Safety
@@ -73,7 +77,12 @@ impl Program {
     pub fn setup(&self) -> Vec<Value> {
         let mut memory = Vec::new();
         memory.reserve_exact(self.req_memory_size);
-        memory.resize(self.req_memory_size, Value { complex: Complex::default() });
+        memory.resize(
+            self.req_memory_size,
+            Value {
+                complex: Complex::default(),
+            },
+        );
 
         for (reg, constant) in memory.iter_mut().zip(self.constants.iter().copied()) {
             *reg = constant.into();
@@ -92,7 +101,7 @@ pub trait Execute {
     ///
     /// # Errors
     /// Any errors related to evaluation.
-    /// 
+    ///
     /// # Safety
     /// Can only be considered safe if all registers used by it are allocated, all registers are of the right type.
     unsafe fn execute(&self, memory: &mut [Value]);
@@ -120,17 +129,14 @@ pub mod expr {
 
     use crate::geometry::{self, Complex};
 
-    use super::{
-        Execute, Line, Circle,
-        Value, Loc
-    };
+    use super::{Circle, Execute, Line, Loc, Value};
 
     #[derive(Debug, Clone, Copy, Serialize)]
     /// A point on a circle.
     pub struct PointOnCircle {
         pub circle: Loc,
         pub clip: Loc,
-        pub target: Loc
+        pub target: Loc,
     }
 
     impl Execute for PointOnCircle {
@@ -139,7 +145,8 @@ pub mod expr {
             let theta = memory.get_unchecked(self.clip).complex.real * 2.0 * PI;
 
             let point_rel = Complex::new(theta.cos(), theta.sin());
-            memory.get_unchecked_mut(self.target).complex = circle.center + point_rel * circle.radius;
+            memory.get_unchecked_mut(self.target).complex =
+                circle.center + point_rel * circle.radius;
         }
     }
 
@@ -148,7 +155,7 @@ pub mod expr {
     pub struct PointOnLine {
         pub line: Loc,
         pub clip: Loc,
-        pub target: Loc
+        pub target: Loc,
     }
 
     impl Execute for PointOnLine {
@@ -156,7 +163,7 @@ pub mod expr {
             let line = memory.get_unchecked(self.line).line;
             let mag = memory.get_unchecked(self.clip).complex.real;
 
-            memory.get_unchecked_mut(self.target).complex =line.origin + line.direction * mag;
+            memory.get_unchecked_mut(self.target).complex = line.origin + line.direction * mag;
         }
     }
 
@@ -164,12 +171,16 @@ pub mod expr {
     /// sums all values.
     pub struct Sum {
         pub params: Vec<Loc>,
-        pub target: Loc
+        pub target: Loc,
     }
 
     impl Execute for Sum {
         unsafe fn execute(&self, memory: &mut [Value]) {
-            let sum = self.params.iter().map(|loc| memory.get_unchecked(*loc).complex).sum();
+            let sum = self
+                .params
+                .iter()
+                .map(|loc| memory.get_unchecked(*loc).complex)
+                .sum();
             memory.get_unchecked_mut(self.target).complex = sum;
         }
     }
@@ -178,12 +189,16 @@ pub mod expr {
     /// multiplies all values.
     pub struct Product {
         pub params: Vec<Loc>,
-        pub target: Loc
+        pub target: Loc,
     }
 
     impl Execute for Product {
         unsafe fn execute(&self, memory: &mut [Value]) {
-            let product = self.params.iter().map(|loc| memory.get_unchecked(*loc).complex).product();
+            let product = self
+                .params
+                .iter()
+                .map(|loc| memory.get_unchecked(*loc).complex)
+                .product();
             memory.get_unchecked_mut(self.target).complex = product;
         }
     }
@@ -192,15 +207,16 @@ pub mod expr {
     /// multiplies all values.
     pub struct PartialProduct {
         pub params: Vec<Loc>,
-        pub target: Loc
+        pub target: Loc,
     }
 
     impl Execute for PartialProduct {
         unsafe fn execute(&self, memory: &mut [Value]) {
-            let product = self.params
+            let product = self
+                .params
                 .iter()
                 .map(|loc| memory.get_unchecked(*loc).complex)
-                .fold(Complex::one(),Complex::partial_mul);
+                .fold(Complex::one(), Complex::partial_mul);
             memory.get_unchecked_mut(self.target).complex = product;
         }
     }
@@ -208,12 +224,16 @@ pub mod expr {
     #[derive(Debug, Clone, Serialize)]
     pub struct Max {
         pub params: Vec<Loc>,
-        pub target: Loc
+        pub target: Loc,
     }
 
     impl Execute for Max {
         unsafe fn execute(&self, memory: &mut [Value]) {
-            let max = self.params.iter().map(|loc| memory.get_unchecked(*loc).complex.real).fold(0.0, f64::max);
+            let max = self
+                .params
+                .iter()
+                .map(|loc| memory.get_unchecked(*loc).complex.real)
+                .fold(0.0, f64::max);
 
             memory.get_unchecked_mut(self.target).complex = Complex::real(max);
         }
@@ -223,12 +243,16 @@ pub mod expr {
     /// calculates the average value.
     pub struct Average {
         pub params: Vec<Loc>,
-        pub target: Loc
+        pub target: Loc,
     }
 
     impl Execute for Average {
         unsafe fn execute(&self, memory: &mut [Value]) {
-            let sum: Complex = self.params.iter().map(|loc| memory.get_unchecked(*loc).complex).sum();
+            let sum: Complex = self
+                .params
+                .iter()
+                .map(|loc| memory.get_unchecked(*loc).complex)
+                .sum();
 
             #[allow(clippy::cast_precision_loss)]
             let x = sum / self.params.len() as f64;
@@ -241,21 +265,22 @@ pub mod expr {
     pub struct PartialPow {
         pub value: Loc,
         pub exponent: f64,
-        pub target: Loc
+        pub target: Loc,
     }
 
     impl Execute for PartialPow {
-        unsafe fn execute(&self, memory: &mut [Value]){
+        unsafe fn execute(&self, memory: &mut [Value]) {
             let v = memory.get_unchecked(self.value).complex;
 
-            memory.get_unchecked_mut(self.target).complex = Complex::new(v.real.powf(self.exponent), v.imaginary.powf(self.exponent));
+            memory.get_unchecked_mut(self.target).complex =
+                Complex::new(v.real.powf(self.exponent), v.imaginary.powf(self.exponent));
         }
     }
 
     #[derive(Debug, Clone, Copy)]
     pub struct Move {
         pub from: Loc,
-        pub to: Loc
+        pub to: Loc,
     }
 
     impl Execute for Move {
@@ -265,7 +290,7 @@ pub mod expr {
         }
     }
 
-    instructions!{
+    instructions! {
         PointPointDistance(a: Complex, b: Complex) -> Real {
             (a - b).magnitude()
         }
@@ -347,7 +372,7 @@ pub mod expr {
     fn smooth_0_inf(x: f64) -> f64 {
         1.0 - 1.0 / (x + 1.0)
     }
-    
+
     /// That's the infamous sigma function. It packs a (-inf, +inf) range into (0, 1).
     fn smooth_inf_inf(x: f64) -> f64 {
         if x >= 0.0 {
@@ -356,7 +381,7 @@ pub mod expr {
             (1.0 - smooth_0_inf(-x)) / 2.0
         }
     }
-    
+
     /// Inverts the quality. As simple as 1 - q
     #[inline]
     fn invert_quality(q: f64) -> f64 {
@@ -452,5 +477,5 @@ pub enum Instruction {
     /// Gets the maximal parameter value.
     MaxReal(Max),
     /// Inverts a rule's quality.
-    InvertQuality(InvertQuality)
+    InvertQuality(InvertQuality),
 }

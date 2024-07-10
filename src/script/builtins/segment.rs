@@ -62,7 +62,7 @@ impl BuildAssociated<BundleNode> for Associated {
                 p_id,
                 q_id,
                 label: MathString::new(),
-                style: style.unwrap()
+                style: style.unwrap(),
             });
         }
     }

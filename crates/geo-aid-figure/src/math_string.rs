@@ -1,11 +1,11 @@
+use num_derive::{FromPrimitive, ToPrimitive};
+use num_traits::FromPrimitive;
+use serde::de::{Error, Visitor};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt::{Display, Formatter};
 use std::mem;
 use std::ops::{Deref, DerefMut};
 use std::str::FromStr;
-use num_derive::{FromPrimitive, ToPrimitive};
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use num_traits::FromPrimitive;
-use serde::de::{Error, Visitor};
 
 /// Special math characters as their string representatives
 pub const SPECIAL_MATH: [&str; 49] = [
@@ -22,7 +22,7 @@ pub struct StringSpan {
     /// The first position in the span
     pub start: usize,
     /// The first position NOT in the span
-    pub end: usize
+    pub end: usize,
 }
 
 impl Display for StringSpan {
@@ -37,7 +37,7 @@ pub struct ParseError {
     /// Span of the error
     pub span: StringSpan,
     /// Kind of the error
-    pub kind: ParseErrorKind
+    pub kind: ParseErrorKind,
 }
 
 impl Display for ParseError {
@@ -46,9 +46,7 @@ impl Display for ParseError {
     }
 }
 
-impl std::error::Error for ParseError {
-    
-}
+impl std::error::Error for ParseError {}
 
 /// The parsing error kind
 #[derive(Debug, Clone)]
@@ -58,7 +56,7 @@ pub enum ParseErrorKind {
     /// A nested index (a `_{...}` inside a `_{...}`). This is not valid
     NestedIndex,
     /// A special tag (`[`) was left unclosed
-    UnclosedSpecialTag(String)
+    UnclosedSpecialTag(String),
 }
 
 impl Display for ParseErrorKind {
@@ -66,7 +64,9 @@ impl Display for ParseErrorKind {
         match self {
             Self::SpecialNotRecognised(special) => write!(f, "special '{special}' not recognised"),
             Self::NestedIndex => write!(f, "nested index is not valid"),
-            Self::UnclosedSpecialTag(special) => write!(f, "unclosed special tag. Parsed '{special}'"),
+            Self::UnclosedSpecialTag(special) => {
+                write!(f, "unclosed special tag. Parsed '{special}'")
+            }
         }
     }
 }
@@ -310,16 +310,15 @@ impl FromStr for MathString {
                     special.push(c);
                     ignore_next = false;
                 } else if c == ']' {
-                    math_string.push(MathChar::Special(
-                        MathSpecial::parse(&special)
-                            .ok_or_else(|| ParseError {
-                                span: StringSpan {
-                                    start: special_start + 1,
-                                    end: char_count
-                                },
-                                kind: ParseErrorKind::SpecialNotRecognised(mem::take(&mut special))
-                            })?
-                    ));
+                    math_string.push(MathChar::Special(MathSpecial::parse(&special).ok_or_else(
+                        || ParseError {
+                            span: StringSpan {
+                                start: special_start + 1,
+                                end: char_count,
+                            },
+                            kind: ParseErrorKind::SpecialNotRecognised(mem::take(&mut special)),
+                        },
+                    )?));
 
                     // special.clear();
                     collect_special = false;
@@ -336,9 +335,9 @@ impl FromStr for MathString {
                     return Err(ParseError {
                         span: StringSpan {
                             start: 0,
-                            end: content.len()
+                            end: content.len(),
                         },
-                        kind: ParseErrorKind::NestedIndex
+                        kind: ParseErrorKind::NestedIndex,
                     });
                 }
 
@@ -378,7 +377,7 @@ impl FromStr for MathString {
             return Err(ParseError {
                 span: StringSpan {
                     start: special_start,
-                    end: content.len()
+                    end: content.len(),
                 },
                 kind: ParseErrorKind::UnclosedSpecialTag(special),
             });
@@ -435,8 +434,6 @@ impl<'de> Visitor<'de> for MathStringVisitor {
     where
         E: Error,
     {
-        MathString::from_str(v).map_err(|err| {
-            E::custom(err)
-        })
+        MathString::from_str(v).map_err(|err| E::custom(err))
     }
 }

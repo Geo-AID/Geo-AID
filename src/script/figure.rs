@@ -1,20 +1,28 @@
 use std::{fmt::Display, str::FromStr};
 
-use geo_aid_figure::math_string::{MathChar, MathIndex, MathSpecial, MathString, ParseErrorKind, SPECIAL_MATH};
-use geo_aid_figure::{Style, VarIndex};
 use crate::geometry::ValueEnum;
 use crate::script::math::{EntityKind, IndexMap, Reconstruct, ReconstructCtx, Reindex};
+use geo_aid_figure::math_string::{
+    MathChar, MathIndex, MathSpecial, MathString, ParseErrorKind, SPECIAL_MATH,
+};
+use geo_aid_figure::{Style, VarIndex};
 
 use crate::span;
 
 use super::math::Entity;
-use super::{parser::{FromProperty, Parse, PropertyValue}, token::{Ident, PointCollectionItem, Span}, unroll::most_similar, Error, math};
+use super::{
+    math,
+    parser::{FromProperty, Parse, PropertyValue},
+    token::{Ident, PointCollectionItem, Span},
+    unroll::most_similar,
+    Error,
+};
 
 #[derive(Debug, Clone)]
 pub struct PointItem {
     pub id: VarIndex,
     pub label: MathString,
-    pub display_dot: bool
+    pub display_dot: bool,
 }
 
 impl Reindex for PointItem {
@@ -42,7 +50,7 @@ impl From<PointItem> for Item {
 pub struct CircleItem {
     pub id: VarIndex,
     pub label: MathString,
-    pub style: Style
+    pub style: Style,
 }
 
 impl Reindex for CircleItem {
@@ -70,7 +78,7 @@ impl From<CircleItem> for Item {
 pub struct LineItem {
     pub id: VarIndex,
     pub label: MathString,
-    pub style: Style
+    pub style: Style,
 }
 
 impl Reindex for LineItem {
@@ -99,7 +107,7 @@ pub struct RayItem {
     pub p_id: VarIndex,
     pub q_id: VarIndex,
     pub label: MathString,
-    pub style: Style
+    pub style: Style,
 }
 
 impl Reindex for RayItem {
@@ -130,7 +138,7 @@ pub struct SegmentItem {
     pub p_id: VarIndex,
     pub q_id: VarIndex,
     pub label: MathString,
-    pub style: Style
+    pub style: Style,
 }
 
 impl From<SegmentItem> for Item {
@@ -162,7 +170,7 @@ pub enum Item {
     Circle(CircleItem),
     Line(LineItem),
     Ray(RayItem),
-    Segment(SegmentItem)
+    Segment(SegmentItem),
 }
 
 impl Reindex for Item {
@@ -184,7 +192,7 @@ impl Reconstruct for Item {
             Self::Circle(v) => Self::Circle(v.reconstruct(ctx)),
             Self::Line(v) => Self::Line(v.reconstruct(ctx)),
             Self::Ray(v) => Self::Ray(v.reconstruct(ctx)),
-            Self::Segment(v) => Self::Segment(v.reconstruct(ctx))
+            Self::Segment(v) => Self::Segment(v.reconstruct(ctx)),
         }
     }
 }
@@ -197,7 +205,7 @@ pub struct Figure {
     /// Variables used by the figure
     pub variables: Vec<math::Expr<()>>,
     /// Drawn items with meta
-    pub items: Vec<Item>
+    pub items: Vec<Item>,
 }
 
 /// Generated figure, created by the engine
@@ -208,7 +216,7 @@ pub struct Generated {
     /// Variables used by the figure
     pub variables: Vec<math::Expr<ValueEnum>>,
     /// Drawn items with meta
-    pub items: Vec<Item>
+    pub items: Vec<Item>,
 }
 
 /// A series of math characters.
@@ -285,38 +293,35 @@ impl SpannedMathString {
     /// # Errors
     /// Returns an error on parsing errors.
     pub fn parse(content: &str, content_span: Span) -> Result<Self, Error> {
-        let string = MathString::from_str(content)
-            .map_err(|err| {
-                let error_span = span!(
-                    content_span.start.line,
-                    content_span.start.column + err.span.start,
-                    content_span.end.line,
-                    content_span.end.column + err.span.end
-                );
+        let string = MathString::from_str(content).map_err(|err| {
+            let error_span = span!(
+                content_span.start.line,
+                content_span.start.column + err.span.start,
+                content_span.end.line,
+                content_span.end.column + err.span.end
+            );
 
-                match err.kind {
-                    ParseErrorKind::SpecialNotRecognised(special) => {
-                        let suggested = most_similar(&SPECIAL_MATH, &special);
+            match err.kind {
+                ParseErrorKind::SpecialNotRecognised(special) => {
+                    let suggested = most_similar(&SPECIAL_MATH, &special);
 
-                        Error::SpecialNotRecognised {
-                            error_span,
-                            code: special,
-                            suggested
-                        }
-                    }
-                    ParseErrorKind::NestedIndex => Error::LabelIndexInsideIndex {
-                        error_span
-                    },
-                    ParseErrorKind::UnclosedSpecialTag(special) => Error::UnclosedSpecial {
+                    Error::SpecialNotRecognised {
                         error_span,
-                        parsed_special: special
+                        code: special,
+                        suggested,
                     }
                 }
-            })?;
+                ParseErrorKind::NestedIndex => Error::LabelIndexInsideIndex { error_span },
+                ParseErrorKind::UnclosedSpecialTag(special) => Error::UnclosedSpecial {
+                    error_span,
+                    parsed_special: special,
+                },
+            }
+        })?;
 
         Ok(Self {
             string,
-            span: content_span
+            span: content_span,
         })
     }
 
@@ -372,7 +377,7 @@ impl From<PointCollectionItem> for SpannedMathString {
         string.push(MathChar::Ascii(value.letter));
 
         if let Some(index) = value.index {
-            string.extend(index.chars().map(MathChar::Ascii))
+            string.extend(index.chars().map(MathChar::Ascii));
         }
 
         string.extend([MathChar::Prime].repeat(value.primes.into()));
@@ -386,6 +391,6 @@ impl From<PointCollectionItem> for SpannedMathString {
 
 impl Display for SpannedMathString {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-       write!(f, "{}", self.string)
+        write!(f, "{}", self.string)
     }
 }

@@ -1,11 +1,14 @@
-use serde::Serialize;
 use crate::engine::rage::generator::program::{Loc, ValueType};
 use crate::geometry::Complex;
+use serde::Serialize;
 
-use super::{program::{Program, Execute, Value}, AdjustableTemplate};
+use super::{
+    program::{Execute, Program, Value},
+    AdjustableTemplate,
+};
 
 /// Program used for evaluation
-/// 
+///
 /// # Safety
 /// The program is considered safe iff:
 /// * the `base` is a safe program.
@@ -26,7 +29,7 @@ pub struct EvaluateProgram {
     /// `rule_count` registers after that are expected to contain rule qualities.
     /// Everything beyond that point is active program memory with no layout guarantees.
     /// Weight of rule `i` on adjustable `j` is at index `i * adjustables.len() + j`.
-    pub weights: Vec<f64>
+    pub weights: Vec<f64>,
 }
 
 impl EvaluateProgram {
@@ -42,7 +45,7 @@ impl EvaluateProgram {
     }
 
     /// Evaluates the qualities of adjustables.
-    /// 
+    ///
     /// # Safety
     /// The program must be valid.
     pub unsafe fn evaluate(&self, memory: &mut [Value], evaluation: &mut [f64]) {
@@ -58,7 +61,11 @@ impl EvaluateProgram {
         self.base.execute(memory);
 
         // Calculate adjustable qualities (weighed mean). Qualities are expected to be normalized.
-        for q in memory.iter().skip(self.base.constants.len()).take(self.rule_count) {
+        for q in memory
+            .iter()
+            .skip(self.base.constants.len())
+            .take(self.rule_count)
+        {
             let quality = q.complex.real;
 
             for ev in evaluation.iter_mut().take(self.adjustables.len()) {
@@ -80,7 +87,7 @@ pub struct FigureProgram {
     /// Expression values.
     pub variables: Vec<(ValueType, Loc)>,
     /// Entity values.
-    pub entities: Vec<(ValueType, Loc)>
+    pub entities: Vec<(ValueType, Loc)>,
 }
 
 impl FigureProgram {

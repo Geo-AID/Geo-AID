@@ -1,4 +1,6 @@
+use crate::span;
 use geo_aid_derive::CloneWithNode;
+use geo_aid_figure::Style;
 use num_traits::{One, Zero};
 use std::collections::HashSet;
 use std::fmt::Formatter;
@@ -11,8 +13,6 @@ use std::{
     rc::Rc,
     write,
 };
-use geo_aid_figure::Style;
-use crate::span;
 
 use crate::script::builtins::macros::index;
 use crate::script::figure::SpannedMathString;
@@ -382,11 +382,7 @@ impl Function {
     /// # Panics
     /// Never. Shut up, clippy.
     #[must_use]
-    pub fn match_params(
-        expected: &[Type],
-        received: &[Type],
-        param_group: Option<&Type>,
-    ) -> bool {
+    pub fn match_params(expected: &[Type], received: &[Type], param_group: Option<&Type>) -> bool {
         if let Some(ty) = param_group {
             if expected.len() < received.len() {
                 let mut received = received.iter();
@@ -939,13 +935,11 @@ macro_rules! impl_make_variable {
 
                 Expr {
                     span: sp,
-                    data: Rc::new($what::Generic(Generic::VariableAccess(Rc::new(
-                        Variable {
-                            name,
-                            definition: self,
-                            definition_span: sp,
-                        },
-                    )))),
+                    data: Rc::new($what::Generic(Generic::VariableAccess(Rc::new(Variable {
+                        name,
+                        definition: self,
+                        definition_span: sp,
+                    })))),
                     node: None, // Variable references are NEVER displayed
                 }
             }
@@ -961,13 +955,11 @@ macro_rules! impl_make_variable {
                     span: sp,
                     data: Rc::new($what {
                         $other: self.data.$other,
-                        data: $data::Generic(Generic::VariableAccess(Rc::new(
-                            Variable {
-                                name,
-                                definition: self,
-                                definition_span: sp,
-                            },
-                        ))),
+                        data: $data::Generic(Generic::VariableAccess(Rc::new(Variable {
+                            name,
+                            definition: self,
+                            definition_span: sp,
+                        }))),
                     }),
                     node: None, // Variable references are NEVER displayed
                 }
@@ -1016,7 +1008,7 @@ pub enum Point {
     Average(ClonedVec<Expr<Point>>),
     LineLineIntersection(Expr<Line>, Expr<Line>),
     CircleCenter(Expr<Circle>),
-    Free
+    Free,
 }
 
 impl Point {
@@ -1046,9 +1038,9 @@ impl GetData for Point {
             Point::Generic(v) => match v {
                 Generic::Boxed(v) => v.get_data(),
                 Generic::VariableAccess(v) => v.definition.get_data(),
-                Generic::Dummy => self
+                Generic::Dummy => self,
             },
-            _ => self
+            _ => self,
         }
     }
 }
@@ -1066,12 +1058,7 @@ impl Expr<Point> {
     }
 
     #[must_use]
-    pub fn x(
-        self,
-        span: Span,
-        display: Properties,
-        context: &CompileContext,
-    ) -> Expr<Scalar> {
+    pub fn x(self, span: Span, display: Properties, context: &CompileContext) -> Expr<Scalar> {
         let mut expr = Expr {
             span,
             node: None,
@@ -1086,12 +1073,7 @@ impl Expr<Point> {
     }
 
     #[must_use]
-    pub fn y(
-        self,
-        span: Span,
-        display: Properties,
-        context: &CompileContext,
-    ) -> Expr<Scalar> {
+    pub fn y(self, span: Span, display: Properties, context: &CompileContext) -> Expr<Scalar> {
         let mut expr = Expr {
             span,
             node: None,
@@ -1131,7 +1113,7 @@ impl Display for Point {
             Self::CircleCenter(circle) => {
                 write!(f, "{circle}.center")
             }
-            Self::Free => write!(f, "Free point")
+            Self::Free => write!(f, "Free point"),
         }
     }
 }
@@ -1224,9 +1206,9 @@ impl GetData for Circle {
             Circle::Generic(v) => match v {
                 Generic::Boxed(v) => v.get_data(),
                 Generic::VariableAccess(v) => v.definition.get_data(),
-                Generic::Dummy => self
+                Generic::Dummy => self,
             },
-            Circle::Circle(..) => self
+            Circle::Circle(..) => self,
         }
     }
 }
@@ -1244,12 +1226,7 @@ impl Expr<Circle> {
     }
 
     #[must_use]
-    pub fn center(
-        self,
-        span: Span,
-        display: Properties,
-        context: &CompileContext,
-    ) -> Expr<Point> {
+    pub fn center(self, span: Span, display: Properties, context: &CompileContext) -> Expr<Point> {
         let mut expr = Expr {
             span,
             node: None,
@@ -1261,12 +1238,7 @@ impl Expr<Circle> {
     }
 
     #[must_use]
-    pub fn radius(
-        self,
-        span: Span,
-        display: Properties,
-        context: &CompileContext,
-    ) -> Expr<Scalar> {
+    pub fn radius(self, span: Span, display: Properties, context: &CompileContext) -> Expr<Scalar> {
         let mut expr = Expr {
             span,
             node: None,
@@ -1334,9 +1306,9 @@ impl GetData for Line {
             Line::Generic(v) => match v {
                 Generic::Boxed(v) => v.get_data(),
                 Generic::VariableAccess(v) => v.definition.get_data(),
-                Generic::Dummy => self
+                Generic::Dummy => self,
             },
-            _ => self
+            _ => self,
         }
     }
 }
@@ -1447,7 +1419,7 @@ pub enum ScalarData {
     Pow(Expr<Scalar>, CompExponent),
     PointX(Expr<Point>),
     PointY(Expr<Point>),
-    Free
+    Free,
 }
 
 impl Display for ScalarData {
@@ -1488,7 +1460,7 @@ impl Display for ScalarData {
             Self::Pow(base, exponent) => write!(f, "({base})^{exponent}"),
             Self::PointX(expr) => write!(f, "{expr}.x"),
             Self::PointY(expr) => write!(f, "{expr}.y"),
-            Self::Free => write!(f, "Free scalar")
+            Self::Free => write!(f, "Free scalar"),
         }
     }
 }
@@ -1576,9 +1548,9 @@ impl GetData for Scalar {
             ScalarData::Generic(v) => match v {
                 Generic::Boxed(v) => v.get_data(),
                 Generic::VariableAccess(v) => v.definition.get_data(),
-                Generic::Dummy => self
+                Generic::Dummy => self,
             },
-            _ => self
+            _ => self,
         }
     }
 }
@@ -1637,9 +1609,7 @@ impl Expr<Scalar> {
                             )),
                             Generic::Dummy => ScalarData::Generic(Generic::Dummy),
                         },
-                        v @ ScalarData::Number(_) => {
-                            v.clone_without_node()
-                        }
+                        v @ ScalarData::Number(_) => v.clone_without_node(),
                         ScalarData::Free => {
                             ScalarData::SetUnit(self.clone_without_node(), unit.unwrap_or_default())
                         }
@@ -2378,9 +2348,7 @@ impl AnyExpr {
                 _ => panic!("not a variable"),
             },
             Self::PointCollection(v) => match &v.data.data {
-                PointCollectionData::Generic(Generic::VariableAccess(var)) => {
-                    var.definition_span
-                }
+                PointCollectionData::Generic(Generic::VariableAccess(var)) => var.definition_span,
                 _ => panic!("not a variable"),
             },
             Self::Bundle(v) => match &v.data.data {
@@ -2690,11 +2658,7 @@ pub fn unroll_parameters(
     definition(params, context, display)
 }
 
-fn fetch_variable(
-    context: &CompileContext,
-    name: &str,
-    variable_span: Span,
-) -> AnyExpr {
+fn fetch_variable(context: &CompileContext, name: &str, variable_span: Span) -> AnyExpr {
     let mut var = if let Some(var) = context.variables.get(name) {
         var.clone_without_node()
     } else {
@@ -2938,12 +2902,8 @@ impl Unroll for FieldIndex {
         match name {
             AnyExpr::Circle(circle) => match &self.field {
                 Ident::Named(named) => match named.ident.as_str() {
-                    "center" => circle
-                        .center(self.get_span(), display, context)
-                        .into(),
-                    "radius" => circle
-                        .radius(self.get_span(), display, context)
-                        .into(),
+                    "center" => circle.center(self.get_span(), display, context).into(),
+                    "radius" => circle.radius(self.get_span(), display, context).into(),
                     x => {
                         display.finish(context);
 

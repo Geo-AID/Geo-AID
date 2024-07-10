@@ -1,13 +1,18 @@
-#![warn(clippy::pedantic, missing_docs, missing_copy_implementations, missing_debug_implementations)]
+#![warn(
+    clippy::pedantic,
+    missing_docs,
+    missing_copy_implementations,
+    missing_debug_implementations
+)]
 
 //! This crate contains type definitions for Geo-AID's JSON format.
 
+use crate::math_string::MathString;
+use num_rational::Rational64;
+use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
 use std::num::{NonZeroI64, NonZeroU64};
 use std::ops::{Add, Deref, DerefMut, Mul};
-use num_rational::Rational64;
-use serde::{Deserialize, Serialize};
-use crate::math_string::MathString;
 
 /// Math strings are Geo-AID's way of handling text involving math-specific notation.
 pub mod math_string;
@@ -64,7 +69,7 @@ pub struct Complex {
     pub real: f64,
     /// The imaginary component
     #[serde(default)]
-    pub imaginary: f64
+    pub imaginary: f64,
 }
 
 /// A rational number
@@ -74,12 +79,15 @@ pub struct Ratio {
     pub num: i64,
     /// The denominator of the ratio
     #[serde(default = "one_i64")]
-    pub denom: NonZeroI64
+    pub denom: NonZeroI64,
 }
 
 impl From<Rational64> for Ratio {
     fn from(value: Rational64) -> Self {
-        Self { num: *value.numer(), denom: (*value.denom()).try_into().unwrap()}
+        Self {
+            num: *value.numer(),
+            denom: (*value.denom()).try_into().unwrap(),
+        }
     }
 }
 
@@ -91,7 +99,7 @@ impl Default for Ratio {
     fn default() -> Self {
         Self {
             num: 0,
-            denom: one_i64()
+            denom: one_i64(),
         }
     }
 }
@@ -102,7 +110,7 @@ pub struct Line {
     /// The origin point of the line
     pub origin: Complex,
     /// The direction vector of the line
-    pub direction: Complex
+    pub direction: Complex,
 }
 
 /// A circle
@@ -111,24 +119,24 @@ pub struct Circle {
     /// The center of the circle
     pub center: Complex,
     /// The radius of the circle. Must be positive
-    pub radius: f64
+    pub radius: f64,
 }
 
 /// A value of an expression or an entity
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all="kebab-case")]
+#[serde(tag = "type", rename_all = "kebab-case")]
 pub enum Value {
     /// A complex number
     Complex(Complex),
     /// A line
     Line(Line),
     /// A circle
-    Circle(Circle)
+    Circle(Circle),
 }
 
 /// Defines how a line should be drawn
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Default)]
-#[serde(rename_all="kebab-case")]
+#[serde(rename_all = "kebab-case")]
 pub enum Style {
     /// A standard, solid line
     #[default]
@@ -138,7 +146,7 @@ pub enum Style {
     /// A line made with dashes (`-`)
     Dashed,
     /// A slightly thicker line
-    Bold
+    Bold,
 }
 
 /// Label-related information
@@ -147,7 +155,7 @@ pub struct Label {
     /// Where the label should be drawn (figure space)
     pub position: Position,
     /// The label contents
-    pub content: MathString
+    pub content: MathString,
 }
 
 /// A figure-space position
@@ -156,16 +164,16 @@ pub struct Position {
     /// X coordinate
     pub x: f64,
     /// Y coordinate
-    pub y: f64
+    pub y: f64,
 }
 
 impl Mul<f64> for Position {
     type Output = Self;
-    
+
     fn mul(self, rhs: f64) -> Self::Output {
         Self {
             x: self.x * rhs,
-            y: self.y * rhs
+            y: self.y * rhs,
         }
     }
 }
@@ -176,7 +184,7 @@ impl Add for Position {
     fn add(self, rhs: Self) -> Self::Output {
         Self {
             x: self.x + rhs.x,
-            y: self.y + rhs.y
+            y: self.y + rhs.y,
         }
     }
 }
@@ -193,7 +201,7 @@ pub struct Figure {
     /// Entities in the image
     pub entities: Vec<Entity>,
     /// Items drawn on the image
-    pub items: Vec<Item>
+    pub items: Vec<Item>,
 }
 
 /// A single expression
@@ -202,74 +210,74 @@ pub struct Expression {
     /// The calculated value of this expression
     pub hint: Value,
     /// The kind of an expression this is
-    pub kind: ExpressionKind
+    pub kind: ExpressionKind,
 }
 
 /// The kind of an expression
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all="kebab-case")]
+#[serde(tag = "type", rename_all = "kebab-case")]
 pub enum ExpressionKind {
     /// An entity
     Entity {
         /// The index in the `entities` vector
-        id: EntityIndex
+        id: EntityIndex,
     },
     /// Intersection of k and l
     LineLineIntersection {
         /// Line 1
         k: VarIndex,
         /// Line 2
-        l: VarIndex
+        l: VarIndex,
     },
     /// The arithmetic average of points as complex numbers
     AveragePoint {
         /// The elements of the average
-        items: Vec<VarIndex>
+        items: Vec<VarIndex>,
     },
     /// The center of a circle
     CircleCenter {
         /// Circle to query
-        circle: VarIndex
+        circle: VarIndex,
     },
     /// Summation of numbers
     Sum {
         /// All the added ones
         plus: Vec<VarIndex>,
         /// All the subtracted ones
-        minus: Vec<VarIndex>
+        minus: Vec<VarIndex>,
     },
     /// Product of numbers
     Product {
         /// Multiply by them
         times: Vec<VarIndex>,
         /// Divide by them
-        by: Vec<VarIndex>
+        by: Vec<VarIndex>,
     },
     /// A constant number value
     Const {
         /// The value
-        value: Complex
+        value: Complex,
     },
     /// Raising a value to a rational power
     Power {
         /// The base
         value: VarIndex,
         /// The exponent
-        exponent: Ratio
+        exponent: Ratio,
     },
     /// Distance between `p` and `q`
     PointPointDistance {
         /// Point 1
         p: VarIndex,
         /// Point 2
-        q: VarIndex
+        q: VarIndex,
     },
     /// Distance between `point` and `line`
     PointLineDistance {
         /// The point
         point: VarIndex,
         /// The line
-        line: VarIndex
+        line: VarIndex,
     },
     /// Angle `abc`
     ThreePointAngle {
@@ -278,7 +286,7 @@ pub enum ExpressionKind {
         /// Vertex
         b: VarIndex,
         /// Arm 2
-        c: VarIndex
+        c: VarIndex,
     },
     /// Directed angle `abc`
     ThreePointAngleDir {
@@ -287,31 +295,31 @@ pub enum ExpressionKind {
         /// Vertex
         b: VarIndex,
         /// Arm 2
-        c: VarIndex
+        c: VarIndex,
     },
     /// Angle between `k` and `l`
     TwoLineAngle {
         /// Line 1
         k: VarIndex,
         /// Line 2
-        l: VarIndex
+        l: VarIndex,
     },
     /// X coordinate of a point
     PointX {
         /// The point
-        point: VarIndex
+        point: VarIndex,
     },
     /// Y coordinate of a point
     PointY {
         /// The point
-        point: VarIndex
+        point: VarIndex,
     },
     /// Line `pq`
     PointPoint {
         /// Point 1
         p: VarIndex,
         /// Point 2
-        q: VarIndex
+        q: VarIndex,
     },
     /// Bisector of angle `abc`
     AngleBisector {
@@ -320,29 +328,29 @@ pub enum ExpressionKind {
         /// Vertex
         q: VarIndex,
         /// Arm 2
-        r: VarIndex
+        r: VarIndex,
     },
     /// Perpendicular line going through `point`
     PerpendicularThrough {
         /// The guiding point
         point: VarIndex,
         /// The reference line
-        line: VarIndex
+        line: VarIndex,
     },
     /// Parallel line going through `point`
     ParallelThrough {
         /// The guiding point
         point: VarIndex,
         /// The reference line
-        line: VarIndex
+        line: VarIndex,
     },
     /// A circle with center and radius
     ConstructCircle {
         /// The circle's center
         center: VarIndex,
         /// The circle's radius. Must be positive
-        radius: VarIndex
-    }
+        radius: VarIndex,
+    },
 }
 
 /// A single entity
@@ -351,7 +359,7 @@ pub struct Entity {
     /// The calculated value of this expression
     pub hint: Value,
     /// The kind of an entity this is
-    pub kind: EntityKind
+    pub kind: EntityKind,
 }
 
 /// The kind of an entity
@@ -363,17 +371,17 @@ pub enum EntityKind {
     /// Point on a line
     PointOnLine {
         /// The reference line
-        line: VarIndex
+        line: VarIndex,
     },
     /// Point on a circle
     PointOnCircle {
         /// The reference circle
-        circle: VarIndex
+        circle: VarIndex,
     },
     /// A free real
     FreeReal,
     /// A distance unit
-    DistanceUnit
+    DistanceUnit,
 }
 
 /// An item drawn on the image
@@ -390,7 +398,7 @@ pub enum Item {
     /// A segment
     Segment(TwoPointItem),
     /// A circle
-    Circle(CircleItem)
+    Circle(CircleItem),
 }
 
 impl Item {
@@ -399,7 +407,7 @@ impl Item {
     pub fn as_point_mut(&mut self) -> Option<&mut PointItem> {
         match self {
             Self::Point(p) => Some(p),
-            _ => None
+            _ => None,
         }
     }
 }
@@ -416,7 +424,7 @@ pub struct PointItem {
     pub display_dot: bool,
     /// The point's label
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub label: Option<Label>
+    pub label: Option<Label>,
 }
 
 /// A line item. Usually depicted by a line.
@@ -431,7 +439,7 @@ pub struct LineItem {
     pub style: Style,
     /// The line's label
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub label: Option<Label>
+    pub label: Option<Label>,
 }
 
 /// A segment or a ray. Usually depicted by a line.
@@ -448,7 +456,7 @@ pub struct TwoPointItem {
     pub style: Style,
     /// The item's label
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub label: Option<Label>
+    pub label: Option<Label>,
 }
 
 /// A circle item. Usually depicted by a circle.
@@ -465,5 +473,5 @@ pub struct CircleItem {
     pub style: Style,
     /// The circle's label
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub label: Option<Label>
+    pub label: Option<Label>,
 }

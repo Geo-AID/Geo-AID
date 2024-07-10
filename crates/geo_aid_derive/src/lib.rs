@@ -7,9 +7,9 @@ use syn::parse::{Parse, ParseStream};
 use syn::punctuated::Punctuated;
 use syn::token::Paren;
 use syn::{
-    braced, parenthesized, parse_macro_input, Attribute, Data, DeriveInput, Expr, Fields,
+    braced, parenthesized, parse_macro_input, Attribute, Block, Data, DeriveInput, Expr, Fields,
     GenericArgument, GenericParam, Generics, Ident, Lit, Path, PathArguments, PathSegment, Token,
-    Type, TypePath, Block,
+    Type, TypePath,
 };
 
 /// Assumes there's no where clause.
@@ -853,7 +853,7 @@ enum InstrArgType {
     Line,
     Circle,
     Complex,
-    Real
+    Real,
 }
 
 impl InstrArgType {
@@ -876,7 +876,7 @@ impl Parse for InstrArgType {
             "Circle" => Self::Circle,
             "Complex" => Self::Complex,
             "Real" => Self::Real,
-            _ => return Err(syn::Error::new_spanned(ident, "invalid type"))
+            _ => return Err(syn::Error::new_spanned(ident, "invalid type")),
         })
     }
 }
@@ -896,7 +896,7 @@ impl ToTokens for InstrArgType {
 struct InstructionArg {
     name: Ident,
     _colon: Token![:],
-    ty: InstrArgType
+    ty: InstrArgType,
 }
 
 impl Parse for InstructionArg {
@@ -904,7 +904,7 @@ impl Parse for InstructionArg {
         Ok(Self {
             name: input.parse()?,
             _colon: input.parse()?,
-            ty: input.parse()?
+            ty: input.parse()?,
         })
     }
 }
@@ -916,7 +916,7 @@ struct Instruction {
     args: Punctuated<InstructionArg, Token![,]>,
     _arrow: Token![->],
     returned: InstrArgType,
-    code: Block
+    code: Block,
 }
 
 impl Parse for Instruction {
@@ -928,7 +928,7 @@ impl Parse for Instruction {
             args: params.parse_terminated(InstructionArg::parse, Token![,])?,
             _arrow: input.parse()?,
             returned: input.parse()?,
-            code: input.parse()?
+            code: input.parse()?,
         };
 
         // println!("{parsed:?}");
@@ -938,7 +938,7 @@ impl Parse for Instruction {
 }
 
 struct InstructionsInput {
-    instructions: Vec<Instruction>
+    instructions: Vec<Instruction>,
 }
 
 impl Parse for InstructionsInput {
@@ -949,9 +949,7 @@ impl Parse for InstructionsInput {
             instructions.push(input.parse()?);
         }
 
-        Ok(Self {
-            instructions
-        })
+        Ok(Self { instructions })
     }
 }
 

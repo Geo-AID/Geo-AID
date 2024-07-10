@@ -1,4 +1,7 @@
-use crate::script::{figure::{LineItem, RayItem, SegmentItem}, math::Build};
+use crate::script::{
+    figure::{LineItem, RayItem, SegmentItem},
+    math::Build,
+};
 
 use super::prelude::*;
 use geo_aid_derive::overload;
@@ -38,7 +41,14 @@ fn angle_function_point_point_point(
 #[derive(Debug)]
 pub struct Associated;
 
-pub fn display_angle_arms(build: &mut Build, a_expr: &Expr<Point>, b_expr: &Expr<Point>, c_expr: &Expr<Point>, arms_type: LineType, arms_style: Style) {
+pub fn display_angle_arms(
+    build: &mut Build,
+    a_expr: &Expr<Point>,
+    b_expr: &Expr<Point>,
+    c_expr: &Expr<Point>,
+    arms_type: LineType,
+    arms_style: Style,
+) {
     let a = build.load(a_expr);
     let b = build.load(b_expr);
     let c = build.load(c_expr);
@@ -58,13 +68,13 @@ pub fn display_angle_arms(build: &mut Build, a_expr: &Expr<Point>, b_expr: &Expr
             build.add(LineItem {
                 id,
                 label: MathString::new(),
-                style: arms_style
+                style: arms_style,
             });
             let id = build.load(&line_c);
             build.add(LineItem {
                 id,
                 label: MathString::new(),
-                style: arms_style
+                style: arms_style,
             });
         }
         LineType::Ray => {
@@ -72,13 +82,13 @@ pub fn display_angle_arms(build: &mut Build, a_expr: &Expr<Point>, b_expr: &Expr
                 p_id: b,
                 q_id: a,
                 label: MathString::new(),
-                style: arms_style
+                style: arms_style,
             });
             build.add(RayItem {
                 p_id: b,
                 q_id: c,
                 label: MathString::new(),
-                style: arms_style
+                style: arms_style,
             });
         }
         LineType::Segment => {
@@ -86,13 +96,13 @@ pub fn display_angle_arms(build: &mut Build, a_expr: &Expr<Point>, b_expr: &Expr
                 p_id: b,
                 q_id: a,
                 label: MathString::new(),
-                style: arms_style
+                style: arms_style,
             });
             build.add(SegmentItem {
                 p_id: b,
                 q_id: c,
                 label: MathString::new(),
-                style: arms_style
+                style: arms_style,
             });
         }
     }

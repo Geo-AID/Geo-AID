@@ -14,7 +14,7 @@ impl Json {
         let json = serde_json::to_string(figure).unwrap();
 
         let file = File::create(target);
-        
+
         match file {
             Ok(mut file) => file.write_all(json.as_bytes()),
             Err(error) => Err(error),

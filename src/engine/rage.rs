@@ -1,7 +1,7 @@
 use crate::engine::rage::compiler::Compiler;
-use crate::engine::rage::generator::Adjustable;
 use crate::engine::rage::generator::critic::{EvaluateProgram, FigureProgram};
 use crate::engine::rage::generator::program::ValueType;
+use crate::engine::rage::generator::Adjustable;
 use crate::geometry::{Complex, ValueEnum};
 use crate::script::figure::{Figure, Generated};
 use crate::script::math::{Entity, Expr, Intermediate};
@@ -16,15 +16,13 @@ mod generator;
 /// The Random Adjustment Generation Engine.
 #[derive(Debug)]
 pub struct Rage {
-    worker_count: usize
+    worker_count: usize,
 }
 
 impl Rage {
     #[must_use]
     pub fn new(worker_count: usize) -> Self {
-        Self {
-            worker_count
-        }
+        Self { worker_count }
     }
 }
 
@@ -32,7 +30,7 @@ pub struct GenParams {
     pub max_adjustment: f64,
     pub mean_count: usize,
     pub delta_max_mean: f64,
-    pub progress_update: Box<dyn FnMut(f64)>
+    pub progress_update: Box<dyn FnMut(f64)>,
 }
 
 impl Engine for Rage {
@@ -44,10 +42,13 @@ impl Engine for Rage {
         Compiler::new(intermediate).compile_programs()
     }
 
-    fn generate(&self, compiled: Self::Compiled, figure: Figure, params: Self::GenerateParams) -> GenerateResult {
-        let mut gen = unsafe {
-            Generator::new(self.worker_count, compiled.0)
-        };
+    fn generate(
+        &self,
+        compiled: Self::Compiled,
+        figure: Figure,
+        params: Self::GenerateParams,
+    ) -> GenerateResult {
+        let mut gen = unsafe { Generator::new(self.worker_count, compiled.0) };
 
         let time = gen.cycle_until_mean_delta(
             params.max_adjustment,
@@ -57,11 +58,17 @@ impl Engine for Rage {
         );
 
         let mut figure_prog = compiled.1;
-        for  (c, adj) in figure_prog.base.constants.iter_mut().zip(&gen.get_state().adjustables) {
+        for (c, adj) in figure_prog
+            .base
+            .constants
+            .iter_mut()
+            .zip(&gen.get_state().adjustables)
+        {
             *c = match adj {
                 Adjustable::Point(point) => ValueEnum::Complex(*point),
-                Adjustable::Real(x)
-                | Adjustable::Clip1D(x) => ValueEnum::Complex(Complex::real(*x))
+                Adjustable::Real(x) | Adjustable::Clip1D(x) => {
+                    ValueEnum::Complex(Complex::real(*x))
+                }
             };
         }
 
@@ -77,13 +84,13 @@ impl Engine for Rage {
                 match ty {
                     ValueType::Complex => ValueEnum::Complex(v.complex),
                     ValueType::Line => ValueEnum::Line(v.line),
-                    ValueType::Circle => ValueEnum::Circle(v.circle)
+                    ValueType::Circle => ValueEnum::Circle(v.circle),
                 }
             };
             variables.push(Expr {
                 ty: expr.ty,
                 kind: expr.kind,
-                meta: v
+                meta: v,
             });
         }
 
@@ -94,13 +101,10 @@ impl Engine for Rage {
                 match ty {
                     ValueType::Complex => ValueEnum::Complex(v.complex),
                     ValueType::Line => ValueEnum::Line(v.line),
-                    ValueType::Circle => ValueEnum::Circle(v.circle)
+                    ValueType::Circle => ValueEnum::Circle(v.circle),
                 }
             };
-            entities.push(Entity {
-                kind: ent,
-                meta: v
-            });
+            entities.push(Entity { kind: ent, meta: v });
         }
 
         GenerateResult {
@@ -110,7 +114,7 @@ impl Engine for Rage {
                 items: figure.items,
             },
             time,
-            total_quality: gen.get_total_quality()
+            total_quality: gen.get_total_quality(),
         }
     }
 }

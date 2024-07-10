@@ -1,7 +1,11 @@
-use std::{fmt::Display, iter::{Product, Sum}, ops::{Add, AddAssign, Div, Mul, MulAssign, Neg, Sub, SubAssign}};
+use std::{
+    fmt::Display,
+    iter::{Product, Sum},
+    ops::{Add, AddAssign, Div, Mul, MulAssign, Neg, Sub, SubAssign},
+};
 
-use serde::Serialize;
 use geo_aid_figure::Position;
+use serde::Serialize;
 
 /// Represents a complex number located on a "unit" plane.
 #[derive(Debug, Clone, Copy, Serialize)]
@@ -129,7 +133,7 @@ impl From<Complex> for Position {
     fn from(value: Complex) -> Self {
         Self {
             x: value.real,
-            y: value.imaginary
+            y: value.imaginary,
         }
     }
 }
@@ -138,7 +142,7 @@ impl From<Complex> for geo_aid_figure::Complex {
     fn from(value: Complex) -> Self {
         Self {
             real: value.real,
-            imaginary: value.imaginary
+            imaginary: value.imaginary,
         }
     }
 }
@@ -252,7 +256,11 @@ impl MulAssign for Complex {
 impl Display for Complex {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if let Some(precision) = f.precision() {
-            write!(f, "{2:.*} + {3:.*}i", precision, precision, self.real, self.imaginary)
+            write!(
+                f,
+                "{2:.*} + {3:.*}i",
+                precision, precision, self.real, self.imaginary
+            )
         } else {
             write!(f, "{} + {}i", self.real, self.imaginary)
         }
@@ -320,7 +328,7 @@ impl From<Line> for geo_aid_figure::Line {
     fn from(value: Line) -> Self {
         Self {
             origin: value.origin.into(),
-            direction: value.direction.into()
+            direction: value.direction.into(),
         }
     }
 }
@@ -338,7 +346,7 @@ impl From<Circle> for geo_aid_figure::Circle {
     fn from(value: Circle) -> Self {
         Self {
             center: value.center.into(),
-            radius: value.radius
+            radius: value.radius,
         }
     }
 }
@@ -348,7 +356,7 @@ impl From<Circle> for geo_aid_figure::Circle {
 pub enum ValueEnum {
     Complex(Complex),
     Line(Line),
-    Circle(Circle)
+    Circle(Circle),
 }
 
 impl ValueEnum {
@@ -356,7 +364,7 @@ impl ValueEnum {
     pub fn as_complex(self) -> Option<Complex> {
         match self {
             Self::Complex(c) => Some(c),
-            _ => None
+            _ => None,
         }
     }
 
@@ -364,7 +372,7 @@ impl ValueEnum {
     pub fn as_line(self) -> Option<Line> {
         match self {
             Self::Line(l) => Some(l),
-            _ => None
+            _ => None,
         }
     }
 
@@ -372,7 +380,7 @@ impl ValueEnum {
     pub fn as_circle(self) -> Option<Circle> {
         match self {
             Self::Circle(l) => Some(l),
-            _ => None
+            _ => None,
         }
     }
 }
@@ -382,7 +390,7 @@ impl From<ValueEnum> for geo_aid_figure::Value {
         match value {
             ValueEnum::Complex(c) => Self::Complex(c.into()),
             ValueEnum::Line(ln) => Self::Line(ln.into()),
-            ValueEnum::Circle(c) => Self::Circle(c.into())
+            ValueEnum::Circle(c) => Self::Circle(c.into()),
         }
     }
 }

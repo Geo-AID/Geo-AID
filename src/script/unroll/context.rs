@@ -1,21 +1,20 @@
+use num_traits::{One, Zero};
 use paste::paste;
 use std::cell::RefCell;
 use std::mem;
 use std::rc::Rc;
 use std::{collections::HashMap, fmt::Debug};
-use num_traits::{Zero, One};
 
 use crate::script::builtins::macros::number;
+use crate::script::token::number::ProcNum;
 use crate::script::unroll::{AnyExpr, CloneWithNode};
 use crate::script::{unit, ComplexUnit, Error};
-use crate::script::token::number::ProcNum;
 use crate::span;
 
 use super::figure::FromExpr;
 use super::{
-    Circle, CollectionNode, Displayed, Expr, FlagSet, HierarchyNode,
-    Line, Node, Point, Properties, Scalar,
-    ScalarData, UnrolledRule, UnrolledRuleKind,
+    Circle, CollectionNode, Displayed, Expr, FlagSet, HierarchyNode, Line, Node, Point, Properties,
+    Scalar, ScalarData, UnrolledRule, UnrolledRuleKind,
 };
 
 /// The context of compilation process.
@@ -86,12 +85,7 @@ impl CompileContext {
 
 /// Everything related to circles.
 impl CompileContext {
-    pub fn point_on_circle(
-        &mut self,
-        lhs: &Expr<Point>,
-        rhs: &Expr<Circle>,
-        weight: ProcNum,
-    ) {
+    pub fn point_on_circle(&mut self, lhs: &Expr<Point>, rhs: &Expr<Circle>, weight: ProcNum) {
         self.push_rule(UnrolledRule {
             kind: UnrolledRuleKind::ScalarEq(
                 self.distance_pp(
@@ -105,12 +99,7 @@ impl CompileContext {
         });
     }
 
-    pub fn point_on_line(
-        &mut self,
-        lhs: &Expr<Point>,
-        rhs: &Expr<Line>,
-        weight: ProcNum,
-    ) {
+    pub fn point_on_line(&mut self, lhs: &Expr<Point>, rhs: &Expr<Line>, weight: ProcNum) {
         self.push_rule(UnrolledRule {
             kind: UnrolledRuleKind::ScalarEq(
                 self.distance_pl(lhs.clone_without_node(), rhs.clone_without_node()),
@@ -286,10 +275,14 @@ impl CompileContext {
     }
 
     pub fn free_scalar_display(&self, display: Properties) -> Expr<Scalar> {
-        self.expr_with(Scalar {
-            unit: Some(unit::SCALAR),
-            data: ScalarData::Free,
-        }, display, Vec::new())
+        self.expr_with(
+            Scalar {
+                unit: Some(unit::SCALAR),
+                data: ScalarData::Free,
+            },
+            display,
+            Vec::new(),
+        )
     }
 
     pub fn free_scalar(&self) -> Expr<Scalar> {

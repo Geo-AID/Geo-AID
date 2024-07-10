@@ -1,11 +1,17 @@
-use std::sync::Arc;
-use std::f64::consts::PI;
-use std::num::NonZeroU64;
-use geo_aid_figure::{Figure, CircleItem as RenderedCircle, Item as Rendered, PointItem as RenderedPoint, LineItem as RenderedLine, TwoPointItem as RenderedTwoPoint, Label, Position, VarIndex, Entity, Expression};
 use crate::geometry;
 use crate::geometry::{Circle, Complex, Line, ValueEnum};
+use geo_aid_figure::{
+    CircleItem as RenderedCircle, Entity, Expression, Figure, Item as Rendered, Label,
+    LineItem as RenderedLine, PointItem as RenderedPoint, Position,
+    TwoPointItem as RenderedTwoPoint, VarIndex,
+};
+use std::f64::consts::PI;
+use std::num::NonZeroU64;
+use std::sync::Arc;
 
-use crate::script::figure::{CircleItem, Generated, Item, LineItem, PointItem, RayItem, SegmentItem};
+use crate::script::figure::{
+    CircleItem, Generated, Item, LineItem, PointItem, RayItem, SegmentItem,
+};
 use crate::script::math::{EntityKind, Expr, ExprType, Flags};
 
 struct Projector {
@@ -18,7 +24,7 @@ struct Projector {
     /// Segments visible on the picture.
     pub segments: Vec<(Complex, Complex)>,
     /// Circles visible on the picture.
-    pub circles: Vec<Circle>
+    pub circles: Vec<Circle>,
 }
 
 impl Projector {
@@ -45,7 +51,10 @@ impl Projector {
         let intersections = [
             geometry::get_intersection(
                 ln_c,
-                geometry::get_line(Complex::new(0.0, self.height), Complex::new(1.0, self.height)),
+                geometry::get_line(
+                    Complex::new(0.0, self.height),
+                    Complex::new(1.0, self.height),
+                ),
             ),
             geometry::get_intersection(
                 ln_c,
@@ -88,11 +97,7 @@ impl Projector {
         // Checking the lines for proximity.
         for (a, b) in &self.segments {
             // Identifying the "first" point by the real axis.
-            let (a, b) = if a.real < b.real {
-                (*a, *b)
-            } else {
-                (*b, *a)
-            };
+            let (a, b) = if a.real < b.real { (*a, *b) } else { (*b, *a) };
 
             let ln = geometry::get_line(a, b);
             let distance = geometry::distance_pt_ln(point, ln);
@@ -117,7 +122,7 @@ impl Projector {
         }
 
         // Checking the circles for associated vectors.
-        for &Circle {center, radius} in &self.circles {
+        for &Circle { center, radius } in &self.circles {
             if (geometry::distance_pt_pt(center, point) - radius).abs() < 1e-4 {
                 let direction = (center - point).mul_i().normalize();
 
@@ -173,7 +178,7 @@ impl Projector {
             // This is just the standard complex number formula.
             let bisector_vec = Complex::polar(
                 bisector_angle,
-                (radius / (biggest_angle / 2.0).sin()).min(radius)
+                (radius / (biggest_angle / 2.0).sin()).min(radius),
             );
 
             // to do -> better scaling
@@ -181,7 +186,8 @@ impl Projector {
                 bisector_vec * -1.0
             } else {
                 bisector_vec
-            }.into()
+            }
+            .into()
         }
     }
 }
@@ -236,7 +242,9 @@ impl Project<PointItem> for Projector {
 
     fn project(&mut self, item: PointItem) -> Self::Result {
         RenderedPoint {
-            position: <Projector as UnVar<Complex>>::un_var(self, item.id).unwrap().into(),
+            position: <Projector as UnVar<Complex>>::un_var(self, item.id)
+                .unwrap()
+                .into(),
             id: item.id,
             display_dot: item.display_dot,
             label: if item.label.is_empty() {
@@ -244,16 +252,16 @@ impl Project<PointItem> for Projector {
             } else {
                 Some(Label {
                     content: item.label,
-                    position: Position { x: 0.0, y: 0.0 }
+                    position: Position { x: 0.0, y: 0.0 },
                 })
-            }
+            },
         }
     }
 }
 
 impl Project<LineItem> for Projector {
     type Result = RenderedLine;
-    
+
     fn project(&mut self, item: LineItem) -> Self::Result {
         let ln_c: Line = self.un_var(item.id).unwrap();
         let points = self.get_line_ends(ln_c);
@@ -268,9 +276,9 @@ impl Project<LineItem> for Projector {
             } else {
                 Some(Label {
                     content: item.label,
-                    position: Position { x: 0.0, y: 0.0 }
+                    position: Position { x: 0.0, y: 0.0 },
                 })
-            }
+            },
         }
     }
 }
@@ -293,9 +301,9 @@ impl Project<SegmentItem> for Projector {
             } else {
                 Some(Label {
                     content: item.label,
-                    position: Position { x: 0.0, y: 0.0 }
+                    position: Position { x: 0.0, y: 0.0 },
                 })
-            }
+            },
         }
     }
 }
@@ -337,9 +345,9 @@ impl Project<RayItem> for Projector {
             } else {
                 Some(Label {
                     content: item.label,
-                    position: Position { x: 0.0, y: 0.0 }
+                    position: Position { x: 0.0, y: 0.0 },
                 })
-            }
+            },
         }
     }
 }
@@ -363,9 +371,9 @@ impl Project<CircleItem> for Projector {
             } else {
                 Some(Label {
                     content: item.label,
-                    position: Position { x: 0.0, y: 0.0 }
+                    position: Position { x: 0.0, y: 0.0 },
                 })
-            }
+            },
         }
     }
 }
@@ -412,7 +420,7 @@ impl Project<CircleItem> for Projector {
 struct Transform {
     offset: Complex,
     scale: f64,
-    margin: Complex
+    margin: Complex,
 }
 
 impl Transform {
@@ -431,7 +439,7 @@ impl Transform {
     fn transform_circle(&self, circle: Circle) -> Circle {
         Circle {
             center: self.transform_point(circle.center),
-            radius: self.transform_dst(circle.radius)
+            radius: self.transform_dst(circle.radius),
         }
     }
 
@@ -474,11 +482,8 @@ impl Transform {
 ///
 /// # Panics
 /// Any panic is a bug.
-pub fn project(
-    figure: Generated,
-    _flags: &Arc<Flags>,
-    canvas_size: (usize, usize)
-) -> Figure {
+#[allow(clippy::too_many_lines)]
+pub fn project(figure: Generated, _flags: &Arc<Flags>, canvas_size: (usize, usize)) -> Figure {
     let mut entities: Vec<_> = figure.entities;
     let mut expressions: Vec<_> = figure.variables;
     let items = figure.items;
@@ -495,33 +500,41 @@ pub fn project(
                     circle.center - circle.radius,
                     circle.center + circle.radius,
                     circle.center - circle.radius * Complex::i(),
-                    circle.center + circle.radius * Complex::i()
+                    circle.center + circle.radius * Complex::i(),
                 ]);
             }
-            _ => ()
+            _ => (),
         }
     }
 
     // Frame top left point.
     let top_left = Complex::new(
-        points.iter()
+        points
+            .iter()
             .map(|pt| pt.real)
-            .reduce(f64::min).unwrap_or_default(),
-        points.iter()
+            .reduce(f64::min)
+            .unwrap_or_default(),
+        points
+            .iter()
             .map(|pt| pt.imaginary)
-            .reduce(f64::min).unwrap_or_default()
+            .reduce(f64::min)
+            .unwrap_or_default(),
     );
 
     let offset = -top_left;
 
     // Frame bottom right point.
     let furthest = Complex::new(
-        points.iter()
+        points
+            .iter()
             .map(|pt| pt.real)
-            .reduce(f64::max).unwrap_or_default(),
-        points.iter()
+            .reduce(f64::max)
+            .unwrap_or_default(),
+        points
+            .iter()
             .map(|pt| pt.imaginary)
-            .reduce(f64::max).unwrap_or_default()
+            .reduce(f64::max)
+            .unwrap_or_default(),
     );
 
     // println!("{top_left}/{furthest}");
@@ -543,34 +556,40 @@ pub fn project(
     let transform = Transform {
         offset,
         scale,
-        margin: size005
+        margin: size005,
     };
 
-    let ent_types: Vec<_> = entities.iter().map(|t| t.get_type(&expressions, &entities)).collect();
+    let ent_types: Vec<_> = entities
+        .iter()
+        .map(|t| t.get_type(&expressions, &entities))
+        .collect();
     for (ent, ty) in entities.iter_mut().zip(ent_types) {
         match &mut ent.meta {
             ValueEnum::Circle(circle) => *circle = transform.transform_circle(*circle),
             ValueEnum::Line(line) => *line = transform.transform_line(*line),
-            ValueEnum::Complex(complex) => {
-                match ty {
-                    ExprType::Point => *complex = transform.transform_point(*complex),
-                    ExprType::Number => if matches!(ent.kind, EntityKind::DistanceUnit) {
+            ValueEnum::Complex(complex) => match ty {
+                ExprType::Point => *complex = transform.transform_point(*complex),
+                ExprType::Number => {
+                    if matches!(ent.kind, EntityKind::DistanceUnit) {
                         complex.real = transform.transform_dst(complex.real);
-                    },
-                    _ => unreachable!()
+                    }
                 }
-            }
+                _ => unreachable!(),
+            },
         }
     }
 
-    let expr_types: Vec<_> = expressions.iter().map(|t| t.get_type(&expressions, &entities)).collect();
+    let expr_types: Vec<_> = expressions
+        .iter()
+        .map(|t| t.get_type(&expressions, &entities))
+        .collect();
     for (expr, ty) in expressions.iter_mut().zip(expr_types) {
         match &mut expr.meta {
             ValueEnum::Circle(circle) => *circle = transform.transform_circle(*circle),
             ValueEnum::Line(line) => *line = transform.transform_line(*line),
             ValueEnum::Complex(complex) => {
                 if ExprType::Point == ty {
-                    *complex = transform.transform_point(*complex)
+                    *complex = transform.transform_point(*complex);
                 }
             }
         }
@@ -585,12 +604,10 @@ pub fn project(
         width: size1.real,
         height: size1.imaginary,
         segments: Vec::new(),
-        circles: Vec::new()
+        circles: Vec::new(),
     };
 
-    let mut rendered: Vec<_> = items.into_iter()
-        .map(|v| projector.project(v))
-        .collect();
+    let mut rendered: Vec<_> = items.into_iter().map(|v| projector.project(v)).collect();
 
     for point in rendered.iter_mut().filter_map(Rendered::as_point_mut) {
         let pos = point.position;
@@ -598,18 +615,29 @@ pub fn project(
             label.position = pos + projector.get_label_position_rel(pos.into());
         }
     }
-    
+
     Figure {
-        width: u64::try_from(canvas_size.0).and_then(NonZeroU64::try_from).unwrap(),
-        height: u64::try_from(canvas_size.1).and_then(NonZeroU64::try_from).unwrap(),
-        expressions: projector.variables.into_iter().map(|expr| Expression {
-            hint: expr.meta.into(),
-            kind: expr.kind.into()
-        }).collect(),
-        entities: entities.into_iter().map(|ent| Entity {
-            hint: ent.meta.into(),
-            kind: ent.kind.into()
-        }).collect(),
+        width: u64::try_from(canvas_size.0)
+            .and_then(NonZeroU64::try_from)
+            .unwrap(),
+        height: u64::try_from(canvas_size.1)
+            .and_then(NonZeroU64::try_from)
+            .unwrap(),
+        expressions: projector
+            .variables
+            .into_iter()
+            .map(|expr| Expression {
+                hint: expr.meta.into(),
+                kind: expr.kind.into(),
+            })
+            .collect(),
+        entities: entities
+            .into_iter()
+            .map(|ent| Entity {
+                hint: ent.meta.into(),
+                kind: ent.kind.into(),
+            })
+            .collect(),
         items: rendered,
     }
 }
