@@ -32,7 +32,7 @@ fn angle_function_point_point_point(
 }
 
 /// ```
-/// # use geo_aid::script::figure::Style;
+/// # use geo_aid_figure::Style;
 /// struct Associated {
 ///     display_arms: bool,
 ///     arms_style: Style

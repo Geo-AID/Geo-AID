@@ -1,3 +1,5 @@
+![Geo-AID Logo](logo/full-white.svg)
+
 # Geo-AID
 
 Geo-AID is a tool aiming to aid people at drawing geometry figures. It uses a figure script with criteria definitions to generate a figure meeting them and draw it.
@@ -24,7 +26,7 @@ geo-aid <arguments here, type --help for help>.
 
 ## Useful resources
 
-The Geo-AID book is available under the `geo-aid-book/` directory. You can display it as HTML using [mdbook](https://github.com/rust-lang/mdBook):
+The Geo-AID book is hosted at https://geo-aid.github.io/. It's also available under the `geo-aid-book/` directory. You can display it as HTML using [mdbook](https://github.com/rust-lang/mdBook):
 
 ```
 cd geo-aid-book

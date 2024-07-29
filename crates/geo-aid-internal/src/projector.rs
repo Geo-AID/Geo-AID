@@ -1,5 +1,6 @@
 use crate::geometry;
 use crate::geometry::{Circle, Complex, Line, ValueEnum};
+pub use geo_aid_figure as figure;
 use geo_aid_figure::{
     CircleItem as RenderedCircle, Entity, Expression, Figure, Item as Rendered, Label,
     LineItem as RenderedLine, PointItem as RenderedPoint, Position,

@@ -1,3 +1,7 @@
+## Version 0.4.2 (2024.07.30)
+- **All**: Full reorganization of the repository.
+- **Rage**: Modified the public API.
+
 ## Version 0.4.1 (2024.07.10)
 - **All**: Generated figure format (datatype) is now in its own library, including math strings. Drawers now use that, rather than a private type.
 - **All**: The organization of the repo changed. Everything is now in a single repository.
