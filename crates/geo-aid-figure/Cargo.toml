@@ -1,6 +1,6 @@
 [package]
 name = "geo-aid-figure"
-version = "0.4.1"
+version = "0.4.2"
 edition = "2021"
 description = "Definitions for Geo-AID's JSON export format."
 license = "MIT"

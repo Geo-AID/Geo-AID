@@ -31,10 +31,10 @@ use super::{
 
 mod optimizations;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Optimizations {}
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Flags {
     pub optimizations: Optimizations,
     pub point_bounds: bool,

@@ -198,7 +198,7 @@ impl Reconstruct for Item {
 }
 
 /// Defines the visual data of the figure.
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct Figure {
     /// Entities used by the figure
     pub entities: Vec<EntityKind>,
@@ -209,7 +209,7 @@ pub struct Figure {
 }
 
 /// Generated figure, created by the engine
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct Generated {
     /// Entities used by the figure
     pub entities: Vec<Entity<ValueEnum>>,

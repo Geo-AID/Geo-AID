@@ -10,17 +10,16 @@ use std::{
 
 use clap::{Parser, ValueEnum};
 use crossterm::{cursor, terminal, ExecutableCommand, QueueableCommand};
-use geo_aid::drawer::json::Json;
-use geo_aid::drawer::latex::Latex;
-use geo_aid::drawer::raw::Raw;
-use geo_aid::drawer::svg::Svg;
-use geo_aid::engine::rage::GenParams;
-use geo_aid::engine::GenerateResult;
-use geo_aid::projector;
-use geo_aid::{
+use geo_aid_internal::drawer::json::Json;
+use geo_aid_internal::drawer::latex::Latex;
+use geo_aid_internal::drawer::raw::Raw;
+use geo_aid_internal::drawer::svg::Svg;
+use geo_aid_internal::engine::rage::GenParams;
+use geo_aid_internal::projector;
+use geo_aid_internal::{
     cli::{Diagnostic, DiagnosticKind},
     drawer::Draw,
-    engine::{rage::Rage, Engine},
+    engine::rage::Rage,
     script::math,
 };
 
@@ -111,40 +110,34 @@ fn main() {
 
     // println!("{intermediate:#?}");
 
-    let rage = Rage::new(args.count_of_workers);
-    let compiled = rage.compile(&intermediate, ());
+    let mut rage = Rage::new(args.count_of_workers, &intermediate);
     let flags = Arc::new(intermediate.flags);
 
     let mut stdout = io::stdout();
 
     stdout.execute(cursor::Hide).unwrap();
 
-    let GenerateResult {
-        time,
-        generated,
-        total_quality,
-    } = rage.generate(
-        compiled,
-        intermediate.figure,
-        GenParams {
-            max_adjustment: args.adjustment_max,
-            mean_count: args.mean_count,
-            delta_max_mean: args.delta_max_mean,
-            progress_update: Box::new(|quality| {
-                let mut stdout = io::stdout();
-                stdout
-                    .queue(terminal::Clear(terminal::ClearType::FromCursorDown))
-                    .unwrap();
+    let time = rage.generate_mean_delta(GenParams {
+        max_adjustment: args.adjustment_max,
+        mean_count: args.mean_count,
+        delta_max_mean: args.delta_max_mean,
+        progress_update: Box::new(|quality| {
+            let mut stdout = io::stdout();
+            stdout
+                .queue(terminal::Clear(terminal::ClearType::FromCursorDown))
+                .unwrap();
 
-                stdout.queue(cursor::SavePosition).unwrap();
-                stdout
-                    .write_all(format!("Quality: {:.2}% ", quality * 100.0).as_bytes())
-                    .unwrap();
-                stdout.queue(cursor::RestorePosition).unwrap();
-                stdout.flush().unwrap();
-            }),
-        },
-    );
+            stdout.queue(cursor::SavePosition).unwrap();
+            stdout
+                .write_all(format!("Quality: {:.2}% ", quality * 100.0).as_bytes())
+                .unwrap();
+            stdout.queue(cursor::RestorePosition).unwrap();
+            stdout.flush().unwrap();
+        }),
+    });
+
+    let total_quality = rage.gen().get_total_quality();
+    let generated = rage.get_figure(intermediate.figure);
 
     stdout.execute(cursor::Show).unwrap();
 
@@ -162,9 +155,8 @@ fn main() {
         }
         Renderer::Raw => {
             Raw::default().draw(&args.output, &rendered).unwrap();
-        }
-        //Renderer::Latex => latex::draw(&args.output, canvas_size, &rendered),
-        //Renderer::Json => json::draw(&args.output, canvas_size, &rendered),
+        } //Renderer::Latex => latex::draw(&args.output, canvas_size, &rendered),
+          //Renderer::Json => json::draw(&args.output, canvas_size, &rendered),
     }
 
     // for i in 1..=200 {

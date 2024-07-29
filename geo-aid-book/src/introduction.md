@@ -1,3 +1,5 @@
+![Geo-AID logo](images/logo.svg)
+
 # Introduction
 
 Geo-AID is a tool to generate figures based off of rules given in the script file. Its main purpose is to minimize the pain related to drawing figures for certain mathematical problems or theorems. It's currently in the early development.

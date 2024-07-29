@@ -136,6 +136,7 @@ struct CycleState {
     pub total_quality: f64,
 }
 
+#[derive(Debug)]
 /// A structure responsible for generating a figure based on criteria and given points.
 pub struct Generator {
     /// Current values of all adjustables.
@@ -242,7 +243,7 @@ impl Generator {
     ///
     /// # Returns
     /// The time it took for this cycle to complete.
-    fn cycle_prebaked(&mut self, magnitudes: &[f64]) -> Duration {
+    pub fn cycle_prebaked(&mut self, magnitudes: &[f64]) -> Duration {
         let now = Instant::now();
 
         // Send data to each worker
@@ -283,7 +284,7 @@ impl Generator {
         now.elapsed()
     }
 
-    fn bake_magnitudes(&self, maximum_adjustment: f64) -> Vec<f64> {
+    pub fn bake_magnitudes(&self, maximum_adjustment: f64) -> Vec<f64> {
         #[allow(clippy::cast_precision_loss)]
         let step = maximum_adjustment / self.workers.len() as f64;
 

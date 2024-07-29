@@ -58,12 +58,17 @@ Geo-AID needs proper documentation for its language as one of its most important
 3. Code contribution
 
 Code contributions of any kind are welcome. We especially encourage bug fixes and drawer writing. Remember to always attach a description of what you've changed, why you've changed it and why that is an improvement.
+There are many places where Geo-AID needs your help. The language, the compiler, the generator(s), the projector, the drawers. You can also focus on external projects. Do something of your own or contribute to already existing projects, like the Geo-AID debugger.
 
 When submitting a request, remember to always test if the code builds and to format the code. Also, please test the correctness of your code. It can be done by running `test.py` with `python`. It runs all tests located in the `tests` catalog.
 
 4. Math
 
 If you think you know how to improve or implement something from a mathematical standpoint, go ahead and contact me. Geo-AID needs a very strong mathematical base to be able to serve its purpose.
+
+5. Website
+
+It would be great to have a website for Geo-AID. If you think you can help with that, go ahead.
 
 ## How to write bug reports?
 
