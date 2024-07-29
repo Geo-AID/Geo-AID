@@ -33,7 +33,7 @@ fn segment_function_point_point(
 }
 
 /// ```
-/// # use geo_aid::script::figure::Style;
+/// # use geo_aid_figure::Style;
 /// struct Associated {
 ///     display_segment: bool,
 ///     style: Style
