@@ -45,6 +45,9 @@ struct Args {
     /// Maximal adjustment of a point during generation.
     #[arg(long, short, default_value_t = 0.5)]
     adjustment_max: f64,
+    /// How strict are the rules. Negative values make the engine less strict. Zero is not allowed.
+    #[arg(long, short, default_value_t = 2.0)]
+    strictness: f64,
     /// Renderer to use.
     #[arg(long, short, default_value_t = Renderer::Svg, value_enum)]
     renderer: Renderer,
@@ -75,6 +78,12 @@ enum Renderer {
 
 fn main() {
     let args = Args::parse();
+
+    // Has to be tested.
+    if args.strictness == 0.0 {
+        println!("Strictness must not be 0.");
+        return;
+    }
 
     if let Some(path) = args.markdown_help {
         fs::write(path, clap_markdown::help_markdown::<Args>()).unwrap();
@@ -110,7 +119,7 @@ fn main() {
 
     // println!("{intermediate:#?}");
 
-    let mut rage = Rage::new(args.count_of_workers, &intermediate);
+    let mut rage = Rage::new(args.count_of_workers, args.strictness, &intermediate);
     let flags = Arc::new(intermediate.flags);
 
     let mut stdout = io::stdout();

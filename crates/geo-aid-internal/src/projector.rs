@@ -195,23 +195,23 @@ impl Projector {
 
 trait UnVar<T> {
     /// Returns the actual variable value.
-    fn un_var(&self, id: VarIndex) -> Option<T>;
+    fn un_var(&self, id: &VarIndex) -> Option<T>;
 }
 
 impl UnVar<Complex> for Projector {
-    fn un_var(&self, id: VarIndex) -> Option<Complex> {
+    fn un_var(&self, id: &VarIndex) -> Option<Complex> {
         self.variables[id.0].meta.as_complex()
     }
 }
 
 impl UnVar<Line> for Projector {
-    fn un_var(&self, id: VarIndex) -> Option<Line> {
+    fn un_var(&self, id: &VarIndex) -> Option<Line> {
         self.variables[id.0].meta.as_line()
     }
 }
 
 impl UnVar<Circle> for Projector {
-    fn un_var(&self, id: VarIndex) -> Option<Circle> {
+    fn un_var(&self, id: &VarIndex) -> Option<Circle> {
         self.variables[id.0].meta.as_circle()
     }
 }
@@ -243,7 +243,7 @@ impl Project<PointItem> for Projector {
 
     fn project(&mut self, item: PointItem) -> Self::Result {
         RenderedPoint {
-            position: <Projector as UnVar<Complex>>::un_var(self, item.id)
+            position: <Projector as UnVar<Complex>>::un_var(self, &item.id)
                 .unwrap()
                 .into(),
             id: item.id,
@@ -264,7 +264,7 @@ impl Project<LineItem> for Projector {
     type Result = RenderedLine;
 
     fn project(&mut self, item: LineItem) -> Self::Result {
-        let ln_c: Line = self.un_var(item.id).unwrap();
+        let ln_c: Line = self.un_var(&item.id).unwrap();
         let points = self.get_line_ends(ln_c);
         self.segments.push(points);
 
@@ -288,8 +288,8 @@ impl Project<SegmentItem> for Projector {
     type Result = RenderedTwoPoint;
 
     fn project(&mut self, item: SegmentItem) -> Self::Result {
-        let seg1 = self.un_var(item.p_id).unwrap();
-        let seg2 = self.un_var(item.q_id).unwrap();
+        let seg1 = self.un_var(&item.p_id).unwrap();
+        let seg2 = self.un_var(&item.q_id).unwrap();
         self.segments.push((seg1, seg2));
 
         RenderedTwoPoint {
@@ -313,8 +313,8 @@ impl Project<RayItem> for Projector {
     type Result = RenderedTwoPoint;
 
     fn project(&mut self, item: RayItem) -> Self::Result {
-        let ray_a = self.un_var(item.p_id).unwrap();
-        let ray_b = self.un_var(item.q_id).unwrap();
+        let ray_a = self.un_var(&item.p_id).unwrap();
+        let ray_b = self.un_var(&item.q_id).unwrap();
 
         let line = geometry::get_line(ray_a, ray_b);
         let ends = self.get_line_ends(line);
@@ -357,7 +357,7 @@ impl Project<CircleItem> for Projector {
     type Result = RenderedCircle;
 
     fn project(&mut self, item: CircleItem) -> Self::Result {
-        let circle: Circle = self.un_var(item.id).unwrap();
+        let circle: Circle = self.un_var(&item.id).unwrap();
         let center = circle.center;
         let radius = circle.radius;
         self.circles.push(circle);

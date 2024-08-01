@@ -81,11 +81,14 @@ unsafe fn generation_cycle(
     sender: &mpsc::Sender<CycleState>,
     program: &Arc<EvaluateProgram>,
     current_state: SendPtr<State>,
+    mean_exponent: f64
 ) {
     let mut memory = program.setup();
     let mut qualities = Vec::new();
     qualities.reserve_exact(program.adjustables.len());
     qualities.resize(program.adjustables.len(), 0.0);
+    #[allow(clippy::cast_precision_loss)]
+    let qualities_len = qualities.len() as f64;
 
     // A complete cycle is the following.
     // 1. Receive adjustment information.
@@ -106,8 +109,7 @@ unsafe fn generation_cycle(
 
                 program.evaluate(&mut memory, &mut qualities);
 
-                #[allow(clippy::cast_precision_loss)]
-                let total_quality = qualities.iter().copied().sum::<f64>() / qualities.len() as f64;
+                let total_quality = (qualities.iter().copied().map(|x| x.powf(mean_exponent)).sum::<f64>() / qualities_len).powf(mean_exponent.recip());
 
                 sender
                     .send(CycleState {
@@ -185,7 +187,7 @@ impl Generator {
     /// # Safety
     /// The `program` MUST be safe.
     #[must_use]
-    pub unsafe fn new(workers: usize, program: EvaluateProgram) -> Self {
+    pub unsafe fn new(workers: usize, program: EvaluateProgram, strictness: f64) -> Self {
         let (input_senders, input_receivers): (
             Vec<mpsc::Sender<Message>>,
             Vec<mpsc::Receiver<Message>>,
@@ -229,7 +231,7 @@ impl Generator {
                     let sender = mpsc::Sender::clone(&output_sender);
                     let program = Arc::clone(&program);
                     thread::spawn(move || unsafe {
-                        generation_cycle(&rec, &sender, &program, state_ptr)
+                        generation_cycle(&rec, &sender, &program, state_ptr, -strictness)
                     })
                 })
                 .collect(),

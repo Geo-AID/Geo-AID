@@ -79,7 +79,7 @@ pub fn display_angle_arms(
         }
         LineType::Ray => {
             build.add(RayItem {
-                p_id: b,
+                p_id: b.clone(),
                 q_id: a,
                 label: MathString::new(),
                 style: arms_style,
@@ -93,7 +93,7 @@ pub fn display_angle_arms(
         }
         LineType::Segment => {
             build.add(SegmentItem {
-                p_id: b,
+                p_id: b.clone(),
                 q_id: a,
                 label: MathString::new(),
                 style: arms_style,

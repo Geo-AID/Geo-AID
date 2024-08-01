@@ -18,7 +18,9 @@ use std::ops::{Add, Deref, DerefMut, Mul};
 pub mod math_string;
 
 /// Index of an expression.
-#[derive(Debug, Clone, Copy, Hash, Ord, PartialOrd, Eq, PartialEq, Serialize, Deserialize)]
+/// Isn't `Copy` for easier differentiation between moving and cloning the value.
+#[allow(missing_copy_implementations)]
+#[derive(Debug, Clone, Hash, Ord, PartialOrd, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct VarIndex(pub usize);
 
@@ -354,7 +356,7 @@ pub enum ExpressionKind {
 }
 
 /// A single entity
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Entity {
     /// The calculated value of this expression
     pub hint: Value,
@@ -363,7 +365,7 @@ pub struct Entity {
 }
 
 /// The kind of an entity
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "kebab-case")]
 pub enum EntityKind {
     /// A free point

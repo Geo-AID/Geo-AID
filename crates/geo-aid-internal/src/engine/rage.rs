@@ -21,11 +21,11 @@ pub struct Rage {
 
 impl Rage {
     #[must_use]
-    pub fn new(worker_count: usize, intermediate: &Intermediate) -> Self {
+    pub fn new(worker_count: usize, strictness: f64, intermediate: &Intermediate) -> Self {
         let (ev, fig) = Compiler::new(intermediate).compile_programs();
 
         Self {
-            generator: unsafe { Generator::new(worker_count, ev) },
+            generator: unsafe { Generator::new(worker_count, ev, strictness) },
             figure_program: fig,
         }
     }

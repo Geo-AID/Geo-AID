@@ -23,6 +23,9 @@
   Default value: `512`
 * `-m`, `--mean-count <MEAN_COUNT>` — The count of last deltas to include in mean calculation. Geo-AID will keep doing generation cycles until the average quality delta over the last `m` cycles gets below `d`.
 
+  Default value: `2.0`
+* `-s`, `--strictness <STRICTNESS>` — How strict the generator treats the rules. The higher, the more strict. Can't be zero.
+
   Default value: `128`
 * `-a`, `--adjustment-max <ADJUSTMENT_MAX>` — Maximal adjustment of an adjustable during generation. Treated differently for different adjustables.
 
