@@ -1,4 +1,5 @@
-![Geo-AID Logo](logo/full-white.svg)
+![Geo-AID Logo](logo/full-white.svg#gh-dark-mode-only)
+![Geo-AID Logo](logo/full-black.svg#gh-light-mode-only)
 
 # Geo-AID
 

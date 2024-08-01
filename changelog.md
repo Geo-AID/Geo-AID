@@ -1,3 +1,6 @@
+## Version 0.4.3
+- **Rage**: Added *strictness* parameter controlling how strict the rules are to be treated.
+
 ## Version 0.4.2 (2024.07.30)
 - **All**: Full reorganization of the repository.
 - **Rage**: Modified the public API.

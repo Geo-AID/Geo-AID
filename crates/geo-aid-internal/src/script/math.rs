@@ -144,7 +144,7 @@ impl<T: ContainsEntity> ContainsEntity for Vec<T> {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 enum EntityBehavior {
     MapEntity(EntityId),
     MapVar(VarIndex),
@@ -173,8 +173,8 @@ pub trait Reconstruct {
 }
 
 fn reconstruct_entity(entity_id: EntityId, ctx: &mut ReconstructCtx) -> ExprKind {
-    match ctx.entity_replacement[entity_id.0] {
-        EntityBehavior::MapEntity(id) => ExprKind::Entity { id },
+    match &ctx.entity_replacement[entity_id.0] {
+        EntityBehavior::MapEntity(id) => ExprKind::Entity { id: *id },
         EntityBehavior::MapVar(index) => ctx.old_vars[index.0].kind.clone().reconstruct(ctx),
     }
 }
@@ -242,15 +242,15 @@ impl DeepClone for VarIndex {
     fn deep_clone(&self, math: &mut Math) -> Self {
         // The clone here is necessary to satisfy the borrow checker.
         // Looks ugly. but otherwise, we'd borrow `math` both mutably and immutably.
-        let ty = math.at(*self).ty;
-        let expr = math.at(*self).kind.clone().deep_clone(math);
+        let ty = math.at(self).ty;
+        let expr = math.at(self).kind.clone().deep_clone(math);
         math.store(expr, ty)
     }
 }
 
 impl Compare for VarIndex {
     fn compare(&self, other: &Self, math: &Math) -> Ordering {
-        math.at(*self).kind.compare(&math.at(*other).kind, math)
+        math.at(self).kind.compare(&math.at(other).kind, math)
     }
 }
 
@@ -262,7 +262,7 @@ impl Reindex for VarIndex {
 
 impl ContainsEntity for VarIndex {
     fn contains_entity(&self, entity: EntityId, math: &Math) -> bool {
-        math.at(*self).contains_entity(entity, math)
+        math.at(self).contains_entity(entity, math)
     }
 }
 
@@ -701,12 +701,10 @@ impl FindEntities for ExprKind {
             | Self::Product { times: v1, by: v2 } => {
                 set.extend(
                     v1.iter()
-                        .copied()
                         .flat_map(|x| previous[x.0].iter().copied()),
                 );
                 set.extend(
                     v2.iter()
-                        .copied()
                         .flat_map(|x| previous[x.0].iter().copied()),
                 );
             }
@@ -932,11 +930,11 @@ impl FromUnrolled<UnrolledCircle> for ExprKind {
 impl Normalize for ExprKind {
     fn normalize(&mut self, math: &mut Math) {
         let cmp_and_swap = |a: &mut VarIndex, b: &mut VarIndex| {
-            if math.compare(*a, *b) == Ordering::Greater {
+            if math.compare(a, b) == Ordering::Greater {
                 mem::swap(a, b);
             }
         };
-        let cmp = |a: &VarIndex, b: &VarIndex| math.compare(*a, *b);
+        let cmp = |a: &VarIndex, b: &VarIndex| math.compare(a, b);
         let mut new_self = None;
 
         match self {
@@ -967,17 +965,21 @@ impl Normalize for ExprKind {
                 normalize_product(times, by, math);
             }
             Self::ParallelThrough { point, line } => {
-                new_self = Some(match &math.at(*line).kind {
-                    Self::ParallelThrough { line, .. } => Self::ParallelThrough { point: *point, line: *line },
-                    Self::PerpendicularThrough { line, .. } => Self::PerpendicularThrough { point: *point, line: *line },
-                    _ => Self::ParallelThrough { point: *point, line: *line }
+                // This is technically a move, although ugly, so we clone.
+                let point = point.clone();
+                new_self = Some(match &math.at(line).kind {
+                    Self::ParallelThrough { line, .. } => Self::ParallelThrough { point, line: line.clone() },
+                    Self::PerpendicularThrough { line, .. } => Self::PerpendicularThrough { point, line: line.clone() },
+                    _ => Self::ParallelThrough { point, line: line.clone() }
                 });
             }
             Self::PerpendicularThrough { point, line } => {
-                new_self = Some(match &math.at(*line).kind {
-                    Self::ParallelThrough { line, .. } => Self::PerpendicularThrough { point: *point, line: *line },
-                    Self::PerpendicularThrough { line, .. } => Self::ParallelThrough { point: *point, line: *line },
-                    _ => Self::PerpendicularThrough { point: *point, line: *line }
+                // This is technically a move, although ugly, so we clone.
+                let point = point.clone();
+                new_self = Some(match &math.at(line).kind {
+                    Self::ParallelThrough { line, .. } => Self::PerpendicularThrough { point, line: line.clone() },
+                    Self::PerpendicularThrough { line, .. } => Self::ParallelThrough { point, line: line.clone() },
+                    _ => Self::PerpendicularThrough { point, line: line.clone() }
                 });
             }
         }
@@ -1095,13 +1097,14 @@ fn normalize_sum(plus: &mut Vec<VarIndex>, minus: &mut Vec<VarIndex>, math: &mut
     let mut plus_final = Vec::new();
     let mut minus_final = Vec::new();
 
-    let cmp = |a: &VarIndex, b: &VarIndex| math.compare(*a, *b);
+    let cmp = |a: &VarIndex, b: &VarIndex| math.compare(a, b);
 
     for item in plus_v {
-        match &math.at(item).kind {
+        match &math.at(&item).kind {
             ExprKind::Sum { plus, minus } => {
-                plus_final = Merge::new(plus_final, plus.iter().copied(), &cmp).collect();
-                minus_final = Merge::new(minus_final, minus.iter().copied(), &cmp).collect();
+                // Yet again, we're technically moving, so we can clone
+                plus_final = Merge::new(plus_final, plus.iter().cloned(), &cmp).collect();
+                minus_final = Merge::new(minus_final, minus.iter().cloned(), &cmp).collect();
             }
             ExprKind::Const { value } => constant += value,
             _ => {
@@ -1111,10 +1114,11 @@ fn normalize_sum(plus: &mut Vec<VarIndex>, minus: &mut Vec<VarIndex>, math: &mut
     }
 
     for item in minus_v {
-        match &math.at(item).kind {
+        match &math.at(&item).kind {
             ExprKind::Sum { plus, minus } => {
-                plus_final = Merge::new(plus_final, minus.iter().copied(), &cmp).collect();
-                minus_final = Merge::new(minus_final, plus.iter().copied(), &cmp).collect();
+                // Yet again, we're technically moving, so we can clone
+                plus_final = Merge::new(plus_final, minus.iter().cloned(), &cmp).collect();
+                minus_final = Merge::new(minus_final, plus.iter().cloned(), &cmp).collect();
             }
             ExprKind::Const { value } => constant -= value,
             _ => {
@@ -1140,13 +1144,14 @@ fn normalize_product(times: &mut Vec<VarIndex>, by: &mut Vec<VarIndex>, math: &m
     let mut times_final = Vec::new();
     let mut by_final = Vec::new();
 
-    let cmp = |a: &VarIndex, b: &VarIndex| math.compare(*a, *b);
+    let cmp = |a: &VarIndex, b: &VarIndex| math.compare(a, b);
 
     for item in times_v {
-        match &math.at(item).kind {
+        match &math.at(&item).kind {
             ExprKind::Product { times, by } => {
-                times_final = Merge::new(times_final, times.iter().copied(), &cmp).collect();
-                by_final = Merge::new(by_final, by.iter().copied(), &cmp).collect();
+                // Yet again, we're technically moving, so we can clone
+                times_final = Merge::new(times_final, times.iter().cloned(), &cmp).collect();
+                by_final = Merge::new(by_final, by.iter().cloned(), &cmp).collect();
             }
             ExprKind::Const { value } => constant *= value,
             _ => {
@@ -1156,10 +1161,11 @@ fn normalize_product(times: &mut Vec<VarIndex>, by: &mut Vec<VarIndex>, math: &m
     }
 
     for item in by_v {
-        match &math.at(item).kind {
+        match &math.at(&item).kind {
             ExprKind::Product { times, by } => {
-                times_final = Merge::new(times_final, by.iter().copied(), &cmp).collect();
-                by_final = Merge::new(by_final, times.iter().copied(), &cmp).collect();
+                // Yet again, we're technically moving, so we can clone
+                times_final = Merge::new(times_final, by.iter().cloned(), &cmp).collect();
+                by_final = Merge::new(by_final, times.iter().cloned(), &cmp).collect();
             }
             ExprKind::Const { value } => constant /= value,
             _ => {
@@ -1361,7 +1367,7 @@ impl Normalize for RuleKind {
     fn normalize(&mut self, math: &mut Math) {
         match self {
             Self::PointEq(a, b) | Self::NumberEq(a, b) => {
-                if math.compare(*a, *b) == Ordering::Greater {
+                if math.compare(a, b) == Ordering::Greater {
                     mem::swap(a, b);
                 }
             }
@@ -1567,7 +1573,7 @@ impl Math {
     }
 
     #[must_use]
-    pub fn compare(&self, a: VarIndex, b: VarIndex) -> Ordering {
+    pub fn compare(&self, a: &VarIndex, b: &VarIndex) -> Ordering {
         self.at(a).kind.compare(&self.at(b).kind, self)
     }
 
@@ -1589,7 +1595,7 @@ impl Math {
     }
 
     #[must_use]
-    pub fn at(&self, index: VarIndex) -> &Expr<()> {
+    pub fn at(&self, index: &VarIndex) -> &Expr<()> {
         &self.expr_record[index.0]
     }
 
@@ -1809,7 +1815,7 @@ fn optimize_cycle(rules: &mut Vec<Option<Rule>>, math: &mut Math, items: &mut Ve
                 | EntityKind::PointOnLine { .. } => EntityBehavior::MapEntity(EntityId(i - offset)),
                 EntityKind::Bind(expr) => {
                     offset += 1;
-                    EntityBehavior::MapVar(*expr)
+                    EntityBehavior::MapVar(expr.clone()) // Technically moving
                 }
             });
         }
