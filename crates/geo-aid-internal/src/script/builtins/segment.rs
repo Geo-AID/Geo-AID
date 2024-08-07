@@ -6,6 +6,7 @@ use crate::{
 use super::prelude::*;
 use geo_aid_derive::overload;
 use geo_aid_figure::math_string::MathString;
+use crate::script::token::Span;
 
 fn segment_function_point_point(
     mut a: Expr<Point>,
@@ -72,10 +73,10 @@ impl BuildAssociated<BundleNode> for Associated {
 fn len(segment: Expr<Bundle>, context: &CompileContext, mut display: Properties) -> Expr<Scalar> {
     display.add_if_not_present(
         "display_segment",
-        PropertyValue::String(StrLit {
+        (Span::empty(), PropertyValue::String(StrLit {
             span: span!(0, 0, 0, 0),
             content: String::from("false"),
-        }),
+        })),
     );
 
     super::dst::distance_function_pp(

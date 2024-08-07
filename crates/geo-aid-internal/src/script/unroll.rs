@@ -1144,8 +1144,12 @@ impl ConvertFrom<Expr<PointCollection>> for Point {
                             .get("label")
                             .maybe_unset(SpannedMathString::new(span!(0, 0, 0, 0)));
                         pt_node.root.display_dot = props.get("display_dot").maybe_unset(true);
+                        pt_node.root.default_label = props
+                            .get("default-label")
+                            .ok_or(SpannedMathString::new(span!(0, 0, 0, 0)));
                     }
 
+                    let _ = props.ignore("default-label");
                     props.finish(context);
                 }
             }
@@ -2895,9 +2899,15 @@ impl Unroll for FieldIndex {
         it_index: &HashMap<u8, usize>,
         display: Properties,
     ) -> AnyExpr {
-        let name = self
+        let name: AnyExpr = self
             .name
             .unroll(context, library, it_index, Properties::default());
+
+        let name = if name.get_type() == Type::PointCollection(1) {
+            name.convert_to(Type::Point, context)
+        } else {
+            name
+        };
 
         match name {
             AnyExpr::Circle(circle) => match &self.field {
@@ -3357,7 +3367,7 @@ pub fn most_similar<'r, I: IntoIterator<Item = &'r T>, T: AsRef<str> + ?Sized + 
 
 #[derive(Debug)]
 pub struct Properties {
-    props: HashMap<String, PropertyValue>,
+    props: HashMap<String, (Span, PropertyValue)>,
     finished: bool,
     errors: Vec<Error>,
     expected: Vec<&'static str>,
@@ -3368,7 +3378,7 @@ impl Display for Properties {
         write!(f, "[")?;
 
         for (k, v) in &self.props {
-            write!(f, "{k} = {v}, ")?;
+            write!(f, "{k} = {}, ", v.1)?;
         }
 
         write!(f, "]")
@@ -3410,7 +3420,7 @@ impl Properties {
             let suggested = most_similar(&expected, &key);
 
             Error::UnexpectedDisplayOption {
-                error_span: value.get_span(),
+                error_span: value.0,
                 option: key,
                 suggested,
             }
@@ -3421,7 +3431,7 @@ impl Properties {
 
     #[must_use]
     pub fn get<T: FromProperty>(&mut self, property: &'static str) -> Property<T> {
-        if let Some(prop) = self.props.remove(property) {
+        if let Some((_, prop)) = self.props.remove(property) {
             let prop_span = prop.get_span();
 
             Property {
@@ -3448,8 +3458,8 @@ impl Properties {
         self.props.remove(property);
     }
 
-    pub fn add_if_not_present(&mut self, property: &'static str, value: PropertyValue) {
-        self.props.entry(property.to_string()).or_insert(value);
+    pub fn add_if_not_present(&mut self, property: &'static str, (key_span, value): (Span, PropertyValue)) {
+        self.props.entry(property.to_string()).or_insert((key_span, value));
     }
 
     #[must_use]
@@ -3457,14 +3467,14 @@ impl Properties {
         self.errors.extend(mem::take(&mut other.errors));
 
         for (k, v) in mem::take(&mut other.props) {
-            let error_span = v.get_span();
+            let error_span = v.0;
             let option = k.clone();
             let old = self.props.insert(k, v);
 
             if let Some(old) = old {
                 self.errors.push(Error::RepeatedDisplayOption {
                     error_span,
-                    first_span: old.get_span(),
+                    first_span: old.0,
                     option,
                 });
             }
@@ -3483,7 +3493,7 @@ impl From<Option<DisplayProperties>> for Properties {
             props: value
                 .into_iter()
                 .flat_map(|x| x.properties.into_parsed_iter())
-                .map(|v| (v.name.ident.clone(), v.value.clone()))
+                .map(|v| (v.name.ident.clone(), (v.name.span, v.value.clone())))
                 .collect(),
             finished: false,
             errors: Vec::new(),
@@ -3548,19 +3558,30 @@ fn create_variable_named(
     mut rhs_unrolled: AnyExpr,
     variable_nodes: &mut Vec<Box<dyn Node>>,
 ) -> Result<(), Error> {
-    if let AnyExpr::PointCollection(pc) = &mut rhs_unrolled {
-        if let Some(node) = &mut pc.node {
-            if let Some(mut props) = node.root.props.take() {
-                let _ = props.get::<SpannedMathString>("default-label");
-                props.finish(context);
+    let convert = if let AnyExpr::PointCollection(pc) = &mut rhs_unrolled {
+        if pc.data.length == 1 {
+            true
+        } else {
+            if let Some(node) = &mut pc.node {
+                if let Some(mut props) = node.root.props.take() {
+                    let _ = props.get::<Result<SpannedMathString, Error>>("default-label");
+                    props.finish(context);
+                }
             }
-        }
 
-        // Point collection variables are ambiguous and therefore cause compilation errors.
-        // They do not, however prevent the program from running properly.
-        context.push_error(Error::InvalidPC {
-            error_span: stat.get_span(),
-        });
+            // Point collection variables are ambiguous and therefore cause compilation errors.
+            // They do not, however prevent the program from running properly.
+            context.push_error(Error::InvalidPC {
+                error_span: stat.get_span(),
+            });
+            false
+        }
+    } else {
+        false
+    };
+
+    if convert {
+        rhs_unrolled = rhs_unrolled.convert_to(Type::Point, context);
     }
 
     match context.variables.entry(named.ident.clone()) {
@@ -3723,7 +3744,7 @@ fn create_variables(
         let mut external = Properties::default();
         external.props.insert(
             String::from("default-label"),
-            PropertyValue::Ident(def.name.clone()),
+            (Span::empty(), PropertyValue::Ident(def.name.clone())),
         );
 
         let display = Properties::from(def.display_properties.clone()).merge_with(external);
