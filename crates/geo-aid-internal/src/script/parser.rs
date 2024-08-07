@@ -128,10 +128,13 @@ impl<T: Parse> Parse for Option<T> {
     where
         Self: Sized,
     {
-        if T::FirstToken::check_parses(input) == Some(false) {
-            Ok(None)
+        let mut branch = input.clone();
+
+        if let Ok(v) = branch.parse() {
+            *input = branch;
+            Ok(Some(v))
         } else {
-            Ok(Some(input.parse()?))
+            Ok(None)
         }
     }
 

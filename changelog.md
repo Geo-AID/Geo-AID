@@ -1,5 +1,11 @@
 ## Version 0.4.3
 - **Rage**: Added *strictness* parameter controlling how strict the rules are to be treated.
+- **GeoScript**: Fixed bugs
+  - Errors regarding unexpected or repeated display options now show squiggles in the right place
+  - Accessing fields on single-point point collections no longer yields errors
+  - Single-point point collections on the right hand side of a let statement are no longer considered ambiguous
+  - Using display options on a rule is now parsed correctly, rather than throwing a syntax error
+  - Using name identifiers on the left side on a single-point point collection assigning let statement no longer yields errors. 
 
 ## Version 0.4.2 (2024.07.30)
 - **All**: Full reorganization of the repository.
