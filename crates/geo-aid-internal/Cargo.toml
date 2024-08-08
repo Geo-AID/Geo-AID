@@ -7,8 +7,9 @@ license = "MIT"
 repository = "https://github.com/Geo-AID/geo-aid/"
 
 [dependencies]
-geo_aid_derive = { version = "0.4.2", path = "../geo_aid_derive" }
-geo-aid-figure = { version = "0.4.2", path = "../geo-aid-figure" }
+geo_aid_derive = { version = "0.4.3", path = "../geo_aid_derive" }
+geo-aid-figure = { version = "0.4.3", path = "../geo-aid-figure" }
+geo-aid-math = { version = "0.4.3", path = "../geo-aid-math" }
 rand = "0.8.5"
 crossterm = "0.27.0"
 serde = {version = "1.0.203", features = ["derive", "rc"]}

@@ -1,0 +1,304 @@
+mod compiler;
+
+#[cfg(feature = "f64")]
+pub type Float = f64;
+#[cfg(not(feature = "f64"))]
+pub type Float = f32;
+
+#[must_use]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Expr(usize);
+
+#[derive(Debug, Clone, Copy)]
+struct Comparison {
+    a: Expr,
+    b: Expr,
+    kind: ComparisonKind
+}
+
+#[derive(Debug, Clone, Copy)]
+enum ComparisonKind {
+    // Eq,
+    // Neq,
+    // Gt,
+    Lt,
+    // Gteq,
+    // Lteq
+}
+
+#[derive(Debug, Clone, Copy)]
+enum Condition {
+    Comparison(Comparison)
+}
+
+#[derive(Debug, Clone, Copy)]
+enum ExprKind {
+    Constant(Float),
+    Add(Expr, Expr),
+    Sub(Expr, Expr),
+    Mul(Expr, Expr),
+    Div(Expr, Expr),
+    Input(usize),
+    Sin(Expr),
+    Cos(Expr),
+    Neg(Expr),
+    Ternary(Condition, Expr, Expr),
+    Pow(Expr, Float)
+}
+
+#[derive(Debug, Clone, Copy)]
+struct Entry {
+    kind: ExprKind,
+    derivatives: Option<usize>
+}
+
+#[derive(Debug, Clone)]
+pub struct Context {
+    inputs: usize,
+    exprs: Vec<Entry>,
+    /// Indices of expressions holding derivatives w.r.t. respective inputs
+    derivatives: Vec<Expr>
+}
+
+impl Context {
+    #[must_use]
+    pub fn new(inputs: usize) -> Self {
+        let mut exprs = Vec::new();
+        let mut derivatives = Vec::new();
+
+        // Due to it being potentially useful and popular, zero is added automatically.
+        exprs.push(Entry {
+            kind: ExprKind::Constant(0.0),
+            derivatives: Some(0)
+        });
+        derivatives.extend([Expr(0)].repeat(inputs));
+
+        // For inputs, we also include a one.
+        exprs.push(Entry {
+            kind: ExprKind::Constant(1.0),
+            derivatives: Some(0)
+        });
+
+        // For the same reason. Input exprs is also included.
+        for i in 0..inputs {
+            exprs.push(Entry {
+                kind: ExprKind::Input(i),
+                derivatives: Some(derivatives.len())
+            });
+            derivatives.extend((0..inputs).map(|j| if i == j {
+                Expr(1)
+            } else {
+                Expr(0)
+            }));
+        }
+
+        Self {
+            inputs,
+            exprs,
+            derivatives
+        }
+    }
+
+    fn push_expr_nodiff(&mut self, kind: ExprKind) -> Expr {
+        let id = self.exprs.len();
+        self.exprs.push(Entry {
+            kind,
+            derivatives: None
+        });
+        Expr(id)
+    }
+
+    fn push_expr(&mut self, kind: ExprKind, derivatives: Vec<Expr>) -> Expr {
+        assert_eq!(self.inputs, derivatives.len());
+        let id = self.exprs.len();
+        self.exprs.push(Entry {
+            kind,
+            derivatives: Some(self.derivatives.len())
+        });
+        self.derivatives.extend(derivatives);
+        Expr(id)
+    }
+
+    /// Get the derivative of `expr` w.r.t. `input`
+    ///
+    /// # Panics
+    /// If the expression is not a user-defined one (does not have a derivative).
+    fn get_derivative(&self, expr: Expr, input: usize) -> Expr {
+        self.derivatives[self.exprs[expr.0].derivatives.unwrap() + input]
+    }
+
+    /// Creates a zero.
+    pub fn zero() -> Expr {
+        Expr(0)
+    }
+
+    /// Creates a one.
+    pub fn one() -> Expr {
+        Expr(1)
+    }
+
+    /// Creates a constant value.
+    pub fn constant(&mut self, value: Float) -> Expr {
+        let kind = ExprKind::Constant(value);
+        let id = self.exprs.len();
+        self.exprs.push(Entry {
+            kind,
+            derivatives: Some(0)
+        });
+        Expr(id)
+    }
+
+    /// Adds two values.
+    pub fn add(&mut self, a: Expr, b: Expr) -> Expr {
+        // The derivative of `a + b` is the derivative of `a` plus the one of `b`.
+        let derivatives = (0..self.inputs)
+            .map(|i| {
+                let a_d = self.get_derivative(a, i);
+                let b_d = self.get_derivative(b, i);
+                self.push_expr_nodiff(ExprKind::Add(a_d, b_d))
+            }).collect();
+        self.push_expr(ExprKind::Add(a, b), derivatives)
+    }
+
+    /// Subtracts two values.
+    pub fn sub(&mut self, a: Expr, b: Expr) -> Expr {
+        // The derivative of `a - b` is the derivative of `a` minus the one of `b`.
+        let derivatives = (0..self.inputs)
+            .map(|i| {
+                let a_d = self.get_derivative(a, i);
+                let b_d = self.get_derivative(b, i);
+                self.push_expr_nodiff(ExprKind::Sub(a_d, b_d))
+            }).collect();
+        self.push_expr(ExprKind::Sub(a, b), derivatives)
+    }
+
+    /// Multiplies two values.
+    pub fn mul(&mut self, a: Expr, b: Expr) -> Expr {
+        // `d(a*b) = da*b + a*db`
+        let derivatives = (0..self.inputs)
+            .map(|i| {
+                let a_d = self.get_derivative(a, i);
+                let b_d = self.get_derivative(b, i);
+                let first = self.push_expr_nodiff(ExprKind::Mul(a_d, b));
+                let second = self.push_expr_nodiff(ExprKind::Mul(a, b_d));
+                self.push_expr_nodiff(ExprKind::Add(first, second))
+            }).collect();
+        self.push_expr(ExprKind::Mul(a, b), derivatives)
+    }
+
+    /// Divides two values.
+    pub fn div(&mut self, a: Expr, b: Expr) -> Expr {
+        // `d(a/b) = (da*b - a*db)/(b*b)`
+        let derivatives = (0..self.inputs)
+            .map(|i| {
+                let a_d = self.get_derivative(a, i);
+                let b_d = self.get_derivative(b, i);
+                let first = self.push_expr_nodiff(ExprKind::Mul(a_d, b));
+                let second = self.push_expr_nodiff(ExprKind::Mul(a, b_d));
+                let diff = self.push_expr_nodiff(ExprKind::Sub(first, second));
+                let b_squared = self.push_expr_nodiff(ExprKind::Mul(b, b));
+                self.push_expr_nodiff(ExprKind::Div(diff, b_squared))
+            }).collect();
+        self.push_expr(ExprKind::Div(a, b), derivatives)
+    }
+
+    /// The i-th input.
+    ///
+    /// # Panics
+    /// If the input is out of bounds
+    pub fn input(&self, input: usize) -> Expr {
+        assert!(input <= self.inputs);
+        Expr(2 + input)
+    }
+
+    /// Calculates the sine of a value.
+    pub fn sin(&mut self, v: Expr) -> Expr {
+        // `dsin(v) = cos(v) * dv`
+        let derivatives = (0..self.inputs)
+            .map(|i| {
+                let dv = self.get_derivative(v, i);
+                let cos = self.push_expr_nodiff(ExprKind::Cos(v));
+                self.push_expr_nodiff(ExprKind::Mul(cos, dv))
+            }).collect();
+        self.push_expr(ExprKind::Sin(v), derivatives)
+    }
+
+    /// Calculates the cosine of a value.
+    pub fn cos(&mut self, v: Expr) -> Expr {
+        // `dcos(v) = -sin(v) * dv`
+        let derivatives = (0..self.inputs)
+            .map(|i| {
+                let dv = self.get_derivative(v, i);
+                let sin = self.push_expr_nodiff(ExprKind::Sin(v));
+                let minus_sin = self.push_expr_nodiff(ExprKind::Neg(sin));
+                self.push_expr_nodiff(ExprKind::Mul(minus_sin, dv))
+            }).collect();
+        self.push_expr(ExprKind::Cos(v), derivatives)
+    }
+
+    /// Negates the value.
+    pub fn neg(&mut self, v: Expr) -> Expr {
+        // `d(-v) = -dv`
+        let derivatives = (0..self.inputs)
+            .map(|i| {
+                let dv = self.get_derivative(v, i);
+                self.push_expr_nodiff(ExprKind::Neg(dv))
+            }).collect();
+        self.push_expr(ExprKind::Neg(v), derivatives)
+    }
+
+    /// Gets the minimum value.
+    pub fn min(&mut self, a: Expr, b: Expr) -> Expr {
+        let cond = Condition::Comparison(Comparison {
+            a, b,
+            kind: ComparisonKind::Lt
+        });
+
+        // `dmin(a, b) = if a < b da else db`
+        let derivatives = (0..self.inputs)
+            .map(|i| {
+                let da = self.get_derivative(a, i);
+                let db = self.get_derivative(b, i);
+                self.push_expr_nodiff(ExprKind::Ternary(
+                    cond, da, db
+                ))
+            }).collect();
+        self.push_expr(ExprKind::Ternary(
+            cond, a, b
+        ), derivatives)
+    }
+
+    /// Raises the value to an exponent.
+    pub fn pow(&mut self, v: Expr, e: Float) -> Expr {
+        // `d(v^e) = ev^(e-1) * dv`
+        let derivatives = (0..self.inputs)
+            .map(|i| {
+                let dv = self.get_derivative(v, i);
+                let raised = self.push_expr_nodiff(ExprKind::Pow(v, e - 1.0));
+                let e_const = self.push_expr_nodiff(ExprKind::Constant(e));
+                let multiplied = self.push_expr_nodiff(ExprKind::Mul(e_const, raised));
+                self.push_expr_nodiff(ExprKind::Mul(multiplied, dv))
+            }).collect();
+        self.push_expr(ExprKind::Pow(v, e), derivatives)
+    }
+}
+
+impl Context {
+    pub fn compute(&self, exprs: &[Expr]) -> Func {
+        Func {func: compiler::compile(self, exprs) }
+    }
+}
+
+#[derive(Clone, Copy)]
+pub struct Func {
+    func: fn(&[Float], &mut [Float])
+}
+
+impl Func {
+    pub fn call(&self, inputs: &[Float], dst: &mut [Float]) {
+        (self.func)(inputs, dst);
+    }
+}
+
+unsafe impl Send for Func {}
+unsafe impl Sync for Func {}
