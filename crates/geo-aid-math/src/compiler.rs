@@ -15,60 +15,43 @@ const FLOAT: Type = types::F32;
 struct External {
     sin: FuncRef,
     cos: FuncRef,
-    pow: FuncRef
+    acos: FuncRef,
+    pow: FuncRef,
+    atan2: FuncRef
+}
+
+fn link_float_func(func: &mut Function, module: &mut JITModule, param_count: usize, name: &'static str) -> FuncRef {
+    let mut sig = Signature::new(module.target_config().default_call_conv);
+
+    for _ in 0..param_count {
+        sig.params.push(AbiParam::new(FLOAT));
+    }
+    sig.returns.push(AbiParam::new(FLOAT));
+
+    let fun = module.declare_function(name, Linkage::Import, &sig).unwrap();
+    let fun = func.declare_imported_user_function(UserExternalName::new(0, fun.as_u32()));
+    let fun_sig = func.import_signature(sig);
+    func.import_function(ExtFuncData {
+        name: ExternalName::User(fun),
+        colocated: false,
+        signature: fun_sig
+    })
 }
 
 fn link_external(func: &mut Function, module: &mut JITModule) -> External {
-    // sin(f64) -> f64
-    let mut sig = Signature::new(module.target_config().default_call_conv);
-    sig.params.push(AbiParam::new(FLOAT));
-    sig.returns.push(AbiParam::new(FLOAT));
-
-    let sin = module.declare_function("sin", Linkage::Import, &sig).unwrap();
-    let sin = func.declare_imported_user_function(UserExternalName::new(0, sin.as_u32()));
-    let sin_sig = func.import_signature(sig);
-    let sin = func.import_function(ExtFuncData {
-        name: ExternalName::User(sin),
-        colocated: false,
-        signature: sin_sig
-    });
-
-    // cos(f64) -> f64
-    let mut sig = Signature::new(module.target_config().default_call_conv);
-    sig.params.push(AbiParam::new(FLOAT));
-    sig.returns.push(AbiParam::new(FLOAT));
-
-    let cos = module.declare_function("cos", Linkage::Import, &sig).unwrap();
-    let cos = func.declare_imported_user_function(UserExternalName::new(0, cos.as_u32()));
-    let cos_sig = func.import_signature(sig);
-    let cos = func.import_function(ExtFuncData {
-        name: ExternalName::User(cos),
-        colocated: false,
-        signature: cos_sig
-    });
-
-    // pow(f64, f64) -> f64
-    let mut sig = Signature::new(module.target_config().default_call_conv);
-    sig.params.push(AbiParam::new(FLOAT));
-    sig.params.push(AbiParam::new(FLOAT));
-    sig.returns.push(AbiParam::new(FLOAT));
-
-    let pow = module.declare_function("pow", Linkage::Import, &sig).unwrap();
-    let pow = func.declare_imported_user_function(UserExternalName::new(0, pow.as_u32()));
-    let pow_sig = func.import_signature(sig);
-    let pow = func.import_function(ExtFuncData {
-        name: ExternalName::User(pow),
-        colocated: false,
-        signature: pow_sig
-    });
+    let sin = link_float_func(func, module, 1, "sin");
+    let cos = link_float_func(func, module, 1, "cos");
+    let acos = link_float_func(func, module, 1, "acos");
+    let pow = link_float_func(func, module, 1, "pow");
+    let atan2 = link_float_func(func, module, 1, "atan2");
 
     External {
-        sin, cos, pow
+        sin, cos, acos, pow, atan2
     }
 }
 
 #[must_use]
-pub fn compile(context: &Context, exprs: &[Expr]) -> fn(&[Float], &mut [Float]) {
+pub fn compile(context: &Context, exprs: impl IntoIterator<Item = Expr>) -> fn(&[Float], &mut [Float]) {
     let mut flag_builder = settings::builder();
     flag_builder.set("use_colocated_libcalls", "false").unwrap();
     flag_builder.set("opt_level", "speed").unwrap();
@@ -114,8 +97,7 @@ pub fn compile(context: &Context, exprs: &[Expr]) -> fn(&[Float], &mut [Float]) 
     builder.def_var(inputs, inputs_arg);
     builder.declare_var(outputs, ptr);
     builder.def_var(outputs, outputs_arg);
-
-
+    
     // Parse all expressions.
     for (i, expr) in context.exprs.iter().enumerate() {
         let var = Variable::new(i);
@@ -124,8 +106,8 @@ pub fn compile(context: &Context, exprs: &[Expr]) -> fn(&[Float], &mut [Float]) 
         builder.def_var(var, value);
     }
 
-    for (i, expr) in exprs.iter().enumerate() {
-        let v = builder.use_var(var(*expr));
+    for (i, expr) in exprs.into_iter().enumerate() {
+        let v = builder.use_var(var(expr));
         let outputs = builder.use_var(Variable::new(1));
         builder.ins().store(
             MemFlags::new().with_notrap().with_aligned(),
@@ -187,6 +169,11 @@ fn compile_expr(builder: &mut FunctionBuilder, kind: ExprKind, external: Externa
         ExprKind::Cos(v) => {
             let v = builder.use_var(var(v));
             let tmp = builder.ins().call(external.cos, &[v]);
+            builder.inst_results(tmp)[0]
+        }
+        ExprKind::Acos(v) => {
+            let v = builder.use_var(var(v));
+            let tmp = builder.ins().call(external.acos, &[v]);
             builder.inst_results(tmp)[0]
         }
         ExprKind::Neg(v) => {

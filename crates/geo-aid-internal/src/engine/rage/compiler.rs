@@ -453,7 +453,7 @@ impl<'i> Compile<ExprKind> for Compiler<'i> {
                 target
             }
             ExprKind::Const { value } => self.locate_const(value),
-            ExprKind::Power { value, exponent } => {
+            ExprKind::PartialPower { value, exponent } => {
                 let target = self.cursor.next();
 
                 let instruction = Instruction::Pow(PartialPow {

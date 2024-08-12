@@ -207,7 +207,7 @@ impl ProcNum {
     /// # Panics
     /// A panic is a bug
     #[must_use]
-    pub fn to_complex(self) -> geometry::Complex {
+    pub fn to_complex(&self) -> geometry::Complex {
         geometry::Complex::new(self.0.re.to_f64().unwrap(), self.0.im.to_f64().unwrap())
     }
 

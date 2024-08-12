@@ -339,7 +339,7 @@ pub enum ExprKind {
     Const {
         value: ProcNum,
     },
-    Power {
+    PartialPower {
         value: VarIndex,
         exponent: CompExponent,
     },
@@ -417,7 +417,7 @@ impl ExprKind {
             Self::Sum { .. } => 4,
             Self::Product { .. } => 5,
             Self::Const { .. } => 6,
-            Self::Power { .. } => 7,
+            Self::PartialPower { .. } => 7,
             Self::PointPointDistance { .. } => 8,
             Self::PointLineDistance { .. } => 9,
             Self::ThreePointAngle { .. } => 10,
@@ -558,11 +558,11 @@ impl ExprKind {
                     self_v.cmp(other_v)
                 }
                 (
-                    Self::Power {
+                    Self::PartialPower {
                         value: self_v,
                         exponent: self_exp,
                     },
-                    Self::Power {
+                    Self::PartialPower {
                         value: other_v,
                         exponent: other_exp,
                     },
@@ -622,7 +622,7 @@ impl ExprKind {
             Self::Sum { .. }
             | Self::Product { .. }
             | Self::Const { .. }
-            | Self::Power { .. }
+            | Self::PartialPower { .. }
             | Self::PointPointDistance { .. }
             | Self::PointLineDistance { .. }
             | Self::ThreePointAngle { .. }
@@ -651,7 +651,7 @@ impl From<ExprKind> for geo_aid_figure::ExpressionKind {
             ExprKind::Const { value } => Self::Const {
                 value: value.to_complex().into(),
             },
-            ExprKind::Power { value, exponent } => Self::Power {
+            ExprKind::PartialPower { value, exponent } => Self::Power {
                 value,
                 exponent: exponent.into(),
             },
@@ -691,7 +691,7 @@ impl FindEntities for ExprKind {
             Self::CircleCenter { circle: x }
             | Self::PointX { point: x }
             | Self::PointY { point: x }
-            | Self::Power { value: x, .. } => {
+            | Self::PartialPower { value: x, .. } => {
                 set.extend(previous[x.0].iter().copied());
             }
             Self::Sum {
@@ -840,7 +840,7 @@ impl FromUnrolled<unroll::Scalar> for ExprKind {
                 k: math.load(k),
                 l: math.load(l),
             },
-            UnrolledScalar::Pow(base, exponent) => ExprKind::Power {
+            UnrolledScalar::Pow(base, exponent) => ExprKind::PartialPower {
                 value: math.load(base),
                 exponent: *exponent,
             },
@@ -942,7 +942,7 @@ impl Normalize for ExprKind {
             | Self::PointLineDistance { .. }
             | Self::PointX { .. }
             | Self::PointY { .. }
-            | Self::Power { .. }
+            | Self::PartialPower { .. }
             | Self::ConstructCircle { .. }
             | Self::Const { .. }
             | Self::ThreePointAngleDir { .. } // DO NOT NORMALIZE DIRECTED ANGLES
@@ -1002,7 +1002,7 @@ fn fix_dst(expr: ExprKind, unit: Option<ComplexUnit>, math: &mut Expand) -> Expr
                     times: vec![
                         math.store(expr, ExprType::Number),
                         math.store(
-                            ExprKind::Power {
+                            ExprKind::PartialPower {
                                 value: dst_var,
                                 exponent: unit.0[SimpleUnit::Distance as usize],
                             },

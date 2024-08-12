@@ -41,6 +41,8 @@ enum ExprKind {
     Input(usize),
     Sin(Expr),
     Cos(Expr),
+    Acos(Expr),
+    Atan2(Expr, Expr),
     Neg(Expr),
     Ternary(Condition, Expr, Expr),
     Pow(Expr, Float)
@@ -236,6 +238,39 @@ impl Context {
         self.push_expr(ExprKind::Cos(v), derivatives)
     }
 
+    /// Calculates the arc-cosine of a value.
+    pub fn acos(&mut self, v: Expr) -> Expr {
+        // `dacos(v) = -1/sqrt(1 - v2) * dv`
+        let derivatives = (0..self.inputs)
+            .map(|i| {
+                let dv = self.get_derivative(v, i);
+                let one = Self::one();
+                let v2 = self.push_expr_nodiff(ExprKind::Mul(v, v));
+                let one_minus_v2 = self.push_expr_nodiff(ExprKind::Sub(one, v2));
+                let inverse_square_root = self.push_expr_nodiff(ExprKind::Pow(one_minus_v2, -2.0));
+                self.push_expr_nodiff(ExprKind::Mul(inverse_square_root, dv))
+            }).collect();
+        self.push_expr(ExprKind::Acos(v), derivatives)
+    }
+
+    /// Calculates the atan2 of two value.
+    pub fn atan2(&mut self, y: Expr, x: Expr) -> Expr {
+        // `datan2(v) = (x*dy - y*dx)/(y^2 + x^2)` In theory, at least. We'll see if that works.
+        let derivatives = (0..self.inputs)
+            .map(|i| {
+                let dy = self.get_derivative(y, i);
+                let dx = self.get_derivative(x, i);
+                let x_dy = self.push_expr_nodiff(ExprKind::Mul(x, dy));
+                let y_dx = self.push_expr_nodiff(ExprKind::Mul(y, dx));
+                let x2 = self.push_expr_nodiff(ExprKind::Mul(x, x));
+                let y2 = self.push_expr_nodiff(ExprKind::Mul(y, y));
+                let x2_plus_y2 = self.push_expr_nodiff(ExprKind::Add(x2, y2));
+                let xdy_minus_ydx = self.push_expr_nodiff(ExprKind::Sub(x_dy, y_dx));
+                self.push_expr_nodiff(ExprKind::Div(xdy_minus_ydx, x2_plus_y2))
+            }).collect();
+        self.push_expr(ExprKind::Atan2(y, x), derivatives)
+    }
+
     /// Negates the value.
     pub fn neg(&mut self, v: Expr) -> Expr {
         // `d(-v) = -dv`
@@ -281,11 +316,46 @@ impl Context {
             }).collect();
         self.push_expr(ExprKind::Pow(v, e), derivatives)
     }
+
+    /// Takes the absolute value.
+    pub fn abs(&mut self, v: Expr) -> Expr {
+        let cond = Condition::Comparison(Comparison {
+            a: Self::zero(), b: v,
+            kind: ComparisonKind::Lt
+        });
+
+        // `dabs(a) = if a > 0 da else -da`
+        let derivatives = (0..self.inputs)
+            .map(|i| {
+                let dv = self.get_derivative(v, i);
+                let minus_dv = self.neg(dv);
+                self.push_expr_nodiff(ExprKind::Ternary(
+                    cond, dv, minus_dv
+                ))
+            }).collect();
+        let minus_v = self.neg(v);
+        self.push_expr(ExprKind::Ternary(
+            cond, v, minus_v
+        ), derivatives)
+    }
 }
 
 impl Context {
-    pub fn compute(&self, exprs: &[Expr]) -> Func {
+    /// Returns a function computing the given expressions.
+    pub fn compute<'r>(&self, exprs: impl IntoIterator<Item = Expr>) -> Func {
         Func {func: compiler::compile(self, exprs) }
+    }
+
+    /// Returns a function computing the gradient for the given expression.
+    pub fn compute_gradient(&self, expr: Expr) -> Func {
+        let func = compiler::compile(
+            self,
+            (0..self.inputs).map(|i| self.get_derivative(expr, i))
+        );
+
+        Func {
+            func
+        }
     }
 }
 
