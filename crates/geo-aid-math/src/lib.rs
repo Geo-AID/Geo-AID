@@ -10,24 +10,24 @@ pub type Float = f32;
 pub struct Expr(usize);
 
 #[derive(Debug, Clone, Copy)]
-struct Comparison {
-    a: Expr,
-    b: Expr,
-    kind: ComparisonKind
+pub struct Comparison {
+    pub a: Expr,
+    pub b: Expr,
+    pub kind: ComparisonKind
 }
 
 #[derive(Debug, Clone, Copy)]
-enum ComparisonKind {
-    // Eq,
-    // Neq,
-    // Gt,
+pub enum ComparisonKind {
+    Eq,
+    Neq,
+    Gt,
     Lt,
-    // Gteq,
-    // Lteq
+    Gteq,
+    Lteq
 }
 
 #[derive(Debug, Clone, Copy)]
-enum Condition {
+pub enum Condition {
     Comparison(Comparison)
 }
 
@@ -284,23 +284,10 @@ impl Context {
 
     /// Gets the minimum value.
     pub fn min(&mut self, a: Expr, b: Expr) -> Expr {
-        let cond = Condition::Comparison(Comparison {
+        self.ternary(Condition::Comparison(Comparison {
             a, b,
             kind: ComparisonKind::Lt
-        });
-
-        // `dmin(a, b) = if a < b da else db`
-        let derivatives = (0..self.inputs)
-            .map(|i| {
-                let da = self.get_derivative(a, i);
-                let db = self.get_derivative(b, i);
-                self.push_expr_nodiff(ExprKind::Ternary(
-                    cond, da, db
-                ))
-            }).collect();
-        self.push_expr(ExprKind::Ternary(
-            cond, a, b
-        ), derivatives)
+        }), a, b)
     }
 
     /// Raises the value to an exponent.
@@ -328,7 +315,7 @@ impl Context {
         let derivatives = (0..self.inputs)
             .map(|i| {
                 let dv = self.get_derivative(v, i);
-                let minus_dv = self.neg(dv);
+                let minus_dv = self.push_expr_nodiff(ExprKind::Neg(dv));
                 self.push_expr_nodiff(ExprKind::Ternary(
                     cond, dv, minus_dv
                 ))
@@ -336,6 +323,22 @@ impl Context {
         let minus_v = self.neg(v);
         self.push_expr(ExprKind::Ternary(
             cond, v, minus_v
+        ), derivatives)
+    }
+
+    /// A ternary expression
+    pub fn ternary(&mut self, condition: Condition, then: Expr, else_: Expr) -> Expr {
+        // dternary(then, else_) = if condition { dthen } else { delse_ }
+        let derivatives = (0..self.inputs)
+            .map(|i| {
+                let dthen = self.get_derivative(then, i);
+                let delse = self.get_derivative(else_, i);
+                self.push_expr_nodiff(ExprKind::Ternary(
+                    condition, dthen, delse
+                ))
+            }).collect();
+        self.push_expr(ExprKind::Ternary(
+            condition, then, else_
         ), derivatives)
     }
 }
@@ -361,12 +364,12 @@ impl Context {
 
 #[derive(Clone, Copy)]
 pub struct Func {
-    func: fn(&[Float], &mut [Float])
+    func: fn(*const Float, *mut Float)
 }
 
 impl Func {
     pub fn call(&self, inputs: &[Float], dst: &mut [Float]) {
-        (self.func)(inputs, dst);
+        (self.func)(inputs.as_ptr(), dst.as_mut_ptr());
     }
 }
 

@@ -42,8 +42,8 @@ fn link_external(func: &mut Function, module: &mut JITModule) -> External {
     let sin = link_float_func(func, module, 1, "sin");
     let cos = link_float_func(func, module, 1, "cos");
     let acos = link_float_func(func, module, 1, "acos");
-    let pow = link_float_func(func, module, 1, "pow");
-    let atan2 = link_float_func(func, module, 1, "atan2");
+    let pow = link_float_func(func, module, 2, "pow");
+    let atan2 = link_float_func(func, module, 2, "atan2");
 
     External {
         sin, cos, acos, pow, atan2
@@ -51,7 +51,7 @@ fn link_external(func: &mut Function, module: &mut JITModule) -> External {
 }
 
 #[must_use]
-pub fn compile(context: &Context, exprs: impl IntoIterator<Item = Expr>) -> fn(&[Float], &mut [Float]) {
+pub fn compile(context: &Context, exprs: impl IntoIterator<Item = Expr>) -> fn(*const Float, *mut Float) {
     let mut flag_builder = settings::builder();
     flag_builder.set("use_colocated_libcalls", "false").unwrap();
     flag_builder.set("opt_level", "speed").unwrap();
@@ -97,10 +97,10 @@ pub fn compile(context: &Context, exprs: impl IntoIterator<Item = Expr>) -> fn(&
     builder.def_var(inputs, inputs_arg);
     builder.declare_var(outputs, ptr);
     builder.def_var(outputs, outputs_arg);
-    
+
     // Parse all expressions.
     for (i, expr) in context.exprs.iter().enumerate() {
-        let var = Variable::new(i);
+        let var = Variable::new(i+2);
         builder.declare_var(var, FLOAT);
         let value = compile_expr(&mut builder, expr.kind, external);
         builder.def_var(var, value);
@@ -110,11 +110,14 @@ pub fn compile(context: &Context, exprs: impl IntoIterator<Item = Expr>) -> fn(&
         let v = builder.use_var(var(expr));
         let outputs = builder.use_var(Variable::new(1));
         builder.ins().store(
-            MemFlags::new().with_notrap().with_aligned(),
-            v, outputs, Offset32::new(i as i32)
+            MemFlags::trusted(),
+            v, outputs, Offset32::new((i * size_of::<Float>()) as i32)
         );
     }
 
+    builder.ins().return_(&[]);
+
+    // println!("{}", builder.func.display());
     builder.finalize();
 
     let id = module.declare_function("func", Linkage::Export, &ctx.func.signature).unwrap();
@@ -156,9 +159,9 @@ fn compile_expr(builder: &mut FunctionBuilder, kind: ExprKind, external: Externa
             let inputs = builder.use_var(Variable::new(0));
             builder.ins().load(
                 FLOAT,
-                MemFlags::new().with_readonly().with_notrap().with_aligned(),
+                MemFlags::trusted().with_readonly(),
                 inputs,
-                Offset32::new(index as i32)
+                Offset32::new((index * size_of::<Float>()) as i32)
             )
         }
         ExprKind::Sin(v) => {
@@ -184,12 +187,12 @@ fn compile_expr(builder: &mut FunctionBuilder, kind: ExprKind, external: Externa
             let v = match cond {
                 Condition::Comparison(cmp) => {
                     let cc = match cmp.kind {
-                        // ComparisonKind::Eq => FloatCC::Equal,
-                        // ComparisonKind::Neq => FloatCC::NotEqual,
-                        // ComparisonKind::Gt => FloatCC::GreaterThan,
+                        ComparisonKind::Eq => FloatCC::Equal,
+                        ComparisonKind::Neq => FloatCC::NotEqual,
+                        ComparisonKind::Gt => FloatCC::GreaterThan,
                         ComparisonKind::Lt => FloatCC::LessThan,
-                        // ComparisonKind::Gteq => FloatCC::GreaterThanOrEqual,
-                        // ComparisonKind::Lteq => FloatCC::LessThanOrEqual
+                        ComparisonKind::Gteq => FloatCC::GreaterThanOrEqual,
+                        ComparisonKind::Lteq => FloatCC::LessThanOrEqual
                     };
                     let a = builder.use_var(var(cmp.a));
                     let b = builder.use_var(var(cmp.b));
@@ -222,6 +225,12 @@ fn compile_expr(builder: &mut FunctionBuilder, kind: ExprKind, external: Externa
             let v = builder.use_var(var(v));
             let e = float_constant(builder, e);
             let tmp = builder.ins().call(external.pow, &[v, e]);
+            builder.inst_results(tmp)[0]
+        }
+        ExprKind::Atan2(a, b) => {
+            let a = builder.use_var(var(a));
+            let b = builder.use_var(var(b));
+            let tmp = builder.ins().call(external.atan2, &[a, b]);
             builder.inst_results(tmp)[0]
         }
     }
