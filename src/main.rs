@@ -130,8 +130,7 @@ fn main() {
         max_adjustment: args.adjustment_max,
         mean_count: args.mean_count,
         delta_max_mean: args.delta_max_mean,
-        progress_update: Box::new(|error| {
-            let quality = (-error).exp();
+        progress_update: Box::new(|quality| {
             let mut stdout = io::stdout();
             stdout
                 .queue(terminal::Clear(terminal::ClearType::FromCursorDown))
@@ -146,8 +145,7 @@ fn main() {
         }),
     });
 
-    let mean_error = rage.gen().get_mean_error();
-    let total_quality = (-mean_error).exp();
+    let total_quality = rage.gen().get_total_quality();
     let generated = rage.get_figure();
 
     stdout.execute(cursor::Show).unwrap();

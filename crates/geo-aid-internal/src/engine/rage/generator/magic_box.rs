@@ -11,8 +11,7 @@ use super::{Complex, State, AdjustableTemplate};
 pub fn adjust(current_state: &State, matrix: &mut [f64], adjustment_magnitude: f64, template: &[AdjustableTemplate]) {
     let it = template
         .iter()
-        // Squeeze the error into [0, 1]
-        .zip(current_state.errors.iter().copied().map(|x| 1.0 - (-x).exp()));
+        .zip(current_state.qualities.iter().copied().map(|x| 1.0 - x));
 
     let mut index = 0;
 

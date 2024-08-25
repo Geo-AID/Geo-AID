@@ -7,8 +7,14 @@ license = "MIT"
 repository = "https://github.com/Geo-AID/geo-aid/"
 
 [dependencies]
-clap = {version = "4.5.7", features = ["derive"]}
+clap = { version = "4.5.7", features = ["derive"] }
 clap-markdown = "0.1.4"
 crossterm = "0.27.0"
 
-geo-aid-internal = {version = "0.4.2", path = "crates/geo-aid-internal"}
+geo-aid-internal = { version = "0.4.2", path = "crates/geo-aid-internal" }
+
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package.'*']
+opt-level = 3

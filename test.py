@@ -8,7 +8,7 @@ import time
 # First, we run all tests through Geo-AID to their respective directories.
 tests = []
 for file in os.scandir("tests"):
-     if file.is_file() and file.name.ends_with(".geo"):
+     if file.is_file() and file.name.endswith(".geo"):
         print(f"Rendering {file.name}")
         
         path = Path(file.path)

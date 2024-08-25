@@ -12,49 +12,8 @@ use geo_aid_math::Func;
 use crate::geometry::Complex;
 use crate::script::math::EntityKind;
 
-pub mod critic;
 pub mod fast_float;
 mod magic_box;
-pub mod program;
-
-// pub type Logger = Vec<String>;
-
-#[derive(Debug, Clone, Copy)]
-pub enum Adjustable {
-    Point(Complex),
-    Real(f64),
-    Clip1D(f64),
-}
-
-// impl Adjustable {
-//     //noinspection DuplicatedCode
-//     #[must_use]
-//     pub fn as_point(&self) -> Option<&Complex> {
-//         if let Self::Point(v) = self {
-//             Some(v)
-//         } else {
-//             None
-//         }
-//     }
-//
-//     #[must_use]
-//     pub fn as_real(&self) -> Option<&f64> {
-//         if let Self::Real(v) = self {
-//             Some(v)
-//         } else {
-//             None
-//         }
-//     }
-//
-//     #[must_use]
-//     pub fn as_clip1d(&self) -> Option<&f64> {
-//         if let Self::Clip1D(v) = self {
-//             Some(v)
-//         } else {
-//             None
-//         }
-//     }
-// }
 
 pub enum Message {
     Generate(f64),
@@ -81,7 +40,7 @@ unsafe fn generation_cycle(
     input_count: usize,
     current_state: SendPtr<State>,
     mean_exponent: f64,
-    error_fn: Func
+    error_fn: Func,
 ) {
     let mut inputs = Vec::new();
     inputs.reserve_exact(input_count);
@@ -106,13 +65,17 @@ unsafe fn generation_cycle(
                         &*current_state.0,
                         &mut inputs,
                         adjustment_magnitude,
-                        adjustables
+                        adjustables,
                     );
                 }
 
                 error_fn.call(&inputs, &mut errors);
 
-                let mean_error = (
+                // Convert the errors to qualities
+                for err in &mut errors {
+                    *err = (-*err).exp();
+                }
+                let total_quality = (
                     errors
                         .iter()
                         .copied()
@@ -122,8 +85,8 @@ unsafe fn generation_cycle(
                 sender
                     .send(CycleState {
                         inputs: SendPtr(inputs.as_slice()),
-                        errors: SendPtr(errors.as_slice()),
-                        mean_error,
+                        qualities: SendPtr(errors.as_slice()),
+                        total_quality,
                     })
                     .unwrap();
             }
@@ -135,15 +98,15 @@ unsafe fn generation_cycle(
 #[derive(Debug, Clone)]
 pub struct State {
     pub inputs: Vec<f64>,
-    pub errors: Vec<f64>,
-    pub mean_error: f64,
+    pub qualities: Vec<f64>,
+    pub total_quality: f64,
 }
 
 #[derive(Clone, Copy)]
 struct CycleState {
     pub inputs: SendPtr<[f64]>,
-    pub errors: SendPtr<[f64]>,
-    pub mean_error: f64,
+    pub qualities: SendPtr<[f64]>,
+    pub total_quality: f64,
 }
 
 #[derive(Debug)]
@@ -194,7 +157,7 @@ impl Generator {
     /// # Safety
     /// The `program` MUST be safe.
     #[must_use]
-    pub unsafe fn new(workers: usize, input_count: usize, error_fn: Func, strictness: f64, adjustables: Arc<[AdjustableTemplate]>) -> Self {
+    pub unsafe fn new(workers: usize, input_count: usize, error_fn: Func, strictness: f64, adjustables: &Arc<[AdjustableTemplate]>) -> Self {
         let (input_senders, input_receivers): (
             Vec<mpsc::Sender<Message>>,
             Vec<mpsc::Receiver<Message>>,
@@ -209,13 +172,13 @@ impl Generator {
                 v.resize_with(input_count, rand::random);
                 v
             },
-            errors: {
+            qualities: {
                 let mut v = Vec::new();
                 v.reserve_exact(adjustables.len());
                 v.resize(adjustables.len(), 0.0);
                 v
             },
-            mean_error: 1.0,
+            total_quality: 0.0,
         };
         let current_state = Box::pin(current_state);
         let state_ptr: &State = &current_state;
@@ -233,7 +196,7 @@ impl Generator {
                             &rec, &sender,
                             &adjustables, input_count,
                             state_ptr, -strictness,
-                            error_fn
+                            error_fn,
                         );
                     })
                 })
@@ -267,18 +230,18 @@ impl Generator {
             // If the total quality is larger than the current total, replace the points.
             let state = self.receiver.recv().unwrap();
 
-            if state.mean_error < best.mean_error {
+            if state.total_quality > best.total_quality {
                 best = state;
             }
         }
 
-        if best.mean_error < self.get_mean_error() {
+        if best.total_quality > self.get_total_quality() {
             // println!("Success!");
             unsafe {
                 let mut_ref = self.current_state.as_mut().get_unchecked_mut();
-                mut_ref.errors.copy_from_slice(&*best.errors.0);
+                mut_ref.qualities.copy_from_slice(&*best.qualities.0);
                 mut_ref.inputs.copy_from_slice(&*best.inputs.0);
-                mut_ref.mean_error = best.mean_error;
+                mut_ref.total_quality = best.total_quality;
             }
         }
 
@@ -324,7 +287,7 @@ impl Generator {
         let magnitudes = self.bake_magnitudes(maximum_adjustment);
         let mut last_deltas = VecDeque::new();
 
-        let mut current_error = 100.0;
+        let mut current_quality = 0.0;
         let mut mean_delta = 1.0;
 
         last_deltas.resize(mean_count, 1.0);
@@ -337,13 +300,13 @@ impl Generator {
         while mean_delta > max_mean {
             duration += self.cycle_prebaked(&magnitudes);
 
-            self.delta = current_error - self.get_mean_error();
-            current_error = self.get_mean_error();
+            self.delta = self.get_total_quality() - current_quality;
+            current_quality = self.get_total_quality();
             let dropped_delta = last_deltas.pop_front().unwrap();
             mean_delta = (mean_delta * mean_count_f - dropped_delta + self.delta) / mean_count_f;
             last_deltas.push_back(self.delta);
 
-            cyclic(current_error);
+            cyclic(current_quality);
         }
 
         duration
@@ -360,8 +323,8 @@ impl Generator {
     // }
 
     #[must_use]
-    pub fn get_mean_error(&self) -> f64 {
-        self.current_state.mean_error
+    pub fn get_total_quality(&self) -> f64 {
+        self.current_state.total_quality
     }
 }
 
