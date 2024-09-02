@@ -1,10 +1,12 @@
-use std::f64::consts::PI;
-use num_traits::ToPrimitive;
-use geo_aid_figure::VarIndex;
-use geo_aid_math::{Comparison, ComparisonKind, Condition, Context, Expr as CompiledExpr};
 use crate::geometry::{Circle, Complex, Line, ValueEnum};
 use crate::script::figure::Generated;
-use crate::script::math::{Entity, EntityKind, Expr, ExprKind, ExprType, Intermediate, Rule, RuleKind};
+use crate::script::math::{
+    Entity, EntityKind, Expr, ExprKind, ExprType, Intermediate, Rule, RuleKind,
+};
+use geo_aid_figure::VarIndex;
+use geo_aid_math::{Comparison, ComparisonKind, Condition, Context, Expr as CompiledExpr};
+use num_traits::ToPrimitive;
+use std::f64::consts::PI;
 
 pub type FigureFn = Box<dyn for<'a> Fn(&'a [f64]) -> Generated>;
 
@@ -18,7 +20,9 @@ pub struct Compiled {
 }
 
 pub fn compile(intermediate: &Intermediate) -> Compiled {
-    let inputs = intermediate.adjusted.entities
+    let inputs = intermediate
+        .adjusted
+        .entities
         .iter()
         .map(|ent| match ent {
             EntityKind::FreePoint => 2,
@@ -26,7 +30,7 @@ pub fn compile(intermediate: &Intermediate) -> Compiled {
             | EntityKind::PointOnCircle { .. }
             | EntityKind::FreeReal
             | EntityKind::DistanceUnit => 1,
-            EntityKind::Bind(_) => unreachable!()
+            EntityKind::Bind(_) => unreachable!(),
         })
         .sum();
 
@@ -34,7 +38,11 @@ pub fn compile(intermediate: &Intermediate) -> Compiled {
     //     println!("[{i}] = {:?}", var.kind);
     // }
 
-    let mut compiler = Compiler::new(inputs, &intermediate.adjusted.entities, &intermediate.figure.variables);
+    let mut compiler = Compiler::new(
+        inputs,
+        &intermediate.adjusted.entities,
+        &intermediate.figure.variables,
+    );
 
     let mut exprs = Vec::new();
     for value in &compiler.variables {
@@ -44,17 +52,12 @@ pub fn compile(intermediate: &Intermediate) -> Compiled {
                 line.origin.real,
                 line.origin.imaginary,
                 line.direction.real,
-                line.direction.imaginary
+                line.direction.imaginary,
             ]),
-            ValueExpr::Complex(complex) => exprs.extend([
-                complex.real,
-                complex.imaginary,
-            ]),
-            ValueExpr::Circle(circle) => exprs.extend([
-                circle.center.real,
-                circle.center.imaginary,
-                circle.radius
-            ])
+            ValueExpr::Complex(complex) => exprs.extend([complex.real, complex.imaginary]),
+            ValueExpr::Circle(circle) => {
+                exprs.extend([circle.center.real, circle.center.imaginary, circle.radius])
+            }
         }
     }
 
@@ -70,8 +73,14 @@ pub fn compile(intermediate: &Intermediate) -> Compiled {
     });
 
     // Reset the compiler.
-    compiler = Compiler::new(inputs, &intermediate.adjusted.entities, &intermediate.adjusted.variables);
-    let rule_errors: Vec<_> = intermediate.adjusted.rules
+    compiler = Compiler::new(
+        inputs,
+        &intermediate.adjusted.entities,
+        &intermediate.adjusted.variables,
+    );
+    let rule_errors: Vec<_> = intermediate
+        .adjusted
+        .rules
         .iter()
         .map(|rule| (rule, compiler.compile_rule(rule)))
         .collect();
@@ -129,7 +138,7 @@ impl<'r> Compiler<'r> {
                     adjustables.push(ValueExpr::This(context.input(index)));
                     index += 1;
                 }
-                EntityKind::Bind(_) => unreachable!()
+                EntityKind::Bind(_) => unreachable!(),
             }
         }
 
@@ -160,17 +169,20 @@ impl<'r> Compiler<'r> {
         let threshold = self.context.add(offset, b);
         let a_minus_threshold = self.context.sub(a, threshold);
         let one_side = self.context.mul(a_minus_threshold, a_minus_threshold);
-        self.context.ternary(Condition::Comparison(Comparison {
-            a,
-            b: threshold,
-            kind: ComparisonKind::Lt,
-        }), one_side, Context::zero())
+        self.context.ternary(
+            Condition::Comparison(Comparison {
+                a,
+                b: threshold,
+                kind: ComparisonKind::Lt,
+            }),
+            one_side,
+            Context::zero(),
+        )
     }
 
     fn compile_rule_kind(&mut self, kind: &RuleKind) -> CompiledExpr {
         match kind {
-            RuleKind::PointEq(a, b)
-            | RuleKind::NumberEq(a, b) => {
+            RuleKind::PointEq(a, b) | RuleKind::NumberEq(a, b) => {
                 // Weirdly, enough, these two are actually the same, right now
                 let a = self.variables[a.0].to_complex();
                 let b = self.variables[b.0].to_complex();
@@ -181,8 +193,7 @@ impl<'r> Compiler<'r> {
                 let five = self.context.constant(5.0);
                 self.context.mul(mag, five)
             }
-            RuleKind::Lt(b, a)
-            | RuleKind::Gt(a, b) => self.gt(a, b),
+            RuleKind::Lt(b, a) | RuleKind::Gt(a, b) => self.gt(a, b),
             RuleKind::Alternative(rules) => {
                 // necessary because borrowing
                 let qualities: Vec<_> = rules
@@ -201,7 +212,7 @@ impl<'r> Compiler<'r> {
                 let ten_q = self.context.mul(q, ten);
                 self.context.div(Context::one(), ten_q)
             }
-            RuleKind::Bias => Context::zero() // Bias in this approach doesn't really do anything
+            RuleKind::Bias => Context::zero(), // Bias in this approach doesn't really do anything
         }
     }
 
@@ -265,7 +276,7 @@ impl<'r> Compiler<'r> {
                     EntityKind::DistanceUnit | EntityKind::FreeReal => {
                         ComplexExpr::real(self.adjustables[id.0].to_single()).into()
                     }
-                    EntityKind::Bind(_) => unreachable!()
+                    EntityKind::Bind(_) => unreachable!(),
                 }
             }
             ExprKind::LineLineIntersection { k, l } => {
@@ -321,7 +332,8 @@ impl<'r> Compiler<'r> {
                 ComplexExpr {
                     real: self.context.constant(value.real),
                     imaginary: self.context.constant(value.imaginary),
-                }.into()
+                }
+                .into()
             }
             ExprKind::PartialPower { value, exponent } => {
                 let value = self.variables[value.0].to_complex();
@@ -330,7 +342,8 @@ impl<'r> Compiler<'r> {
                 ComplexExpr {
                     real: self.context.pow(value.real, exp),
                     imaginary: self.context.pow(value.imaginary, exp),
-                }.into()
+                }
+                .into()
             }
             ExprKind::PointPointDistance { p, q } => {
                 let p = self.variables[p.0].to_complex();
@@ -340,7 +353,8 @@ impl<'r> Compiler<'r> {
                 ComplexExpr {
                     real: p_minus_q.modulus(&mut self.context),
                     imaginary: Context::zero(),
-                }.into()
+                }
+                .into()
             }
             ExprKind::PointLineDistance { point, line } => {
                 // ((point - line.origin) / line.direction).imaginary.abs()
@@ -348,7 +362,8 @@ impl<'r> Compiler<'r> {
                 let line = self.variables[line.0].to_line();
 
                 let point_minus_line_origin = point.sub(line.origin, &mut self.context);
-                let that_by_direction = point_minus_line_origin.div(line.direction, &mut self.context);
+                let that_by_direction =
+                    point_minus_line_origin.div(line.direction, &mut self.context);
                 let real = self.context.abs(that_by_direction.imaginary);
                 ComplexExpr::real(real).into()
             }
@@ -371,9 +386,7 @@ impl<'r> Compiler<'r> {
 
                 let dot_product_alpha = self.context.mul(arm1_vec.real, arm2_vec.real);
                 let dot_product_beta = self.context.mul(arm1_vec.imaginary, arm2_vec.imaginary);
-                let dot_product = self.context.add(
-                    dot_product_alpha, dot_product_beta,
-                );
+                let dot_product = self.context.add(dot_product_alpha, dot_product_beta);
                 let mag1 = arm1_vec.modulus(&mut self.context);
                 let mag2 = arm2_vec.modulus(&mut self.context);
                 let mag_product = self.context.mul(mag1, mag2);
@@ -427,7 +440,8 @@ impl<'r> Compiler<'r> {
                 LineExpr {
                     origin: p,
                     direction: normalized,
-                }.into()
+                }
+                .into()
             }
             ExprKind::AngleBisector { p, q, r } => {
                 // let a = arm1 - origin;
@@ -475,12 +489,14 @@ impl<'r> Compiler<'r> {
                 let normalized_mul_i = normalized.mul_i(&mut self.context);
 
                 // Another ternary
-                let direction = ComplexExpr::ternary(condition, normalized, normalized_mul_i, &mut self.context);
+                let direction = ComplexExpr::ternary(
+                    condition,
+                    normalized,
+                    normalized_mul_i,
+                    &mut self.context,
+                );
 
-                LineExpr {
-                    origin,
-                    direction,
-                }.into()
+                LineExpr { origin, direction }.into()
             }
             ExprKind::ParallelThrough { point, line } => {
                 let point = self.variables[point.0].to_complex();
@@ -496,7 +512,8 @@ impl<'r> Compiler<'r> {
                 LineExpr {
                     origin: point,
                     direction: line.direction.mul_i(&mut self.context),
-                }.into()
+                }
+                .into()
             }
             ExprKind::ConstructCircle { center, radius } => {
                 let center = self.variables[center.0].to_complex();
@@ -505,7 +522,8 @@ impl<'r> Compiler<'r> {
                 CircleExpr {
                     center,
                     radius: radius.real,
-                }.into()
+                }
+                .into()
             }
         }
     }
@@ -630,8 +648,14 @@ impl ComplexExpr {
         // self = a + bi
         // other = c + di
         // quotient = (ac - bd) + (ad + bc)i
-        let Self { real: a, imaginary: b } = self;
-        let Self { real: c, imaginary: d } = other;
+        let Self {
+            real: a,
+            imaginary: b,
+        } = self;
+        let Self {
+            real: c,
+            imaginary: d,
+        } = other;
 
         let ac = context.mul(a, c);
         let bd = context.mul(b, d);
@@ -652,8 +676,14 @@ impl ComplexExpr {
         // self = a + bi
         // other = c + di
         // quotient = ((ac + bd) + (bc - ad)i)/(c^2 + d^2)
-        let Self { real: a, imaginary: b } = self;
-        let Self { real: c, imaginary: d } = other;
+        let Self {
+            real: a,
+            imaginary: b,
+        } = self;
+        let Self {
+            real: c,
+            imaginary: d,
+        } = other;
 
         let ac = context.mul(a, c);
         let bd = context.mul(b, d);
@@ -669,10 +699,7 @@ impl ComplexExpr {
         let real = context.div(ac_plus_bd, c2_plus_d2);
         let imaginary = context.div(bc_sub_ad, c2_plus_d2);
 
-        Self {
-            real,
-            imaginary,
-        }
+        Self { real, imaginary }
     }
 
     #[must_use]
@@ -724,10 +751,8 @@ impl ComplexExpr {
     }
 }
 
-fn get_complex<I: Iterator<Item=f64>>(value: &mut I) -> Complex {
-    Complex::new(
-        value.next().unwrap(), value.next().unwrap(),
-    )
+fn get_complex<I: Iterator<Item = f64>>(value: &mut I) -> Complex {
+    Complex::new(value.next().unwrap(), value.next().unwrap())
 }
 
 fn get_figure(figure: &crate::script::figure::Figure, inputs: &[f64], values: &[f64]) -> Generated {
@@ -765,9 +790,12 @@ fn get_figure(figure: &crate::script::figure::Figure, inputs: &[f64], values: &[
             | EntityKind::PointOnLine { .. }
             | EntityKind::DistanceUnit
             | EntityKind::FreeReal => ValueEnum::Complex(Complex::real(input.next().unwrap())),
-            EntityKind::Bind(_) => unreachable!()
+            EntityKind::Bind(_) => unreachable!(),
         };
-        entities.push(Entity { kind: ent.clone(), meta: v });
+        entities.push(Entity {
+            kind: ent.clone(),
+            meta: v,
+        });
     }
 
     Generated {

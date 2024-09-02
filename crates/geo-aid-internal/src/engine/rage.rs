@@ -1,11 +1,11 @@
+pub use self::generator::Generator;
+use crate::engine::compiler::{Compiled, FigureFn};
 use crate::engine::rage::generator::AdjustableTemplate;
 use crate::script::figure::Generated;
 use crate::script::math::Intermediate;
-use std::time::Duration;
 #[allow(unused_imports)]
 use geo_aid_math::Func;
-use crate::engine::compiler::{Compiled, FigureFn};
-pub use self::generator::Generator;
+use std::time::Duration;
 
 mod generator;
 
@@ -17,9 +17,19 @@ pub struct Rage {
     // rule_count: usize,
 }
 
+#[derive(Clone, Copy)]
+pub struct Params {
+    pub strictness: f64,
+    pub samples: usize,
+    pub worker_count: usize,
+    pub mean_count: usize,
+    pub max_mean_delta: f64,
+    pub max_adjustment: f64,
+}
+
 impl Rage {
     #[must_use]
-    pub fn new(worker_count: usize, strictness: f64, intermediate: &Intermediate) -> Self {
+    pub fn new(params: Params, intermediate: &Intermediate) -> Self {
         let Compiled {
             context,
             errors,
@@ -29,8 +39,12 @@ impl Rage {
         } = super::compiler::compile(intermediate);
 
         let error_fn = context.compute(errors.iter().copied());
-        let adjustables: Vec<_> = intermediate.adjusted.entities
-            .iter().map(AdjustableTemplate::from).collect();
+        let adjustables: Vec<_> = intermediate
+            .adjusted
+            .entities
+            .iter()
+            .map(AdjustableTemplate::from)
+            .collect();
 
         // let rule_count = rule_errors.len();
         // let rule_fn = context.compute(rule_errors.into_iter());
@@ -40,15 +54,7 @@ impl Rage {
         // println!("Works now: {dst:?}");
 
         Self {
-            generator: unsafe {
-                Generator::new(
-                    worker_count,
-                    input_count,
-                    error_fn,
-                    strictness,
-                    &adjustables.into(),
-                )
-            },
+            generator: Generator::new(params, input_count, error_fn, &adjustables.into()),
             figure_fn,
             // rule_fn,
             // rule_count,

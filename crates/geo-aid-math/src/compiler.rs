@@ -1,10 +1,10 @@
-use std::mem;
-use cranelift::codegen::ir::{FuncRef, Function, UserExternalName};
+use crate::{ComparisonKind, Condition, Context, Expr, ExprKind, Float};
 use cranelift::codegen::ir::immediates::Offset32;
+use cranelift::codegen::ir::{FuncRef, Function, UserExternalName};
 use cranelift::prelude::*;
 use cranelift_jit::{JITBuilder, JITModule};
 use cranelift_module::{Linkage, Module};
-use crate::{ComparisonKind, Condition, Context, Expr, ExprKind, Float};
+use std::mem;
 
 #[cfg(feature = "f64")]
 const FLOAT: Type = types::F64;
@@ -17,10 +17,15 @@ struct External {
     cos: FuncRef,
     acos: FuncRef,
     pow: FuncRef,
-    atan2: FuncRef
+    atan2: FuncRef,
 }
 
-fn link_float_func(func: &mut Function, module: &mut JITModule, param_count: usize, name: &'static str) -> FuncRef {
+fn link_float_func(
+    func: &mut Function,
+    module: &mut JITModule,
+    param_count: usize,
+    name: &'static str,
+) -> FuncRef {
     let mut sig = Signature::new(module.target_config().default_call_conv);
 
     for _ in 0..param_count {
@@ -28,13 +33,15 @@ fn link_float_func(func: &mut Function, module: &mut JITModule, param_count: usi
     }
     sig.returns.push(AbiParam::new(FLOAT));
 
-    let fun = module.declare_function(name, Linkage::Import, &sig).unwrap();
+    let fun = module
+        .declare_function(name, Linkage::Import, &sig)
+        .unwrap();
     let fun = func.declare_imported_user_function(UserExternalName::new(0, fun.as_u32()));
     let fun_sig = func.import_signature(sig);
     func.import_function(ExtFuncData {
         name: ExternalName::User(fun),
         colocated: false,
-        signature: fun_sig
+        signature: fun_sig,
     })
 }
 
@@ -46,20 +53,26 @@ fn link_external(func: &mut Function, module: &mut JITModule) -> External {
     let atan2 = link_float_func(func, module, 2, "atan2");
 
     External {
-        sin, cos, acos, pow, atan2
+        sin,
+        cos,
+        acos,
+        pow,
+        atan2,
     }
 }
 
 #[must_use]
-pub fn compile(context: &Context, exprs: impl IntoIterator<Item = Expr>) -> fn(*const Float, *mut Float) {
+pub fn compile(
+    context: &Context,
+    exprs: impl IntoIterator<Item = Expr>,
+) -> fn(*const Float, *mut Float) {
     let mut flag_builder = settings::builder();
     flag_builder.set("use_colocated_libcalls", "false").unwrap();
     flag_builder.set("opt_level", "speed").unwrap();
     flag_builder.set("is_pic", "false").unwrap();
 
-    let isa_builder = cranelift_native::builder().unwrap_or_else(|msg| {
-        panic!("internal error: host machine is not supported: {msg}")
-    });
+    let isa_builder = cranelift_native::builder()
+        .unwrap_or_else(|msg| panic!("internal error: host machine is not supported: {msg}"));
     let isa = isa_builder
         .finish(settings::Flags::new(flag_builder))
         .unwrap();
@@ -100,18 +113,21 @@ pub fn compile(context: &Context, exprs: impl IntoIterator<Item = Expr>) -> fn(*
 
     // Parse all expressions.
     for (i, expr) in context.exprs.iter().enumerate() {
-        let var = Variable::new(i+2);
+        let var = Variable::new(i + 2);
         builder.declare_var(var, FLOAT);
         let value = compile_expr(&mut builder, expr.kind, external);
         builder.def_var(var, value);
     }
 
     for (i, expr) in exprs.into_iter().enumerate() {
+        // println!("{}", context.stringify(expr));
         let v = builder.use_var(var(expr));
         let outputs = builder.use_var(Variable::new(1));
         builder.ins().store(
             MemFlags::trusted(),
-            v, outputs, Offset32::new((i * size_of::<Float>()) as i32)
+            v,
+            outputs,
+            Offset32::new((i * size_of::<Float>()) as i32),
         );
     }
 
@@ -120,16 +136,16 @@ pub fn compile(context: &Context, exprs: impl IntoIterator<Item = Expr>) -> fn(*
     // println!("{}", builder.func.display());
     builder.finalize();
 
-    let id = module.declare_function("func", Linkage::Export, &ctx.func.signature).unwrap();
+    let id = module
+        .declare_function("func", Linkage::Export, &ctx.func.signature)
+        .unwrap();
     module.define_function(id, &mut ctx).unwrap();
     module.clear_context(&mut ctx);
     module.finalize_definitions().unwrap();
 
     let func = module.get_finalized_function(id);
 
-    unsafe {
-        mem::transmute(func)
-    }
+    unsafe { mem::transmute(func) }
 }
 
 fn compile_expr(builder: &mut FunctionBuilder, kind: ExprKind, external: External) -> Value {
@@ -139,7 +155,7 @@ fn compile_expr(builder: &mut FunctionBuilder, kind: ExprKind, external: Externa
             let a = builder.use_var(var(a));
             let b = builder.use_var(var(b));
             builder.ins().fadd(a, b)
-        },
+        }
         ExprKind::Sub(a, b) => {
             let a = builder.use_var(var(a));
             let b = builder.use_var(var(b));
@@ -161,7 +177,7 @@ fn compile_expr(builder: &mut FunctionBuilder, kind: ExprKind, external: Externa
                 FLOAT,
                 MemFlags::trusted().with_readonly(),
                 inputs,
-                Offset32::new((index * size_of::<Float>()) as i32)
+                Offset32::new((index * size_of::<Float>()) as i32),
             )
         }
         ExprKind::Sin(v) => {
@@ -192,7 +208,7 @@ fn compile_expr(builder: &mut FunctionBuilder, kind: ExprKind, external: Externa
                         ComparisonKind::Gt => FloatCC::GreaterThan,
                         ComparisonKind::Lt => FloatCC::LessThan,
                         ComparisonKind::Gteq => FloatCC::GreaterThanOrEqual,
-                        ComparisonKind::Lteq => FloatCC::LessThanOrEqual
+                        ComparisonKind::Lteq => FloatCC::LessThanOrEqual,
                     };
                     let a = builder.use_var(var(cmp.a));
                     let b = builder.use_var(var(cmp.b));

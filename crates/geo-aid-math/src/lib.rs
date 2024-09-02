@@ -13,7 +13,7 @@ pub struct Expr(usize);
 pub struct Comparison {
     pub a: Expr,
     pub b: Expr,
-    pub kind: ComparisonKind
+    pub kind: ComparisonKind,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -23,12 +23,12 @@ pub enum ComparisonKind {
     Gt,
     Lt,
     Gteq,
-    Lteq
+    Lteq,
 }
 
 #[derive(Debug, Clone, Copy)]
 pub enum Condition {
-    Comparison(Comparison)
+    Comparison(Comparison),
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -45,13 +45,13 @@ enum ExprKind {
     Atan2(Expr, Expr),
     Neg(Expr),
     Ternary(Condition, Expr, Expr),
-    Pow(Expr, Float)
+    Pow(Expr, Float),
 }
 
 #[derive(Debug, Clone, Copy)]
 struct Entry {
     kind: ExprKind,
-    derivatives: Option<usize>
+    derivatives: Option<usize>,
 }
 
 #[derive(Debug, Clone)]
@@ -59,7 +59,7 @@ pub struct Context {
     inputs: usize,
     exprs: Vec<Entry>,
     /// Indices of expressions holding derivatives w.r.t. respective inputs
-    derivatives: Vec<Expr>
+    derivatives: Vec<Expr>,
 }
 
 impl Context {
@@ -71,33 +71,83 @@ impl Context {
         // Due to it being potentially useful and popular, zero is added automatically.
         exprs.push(Entry {
             kind: ExprKind::Constant(0.0),
-            derivatives: Some(0)
+            derivatives: Some(0),
         });
         derivatives.extend([Expr(0)].repeat(inputs));
 
         // For inputs, we also include a one.
         exprs.push(Entry {
             kind: ExprKind::Constant(1.0),
-            derivatives: Some(0)
+            derivatives: Some(0),
         });
 
         // For the same reason. Input exprs is also included.
         for i in 0..inputs {
             exprs.push(Entry {
                 kind: ExprKind::Input(i),
-                derivatives: Some(derivatives.len())
+                derivatives: Some(derivatives.len()),
             });
-            derivatives.extend((0..inputs).map(|j| if i == j {
-                Expr(1)
-            } else {
-                Expr(0)
-            }));
+            derivatives.extend((0..inputs).map(|j| if i == j { Expr(1) } else { Expr(0) }));
         }
 
         Self {
             inputs,
             exprs,
-            derivatives
+            derivatives,
+        }
+    }
+
+    pub fn stringify(&self, expr: Expr) -> String {
+        self.stringify_kind(self.exprs[expr.0].kind)
+    }
+
+    fn stringify_kind(&self, expr_kind: ExprKind) -> String {
+        match expr_kind {
+            ExprKind::Constant(v) => format!("{v:.2}"),
+            ExprKind::Add(a, b) => {
+                format!("({} + {})", self.stringify(a), self.stringify(b))
+            }
+            ExprKind::Sub(a, b) => {
+                format!("({} - {})", self.stringify(a), self.stringify(b))
+            }
+            ExprKind::Mul(a, b) => {
+                format!("({} * {})", self.stringify(a), self.stringify(b))
+            }
+            ExprKind::Div(a, b) => {
+                format!("({} / {})", self.stringify(a), self.stringify(b))
+            }
+            ExprKind::Input(i) => format!("#{i}"),
+            ExprKind::Sin(v) => format!("sin({})", self.stringify(v)),
+            ExprKind::Cos(v) => format!("cos({})", self.stringify(v)),
+            ExprKind::Acos(v) => format!("acos({})", self.stringify(v)),
+            ExprKind::Atan2(y, x) => format!("atan2({}, {})", self.stringify(y), self.stringify(x)),
+            ExprKind::Neg(v) => format!("-{}", self.stringify(v)),
+            ExprKind::Ternary(cond, then, else_) => format!(
+                "({} ? {} : {})",
+                self.stringify_condition(cond),
+                self.stringify(then),
+                self.stringify(else_)
+            ),
+            ExprKind::Pow(v, p) => format!("{}^{p}", self.stringify(v)),
+        }
+    }
+
+    fn stringify_condition(&self, condition: Condition) -> String {
+        match condition {
+            Condition::Comparison(cmp) => {
+                let a = self.stringify(cmp.a);
+                let b = self.stringify(cmp.b);
+                let sign = match cmp.kind {
+                    ComparisonKind::Eq => "=",
+                    ComparisonKind::Neq => "!=",
+                    ComparisonKind::Gt => ">",
+                    ComparisonKind::Lt => "<",
+                    ComparisonKind::Gteq => "≥",
+                    ComparisonKind::Lteq => "≤",
+                };
+
+                format!("{a} {sign} {b}")
+            }
         }
     }
 
@@ -105,7 +155,7 @@ impl Context {
         let id = self.exprs.len();
         self.exprs.push(Entry {
             kind,
-            derivatives: None
+            derivatives: None,
         });
         Expr(id)
     }
@@ -115,7 +165,7 @@ impl Context {
         let id = self.exprs.len();
         self.exprs.push(Entry {
             kind,
-            derivatives: Some(self.derivatives.len())
+            derivatives: Some(self.derivatives.len()),
         });
         self.derivatives.extend(derivatives);
         Expr(id)
@@ -145,7 +195,7 @@ impl Context {
         let id = self.exprs.len();
         self.exprs.push(Entry {
             kind,
-            derivatives: Some(0)
+            derivatives: Some(0),
         });
         Expr(id)
     }
@@ -158,7 +208,8 @@ impl Context {
                 let a_d = self.get_derivative(a, i);
                 let b_d = self.get_derivative(b, i);
                 self.push_expr_nodiff(ExprKind::Add(a_d, b_d))
-            }).collect();
+            })
+            .collect();
         self.push_expr(ExprKind::Add(a, b), derivatives)
     }
 
@@ -170,7 +221,8 @@ impl Context {
                 let a_d = self.get_derivative(a, i);
                 let b_d = self.get_derivative(b, i);
                 self.push_expr_nodiff(ExprKind::Sub(a_d, b_d))
-            }).collect();
+            })
+            .collect();
         self.push_expr(ExprKind::Sub(a, b), derivatives)
     }
 
@@ -184,7 +236,8 @@ impl Context {
                 let first = self.push_expr_nodiff(ExprKind::Mul(a_d, b));
                 let second = self.push_expr_nodiff(ExprKind::Mul(a, b_d));
                 self.push_expr_nodiff(ExprKind::Add(first, second))
-            }).collect();
+            })
+            .collect();
         self.push_expr(ExprKind::Mul(a, b), derivatives)
     }
 
@@ -200,7 +253,8 @@ impl Context {
                 let diff = self.push_expr_nodiff(ExprKind::Sub(first, second));
                 let b_squared = self.push_expr_nodiff(ExprKind::Mul(b, b));
                 self.push_expr_nodiff(ExprKind::Div(diff, b_squared))
-            }).collect();
+            })
+            .collect();
         self.push_expr(ExprKind::Div(a, b), derivatives)
     }
 
@@ -221,7 +275,8 @@ impl Context {
                 let dv = self.get_derivative(v, i);
                 let cos = self.push_expr_nodiff(ExprKind::Cos(v));
                 self.push_expr_nodiff(ExprKind::Mul(cos, dv))
-            }).collect();
+            })
+            .collect();
         self.push_expr(ExprKind::Sin(v), derivatives)
     }
 
@@ -234,7 +289,8 @@ impl Context {
                 let sin = self.push_expr_nodiff(ExprKind::Sin(v));
                 let minus_sin = self.push_expr_nodiff(ExprKind::Neg(sin));
                 self.push_expr_nodiff(ExprKind::Mul(minus_sin, dv))
-            }).collect();
+            })
+            .collect();
         self.push_expr(ExprKind::Cos(v), derivatives)
     }
 
@@ -249,7 +305,8 @@ impl Context {
                 let one_minus_v2 = self.push_expr_nodiff(ExprKind::Sub(one, v2));
                 let inverse_square_root = self.push_expr_nodiff(ExprKind::Pow(one_minus_v2, -2.0));
                 self.push_expr_nodiff(ExprKind::Mul(inverse_square_root, dv))
-            }).collect();
+            })
+            .collect();
         self.push_expr(ExprKind::Acos(v), derivatives)
     }
 
@@ -267,7 +324,8 @@ impl Context {
                 let x2_plus_y2 = self.push_expr_nodiff(ExprKind::Add(x2, y2));
                 let xdy_minus_ydx = self.push_expr_nodiff(ExprKind::Sub(x_dy, y_dx));
                 self.push_expr_nodiff(ExprKind::Div(xdy_minus_ydx, x2_plus_y2))
-            }).collect();
+            })
+            .collect();
         self.push_expr(ExprKind::Atan2(y, x), derivatives)
     }
 
@@ -278,16 +336,22 @@ impl Context {
             .map(|i| {
                 let dv = self.get_derivative(v, i);
                 self.push_expr_nodiff(ExprKind::Neg(dv))
-            }).collect();
+            })
+            .collect();
         self.push_expr(ExprKind::Neg(v), derivatives)
     }
 
     /// Gets the minimum value.
     pub fn min(&mut self, a: Expr, b: Expr) -> Expr {
-        self.ternary(Condition::Comparison(Comparison {
-            a, b,
-            kind: ComparisonKind::Lt
-        }), a, b)
+        self.ternary(
+            Condition::Comparison(Comparison {
+                a,
+                b,
+                kind: ComparisonKind::Lt,
+            }),
+            a,
+            b,
+        )
     }
 
     /// Raises the value to an exponent.
@@ -300,15 +364,17 @@ impl Context {
                 let e_const = self.push_expr_nodiff(ExprKind::Constant(e));
                 let multiplied = self.push_expr_nodiff(ExprKind::Mul(e_const, raised));
                 self.push_expr_nodiff(ExprKind::Mul(multiplied, dv))
-            }).collect();
+            })
+            .collect();
         self.push_expr(ExprKind::Pow(v, e), derivatives)
     }
 
     /// Takes the absolute value.
     pub fn abs(&mut self, v: Expr) -> Expr {
         let cond = Condition::Comparison(Comparison {
-            a: Self::zero(), b: v,
-            kind: ComparisonKind::Lt
+            a: Self::zero(),
+            b: v,
+            kind: ComparisonKind::Lt,
         });
 
         // `dabs(a) = if a > 0 da else -da`
@@ -316,14 +382,11 @@ impl Context {
             .map(|i| {
                 let dv = self.get_derivative(v, i);
                 let minus_dv = self.push_expr_nodiff(ExprKind::Neg(dv));
-                self.push_expr_nodiff(ExprKind::Ternary(
-                    cond, dv, minus_dv
-                ))
-            }).collect();
+                self.push_expr_nodiff(ExprKind::Ternary(cond, dv, minus_dv))
+            })
+            .collect();
         let minus_v = self.neg(v);
-        self.push_expr(ExprKind::Ternary(
-            cond, v, minus_v
-        ), derivatives)
+        self.push_expr(ExprKind::Ternary(cond, v, minus_v), derivatives)
     }
 
     /// A ternary expression
@@ -333,38 +396,39 @@ impl Context {
             .map(|i| {
                 let dthen = self.get_derivative(then, i);
                 let delse = self.get_derivative(else_, i);
-                self.push_expr_nodiff(ExprKind::Ternary(
-                    condition, dthen, delse
-                ))
-            }).collect();
-        self.push_expr(ExprKind::Ternary(
-            condition, then, else_
-        ), derivatives)
+                self.push_expr_nodiff(ExprKind::Ternary(condition, dthen, delse))
+            })
+            .collect();
+        self.push_expr(ExprKind::Ternary(condition, then, else_), derivatives)
     }
 }
 
 impl Context {
     /// Returns a function computing the given expressions.
     pub fn compute<'r>(&self, exprs: impl IntoIterator<Item = Expr>) -> Func {
-        Func {func: compiler::compile(self, exprs) }
+        Func {
+            func: compiler::compile(self, exprs),
+        }
     }
 
     /// Returns a function computing the gradient for the given expression.
     pub fn compute_gradient(&self, expr: Expr) -> Func {
-        let func = compiler::compile(
-            self,
-            (0..self.inputs).map(|i| self.get_derivative(expr, i))
-        );
+        let func = compiler::compile(self, (0..self.inputs).map(|i| self.get_derivative(expr, i)));
 
-        Func {
-            func
-        }
+        Func { func }
+    }
+
+    /// Returns the gradient expressions, one for each input.
+    pub fn gradient(&self, expr: Expr) -> Vec<Expr> {
+        (0..self.inputs)
+            .map(|i| self.get_derivative(expr, i))
+            .collect()
     }
 }
 
 #[derive(Clone, Copy)]
 pub struct Func {
-    func: fn(*const Float, *mut Float)
+    func: fn(*const Float, *mut Float),
 }
 
 impl Func {
