@@ -2,12 +2,15 @@
 
 > <sup>**Syntax**</sup>\
 > *ImplicitIterator* :\
-> &nbsp;&nbsp; [*Expression&lt;false&gt;*](expressions.md) (`,` [*Expression&lt;false&gt;*](expressions.md))<sup>+</sup>\
+> &nbsp;&nbsp; [*Expression&lt;false&gt;*](expressions.md) (`,` [
+*Expression&lt;false&gt;*](expressions.md))<sup>+</sup>\
 > \
 > *ExplicitIterator* :\
-> &nbsp;&nbsp; `$` [INTEGER](numbers.md) `(` [*Expression&lt;false&gt;*](expressions.md) (`,` [*Expression&lt;false&gt;*](expressions.md))<sup>*</sup> `)`
+> &nbsp;&nbsp; `$` [INTEGER](numbers.md) `(` [*Expression&lt;false&gt;*](expressions.md) (`,` [
+*Expression&lt;false&gt;*](expressions.md))<sup>*</sup> `)`
 
-Iterators can be used in `let` statements and rules on both sides. A sequence of expressions separated by a comma is called an *implicit iterator*. Using these, multiple lines of a script can be collapsed into a single one. For example:
+Iterators can be used in `let` statements and rules on both sides. A sequence of expressions separated by a comma is
+called an *implicit iterator*. Using these, multiple lines of a script can be collapsed into a single one. For example:
 
 ```
 let A, B, C = Point();
@@ -15,7 +18,8 @@ let A, B, C = Point();
 AB = AC, BC;
 ```
 
-Iterators are expanded into multiple rules/statement by simply iterating over the given sequence. Implicit iterators take precedence over any arithmetic operators. Here's a few examples:
+Iterators are expanded into multiple rules/statement by simply iterating over the given sequence. Implicit iterators
+take precedence over any arithmetic operators. Here's a few examples:
 
 ```
 AB, BC = CD, EF;
@@ -58,7 +62,8 @@ The above example is equivalent to just writing
 AB = AC, BC;
 ```
 
-The number after the dollar sign is the *id* of the iterator. If only a single id is used, they function just like implicit iterators. However, when using multiple different ids, more complicated results can be achieved:
+The number after the dollar sign is the *id* of the iterator. If only a single id is used, they function just like
+implicit iterators. However, when using multiple different ids, more complicated results can be achieved:
 
 ```
 $1(AB, CD) < $2(XY, YZ);
@@ -91,9 +96,9 @@ Iterators have a few rules. Not obeying them causes compilation errors.
 
 * All implicit iterators have an id of 0;
 * All iterators of the same id must have the same length;
-* The left hand side of let statements only accept implicit iterators;
-* The right hand side of let statements accepts at most one level of iteration;
-* The right hand side of a let statement may only contain iterators, if so does the left side;
+* The left hand side of `let` statements only accept implicit iterators;
+* The right hand side of `let` statements accepts at most one level of iteration;
+* The right hand side of a `let` statement may only contain iterators, if so does the left side;
 * All iterators must have at least two variants;
 * An iterator with id x must not contain another iterator with id x;
 * Iterator length must not exceed 255;

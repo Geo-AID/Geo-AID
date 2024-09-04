@@ -160,7 +160,11 @@ pub struct ReconstructCtx<'r> {
 
 impl<'r> ReconstructCtx<'r> {
     #[must_use]
-    fn new(entity_replacement: &'r [EntityBehavior], old_vars: &'r [Expr<()>], old_entities: &'r [EntityKind]) -> Self {
+    fn new(
+        entity_replacement: &'r [EntityBehavior],
+        old_vars: &'r [Expr<()>],
+        old_entities: &'r [EntityKind],
+    ) -> Self {
         let mut ctx = Self {
             entity_replacement,
             old_vars,
@@ -229,17 +233,29 @@ impl<T: Reconstruct> Reconstruct for Vec<T> {
 }
 
 trait FindEntities {
-    fn find_entities(&self, previous: &[HashSet<EntityId>], entities: &[EntityKind]) -> HashSet<EntityId>;
+    fn find_entities(
+        &self,
+        previous: &[HashSet<EntityId>],
+        entities: &[EntityKind],
+    ) -> HashSet<EntityId>;
 }
 
 impl FindEntities for EntityId {
-    fn find_entities(&self, previous: &[HashSet<EntityId>], entities: &[EntityKind]) -> HashSet<EntityId> {
+    fn find_entities(
+        &self,
+        previous: &[HashSet<EntityId>],
+        entities: &[EntityKind],
+    ) -> HashSet<EntityId> {
         entities[self.0].find_entities(previous, entities)
     }
 }
 
 impl FindEntities for Vec<VarIndex> {
-    fn find_entities(&self, previous: &[HashSet<EntityId>], _entities: &[EntityKind]) -> HashSet<EntityId> {
+    fn find_entities(
+        &self,
+        previous: &[HashSet<EntityId>],
+        _entities: &[EntityKind],
+    ) -> HashSet<EntityId> {
         self.iter()
             .flat_map(|x| previous[x.0].iter().copied())
             .collect()
@@ -459,6 +475,7 @@ impl ExprKind {
     }
 
     #[must_use]
+    #[allow(clippy::too_many_lines)]
     pub fn compare(&self, other: &Self, math: &Math) -> Ordering {
         self.variant_id()
             .cmp(&other.variant_id())
@@ -667,7 +684,7 @@ impl ExprKind {
 impl From<ExprKind> for geo_aid_figure::ExpressionKind {
     fn from(value: ExprKind) -> Self {
         match value {
-            ExprKind::Entity { id } => Self::Entity { id: id },
+            ExprKind::Entity { id } => Self::Entity { id },
             ExprKind::LineLineIntersection { k, l } => Self::LineLineIntersection { k, l },
             ExprKind::AveragePoint { items } => Self::AveragePoint { items },
             ExprKind::CircleCenter { circle } => Self::CircleCenter { circle },
@@ -703,13 +720,17 @@ impl From<ExprKind> for geo_aid_figure::ExpressionKind {
 }
 
 impl FindEntities for ExprKind {
-    fn find_entities(&self, previous: &[HashSet<EntityId>], entities: &[EntityKind]) -> HashSet<EntityId> {
+    fn find_entities(
+        &self,
+        previous: &[HashSet<EntityId>],
+        entities: &[EntityKind],
+    ) -> HashSet<EntityId> {
         let mut set = HashSet::new();
 
         match self {
             Self::Entity { id } => {
                 set.insert(*id);
-                set.extend(id.find_entities(previous, entities))
+                set.extend(id.find_entities(previous, entities));
             }
             Self::AveragePoint { items } => {
                 set.extend(items.iter().flat_map(|x| previous[x.0].iter().copied()));
@@ -725,14 +746,8 @@ impl FindEntities for ExprKind {
                 minus: v2,
             }
             | Self::Product { times: v1, by: v2 } => {
-                set.extend(
-                    v1.iter()
-                        .flat_map(|x| previous[x.0].iter().copied()),
-                );
-                set.extend(
-                    v2.iter()
-                        .flat_map(|x| previous[x.0].iter().copied()),
-                );
+                set.extend(v1.iter().flat_map(|x| previous[x.0].iter().copied()));
+                set.extend(v2.iter().flat_map(|x| previous[x.0].iter().copied()));
             }
             Self::PointPointDistance { p: a, q: b }
             | Self::PointLineDistance { point: a, line: b }
@@ -1045,8 +1060,8 @@ fn fix_dst(expr: ExprKind, unit: Option<ComplexUnit>, math: &mut Expand) -> Expr
 #[derive(Debug, Clone)]
 pub struct Merge<T, I, J, F>
 where
-    I: Iterator<Item=T>,
-    J: Iterator<Item=T>,
+    I: Iterator<Item = T>,
+    J: Iterator<Item = T>,
     F: FnMut(&T, &T) -> Ordering,
 {
     i: Peekable<I>,
@@ -1054,11 +1069,11 @@ where
     f: F,
 }
 
-impl<T, I: Iterator<Item=T>, J: Iterator<Item=T>, F: FnMut(&T, &T) -> Ordering>
-Merge<T, I, J, F>
+impl<T, I: Iterator<Item = T>, J: Iterator<Item = T>, F: FnMut(&T, &T) -> Ordering>
+    Merge<T, I, J, F>
 {
     #[must_use]
-    pub fn new<A: IntoIterator<IntoIter=I>, B: IntoIterator<IntoIter=J>>(
+    pub fn new<A: IntoIterator<IntoIter = I>, B: IntoIterator<IntoIter = J>>(
         a: A,
         b: B,
         f: F,
@@ -1071,7 +1086,7 @@ Merge<T, I, J, F>
     }
 
     #[must_use]
-    pub fn merge_with<It: IntoIterator<Item=T>>(
+    pub fn merge_with<It: IntoIterator<Item = T>>(
         self,
         other: It,
     ) -> Merge<T, Self, It::IntoIter, F>
@@ -1084,7 +1099,7 @@ Merge<T, I, J, F>
 }
 
 impl<T, F: FnMut(&T, &T) -> Ordering>
-Merge<T, std::option::IntoIter<T>, std::option::IntoIter<T>, F>
+    Merge<T, std::option::IntoIter<T>, std::option::IntoIter<T>, F>
 {
     #[must_use]
     pub fn empty(f: F) -> Self {
@@ -1092,8 +1107,8 @@ Merge<T, std::option::IntoIter<T>, std::option::IntoIter<T>, F>
     }
 }
 
-impl<T, I: Iterator<Item=T>, J: Iterator<Item=T>, F: FnMut(&T, &T) -> Ordering> Iterator
-for Merge<T, I, J, F>
+impl<T, I: Iterator<Item = T>, J: Iterator<Item = T>, F: FnMut(&T, &T) -> Ordering> Iterator
+    for Merge<T, I, J, F>
 {
     type Item = T;
 
@@ -1223,7 +1238,11 @@ impl<M> Expr<M> {
 }
 
 impl<M> FindEntities for Expr<M> {
-    fn find_entities(&self, previous: &[HashSet<EntityId>], entities: &[EntityKind]) -> HashSet<EntityId> {
+    fn find_entities(
+        &self,
+        previous: &[HashSet<EntityId>],
+        entities: &[EntityKind],
+    ) -> HashSet<EntityId> {
         self.kind.find_entities(previous, entities)
     }
 }
@@ -1286,8 +1305,7 @@ pub enum RuleKind {
 impl Display for RuleKind {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            RuleKind::PointEq(a, b)
-            | RuleKind::NumberEq(a, b) => write!(f, "{a} = {b}"),
+            RuleKind::PointEq(a, b) | RuleKind::NumberEq(a, b) => write!(f, "{a} = {b}"),
             RuleKind::Lt(a, b) => write!(f, "{a} < {b}"),
             RuleKind::Gt(a, b) => write!(f, "{a} > {b}"),
             RuleKind::Alternative(v) => {
@@ -1298,13 +1316,18 @@ impl Display for RuleKind {
                 Ok(())
             }
             RuleKind::Invert(v) => write!(f, "not {v}"),
-            RuleKind::Bias => write!(f, "bias")
+            RuleKind::Bias => write!(f, "bias"),
         }
     }
 }
 
 impl FindEntities for RuleKind {
-    fn find_entities(&self, previous: &[HashSet<EntityId>], entities: &[EntityKind]) -> HashSet<EntityId> {
+    #[allow(clippy::only_used_in_recursion)]
+    fn find_entities(
+        &self,
+        previous: &[HashSet<EntityId>],
+        entities: &[EntityKind],
+    ) -> HashSet<EntityId> {
         let mut set = HashSet::new();
 
         match self {
@@ -1501,18 +1524,17 @@ pub enum EntityKind {
 }
 
 impl FindEntities for EntityKind {
-    fn find_entities(&self, previous: &[HashSet<EntityId>], _entities: &[EntityKind]) -> HashSet<EntityId> {
+    fn find_entities(
+        &self,
+        previous: &[HashSet<EntityId>],
+        _entities: &[EntityKind],
+    ) -> HashSet<EntityId> {
         match self {
-            Self::PointOnLine { line: var }
-            | Self::PointOnCircle { circle: var } => {
+            Self::PointOnLine { line: var } | Self::PointOnCircle { circle: var } => {
                 previous[var.0].clone()
             }
-            Self::FreePoint
-            | Self::FreeReal
-            | Self::DistanceUnit => {
-                HashSet::new()
-            }
-            Self::Bind(_) => unreachable!()
+            Self::FreePoint | Self::FreeReal | Self::DistanceUnit => HashSet::new(),
+            Self::Bind(_) => unreachable!(),
         }
     }
 }
@@ -1619,7 +1641,7 @@ impl Expand {
         self.rc_keepalive
             .push(Rc::clone(&unrolled.data) as Rc<dyn Any>);
 
-        let key = (unrolled.get_data() as *const _) as usize;
+        let key = std::ptr::from_ref(unrolled.get_data()) as usize;
         let loaded = self.expr_map.get(&key).cloned();
 
         if let Some(loaded) = loaded {

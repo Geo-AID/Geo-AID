@@ -10,6 +10,7 @@
       yields errors.
 - **Glide**: Added a new gradient descent based engine that should generally perform better than Rage and made it a new
   default.
+- **Book**: Updated the book.
 
 ## Version 0.4.2 (2024.07.30)
 

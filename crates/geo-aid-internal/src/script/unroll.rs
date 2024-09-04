@@ -1149,7 +1149,7 @@ impl ConvertFrom<Expr<PointCollection>> for Point {
                             .ok_or(SpannedMathString::new(span!(0, 0, 0, 0)));
                     }
 
-                    let _ = props.ignore("default-label");
+                    props.ignore("default-label");
                     props.finish(context);
                 }
             }
@@ -3458,8 +3458,14 @@ impl Properties {
         self.props.remove(property);
     }
 
-    pub fn add_if_not_present(&mut self, property: &'static str, (key_span, value): (Span, PropertyValue)) {
-        self.props.entry(property.to_string()).or_insert((key_span, value));
+    pub fn add_if_not_present(
+        &mut self,
+        property: &'static str,
+        (key_span, value): (Span, PropertyValue),
+    ) {
+        self.props
+            .entry(property.to_string())
+            .or_insert((key_span, value));
     }
 
     #[must_use]

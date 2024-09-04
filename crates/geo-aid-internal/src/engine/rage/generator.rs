@@ -27,6 +27,7 @@ fn adjust_and_check(ctx: &mut GenerateContext) {
         &ctx.adjustable_template,
     );
 
+    #[allow(clippy::cast_precision_loss)]
     let errors_len = ctx.current_state.qualities.len() as f64;
     ctx.error_fn
         .call(&ctx.current_state.inputs, &mut ctx.current_state.qualities);

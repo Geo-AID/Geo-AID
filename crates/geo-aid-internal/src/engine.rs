@@ -25,6 +25,7 @@ pub(crate) struct QualityRecord {
 impl QualityRecord {
     #[must_use]
     pub fn new(entry_count: usize, limit: f64) -> Self {
+        #[allow(clippy::cast_precision_loss)]
         Self {
             queue: VecDeque::with_capacity(entry_count),
             entry_count,
@@ -49,9 +50,7 @@ impl QualityRecord {
         self.queue.push_back(delta);
         self.quality = quality;
 
-        let x = self.queue.len() >= self.entry_count && self.sum <= self.limit;
-        // println!("{x}");
-        x
+        self.queue.len() >= self.entry_count && self.sum <= self.limit
     }
 
     /// Clears the quality record, therefore resetting the process.

@@ -4,7 +4,7 @@
 let A, B, C, D = Point();
 ABCD lies_on Circle();
 
-let X [display = false] = intersection(bisector(BCD) [display = false], bisector(CDA) [display = false]) lies_on Segment(AB);
+let X [display = false] = intersection(bisector(BCD), bisector(CDA)) lies_on Segment(AB);
 let omega = Circle(X, dst(X, DC [display = false]));
 
 ?Segment((BC, CD, DA));

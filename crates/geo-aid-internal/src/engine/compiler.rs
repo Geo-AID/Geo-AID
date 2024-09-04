@@ -56,7 +56,7 @@ pub fn compile(intermediate: &Intermediate) -> Compiled {
             ]),
             ValueExpr::Complex(complex) => exprs.extend([complex.real, complex.imaginary]),
             ValueExpr::Circle(circle) => {
-                exprs.extend([circle.center.real, circle.center.imaginary, circle.radius])
+                exprs.extend([circle.center.real, circle.center.imaginary, circle.radius]);
             }
         }
     }
@@ -295,22 +295,23 @@ impl<'r> Compiler<'r> {
                 // println!("{:#?}", self.variables);
                 let k = self.variables[k.0].to_line();
                 let l = self.variables[l.0].to_line();
-                let a = k.origin;
-                let b = k.direction;
-                let c = l.origin;
-                let d = l.direction;
+                // a = k.origin;
+                // b = k.direction;
+                // c = l.origin;
+                // d = l.direction;
 
-                let b_by_d = b.div(d, &mut self.context);
-                let a_sub_c = a.sub(c, &mut self.context);
-                let a_sub_c_by_d = a_sub_c.div(d, &mut self.context);
+                let b_by_d = k.direction.div(l.direction, &mut self.context);
+                let a_sub_c = k.origin.sub(l.origin, &mut self.context);
+                let a_sub_c_by_d = a_sub_c.div(l.direction, &mut self.context);
                 let quotient = self.context.div(a_sub_c_by_d.imaginary, b_by_d.imaginary);
-                let b_times_quotient = b.mul_real(quotient, &mut self.context);
+                let b_times_quotient = k.direction.mul_real(quotient, &mut self.context);
 
-                a.sub(b_times_quotient, &mut self.context).into()
+                k.origin.sub(b_times_quotient, &mut self.context).into()
             }
             ExprKind::AveragePoint { items } => {
                 let sum = self.compile_sum(items);
 
+                #[allow(clippy::cast_precision_loss)]
                 let len = self.context.constant(items.len() as f64);
                 sum.div_real(len, &mut self.context).into()
             }

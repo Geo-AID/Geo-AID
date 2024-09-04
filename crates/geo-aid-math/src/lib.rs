@@ -405,7 +405,7 @@ impl Context {
 
 impl Context {
     /// Returns a function computing the given expressions.
-    pub fn compute<'r>(&self, exprs: impl IntoIterator<Item = Expr>) -> Func {
+    pub fn compute(&self, exprs: impl IntoIterator<Item = Expr>) -> Func {
         Func {
             func: compiler::compile(self, exprs),
         }
