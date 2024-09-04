@@ -2,7 +2,7 @@ use crate::script::math::{
     ContainsEntity, DeepClone, EntityKind, ExprKind, ExprType, Math, VarIndex,
 };
 use crate::script::token::number::ProcNum;
-use num_traits::Zero;
+use num_traits::{FromPrimitive, Zero};
 
 use super::{Rule, RuleKind};
 
@@ -114,7 +114,12 @@ pub struct EqPointDst;
 
 impl EqPointDst {
     // Assumes that if rule has an entity, it's on the left of dst(a, b) = c
-    fn process_pp_of_ent_x(a: VarIndex, b: VarIndex, c: VarIndex, math: &mut Math) -> Result<(), (VarIndex, VarIndex, VarIndex)> {
+    fn process_pp_of_ent_x(
+        a: VarIndex,
+        b: VarIndex,
+        c: VarIndex,
+        math: &mut Math,
+    ) -> Result<(), (VarIndex, VarIndex, VarIndex)> {
         let &ExprKind::Entity { id } = &math.at(&a).kind else {
             return Err((a, b, c));
         };
@@ -143,8 +148,8 @@ impl EqPointDst {
     }
 
     // Assumes that if rule compares a pp distance, the distance on left of a = b
-    fn process_pp_x(a: VarIndex, b: VarIndex, math: &mut Math) -> bool {
-        let ExprKind::PointPointDistance { p, q } = &math.at(&a).kind else {
+    fn process_pp_x(a: &VarIndex, b: VarIndex, math: &mut Math) -> bool {
+        let ExprKind::PointPointDistance { p, q } = &math.at(a).kind else {
             return false;
         };
 
@@ -163,7 +168,7 @@ impl EqPointDst {
             return false;
         };
 
-        if Self::process_pp_x(a.clone(), b.clone(), math) || Self::process_pp_x(b.clone(), a.clone(), math) {
+        if Self::process_pp_x(a, b.clone(), math) || Self::process_pp_x(b, a.clone(), math) {
             *rule = None;
             true
         } else {
@@ -176,6 +181,7 @@ impl EqPointDst {
 pub struct RightAngle;
 
 impl RightAngle {
+    #[allow(clippy::many_single_char_names)]
     pub fn process(rule: &mut Option<Rule>, math: &mut Math) -> bool {
         let Some(Rule {
             kind: RuleKind::NumberEq(a, b),
@@ -192,7 +198,7 @@ impl RightAngle {
             return false;
         };
 
-        if *value != ProcNum::pi() {
+        if *value != ProcNum::pi() / &ProcNum::from_u64(2).unwrap() {
             return false;
         }
 

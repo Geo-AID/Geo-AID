@@ -2,21 +2,16 @@
 
 Changes that are already assigned to specific versions.
 
-## Version 0.4.2
-
-- Extract the internals of Geo-AID to an external crate. This should help in...
-- Create a debugger for Geo-AID. This is crucial for further improving the tool.
-
 # Backlog
 
 Will do, but yet unassigned.
 
 - It's always more docs
-- Gradient adjustment engine
 - Quantum points
-- More engines in general
+- More engines (?)
 - GeoGebra drawer
-- Extraction of drawers to external crates (will help with e.g. reusing the code for a browser-based interface to Geo-AID)
+- Extraction of drawers to external crates (will help with e.g. reusing the code for a browser-based interface to
+  Geo-AID)
 - A simple equation solver, crucial for handling distance literals well.
 - Label support for circles, lines, etc. including smart label assignment for distances.
 - Distance and angle equality support (for the presentation layer, the rules have always supported it)

@@ -1,32 +1,63 @@
-use crate::engine::rage::compiler::Compiler;
-use crate::engine::rage::generator::critic::FigureProgram;
-use crate::engine::rage::generator::program::ValueType;
-use crate::engine::rage::generator::Adjustable;
-use crate::geometry::{Complex, ValueEnum};
-use crate::script::figure::{Figure, Generated};
-use crate::script::math::{Entity, Expr, Intermediate};
+pub use self::generator::Generator;
+use crate::engine::compiler::{Compiled, FigureFn};
+use crate::engine::rage::generator::AdjustableTemplate;
+use crate::script::figure::Generated;
+use crate::script::math::Intermediate;
+#[allow(unused_imports)]
+use geo_aid_math::Func;
 use std::time::Duration;
 
-pub use self::generator::Generator;
-
-mod compiler;
 mod generator;
 
 /// The Random Adjustment Generation Engine.
-#[derive(Debug)]
 pub struct Rage {
     generator: Generator,
-    figure_program: FigureProgram,
+    figure_fn: FigureFn,
+    // rule_fn: Func,
+    // rule_count: usize,
+}
+
+#[derive(Clone, Copy)]
+pub struct Params {
+    pub strictness: f64,
+    pub samples: usize,
+    pub worker_count: usize,
+    pub mean_count: usize,
+    pub max_mean_delta: f64,
+    pub max_adjustment: f64,
 }
 
 impl Rage {
     #[must_use]
-    pub fn new(worker_count: usize, strictness: f64, intermediate: &Intermediate) -> Self {
-        let (ev, fig) = Compiler::new(intermediate).compile_programs();
+    pub fn new(params: Params, intermediate: &Intermediate) -> Self {
+        let Compiled {
+            context,
+            errors,
+            figure_fn,
+            input_count,
+            ..
+        } = super::compiler::compile(intermediate);
+
+        let error_fn = context.compute(errors.iter().copied());
+        let adjustables: Vec<_> = intermediate
+            .adjusted
+            .entities
+            .iter()
+            .map(AdjustableTemplate::from)
+            .collect();
+
+        // let rule_count = rule_errors.len();
+        // let rule_fn = context.compute(rule_errors.into_iter());
+
+        // let mut dst = [1.0, 1.0];
+        // error_fn.call(&[0.0, 0.0, 2.0, 2.0], &mut dst);
+        // println!("Works now: {dst:?}");
 
         Self {
-            generator: unsafe { Generator::new(worker_count, ev, strictness) },
-            figure_program: fig,
+            generator: Generator::new(params, input_count, error_fn, &adjustables.into()),
+            figure_fn,
+            // rule_fn,
+            // rule_count,
         }
     }
 
@@ -51,62 +82,12 @@ impl Rage {
         &mut self.generator
     }
 
-    pub fn get_figure(&mut self, figure: Figure) -> Generated {
-        for (c, adj) in self
-            .figure_program
-            .base
-            .constants
-            .iter_mut()
-            .zip(&self.generator.get_state().adjustables)
-        {
-            *c = match adj {
-                Adjustable::Point(point) => ValueEnum::Complex(*point),
-                Adjustable::Real(x) | Adjustable::Clip1D(x) => {
-                    ValueEnum::Complex(Complex::real(*x))
-                }
-            };
-        }
-
-        let mut memory = self.figure_program.setup();
-        unsafe {
-            self.figure_program.calculate(&mut memory);
-        }
-
-        let mut variables = Vec::new();
-        for ((ty, loc), expr) in self.figure_program.variables.iter().zip(figure.variables) {
-            let v = memory[*loc];
-            let v = unsafe {
-                match ty {
-                    ValueType::Complex => ValueEnum::Complex(v.complex),
-                    ValueType::Line => ValueEnum::Line(v.line),
-                    ValueType::Circle => ValueEnum::Circle(v.circle),
-                }
-            };
-            variables.push(Expr {
-                ty: expr.ty,
-                kind: expr.kind,
-                meta: v,
-            });
-        }
-
-        let mut entities = Vec::new();
-        for ((ty, loc), ent) in self.figure_program.entities.iter().zip(figure.entities) {
-            let v = memory[*loc];
-            let v = unsafe {
-                match ty {
-                    ValueType::Complex => ValueEnum::Complex(v.complex),
-                    ValueType::Line => ValueEnum::Line(v.line),
-                    ValueType::Circle => ValueEnum::Circle(v.circle),
-                }
-            };
-            entities.push(Entity { kind: ent, meta: v });
-        }
-
-        Generated {
-            variables,
-            entities,
-            items: figure.items,
-        }
+    pub fn get_figure(&mut self) -> Generated {
+        let inputs = self.generator.get_state();
+        // let mut rule_qs = vec![0.0; self.rule_count];
+        // self.rule_fn.call(&inputs.inputs, &mut rule_qs);
+        // println!("Rule qualities: {:?}", rule_qs);
+        (self.figure_fn)(&inputs.inputs)
     }
 }
 

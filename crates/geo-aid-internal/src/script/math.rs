@@ -10,7 +10,7 @@ use std::any::Any;
 use std::cell::OnceCell;
 use std::cmp::Ordering;
 use std::collections::{hash_map, HashMap, HashSet};
-use std::fmt::Debug;
+use std::fmt::{Debug, Display, Formatter};
 use std::hash::Hash;
 use std::iter::Peekable;
 use std::mem;
@@ -154,15 +154,35 @@ pub struct ReconstructCtx<'r> {
     entity_replacement: &'r [EntityBehavior],
     old_vars: &'r [Expr<()>],
     new_vars: Vec<Expr<()>>,
+    old_entities: &'r [EntityKind],
+    new_entities: Vec<Option<EntityKind>>,
 }
 
 impl<'r> ReconstructCtx<'r> {
     #[must_use]
-    fn new(entity_replacement: &'r [EntityBehavior], old_vars: &'r [Expr<()>]) -> Self {
-        Self {
+    fn new(
+        entity_replacement: &'r [EntityBehavior],
+        old_vars: &'r [Expr<()>],
+        old_entities: &'r [EntityKind],
+    ) -> Self {
+        let mut ctx = Self {
             entity_replacement,
             old_vars,
             new_vars: Vec::new(),
+            old_entities,
+            new_entities: vec![None; old_entities.len()],
+        };
+
+        for i in 0..old_entities.len() {
+            ctx.reconstruct_entity(EntityId(i));
+        }
+
+        ctx
+    }
+
+    fn reconstruct_entity(&mut self, id: EntityId) {
+        if self.new_entities[id.0].is_none() {
+            self.new_entities[id.0] = Some(self.old_entities[id.0].clone().reconstruct(self));
         }
     }
 }
@@ -174,7 +194,10 @@ pub trait Reconstruct {
 
 fn reconstruct_entity(entity_id: EntityId, ctx: &mut ReconstructCtx) -> ExprKind {
     match &ctx.entity_replacement[entity_id.0] {
-        EntityBehavior::MapEntity(id) => ExprKind::Entity { id: *id },
+        EntityBehavior::MapEntity(id) => {
+            ctx.reconstruct_entity(*id);
+            ExprKind::Entity { id: *id }
+        }
         EntityBehavior::MapVar(index) => ctx.old_vars[index.0].kind.clone().reconstruct(ctx),
     }
 }
@@ -210,11 +233,29 @@ impl<T: Reconstruct> Reconstruct for Vec<T> {
 }
 
 trait FindEntities {
-    fn find_entities(&self, previous: &[HashSet<EntityId>]) -> HashSet<EntityId>;
+    fn find_entities(
+        &self,
+        previous: &[HashSet<EntityId>],
+        entities: &[EntityKind],
+    ) -> HashSet<EntityId>;
+}
+
+impl FindEntities for EntityId {
+    fn find_entities(
+        &self,
+        previous: &[HashSet<EntityId>],
+        entities: &[EntityKind],
+    ) -> HashSet<EntityId> {
+        entities[self.0].find_entities(previous, entities)
+    }
 }
 
 impl FindEntities for Vec<VarIndex> {
-    fn find_entities(&self, previous: &[HashSet<EntityId>]) -> HashSet<EntityId> {
+    fn find_entities(
+        &self,
+        previous: &[HashSet<EntityId>],
+        _entities: &[EntityKind],
+    ) -> HashSet<EntityId> {
         self.iter()
             .flat_map(|x| previous[x.0].iter().copied())
             .collect()
@@ -339,7 +380,7 @@ pub enum ExprKind {
     Const {
         value: ProcNum,
     },
-    Power {
+    PartialPower {
         value: VarIndex,
         exponent: CompExponent,
     },
@@ -417,7 +458,7 @@ impl ExprKind {
             Self::Sum { .. } => 4,
             Self::Product { .. } => 5,
             Self::Const { .. } => 6,
-            Self::Power { .. } => 7,
+            Self::PartialPower { .. } => 7,
             Self::PointPointDistance { .. } => 8,
             Self::PointLineDistance { .. } => 9,
             Self::ThreePointAngle { .. } => 10,
@@ -434,6 +475,7 @@ impl ExprKind {
     }
 
     #[must_use]
+    #[allow(clippy::too_many_lines)]
     pub fn compare(&self, other: &Self, math: &Math) -> Ordering {
         self.variant_id()
             .cmp(&other.variant_id())
@@ -558,11 +600,11 @@ impl ExprKind {
                     self_v.cmp(other_v)
                 }
                 (
-                    Self::Power {
+                    Self::PartialPower {
                         value: self_v,
                         exponent: self_exp,
                     },
-                    Self::Power {
+                    Self::PartialPower {
                         value: other_v,
                         exponent: other_exp,
                     },
@@ -622,7 +664,7 @@ impl ExprKind {
             Self::Sum { .. }
             | Self::Product { .. }
             | Self::Const { .. }
-            | Self::Power { .. }
+            | Self::PartialPower { .. }
             | Self::PointPointDistance { .. }
             | Self::PointLineDistance { .. }
             | Self::ThreePointAngle { .. }
@@ -642,7 +684,7 @@ impl ExprKind {
 impl From<ExprKind> for geo_aid_figure::ExpressionKind {
     fn from(value: ExprKind) -> Self {
         match value {
-            ExprKind::Entity { id } => Self::Entity { id: id },
+            ExprKind::Entity { id } => Self::Entity { id },
             ExprKind::LineLineIntersection { k, l } => Self::LineLineIntersection { k, l },
             ExprKind::AveragePoint { items } => Self::AveragePoint { items },
             ExprKind::CircleCenter { circle } => Self::CircleCenter { circle },
@@ -651,7 +693,7 @@ impl From<ExprKind> for geo_aid_figure::ExpressionKind {
             ExprKind::Const { value } => Self::Const {
                 value: value.to_complex().into(),
             },
-            ExprKind::Power { value, exponent } => Self::Power {
+            ExprKind::PartialPower { value, exponent } => Self::Power {
                 value,
                 exponent: exponent.into(),
             },
@@ -678,12 +720,17 @@ impl From<ExprKind> for geo_aid_figure::ExpressionKind {
 }
 
 impl FindEntities for ExprKind {
-    fn find_entities(&self, previous: &[HashSet<EntityId>]) -> HashSet<EntityId> {
+    fn find_entities(
+        &self,
+        previous: &[HashSet<EntityId>],
+        entities: &[EntityKind],
+    ) -> HashSet<EntityId> {
         let mut set = HashSet::new();
 
         match self {
             Self::Entity { id } => {
                 set.insert(*id);
+                set.extend(id.find_entities(previous, entities));
             }
             Self::AveragePoint { items } => {
                 set.extend(items.iter().flat_map(|x| previous[x.0].iter().copied()));
@@ -691,7 +738,7 @@ impl FindEntities for ExprKind {
             Self::CircleCenter { circle: x }
             | Self::PointX { point: x }
             | Self::PointY { point: x }
-            | Self::Power { value: x, .. } => {
+            | Self::PartialPower { value: x, .. } => {
                 set.extend(previous[x.0].iter().copied());
             }
             Self::Sum {
@@ -699,14 +746,8 @@ impl FindEntities for ExprKind {
                 minus: v2,
             }
             | Self::Product { times: v1, by: v2 } => {
-                set.extend(
-                    v1.iter()
-                        .flat_map(|x| previous[x.0].iter().copied()),
-                );
-                set.extend(
-                    v2.iter()
-                        .flat_map(|x| previous[x.0].iter().copied()),
-                );
+                set.extend(v1.iter().flat_map(|x| previous[x.0].iter().copied()));
+                set.extend(v2.iter().flat_map(|x| previous[x.0].iter().copied()));
             }
             Self::PointPointDistance { p: a, q: b }
             | Self::PointLineDistance { point: a, line: b }
@@ -840,7 +881,7 @@ impl FromUnrolled<unroll::Scalar> for ExprKind {
                 k: math.load(k),
                 l: math.load(l),
             },
-            UnrolledScalar::Pow(base, exponent) => ExprKind::Power {
+            UnrolledScalar::Pow(base, exponent) => ExprKind::PartialPower {
                 value: math.load(base),
                 exponent: *exponent,
             },
@@ -942,7 +983,7 @@ impl Normalize for ExprKind {
             | Self::PointLineDistance { .. }
             | Self::PointX { .. }
             | Self::PointY { .. }
-            | Self::Power { .. }
+            | Self::PartialPower { .. }
             | Self::ConstructCircle { .. }
             | Self::Const { .. }
             | Self::ThreePointAngleDir { .. } // DO NOT NORMALIZE DIRECTED ANGLES
@@ -952,7 +993,7 @@ impl Normalize for ExprKind {
             | Self::TwoLineAngle { k: a, l: b }
             | Self::AngleBisector { p: a, r: b, .. }
             | Self::ThreePointAngle { p: a, r: b, .. }
-            | Self::PointPointDistance {p: a, q: b} => {
+            | Self::PointPointDistance { p: a, q: b } => {
                 cmp_and_swap(a, b);
             }
             Self::AveragePoint { items } => {
@@ -1002,7 +1043,7 @@ fn fix_dst(expr: ExprKind, unit: Option<ComplexUnit>, math: &mut Expand) -> Expr
                     times: vec![
                         math.store(expr, ExprType::Number),
                         math.store(
-                            ExprKind::Power {
+                            ExprKind::PartialPower {
                                 value: dst_var,
                                 exponent: unit.0[SimpleUnit::Distance as usize],
                             },
@@ -1197,8 +1238,12 @@ impl<M> Expr<M> {
 }
 
 impl<M> FindEntities for Expr<M> {
-    fn find_entities(&self, previous: &[HashSet<EntityId>]) -> HashSet<EntityId> {
-        self.kind.find_entities(previous)
+    fn find_entities(
+        &self,
+        previous: &[HashSet<EntityId>],
+        entities: &[EntityKind],
+    ) -> HashSet<EntityId> {
+        self.kind.find_entities(previous, entities)
     }
 }
 
@@ -1257,8 +1302,32 @@ pub enum RuleKind {
     Bias,
 }
 
+impl Display for RuleKind {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            RuleKind::PointEq(a, b) | RuleKind::NumberEq(a, b) => write!(f, "{a} = {b}"),
+            RuleKind::Lt(a, b) => write!(f, "{a} < {b}"),
+            RuleKind::Gt(a, b) => write!(f, "{a} > {b}"),
+            RuleKind::Alternative(v) => {
+                for kind in v {
+                    write!(f, "| {kind}")?;
+                }
+
+                Ok(())
+            }
+            RuleKind::Invert(v) => write!(f, "not {v}"),
+            RuleKind::Bias => write!(f, "bias"),
+        }
+    }
+}
+
 impl FindEntities for RuleKind {
-    fn find_entities(&self, previous: &[HashSet<EntityId>]) -> HashSet<EntityId> {
+    #[allow(clippy::only_used_in_recursion)]
+    fn find_entities(
+        &self,
+        previous: &[HashSet<EntityId>],
+        entities: &[EntityKind],
+    ) -> HashSet<EntityId> {
         let mut set = HashSet::new();
 
         match self {
@@ -1269,11 +1338,11 @@ impl FindEntities for RuleKind {
             Self::Alternative(items) => {
                 return items
                     .iter()
-                    .flat_map(|x| x.find_entities(previous).into_iter())
+                    .flat_map(|x| x.find_entities(previous, entities).into_iter())
                     .collect();
             }
             Self::Invert(rule) => {
-                return rule.find_entities(previous);
+                return rule.find_entities(previous, entities);
             }
             Self::Bias => unreachable!(),
         }
@@ -1287,6 +1356,12 @@ pub struct Rule {
     pub kind: RuleKind,
     pub weight: ProcNum,
     pub entities: Vec<EntityId>,
+}
+
+impl Display for Rule {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.kind)
+    }
 }
 
 impl ContainsEntity for Rule {
@@ -1448,6 +1523,22 @@ pub enum EntityKind {
     Bind(VarIndex),
 }
 
+impl FindEntities for EntityKind {
+    fn find_entities(
+        &self,
+        previous: &[HashSet<EntityId>],
+        _entities: &[EntityKind],
+    ) -> HashSet<EntityId> {
+        match self {
+            Self::PointOnLine { line: var } | Self::PointOnCircle { circle: var } => {
+                previous[var.0].clone()
+            }
+            Self::FreePoint | Self::FreeReal | Self::DistanceUnit => HashSet::new(),
+            Self::Bind(_) => unreachable!(),
+        }
+    }
+}
+
 impl From<EntityKind> for geo_aid_figure::EntityKind {
     fn from(value: EntityKind) -> Self {
         match value {
@@ -1550,7 +1641,7 @@ impl Expand {
         self.rc_keepalive
             .push(Rc::clone(&unrolled.data) as Rc<dyn Any>);
 
-        let key = (unrolled.get_data() as *const _) as usize;
+        let key = std::ptr::from_ref(unrolled.get_data()) as usize;
         let loaded = self.expr_map.get(&key).cloned();
 
         if let Some(loaded) = loaded {
@@ -1828,13 +1919,13 @@ fn optimize_cycle(rules: &mut Vec<Option<Rule>>, math: &mut Math, items: &mut Ve
         // We'll also have to update items. Otherwise, they will have misguided indices.
 
         let old_vars = mem::take(&mut math.expr_record);
-        let mut ctx = ReconstructCtx::new(&entity_map, &old_vars);
-        math.entities = entities.reconstruct(&mut ctx);
+        let mut ctx = ReconstructCtx::new(&entity_map, &old_vars, &entities);
         let old_items = mem::take(items);
         *items = old_items.reconstruct(&mut ctx);
         let old_rules = mem::take(rules);
         *rules = old_rules.reconstruct(&mut ctx);
         math.expr_record = ctx.new_vars;
+        math.entities = ctx.new_entities.into_iter().map(Option::unwrap).collect();
 
         // After reconstruction, all forward referencing is gone.
 
@@ -1916,11 +2007,19 @@ pub fn load_script(input: &str) -> Result<Intermediate, Vec<Error>> {
         .collect();
 
     let old_vars = mem::take(&mut math.expr_record);
-    let mut ctx = ReconstructCtx::new(&entity_map, &old_vars);
-    let new_entities = old_entities.reconstruct(&mut ctx);
+    let mut ctx = ReconstructCtx::new(&entity_map, &old_vars, &old_entities);
     build.items = build.items.reconstruct(&mut ctx);
     rules = rules.reconstruct(&mut ctx);
     math.expr_record = ctx.new_vars;
+    let new_entities: Vec<_> = ctx.new_entities.into_iter().map(Option::unwrap).collect();
+
+    // for (i, ent) in new_entities.iter().enumerate() {
+    //     println!("[{i}] = {ent:?}");
+    // }
+    //
+    // for (i, var) in math.expr_record.iter().enumerate() {
+    //     println!("[{i}] = {:?}", var.kind);
+    // }
 
     // We can also finalize rules:
     let mut rules: Vec<_> = rules.into_iter().flatten().collect();
@@ -1986,12 +2085,12 @@ pub fn load_script(input: &str) -> Result<Intermediate, Vec<Error>> {
     // Find entities affected by specific rules
     let mut found_entities = Vec::new();
     for expr in &variables {
-        let found = expr.find_entities(&found_entities);
+        let found = expr.find_entities(&found_entities, &entities);
         found_entities.push(found);
     }
 
     for rule in &mut rules {
-        let entities = rule.kind.find_entities(&found_entities);
+        let entities = rule.kind.find_entities(&found_entities, &entities);
         rule.entities = entities.into_iter().collect();
     }
 

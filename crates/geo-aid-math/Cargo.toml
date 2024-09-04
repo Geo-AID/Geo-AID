@@ -1,0 +1,17 @@
+[package]
+name = "geo-aid-math"
+version = "0.5.0"
+edition = "2021"
+description = "The mathematics engine for Geo-AID."
+license = "MIT"
+repository = "https://github.com/Geo-AID/geo-aid"
+
+[features]
+default = ["f64"]
+f64 = []
+
+[dependencies]
+cranelift = "0.110.1"
+cranelift-jit = "0.110.1"
+cranelift-native = "0.110.1"
+cranelift-module = "0.110.1"

@@ -1,14 +1,20 @@
 import subprocess
 import os
+import sys
 from pathlib import Path
 from typing import List, Tuple
 import csv
 import time
 
+if len(sys.argv) == 1:
+    engine = "glide"
+else:
+    engine = sys.argv[1]
+
 # First, we run all tests through Geo-AID to their respective directories.
 tests = []
 for file in os.scandir("tests"):
-     if file.is_file() and file.name.ends_with(".geo"):
+     if file.is_file() and file.name.endswith(".geo"):
         print(f"Rendering {file.name}")
         
         path = Path(file.path)
@@ -21,7 +27,7 @@ for file in os.scandir("tests"):
             "cargo", "run", "--release", "--",
             file.path, os.path.join(output, "result.svg"),
             "-l", os.path.join(output, "log.log"),
-            "-r", "svg"
+            "-f", "svg", "-e", engine
         ])
         proc.communicate()
         proc.wait()

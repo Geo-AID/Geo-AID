@@ -1,0 +1,2 @@
+# According to the wise words of kaleidoscope tutorial, this should explicitly link libm
+rustflags = ["-C", "link-arg=-lm"]
