@@ -28,3 +28,4 @@
     - [Rule operators](./reference/rule-operators.md)
     - [Display system](./reference/display-system.md)
     - [Weight system](./reference/weight-system.md)
+- [Math behind Geo-AID](https://www.overleaf.com/read/nnjqztpynydm#156b73)
