@@ -42,7 +42,7 @@ impl ZeroLineDst {
             return false;
         }
 
-        if !ln.contains_entity(a, math) {
+        if ln.contains_entity(a, math) {
             return false;
         }
 
