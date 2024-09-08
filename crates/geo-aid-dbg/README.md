@@ -1,0 +1,1 @@
+This is a basic debugger for Geo-AID. Allows peeking into the generation process. Any further information should be found in Geo-AID's repository.

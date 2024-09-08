@@ -1,0 +1,18 @@
+[package]
+name = "geo-aid-dbg"
+description = "A debugger for Geo-AID. Used in development for peeking inside Geo-AID in order to see how the generation process goes."
+version = "0.5.1"
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/Geo-AID/Geo-AID"
+
+[dependencies]
+geo-aid-internal = { version = "0.5.1", path = "../geo-aid-internal" }
+geo-aid-math = { version = "0.5.1", path = "../geo-aid-math" }
+macroquad = "0.4.11"
+egui = "0.28.1"
+egui_file = "0.18.0"
+getrandom = "0.2.15"
+bytemuck = "1.16.1"
+quad-url = "0.1.1"
+rand = "0.8.5"
