@@ -37,14 +37,14 @@ pub struct Optimizations {}
 #[derive(Debug, Clone)]
 pub struct Flags {
     pub optimizations: Optimizations,
-    pub point_bounds: bool,
+    pub point_inequalities: bool,
 }
 
 impl Default for Flags {
     fn default() -> Self {
         Self {
             optimizations: Optimizations {},
-            point_bounds: false,
+            point_inequalities: false,
         }
     }
 }
@@ -1875,7 +1875,7 @@ fn fold(matrix: &mut Vec<Expr<()>>) -> IndexMap {
 fn read_flags(flags: &HashMap<String, Flag>) -> Flags {
     Flags {
         optimizations: Optimizations {},
-        point_bounds: flags["point_bounds"].as_bool().unwrap(),
+        point_inequalities: flags["point_inequalities"].as_bool().unwrap(),
     }
 }
 
@@ -2027,7 +2027,7 @@ pub fn load_script(input: &str) -> Result<Intermediate, Vec<Error>> {
     let flags = read_flags(&unrolled.flags);
 
     // And add point inequalities
-    if flags.point_bounds {
+    if flags.point_inequalities {
         for i in new_entities
             .iter()
             .enumerate()
