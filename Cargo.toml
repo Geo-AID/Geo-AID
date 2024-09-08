@@ -1,17 +1,20 @@
 [package]
 name = "geo-aid"
 description = "A tool designed to generate geometrical figures based on given rules."
-version = "0.5.0"
+version = "0.5.1"
 edition = "2021"
 license = "MIT"
 repository = "https://github.com/Geo-AID/geo-aid/"
+
+[workspace]
+members = ["crates/*"]
 
 [dependencies]
 clap = { version = "4.5.7", features = ["derive"] }
 clap-markdown = "0.1.4"
 crossterm = "0.27.0"
 
-geo-aid-internal = { version = "0.5.0", path = "crates/geo-aid-internal" }
+geo-aid-internal = { version = "0.5.1", path = "crates/geo-aid-internal" }
 
 [profile.dev]
 opt-level = 1

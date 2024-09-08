@@ -1,3 +1,13 @@
+## Version 0.5.1
+
+- **Glide**: Fixed that Glide wouldn't actually try to optimize the figure (a typo).
+- **Compiler**: Fixed that zero-distance optimisation would return false negatives when
+  it should be applied and lead to stack overflow when it shouldn't.
+- **Debugger**: The debugger is now a part of the monorepo and has a different function.
+- **GeoScript**: Removed the `identical_expressions` flag as it no longer had any effect.
+- **GeoScript**: Replaced `point_bounds` with `point_inequalities`. The former was not functional
+  or useful. The latter is enabled by default and disabling it might be desirable.
+
 ## Version 0.5.0
 
 - **Rage**: Added *strictness* parameter controlling how strict the rules are to be treated.

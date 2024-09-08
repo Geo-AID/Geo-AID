@@ -4361,11 +4361,8 @@ pub fn unroll(input: &str) -> Result<(CompileContext, CollectionNode), Vec<Error
     }
 
     let mut flags = FlagSetConstructor::new()
-        .add_set(
-            &"optimizations",
-            FlagSetConstructor::new().add_bool_def(&"identical_expressions", true),
-        )
-        .add_bool_def(&"point_bounds", false)
+        .add_set(&"optimizations", FlagSetConstructor::new())
+        .add_bool_def(&"point_inequalities", true)
         .finish();
 
     for flag in statements.iter().filter_map(Statement::as_flag) {

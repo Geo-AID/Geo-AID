@@ -166,7 +166,7 @@ fn descend(ctx: &mut GenerateContext) {
     ctx.candidate.clone_from(&ctx.sample);
 
     loop {
-        while speed < SPEED_LIMIT {
+        while speed > SPEED_LIMIT {
             for (delta, target) in ctx
                 .gradient
                 .iter()

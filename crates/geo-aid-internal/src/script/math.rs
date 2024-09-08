@@ -37,14 +37,14 @@ pub struct Optimizations {}
 #[derive(Debug, Clone)]
 pub struct Flags {
     pub optimizations: Optimizations,
-    pub point_bounds: bool,
+    pub point_inequalities: bool,
 }
 
 impl Default for Flags {
     fn default() -> Self {
         Self {
             optimizations: Optimizations {},
-            point_bounds: false,
+            point_inequalities: false,
         }
     }
 }
@@ -1875,7 +1875,7 @@ fn fold(matrix: &mut Vec<Expr<()>>) -> IndexMap {
 fn read_flags(flags: &HashMap<String, Flag>) -> Flags {
     Flags {
         optimizations: Optimizations {},
-        point_bounds: flags["point_bounds"].as_bool().unwrap(),
+        point_inequalities: flags["point_inequalities"].as_bool().unwrap(),
     }
 }
 
@@ -2024,24 +2024,13 @@ pub fn load_script(input: &str) -> Result<Intermediate, Vec<Error>> {
     // We can also finalize rules:
     let mut rules: Vec<_> = rules.into_iter().flatten().collect();
 
+    let flags = read_flags(&unrolled.flags);
+
     // And add point inequalities
-    for i in new_entities
-        .iter()
-        .enumerate()
-        .filter(|ent| {
-            matches!(
-                ent.1,
-                EntityKind::PointOnLine { .. }
-                    | EntityKind::FreePoint
-                    | EntityKind::PointOnCircle { .. }
-            )
-        })
-        .map(|x| x.0)
-    {
-        for j in new_entities
+    if flags.point_inequalities {
+        for i in new_entities
             .iter()
             .enumerate()
-            .skip(i + 1)
             .filter(|ent| {
                 matches!(
                     ent.1,
@@ -2052,13 +2041,28 @@ pub fn load_script(input: &str) -> Result<Intermediate, Vec<Error>> {
             })
             .map(|x| x.0)
         {
-            let ent1 = math.store(ExprKind::Entity { id: EntityId(i) }, ExprType::Point);
-            let ent2 = math.store(ExprKind::Entity { id: EntityId(j) }, ExprType::Point);
-            rules.push(Rule {
-                weight: ProcNum::one(),
-                entities: Vec::new(),
-                kind: RuleKind::Invert(Box::new(RuleKind::PointEq(ent1, ent2))),
-            });
+            for j in new_entities
+                .iter()
+                .enumerate()
+                .skip(i + 1)
+                .filter(|ent| {
+                    matches!(
+                        ent.1,
+                        EntityKind::PointOnLine { .. }
+                            | EntityKind::FreePoint
+                            | EntityKind::PointOnCircle { .. }
+                    )
+                })
+                .map(|x| x.0)
+            {
+                let ent1 = math.store(ExprKind::Entity { id: EntityId(i) }, ExprType::Point);
+                let ent2 = math.store(ExprKind::Entity { id: EntityId(j) }, ExprType::Point);
+                rules.push(Rule {
+                    weight: ProcNum::one(),
+                    entities: Vec::new(),
+                    kind: RuleKind::Invert(Box::new(RuleKind::PointEq(ent1, ent2))),
+                });
+            }
         }
     }
 
@@ -2134,6 +2138,6 @@ pub fn load_script(input: &str) -> Result<Intermediate, Vec<Error>> {
             variables: fig_variables,
             items,
         },
-        flags: read_flags(&unrolled.flags),
+        flags,
     })
 }
