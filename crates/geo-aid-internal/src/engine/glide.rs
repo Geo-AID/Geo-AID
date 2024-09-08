@@ -8,11 +8,11 @@ use rand::Rng;
 use std::time::{Duration, Instant};
 
 pub struct Glide {
-    pub params: Params,
-    pub error_fn: Func,
-    pub gradient_fn: Func,
-    pub figure_fn: FigureFn,
-    pub inputs: Vec<f64>,
+    params: Params,
+    error_fn: Func,
+    gradient_fn: Func,
+    figure_fn: FigureFn,
+    inputs: Vec<f64>,
 }
 
 #[derive(Clone, Copy)]
@@ -166,7 +166,7 @@ fn descend(ctx: &mut GenerateContext) {
     ctx.candidate.clone_from(&ctx.sample);
 
     loop {
-        while speed < SPEED_LIMIT {
+        while speed > SPEED_LIMIT {
             for (delta, target) in ctx
                 .gradient
                 .iter()
