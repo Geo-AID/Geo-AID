@@ -8,11 +8,11 @@ use rand::Rng;
 use std::time::{Duration, Instant};
 
 pub struct Glide {
-    params: Params,
-    error_fn: Func,
-    gradient_fn: Func,
-    figure_fn: FigureFn,
-    inputs: Vec<f64>,
+    pub params: Params,
+    pub error_fn: Func,
+    pub gradient_fn: Func,
+    pub figure_fn: FigureFn,
+    pub inputs: Vec<f64>,
 }
 
 #[derive(Clone, Copy)]

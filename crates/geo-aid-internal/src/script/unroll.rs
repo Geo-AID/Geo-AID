@@ -4365,7 +4365,7 @@ pub fn unroll(input: &str) -> Result<(CompileContext, CollectionNode), Vec<Error
             &"optimizations",
             FlagSetConstructor::new().add_bool_def(&"identical_expressions", true),
         )
-        .add_bool_def(&"point_bounds", false)
+        .add_bool_def(&"point_bounds", true)
         .finish();
 
     for flag in statements.iter().filter_map(Statement::as_flag) {

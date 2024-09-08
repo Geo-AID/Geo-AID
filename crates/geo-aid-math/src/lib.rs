@@ -263,7 +263,7 @@ impl Context {
     /// # Panics
     /// If the input is out of bounds
     pub fn input(&self, input: usize) -> Expr {
-        assert!(input <= self.inputs);
+        assert!(input < self.inputs);
         Expr(2 + input)
     }
 
@@ -385,7 +385,7 @@ impl Context {
                 self.push_expr_nodiff(ExprKind::Ternary(cond, dv, minus_dv))
             })
             .collect();
-        let minus_v = self.neg(v);
+        let minus_v = self.push_expr_nodiff(ExprKind::Neg(v));
         self.push_expr(ExprKind::Ternary(cond, v, minus_v), derivatives)
     }
 

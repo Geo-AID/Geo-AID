@@ -6,7 +6,7 @@ pub mod rage;
 /// Gradient-Led Iterative Descent Engine
 pub mod glide;
 
-mod compiler;
+pub mod compiler;
 
 /// A helper module for thread pools for use in generation.
 mod thread_pool;
