@@ -849,7 +849,7 @@ impl FromUnrolled<unroll::Scalar> for ExprKind {
                 id: math.add_real(),
             },
             UnrolledScalar::Number(x) => {
-                return fix_dst(ExprKind::Const { value: x.clone() }, expr.data.unit, math)
+                return fix_dst(ExprKind::Const { value: x.clone() }, expr.data.unit, math);
             }
             UnrolledScalar::DstLiteral(x) => ExprKind::Const { value: x.clone() },
             UnrolledScalar::SetUnit(x, unit) => {
