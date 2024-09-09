@@ -828,8 +828,6 @@ impl Node for CircleNode {
 
 impl FromExpr<Circle> for CircleNode {
     fn from_expr(expr: &Expr<Circle>, mut props: Properties, context: &CompileContext) -> Self {
-        let _ = props.get::<MathString>("default-label");
-
         let node = Self {
             display: props.get("display").maybe_unset(true),
             label: props

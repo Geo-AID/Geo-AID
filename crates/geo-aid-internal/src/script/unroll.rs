@@ -3973,6 +3973,11 @@ fn unroll_eq(
             .convert(context)
             .convert_unit(Some(unit::DISTANCE), context);
         context.scalar_eq_display(lhs, rhs, inverted, display)
+    } else if lhs_type == ty::collection(1) && rhs_type == ty::collection(1) {
+        let lhs = lhs.convert(context);
+        let rhs = rhs.convert(context);
+
+        context.point_eq_display(lhs, rhs, inverted, display)
     } else {
         // If any of the two types can be cast onto the other, cast and compare.
         let (lhs, rhs, new_type) = if rhs.can_convert_to(lhs_type) {
