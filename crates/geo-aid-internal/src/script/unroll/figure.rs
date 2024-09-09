@@ -901,6 +901,12 @@ property_enum! {
     }
 }
 
+impl Default for LineType {
+    fn default() -> Self {
+        Self::Line
+    }
+}
+
 property_enum_impl! {
     Style {
         Solid: "solid",

@@ -7,7 +7,7 @@ let J = intersection(
 
 let b = perpendicular_through(B, bisector(ABC));
 
-let P, Q = Point() lies_on BC;
+let P, Q = Point() lies_on BC [type=ray];
 PB + BC = PC;
 BC + CQ = BQ;
 
@@ -17,3 +17,4 @@ QC = AC;
 angle(BAC) > degrees(60);
 
 ?Circle(J, dst(J, AB));
+?Line(AC) [type=ray];

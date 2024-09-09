@@ -1,6 +1,5 @@
-use crate::script::{figure::SegmentItem, math::Build, unroll::Convert};
-
 use super::prelude::*;
+use crate::script::{figure::SegmentItem, math::Build, unroll::Convert};
 use geo_aid_derive::overload;
 use geo_aid_figure::math_string::MathString;
 

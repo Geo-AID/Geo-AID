@@ -43,6 +43,10 @@ Number values accept positive integers and floats. They cannot be expressed by i
 
 Style properties tell Geo-AID how to display a given line or a circle. Available options are: `SOLID`, `DASHED`, `BOLD`, and `DOTTED`. They can be represented using identifiers or non-raw strings. When parsed, case is ignored.
 
+### `LineType`
+
+This property is most commonly seen alongside lines constructed from points. This tells Geo-AID whether to display the line as a `LINE`, a `RAY`, or a `SEGMENT`.
+
 ### `MathString`
 
 MathString properties usually represent label contents. MathStrings are used to write normal text while also allowing lower indices and a restricted set of mathematical characters, like greek letters.

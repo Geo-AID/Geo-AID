@@ -1361,6 +1361,7 @@ impl ConvertFrom<Expr<PointCollection>> for Line {
                             .get_or(SpannedMathString::new(span!(0, 0, 0, 0)));
                         ln_node.root.line_type = props.get("line_type").maybe_unset(LineType::Line);
                         ln_node.root.style = props.get("style").maybe_unset(Style::default());
+                        ln_node.root.line_type = props.get("type").maybe_unset(LineType::default());
                     }
 
                     props.finish(context);

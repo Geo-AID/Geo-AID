@@ -7,6 +7,7 @@ pub mod degrees;
 pub mod dst;
 pub mod intersection;
 pub mod lies_on;
+pub mod line;
 pub mod mid;
 pub mod parallel;
 pub mod perpendicular;
@@ -51,6 +52,7 @@ pub fn register(library: &mut Library) {
     bisector::register(library); // bisector()
     circle::register(library); // Circle()
     segment::register(library); // Segment()
+    line::register(library); // Line()
 
     lies_on::register(library); // lies_on
 }

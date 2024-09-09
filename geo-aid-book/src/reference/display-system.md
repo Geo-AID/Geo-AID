@@ -68,6 +68,7 @@ struct Line {
     label: MathString, // Default empty (look at next section),
     display_label: bool, // Default: true
     style: Style, // Default: SOLID
+    type: LineType // Default: LINE
 }
 ```
 
