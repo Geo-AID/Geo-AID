@@ -216,7 +216,7 @@ impl ProcNum {
     #[must_use]
     pub fn pi() -> Self {
         Self(Complex::new(
-            -BigRational::from_f64(std::f64::consts::PI).unwrap(),
+            BigRational::from_f64(std::f64::consts::PI).unwrap(),
             BigRational::zero(),
         ))
     }

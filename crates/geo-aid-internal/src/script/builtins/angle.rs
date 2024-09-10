@@ -32,10 +32,11 @@ fn angle_function_point_point_point(
 }
 
 /// ```
-/// # use geo_aid_figure::Style;
+/// # use geo_aid_figure::{Style, LineType};
 /// struct Associated {
 ///     display_arms: bool,
-///     arms_style: Style
+///     arms_style: Style,
+///     amrs_type: LineType
 /// }
 /// ```
 #[derive(Debug)]

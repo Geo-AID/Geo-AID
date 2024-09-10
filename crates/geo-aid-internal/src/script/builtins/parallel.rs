@@ -17,8 +17,8 @@ pub fn register(library: &mut Library) {
         Function {
             overloads: vec![
                 overload!((POINT, LINE) -> LINE {
-                    |point: Expr<Point>, line: Expr<Line>, figure, _| {
-                        call!(figure:parallel_function_line_point(line, point))
+                    |point: Expr<Point>, line: Expr<Line>, figure, display| {
+                        call!(figure:parallel_function_line_point(line, point) with display)
                     }
                 }),
                 overload!((LINE, POINT) -> LINE : parallel_function_line_point),

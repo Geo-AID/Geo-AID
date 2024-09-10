@@ -1361,6 +1361,7 @@ impl ConvertFrom<Expr<PointCollection>> for Line {
                             .get_or(SpannedMathString::new(span!(0, 0, 0, 0)));
                         ln_node.root.line_type = props.get("line_type").maybe_unset(LineType::Line);
                         ln_node.root.style = props.get("style").maybe_unset(Style::default());
+                        ln_node.root.line_type = props.get("type").maybe_unset(LineType::default());
                     }
 
                     props.finish(context);
@@ -1799,6 +1800,19 @@ impl Dummy for PointCollection {
 
     fn is_dummy(&self) -> bool {
         matches!(self.data, PointCollectionData::Generic(Generic::Dummy))
+    }
+}
+
+impl GetData for PointCollection {
+    fn get_data(&self) -> &Self {
+        match &self.data {
+            PointCollectionData::Generic(v) => match v {
+                Generic::Boxed(v) => v.get_data(),
+                Generic::VariableAccess(v) => v.definition.get_data(),
+                Generic::Dummy => self,
+            },
+            _ => self,
+        }
     }
 }
 
@@ -2293,7 +2307,7 @@ impl AnyExpr {
             Self::PointCollection(v) => {
                 v.data.length == 2 && (unit == Some(unit::DISTANCE) || unit.is_none())
             }
-            Self::Scalar(u) => u.data.unit == unit || unit.is_none(),
+            Self::Scalar(u) => u.data.unit == unit || u.data.unit.is_none(),
             Self::Unknown(_) => true,
         }
     }
@@ -2694,7 +2708,6 @@ impl Unroll for SimpleExpression {
         let display = Properties::from(self.display.clone()).merge_with(display);
 
         let unrolled = self.kind.unroll(context, library, it_index, display);
-
         let unrolled = if let Some(exponent) = &self.exponent {
             let mut unrolled: Expr<Scalar> = unrolled.convert(context);
             let node = unrolled.node.take();
@@ -2805,7 +2818,7 @@ impl Unroll for ExprCall {
         context: &mut CompileContext,
         library: &Library,
         it_index: &HashMap<u8, usize>,
-        display: Properties,
+        mut display: Properties,
     ) -> AnyExpr {
         let name = self
             .name
@@ -2828,7 +2841,7 @@ impl Unroll for ExprCall {
             }
         }
 
-        if let Some(func) = library.functions.get(&func_name) {
+        let res = if let Some(func) = library.functions.get(&func_name) {
             let param_types: Vec<_> = params.iter().map(AnyExpr::get_type).collect();
 
             if let Some(overload) = func.get_overload(&param_types) {
@@ -2846,17 +2859,21 @@ impl Unroll for ExprCall {
 
                 let ret = unroll_parameters(&overload.definition, params, display, context);
 
-                ret.boxed(self.get_span())
-            } else {
-                context.push_error(Error::OverloadNotFound {
-                    error_span: self.get_span(),
-                    function_name: func_name.clone(),
-                    params: param_types,
-                });
-
-                display.finish(context);
-                Expr::new_spanless(Unknown::dummy()).into()
+                return ret.boxed(self.get_span());
             }
+
+            context.push_error(Error::OverloadNotFound {
+                error_span: self.get_span(),
+                function_name: func_name.clone(),
+                params: param_types,
+            });
+
+            Expr {
+                data: Rc::new(Unknown::dummy()),
+                span: self.get_span(),
+                node: None,
+            }
+            .into()
         } else {
             if let Some(self_type) = self_type {
                 let self_type_name = format!("[{self_type}]::");
@@ -2887,7 +2904,25 @@ impl Unroll for ExprCall {
             }
 
             Expr::new_spanless(Unknown::dummy()).into()
+        };
+
+        for mut param in params {
+            if let Some(node) = param.replace_node(None) {
+                match node {
+                    AnyExprNode::PointCollection(mut pc) => {
+                        if let Some(props) = pc.root.props.take() {
+                            props.finish(context);
+                        }
+                    }
+                    _ => (),
+                }
+            }
         }
+
+        display.ignore_all();
+        display.finish(context);
+
+        res
     }
 }
 
@@ -3491,6 +3526,10 @@ impl Properties {
 
         self
     }
+
+    fn ignore_all(&mut self) {
+        self.props.clear();
+    }
 }
 
 impl From<Option<DisplayProperties>> for Properties {
@@ -3625,7 +3664,12 @@ fn create_variable_collection(
     };
     let mut rhs_unpacked = rhs_unrolled.convert::<PointCollection>(context);
 
-    if rhs_unpacked.data.length != col.len() {
+    if rhs_unpacked.data.length != col.len()
+        && !matches!(
+            rhs_unpacked.data.data,
+            PointCollectionData::Generic(Generic::Dummy)
+        )
+    {
         return Err(maybe_error);
     }
 
@@ -3640,13 +3684,21 @@ fn create_variable_collection(
     // };
 
     let mut rhs_node = rhs_unpacked.take_node();
-    let mut rhs_unpacked = rhs_unpacked
-        .data
-        .data
-        .as_collection()
-        .unwrap()
-        .iter()
-        .map(CloneWithNode::clone_without_node);
+    let mut rhs_unpacked: Box<dyn Iterator<Item = Expr<Point>>> =
+        match &rhs_unpacked.data.get_data().data {
+            PointCollectionData::PointCollection(collection) => {
+                Box::new(collection.clone_without_node().0.into_iter())
+                    as Box<dyn Iterator<Item = Expr<Point>>>
+            }
+            PointCollectionData::Generic(Generic::Dummy) => {
+                Box::new(std::iter::repeat_with(|| Expr {
+                    data: Rc::new(Point::dummy()),
+                    span: rhs_unpacked.span,
+                    node: None,
+                }))
+            }
+            _ => unreachable!(),
+        };
 
     for (i, pt) in col.collection.iter().enumerate() {
         let id = format!("{pt}");
@@ -3921,6 +3973,11 @@ fn unroll_eq(
             .convert(context)
             .convert_unit(Some(unit::DISTANCE), context);
         context.scalar_eq_display(lhs, rhs, inverted, display)
+    } else if lhs_type == ty::collection(1) && rhs_type == ty::collection(1) {
+        let lhs = lhs.convert(context);
+        let rhs = rhs.convert(context);
+
+        context.point_eq_display(lhs, rhs, inverted, display)
     } else {
         // If any of the two types can be cast onto the other, cast and compare.
         let (lhs, rhs, new_type) = if rhs.can_convert_to(lhs_type) {
