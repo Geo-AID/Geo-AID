@@ -2301,14 +2301,11 @@ impl AnyExpr {
     }
 
     #[must_use]
-    pub fn can_convert_to_scalar(&self, unit: Option<ComplexUnit>) -> bool {
+    pub fn can_convert_to_scalar(&self, _: Option<ComplexUnit>) -> bool {
         match self {
             Self::Line(_) | Self::Bundle(_) | Self::Circle(_) | Self::Point(_) => false,
-            Self::PointCollection(v) => {
-                v.data.length == 2 && (unit == Some(unit::DISTANCE) || unit.is_none())
-            }
-            Self::Scalar(u) => u.data.unit == unit || u.data.unit.is_none(),
-            Self::Unknown(_) => true,
+            Self::PointCollection(v) => v.data.length == 2,
+            Self::Scalar(_) | Self::Unknown(_) => true,
         }
     }
 
