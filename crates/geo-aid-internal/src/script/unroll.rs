@@ -2307,7 +2307,7 @@ impl AnyExpr {
             Self::PointCollection(v) => {
                 v.data.length == 2 && (unit == Some(unit::DISTANCE) || unit.is_none())
             }
-            Self::Scalar(u) => u.data.unit == unit || u.data.unit.is_none(),
+            Self::Scalar(u) => u.data.unit == unit || u.data.unit.is_none() || unit.is_none(),
             Self::Unknown(_) => true,
         }
     }
