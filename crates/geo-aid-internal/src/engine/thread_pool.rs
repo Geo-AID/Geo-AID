@@ -1,3 +1,6 @@
+//! A helper module containing the [`ThreadPool`] functionality
+//! used by engines.
+
 use std::sync::mpsc;
 use std::thread;
 
@@ -135,12 +138,18 @@ impl<T: Send + 'static> Drop for ThreadPool<T> {
     }
 }
 
+/// Message for use in communicating with workers.
 enum Message<T> {
+    /// A task to execute
     Task(T),
+    /// Terminate the worker
     Terminate,
 }
 
+/// A simple struct with worker data.
 struct Worker<R> {
+    /// The id of the worker
     worker_id: usize,
+    /// Payload of the worker
     payload: R,
 }
