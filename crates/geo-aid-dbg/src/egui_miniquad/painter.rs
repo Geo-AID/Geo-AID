@@ -48,6 +48,7 @@ pub struct CallbackFn {
 }
 
 impl CallbackFn {
+    #[allow(dead_code)]
     pub fn new(
         callback: impl Fn(egui::PaintCallbackInfo, &mut dyn RenderingBackend) + Sync + Send + 'static,
     ) -> Self {
