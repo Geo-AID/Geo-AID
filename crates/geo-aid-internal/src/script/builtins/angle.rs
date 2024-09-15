@@ -33,7 +33,7 @@ fn angle_function_point_point_point(
 
 /// ```
 /// # use geo_aid_figure::Style;
-/// # use crate::script::unroll::figure::LineType;
+/// # use geo_aid_internal::script::unroll::figure::LineType;
 /// struct Associated {
 ///     display_arms: bool,
 ///     arms_style: Style,
