@@ -2300,6 +2300,9 @@ impl AnyExpr {
         }
     }
 
+    /// Checks if `self` is convertible to a scalar with a given unit.
+    ///
+    /// **NOTE**: When `unit` is `None`, it is treated as "ANY" unit.
     #[must_use]
     pub fn can_convert_to_scalar(&self, unit: Option<ComplexUnit>) -> bool {
         match self {
