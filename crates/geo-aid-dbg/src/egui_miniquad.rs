@@ -186,6 +186,7 @@ impl EguiMq {
     /// Use this to open egui windows, panels etc.
     ///
     /// May only be used from inside the callback given to [`Self::run`].
+    #[allow(dead_code)]
     pub fn egui_ctx(&self) -> &egui::Context {
         &self.egui_ctx
     }
