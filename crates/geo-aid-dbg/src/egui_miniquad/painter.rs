@@ -24,8 +24,8 @@
 //! DEALINGS IN THE SOFTWARE.
 //!
 
-use egui::Color32;
 use egui::epaint::Vertex;
+use egui::Color32;
 use macroquad::miniquad;
 use miniquad::{
     Backend, Bindings, BlendFactor, BlendState, BlendValue, BufferLayout, BufferSource, BufferType,
