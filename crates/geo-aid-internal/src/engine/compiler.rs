@@ -19,6 +19,7 @@ pub struct Compiled {
     pub rule_errors: Vec<CompiledExpr>,
 }
 
+#[must_use]
 pub fn compile(intermediate: &Intermediate) -> Compiled {
     let inputs = intermediate
         .adjusted

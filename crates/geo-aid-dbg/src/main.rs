@@ -89,10 +89,8 @@ impl Debugger {
                                     self.dialog.open();
                                 }
                             });
-                        } else {
-                            if ui.button("Open").clicked() {
-                                self.dialog.open();
-                            }
+                        } else if ui.button("Open").clicked() {
+                            self.dialog.open();
                         }
                         ui.end_row();
 

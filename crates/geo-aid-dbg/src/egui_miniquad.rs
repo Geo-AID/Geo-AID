@@ -143,6 +143,7 @@ use egui::CursorIcon;
 use macroquad::miniquad;
 use miniquad as mq;
 
+#[allow(unused_imports)]
 pub use painter::CallbackFn;
 
 #[cfg(target_os = "macos")] // https://github.com/not-fl3/miniquad/issues/172
@@ -185,6 +186,7 @@ impl EguiMq {
     /// Use this to open egui windows, panels etc.
     ///
     /// May only be used from inside the callback given to [`Self::run`].
+    #[allow(dead_code)]
     pub fn egui_ctx(&self) -> &egui::Context {
         &self.egui_ctx
     }

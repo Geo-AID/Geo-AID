@@ -82,6 +82,8 @@ static mut EGUI: Option<Egui> = None;
 
 fn get_egui() -> &'static mut Egui {
     unsafe {
+        // Temporary, it's gonna need a fix later, probably including moving away from macroquad.
+        #[allow(static_mut_refs)]
         if let Some(egui) = &mut EGUI {
             egui
         } else {
@@ -120,6 +122,7 @@ pub fn ui<F: FnOnce(&egui::Context)>(f: F) {
 }
 
 /// Configure egui without beginning or ending a frame.
+#[allow(dead_code)]
 pub fn cfg<F: FnOnce(&egui::Context)>(f: F) {
     f(get_egui().0.egui_ctx());
 }
@@ -142,39 +145,19 @@ impl mq::EventHandler for Egui {
         self.0.mouse_wheel_event(dx, dy);
     }
 
-    fn mouse_button_down_event(
-        &mut self,
-        mb: mq::MouseButton,
-        x: f32,
-        y: f32,
-    ) {
+    fn mouse_button_down_event(&mut self, mb: mq::MouseButton, x: f32, y: f32) {
         self.0.mouse_button_down_event(mb, x, y);
     }
 
-    fn mouse_button_up_event(
-        &mut self,
-        mb: mq::MouseButton,
-        x: f32,
-        y: f32,
-    ) {
+    fn mouse_button_up_event(&mut self, mb: mq::MouseButton, x: f32, y: f32) {
         self.0.mouse_button_up_event(mb, x, y);
     }
 
-    fn char_event(
-        &mut self,
-        character: char,
-        _keymods: mq::KeyMods,
-        _repeat: bool,
-    ) {
+    fn char_event(&mut self, character: char, _keymods: mq::KeyMods, _repeat: bool) {
         self.0.char_event(character);
     }
 
-    fn key_down_event(
-        &mut self,
-        keycode: mq::KeyCode,
-        keymods: mq::KeyMods,
-        _repeat: bool,
-    ) {
+    fn key_down_event(&mut self, keycode: mq::KeyCode, keymods: mq::KeyMods, _repeat: bool) {
         self.0.key_down_event(keycode, keymods);
     }
 

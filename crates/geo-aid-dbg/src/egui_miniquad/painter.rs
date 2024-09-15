@@ -24,8 +24,8 @@
 //! DEALINGS IN THE SOFTWARE.
 //!
 
-use egui::Color32;
 use egui::epaint::Vertex;
+use egui::Color32;
 use macroquad::miniquad;
 use miniquad::{
     Backend, Bindings, BlendFactor, BlendState, BlendValue, BufferLayout, BufferSource, BufferType,
@@ -48,6 +48,7 @@ pub struct CallbackFn {
 }
 
 impl CallbackFn {
+    #[allow(dead_code)]
     pub fn new(
         callback: impl Fn(egui::PaintCallbackInfo, &mut dyn RenderingBackend) + Sync + Send + 'static,
     ) -> Self {
@@ -70,6 +71,7 @@ fn pixel_data(data: &[Color32]) -> &[u8] {
 }
 
 impl Painter {
+    #[allow(dead_code)]
     pub fn new(ctx: &mut dyn RenderingBackend) -> Painter {
         let source = match ctx.info().backend {
             Backend::Metal => unimplemented!(),
