@@ -4,10 +4,7 @@
 
 use std::{
     fmt::Display,
-    hash::Hash,
     ops::{Deref, DerefMut, Div, Mul},
-    rc::Rc,
-    sync::{self, Arc},
 };
 
 use crate::{
