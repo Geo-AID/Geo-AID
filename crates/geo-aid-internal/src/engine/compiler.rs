@@ -1,3 +1,8 @@
+//! This module contains functionality to compile Math IR
+//! into Geo-AID's math backend IR, the last step before
+//! compiling to the final form. The final step is performed
+//! by the `geo-aid-math` crate.
+
 use crate::geometry::{Circle, Complex, Line, ValueEnum};
 use crate::script::figure::Generated;
 use crate::script::math::{
@@ -8,17 +13,26 @@ use geo_aid_math::{Comparison, ComparisonKind, Condition, Context, Expr as Compi
 use num_traits::ToPrimitive;
 use std::f64::consts::PI;
 
+/// A function that takes in values for all inputs and returns
+/// a generated figure
 pub type FigureFn = Box<dyn for<'a> Fn(&'a [f64]) -> Generated>;
 
+/// The result of the compilation of a Math IR.
 pub struct Compiled {
+    /// The figure function
     pub figure_fn: FigureFn,
+    /// Errors of each adjustable
     pub errors: Vec<CompiledExpr>,
+    /// The compile context. Can be used for further processing
     pub context: Context,
+    /// The number of inputs of this figure.
     pub input_count: usize,
+    /// Errors of each rule (for debugging purposes)
     #[allow(unused)]
     pub rule_errors: Vec<CompiledExpr>,
 }
 
+/// Compile a Math IR into an (almost) compiled form.
 #[must_use]
 pub fn compile(intermediate: &Intermediate) -> Compiled {
     let inputs = intermediate
@@ -39,12 +53,15 @@ pub fn compile(intermediate: &Intermediate) -> Compiled {
     //     println!("[{i}] = {:?}", var.kind);
     // }
 
+    // We start with constructing the figure function.
+
     let mut compiler = Compiler::new(
         inputs,
         &intermediate.adjusted.entities,
         &intermediate.figure.variables,
     );
 
+    // Collect all expressions necessary for figure drawing.
     let mut exprs = Vec::new();
     for value in &compiler.variables {
         match value {
@@ -73,7 +90,7 @@ pub fn compile(intermediate: &Intermediate) -> Compiled {
         get_figure(&fig, inputs, &outputs)
     });
 
-    // Reset the compiler.
+    // Reset the compiler and gather rule errors.
     compiler = Compiler::new(
         inputs,
         &intermediate.adjusted.entities,
@@ -88,6 +105,7 @@ pub fn compile(intermediate: &Intermediate) -> Compiled {
 
     let rule_error_exprs = rule_errors.iter().map(|v| v.1).collect();
 
+    // Gather entity errors
     let mut entity_errors = [Context::zero()].repeat(intermediate.adjusted.entities.len());
     for (rule, quality) in rule_errors {
         // println!("{rule}");
@@ -107,6 +125,7 @@ pub fn compile(intermediate: &Intermediate) -> Compiled {
     }
 }
 
+/// The compiler's state
 struct Compiler<'r> {
     entities: &'r [EntityKind],
     context: Context,
@@ -115,6 +134,7 @@ struct Compiler<'r> {
 }
 
 impl<'r> Compiler<'r> {
+    /// Create a new compiler. Prepares some constants and precomputes all values.
     #[must_use]
     pub fn new(inputs: usize, entities: &'r [EntityKind], variables: &[Expr<()>]) -> Self {
         let mut adjustables = Vec::new();
@@ -160,6 +180,7 @@ impl<'r> Compiler<'r> {
         s
     }
 
+    /// Compile the error function for a > b
     fn gt(&mut self, a: &VarIndex, b: &VarIndex) -> CompiledExpr {
         let a = self.variables[a.0].to_complex().real;
         let b = self.variables[b.0].to_complex().real;
@@ -181,6 +202,7 @@ impl<'r> Compiler<'r> {
         )
     }
 
+    /// Compile the error function for the given rule kind.
     fn compile_rule_kind(&mut self, kind: &RuleKind) -> CompiledExpr {
         match kind {
             RuleKind::PointEq(a, b) | RuleKind::NumberEq(a, b) => {
@@ -217,12 +239,14 @@ impl<'r> Compiler<'r> {
         }
     }
 
+    /// Compile the error function for the given rule.
     fn compile_rule(&mut self, rule: &Rule) -> CompiledExpr {
         let quality = self.compile_rule_kind(&rule.kind);
         let weight = self.context.constant(rule.weight.to_complex().real);
         self.context.mul(quality, weight)
     }
 
+    /// Compile the sum of given expressions.
     fn compile_sum(&mut self, value: &[VarIndex]) -> ComplexExpr {
         value
             .iter()
@@ -234,6 +258,7 @@ impl<'r> Compiler<'r> {
             })
     }
 
+    /// Compile the product of different expressions
     fn compile_mul(&mut self, value: &[VarIndex]) -> ComplexExpr {
         value
             .iter()
@@ -245,7 +270,10 @@ impl<'r> Compiler<'r> {
             })
     }
 
-    // We'll assume all previous values are already handled.
+    /// Compile the specific expression.
+    /// Assume all expressions it may depend on are already compiled.
+    /// This assumption is true given that expressions are processed
+    /// one by one, in a preordered fashion.
     #[allow(clippy::too_many_lines)]
     fn compile_value(&mut self, value: &Expr<()>) -> ValueExpr {
         match &value.kind {
@@ -531,6 +559,7 @@ impl<'r> Compiler<'r> {
     }
 }
 
+/// A generic compiled value of an expression.
 #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
 enum ValueExpr {
     This(CompiledExpr),
@@ -540,6 +569,7 @@ enum ValueExpr {
 }
 
 impl ValueExpr {
+    /// Returns a line if the expression is one. Panics otherwise.
     #[must_use]
     fn to_line(self) -> LineExpr {
         if let Self::Line(x) = self {
@@ -549,6 +579,7 @@ impl ValueExpr {
         }
     }
 
+    /// Returns a point if the expression is one. Panics otherwise.
     #[must_use]
     fn to_complex(self) -> ComplexExpr {
         if let Self::Complex(x) = self {
@@ -558,6 +589,7 @@ impl ValueExpr {
         }
     }
 
+    /// Returns a circle if the expression is one. Panics otherwise.
     #[must_use]
     fn to_circle(self) -> CircleExpr {
         if let Self::Circle(x) = self {
@@ -567,6 +599,7 @@ impl ValueExpr {
         }
     }
 
+    /// Returns a scalar if the expression is one. Panics otherwise.
     fn to_single(self) -> CompiledExpr {
         if let Self::This(x) = self {
             x
@@ -594,18 +627,21 @@ impl From<CircleExpr> for ValueExpr {
     }
 }
 
+/// A line with an origin point and a normalized direction vector.
 #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
 struct LineExpr {
     origin: ComplexExpr,
     direction: ComplexExpr,
 }
 
+/// A circle with an origin and a radius.
 #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
 struct CircleExpr {
     center: ComplexExpr,
     radius: CompiledExpr,
 }
 
+/// A complex value with a real and imaginary part.
 #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
 struct ComplexExpr {
     real: CompiledExpr,
@@ -613,6 +649,7 @@ struct ComplexExpr {
 }
 
 impl ComplexExpr {
+    /// Create a complex value from a real.
     #[must_use]
     fn real(real: CompiledExpr) -> Self {
         Self {
@@ -621,6 +658,7 @@ impl ComplexExpr {
         }
     }
 
+    /// Subtract complex values.
     #[must_use]
     fn sub(self, other: Self, context: &mut Context) -> Self {
         Self {
@@ -629,6 +667,7 @@ impl ComplexExpr {
         }
     }
 
+    /// Add complex values.
     #[must_use]
     fn add(self, other: Self, context: &mut Context) -> Self {
         Self {
@@ -637,6 +676,7 @@ impl ComplexExpr {
         }
     }
 
+    /// Add a real to a complex.
     #[must_use]
     fn add_real(self, other: CompiledExpr, context: &mut Context) -> Self {
         Self {
@@ -645,6 +685,7 @@ impl ComplexExpr {
         }
     }
 
+    /// Multiply complex values.
     #[must_use]
     fn mul(self, other: Self, context: &mut Context) -> Self {
         // self = a + bi
@@ -673,6 +714,7 @@ impl ComplexExpr {
         }
     }
 
+    /// Divide complex values.
     #[must_use]
     fn div(self, other: Self, context: &mut Context) -> Self {
         // self = a + bi
@@ -704,6 +746,7 @@ impl ComplexExpr {
         Self { real, imaginary }
     }
 
+    /// Multiply a complex by a real.
     #[must_use]
     fn mul_real(self, other: CompiledExpr, context: &mut Context) -> Self {
         Self {
@@ -712,6 +755,7 @@ impl ComplexExpr {
         }
     }
 
+    /// Divide a complex by a real.
     #[must_use]
     fn div_real(self, other: CompiledExpr, context: &mut Context) -> Self {
         Self {
@@ -720,6 +764,7 @@ impl ComplexExpr {
         }
     }
 
+    /// Get the magnitude of a complex as vector (distance from 0)
     fn modulus(self, context: &mut Context) -> CompiledExpr {
         // |a + bi| = (a^2 + b^2)^0.5
         let a2 = context.mul(self.real, self.real);
@@ -728,6 +773,7 @@ impl ComplexExpr {
         context.pow(a2_plus_b2, 0.5)
     }
 
+    /// Negate the complex
     #[must_use]
     fn neg(self, context: &mut Context) -> Self {
         Self {
@@ -736,6 +782,7 @@ impl ComplexExpr {
         }
     }
 
+    /// A ternary operator. If `cond` is true, return `then`, otherwise return `else_`
     #[must_use]
     fn ternary(cond: Condition, then: Self, else_: Self, context: &mut Context) -> Self {
         Self {
@@ -744,6 +791,7 @@ impl ComplexExpr {
         }
     }
 
+    /// Multiply the complex by `i`. A separate function as it's a simple operation.
     #[must_use]
     fn mul_i(self, context: &mut Context) -> Self {
         Self {
@@ -753,10 +801,13 @@ impl ComplexExpr {
     }
 }
 
+/// Get a single complex from an iterator over floats.
 fn get_complex<I: Iterator<Item = f64>>(value: &mut I) -> Complex {
     Complex::new(value.next().unwrap(), value.next().unwrap())
 }
 
+/// Create a figure based on its IR, figure's inputs and
+/// computed values for all figure's expressions.
 fn get_figure(figure: &crate::script::figure::Figure, inputs: &[f64], values: &[f64]) -> Generated {
     let mut value = values.iter().copied();
 
