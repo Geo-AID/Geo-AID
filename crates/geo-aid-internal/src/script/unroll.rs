@@ -1811,7 +1811,7 @@ impl GetData for PointCollection {
                 Generic::VariableAccess(v) => v.definition.get_data(),
                 Generic::Dummy => self,
             },
-            _ => self,
+            PointCollectionData::PointCollection(_) => self,
         }
     }
 }
@@ -2549,20 +2549,20 @@ impl<K: Hash + CloneWithNode + Eq, V: CloneWithNode> CloneWithNode for ClonedMap
 }
 
 #[derive(Debug)]
-pub struct Expr<T: ?Sized + Displayed> {
+pub struct Expr<T: Displayed> {
     pub data: Rc<T>,
     pub span: Span,
     pub node: Option<HierarchyNode<T::Node>>,
 }
 
-impl<T: GetData + ?Sized + Displayed> Expr<T> {
+impl<T: GetData + Displayed> Expr<T> {
     #[must_use]
     pub fn get_data(&self) -> &T {
         self.data.get_data()
     }
 }
 
-impl<T: ?Sized + Displayed> CloneWithNode for Expr<T> {
+impl<T: Displayed> CloneWithNode for Expr<T> {
     fn clone_with_node(&mut self) -> Self {
         Self {
             data: Rc::clone(&self.data),
@@ -2907,14 +2907,9 @@ impl Unroll for ExprCall {
         };
 
         for mut param in params {
-            if let Some(node) = param.replace_node(None) {
-                match node {
-                    AnyExprNode::PointCollection(mut pc) => {
-                        if let Some(props) = pc.root.props.take() {
-                            props.finish(context);
-                        }
-                    }
-                    _ => (),
+            if let Some(AnyExprNode::PointCollection(mut pc)) = param.replace_node(None) {
+                if let Some(props) = pc.root.props.take() {
+                    props.finish(context);
                 }
             }
         }
@@ -3697,7 +3692,7 @@ fn create_variable_collection(
                     node: None,
                 }))
             }
-            _ => unreachable!(),
+            PointCollectionData::Generic(_) => unreachable!(),
         };
 
     for (i, pt) in col.collection.iter().enumerate() {

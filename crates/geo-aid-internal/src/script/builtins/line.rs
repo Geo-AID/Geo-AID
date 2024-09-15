@@ -1,7 +1,7 @@
 use super::prelude::*;
 use geo_aid_derive::overload;
 
-pub fn line_function_pp(
+pub fn function_pp(
     a: Expr<Point>,
     b: Expr<Point>,
     context: &CompileContext,
@@ -23,12 +23,12 @@ pub fn register(library: &mut Library) {
         Function {
             overloads: vec![
                 overload!((2-P) -> LINE {
-                    |mut col: Expr<PointCollection>, context, display| call!(context:line_function_pp(
+                    |mut col: Expr<PointCollection>, context, display| call!(context:function_pp(
                         index!(node col, 0),
                         index!(node col, 1)
                     ) with display)
                 }),
-                overload!((POINT, POINT) -> LINE : line_function_pp),
+                overload!((POINT, POINT) -> LINE : function_pp),
             ],
         },
     );
