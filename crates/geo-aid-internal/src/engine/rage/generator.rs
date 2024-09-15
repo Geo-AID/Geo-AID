@@ -1,3 +1,6 @@
+//! The generator of Rage, contains all underlying logic
+//! of the engine.
+
 use std::{
     collections::VecDeque,
     sync::Arc,
@@ -12,14 +15,21 @@ use serde::Serialize;
 
 mod magic_box;
 
+/// The generation context
 struct GenerateContext {
+    /// Current best state
     current_state: State,
+    /// How much the inputs should be adjusted.
     adjustment_magnitude: f64,
+    /// What adjustables the generator is adjusting.
     adjustable_template: Arc<[AdjustableTemplate]>,
+    /// The function for computing entity errors
     error_fn: Func,
+    /// The exponent used for a generic mean for computing figure quality.
     mean_exponent: f64,
 }
 
+/// An attempt at adjusting the state.
 fn adjust_and_check(ctx: &mut GenerateContext) {
     magic_box::adjust(
         &mut ctx.current_state,
@@ -48,10 +58,14 @@ fn adjust_and_check(ctx: &mut GenerateContext) {
     ctx.current_state.total_quality = total_quality;
 }
 
+/// A generator state
 #[derive(Debug, Clone)]
 pub struct State {
+    /// Current input values
     pub inputs: Vec<f64>,
+    /// Current entity qualities
     pub qualities: Vec<f64>,
+    /// Total figure quality
     pub total_quality: f64,
 }
 
@@ -67,10 +81,14 @@ pub struct Generator {
     input_count: usize,
 }
 
+/// The kind of an adjustable (entity)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub enum AdjustableTemplate {
+    /// A free point
     Point,
+    /// A point described with one real value.
     Clip1d,
+    /// A free real
     Real,
 }
 
@@ -98,6 +116,8 @@ impl From<&EntityKind> for AdjustableTemplate {
 }
 
 impl Generator {
+    /// Creates a new generator.
+    ///
     /// # Panics
     /// Any panic is a bug.
     #[must_use]
@@ -107,6 +127,7 @@ impl Generator {
         error_fn: Func,
         adjustables: &Arc<[AdjustableTemplate]>,
     ) -> Self {
+        // Randomize the first state
         let current_state = State {
             inputs: {
                 let mut v = Vec::new();
@@ -123,6 +144,7 @@ impl Generator {
             total_quality: 0.0,
         };
 
+        // Create the executing thread pool
         let pool = ThreadPool::new(
             params.worker_count,
             move |v| {
@@ -180,6 +202,7 @@ impl Generator {
         now.elapsed()
     }
 
+    /// Prepares adjustment magnitudes for each sample (adjustment attempt) based on the max magnitude.
     #[must_use]
     pub fn bake_magnitudes(&self, maximum_adjustment: f64) -> Vec<f64> {
         #[allow(clippy::cast_precision_loss)]
@@ -238,16 +261,13 @@ impl Generator {
         duration
     }
 
+    /// Get the current best state.
     #[must_use]
     pub fn get_state(&self) -> &State {
         &self.current_state
     }
 
-    // #[must_use]
-    // pub fn get_delta(&self) -> f64 {
-    //     self.delta
-    // }
-
+    /// Get the current state's quality.
     #[must_use]
     pub fn get_total_quality(&self) -> f64 {
         self.current_state.total_quality
