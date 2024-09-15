@@ -82,6 +82,8 @@ static mut EGUI: Option<Egui> = None;
 
 fn get_egui() -> &'static mut Egui {
     unsafe {
+        // Temporary, it's gonna need a fix later, probably including moving away from macroquad.
+        #[allow(static_mut_refs)]
         if let Some(egui) = &mut EGUI {
             egui
         } else {
@@ -120,6 +122,7 @@ pub fn ui<F: FnOnce(&egui::Context)>(f: F) {
 }
 
 /// Configure egui without beginning or ending a frame.
+#[allow(dead_code)]
 pub fn cfg<F: FnOnce(&egui::Context)>(f: F) {
     f(get_egui().0.egui_ctx());
 }
