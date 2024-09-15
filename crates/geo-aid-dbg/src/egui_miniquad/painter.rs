@@ -70,6 +70,7 @@ fn pixel_data(data: &[Color32]) -> &[u8] {
 }
 
 impl Painter {
+    #[allow(dead_code)]
     pub fn new(ctx: &mut dyn RenderingBackend) -> Painter {
         let source = match ctx.info().backend {
             Backend::Metal => unimplemented!(),
