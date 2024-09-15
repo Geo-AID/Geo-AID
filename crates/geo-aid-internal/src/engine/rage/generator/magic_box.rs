@@ -1,8 +1,14 @@
+//! Contains entity adjustment logic.
+//!
+//! Different entity kinds have different adjustments. Points are moved in a random direction.
+//! Clips have their values moved similarly to points, just with only two possible directions.
+//! Free reals are modified proportionally to their current value.
+
 use std::f64::consts::PI;
 
 use super::{AdjustableTemplate, Complex, State};
 
-/// Performs an adjustment in a random direction.
+/// Performs an adjustment of all entities in a random direction.
 ///
 /// # Arguments
 /// * `current_state` - current values and errors of all inputs
