@@ -1,3 +1,5 @@
+//! The circle function
+
 use super::prelude::*;
 use geo_aid_derive::overload;
 
@@ -11,6 +13,7 @@ fn circle_function(
     context.circle_display(center, radius, display)
 }
 
+/// Register the function
 pub fn register(library: &mut Library) {
     library.functions.insert(
         String::from("Circle"),

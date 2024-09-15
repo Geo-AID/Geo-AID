@@ -1,9 +1,11 @@
+//! The `bisector` function
+
 use crate::script::math::Build;
 
 use super::{angle::display_angle_arms, prelude::*};
 use geo_aid_derive::overload;
 
-/// bisector(point, point, point) - angle bisector.
+/// bisector(point, point, point) - an angle's bisector.
 pub fn point_point_point(
     a: Expr<Point>,
     b: Expr<Point>,
@@ -87,7 +89,7 @@ impl BuildAssociated<LineNode> for Associated {
     }
 }
 
-/// bisector(point, point) - bisector of a segment.
+/// bisector(point, point) - a segment's perpendicular bisector line.
 pub fn point_point(
     a: Expr<Point>,
     b: Expr<Point>,
@@ -103,6 +105,7 @@ pub fn point_point(
     ) with display)
 }
 
+/// Register the function
 pub fn register(library: &mut Library) {
     library.functions.insert(
         String::from("bisector"),

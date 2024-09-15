@@ -1,3 +1,5 @@
+//! The `lies_on` rule
+
 use geo_aid_derive::overload;
 use num_traits::{One, Zero};
 use std::rc::Rc;
@@ -5,6 +7,7 @@ use std::rc::Rc;
 use super::prelude::*;
 use crate::script::token::number::ProcNum;
 
+/// `point lies_on circle` - a point lies on a circle.
 fn pt_lies_on_circle(
     mut lhs: Expr<Point>,
     mut rhs: Expr<Circle>,
@@ -36,6 +39,7 @@ fn pt_lies_on_circle(
     node
 }
 
+/// `point lies_on line` - a point lies on a line.
 fn pt_lies_on_line(
     mut lhs: Expr<Point>,
     mut rhs: Expr<Line>,
@@ -67,6 +71,7 @@ fn pt_lies_on_line(
     node
 }
 
+/// `pc lies_on circle` - a point collection lies on a circle.
 #[allow(clippy::needless_pass_by_value)]
 fn col_lies_on_circle(
     mut lhs: Expr<PointCollection>,
@@ -126,6 +131,7 @@ fn col_lies_on_circle(
     node
 }
 
+/// `point lies_on segment` - a point lies on a segment (on the containing line, between the delimiting points)
 fn pt_lies_on_segment(
     mut lhs: Expr<Point>,
     mut rhs: Expr<Bundle>,
@@ -202,6 +208,7 @@ fn pt_lies_on_segment(
     node
 }
 
+/// Register the rule
 pub fn register(library: &mut Library) {
     library.rule_ops.insert(
         String::from("lies_on"),

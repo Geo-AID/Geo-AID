@@ -1,3 +1,5 @@
+//! The `parallel_through` function
+
 use super::prelude::*;
 use geo_aid_derive::overload;
 
@@ -11,6 +13,7 @@ fn parallel_function_line_point(
     context.parallel_through_display(line, point, display)
 }
 
+/// Register the function
 pub fn register(library: &mut Library) {
     library.functions.insert(
         String::from("parallel_through"),

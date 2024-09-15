@@ -1,8 +1,11 @@
+//! The `intersection` function
+
 use crate::script::math::Build;
 
 use super::prelude::*;
 use geo_aid_derive::overload;
 
+/// `intesection(line, line)` - intersection of two lines.
 fn intersection_function_line_line(
     k: Expr<Line>,
     l: Expr<Line>,
@@ -19,6 +22,7 @@ fn intersection_function_line_line(
     expr
 }
 
+/// The associated data. No properties.
 #[derive(Debug)]
 pub struct Associated;
 
@@ -32,6 +36,7 @@ impl BuildAssociated<PointNode> for Associated {
     }
 }
 
+/// Register the function
 pub fn register(library: &mut Library) {
     library.functions.insert(
         String::from("intersection"),

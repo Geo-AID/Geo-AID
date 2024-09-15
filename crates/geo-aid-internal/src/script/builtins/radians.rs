@@ -1,6 +1,9 @@
+//! The `radians` function.
+
 use super::prelude::*;
 use geo_aid_derive::overload;
 
+/// Register the function
 pub fn register(library: &mut Library) {
     library.functions.insert(
         String::from("radians"),

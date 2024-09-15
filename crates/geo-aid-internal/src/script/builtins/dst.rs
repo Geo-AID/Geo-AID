@@ -1,8 +1,11 @@
+//! The `dst` function
+
 use super::prelude::*;
 use crate::script::{figure::SegmentItem, math::Build, unroll::Convert};
 use geo_aid_derive::overload;
 use geo_aid_figure::math_string::MathString;
 
+/// `dst(point, point)` - distance between two points.
 pub fn distance_function_pp(
     a: Expr<Point>,
     b: Expr<Point>,
@@ -23,6 +26,7 @@ pub fn distance_function_pp(
     expr
 }
 
+/// `dst(point, line)` - distance of a point from a line.
 fn distance_function_pl(
     a: Expr<Point>,
     k: Expr<Line>,
@@ -43,6 +47,7 @@ fn distance_function_pl(
     expr
 }
 
+/// Convert a point collection to a distance.
 fn distance_convert_pc(
     mut pc: Expr<PointCollection>,
     context: &CompileContext,
@@ -120,6 +125,7 @@ impl BuildAssociated<ScalarNode> for Associated {
     }
 }
 
+/// Register the function
 pub fn register(library: &mut Library) {
     library.functions.insert(
         String::from("dst"),
