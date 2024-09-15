@@ -1,13 +1,19 @@
+//! Geo-AID is capable of outputting figures as a simple svg file. This file may not be possible
+//! to display everywhere, but it should be suitable for most cases.
+
 use geo_aid_figure::{CircleItem, Figure, LineItem, PointItem, Position, Style, TwoPointItem};
 
 use crate::format::Draw;
 
+/// The SVG format writer.
 #[derive(Debug, Default)]
 pub struct Svg {
+    /// Current file contents
     content: String,
 }
 
 impl Svg {
+    /// The width of a line made with the given [`Style`]
     fn get_style_width(style: Style) -> &'static str {
         match style {
             Style::Dashed | Style::Dotted => "0.5",
@@ -16,6 +22,7 @@ impl Svg {
         }
     }
 
+    /// Get parameters for line based on its [`Style`]
     fn get_style_dashing(style: Style) -> &'static str {
         match style {
             Style::Dotted => "0.8,1",
@@ -24,6 +31,7 @@ impl Svg {
         }
     }
 
+    /// Draw a styled segment delimited by two points.
     fn draw_simple_segment(&mut self, (p1, p2): (Position, Position), style: Style) {
         self.content += &format!(
             r#"
