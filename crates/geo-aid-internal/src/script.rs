@@ -1,3 +1,7 @@
+//! Everything relating in any way to GeoScript. This is where the language gets parsed,
+//! compiled and optimized. All errors are defined and reported here as well. The largest
+//! module of Geo-AID
+
 use std::{
     fmt::Display,
     hash::Hash,
@@ -24,208 +28,319 @@ pub mod parser;
 pub mod token;
 pub mod unroll;
 
+/// A GeoScript error
 #[derive(Debug)]
 pub enum Error {
+    /// Invalid token in the figure script.
     InvalidToken {
+        /// The token that was encountered.
         token: Token,
     },
+    /// Invalid (unsupported) character in the figure script.
     InvalidCharacter {
+        /// The character that was encountered.
         character: char,
+        /// Where it was encountered.
         error_span: Span,
     },
+    /// A newline character was found in a string
     NewLineInString {
+        /// Where the error happened.
         error_span: Span,
     },
+    /// The given number is too large to be parsed.
     NumberTooLarge {
+        /// Where the number is.
         error_span: Span,
     },
+    /// Found an explicit iterator with a single variant.
     SingleVariantExplicitIterator {
+        /// The location of the iterator.
         error_span: Span,
     },
+    /// Unexpected end of script.
     EndOfInput,
+    /// Found an undefined rule oprator.
     UndefinedRuleOperator {
+        /// The operator
         operator: NamedIdent,
     },
+    /// Iterators with non-matching lengths
     InconsistentIterators {
+        /// The first iterator's span.
         first_span: Span,
+        /// The first iterator's length
         first_length: usize,
+        /// The second iterator's span
         occurred_span: Span,
+        /// he second iterator's length
         occurred_length: usize,
+        /// The specific error span.
         error_span: Span,
     },
+    /// An iterator contains an iterator with the same id.
     IteratorWithSameIdIterator {
+        /// Where exactly the error occurred
         error_span: Span,
+        /// The parent iterator's span.
         parent_span: Span,
+        /// The contained iterator's span.
         contained_span: Span,
     },
+    /// Inconsistent types in a rule or a binary operation.
     InconsistentTypes {
+        /// The expected type
         // boxes here to reduce size
         expected: (Type, Box<Span>),
+        /// The recevied type.
         got: (Type, Box<Span>),
+        /// Exactly where the error occurred.
         error_span: Box<Span>,
     },
+    /// A variable with the same name already exists
     RedefinedVariable {
+        /// The first definition span
         defined_at: Span,
+        /// The second definition span
         error_span: Span,
+        /// The variable name
         variable_name: String,
     },
+    /// A variable of undefined type
     UndefinedTypeVariable {
+        /// Where the variable is defined
         definition: Span,
     },
+    /// An undefined variable was referenced
     UndefinedVariable {
+        /// The reference span
         error_span: Span,
+        /// The variable name
         variable_name: String,
+        /// The potentially intended name.
         suggested: Option<String>,
     },
+    /// An undefined function was referenced.
     UndefinedFunction {
+        /// The reference span
         error_span: Span,
+        /// The function name
         function_name: String,
+        /// The potentially intended name.
         suggested: Option<String>,
     },
+    /// An undefined method was referenced.
     UndefinedMethod {
+        /// The reference sapn
         error_span: Span,
+        /// Teh method name
         function_name: String,
+        /// The potentially intended name.
         suggested: Option<String>,
+        /// The type the method was searched on.
         on_type: Type,
     },
+    /// An undeifned field was referenced
     UndefinedField {
+        /// The reference span
         error_span: Span,
+        /// The field name
         field: String,
+        /// The type the field was searched on
         on_type: Type,
+        /// The potentially intended name.
         suggested: Option<String>,
     },
+    /// A field was referenced on type with no fields.
     NoFieldsOnType {
+        /// The reference span
         error_span: Span,
+        /// The type the field was searched on.
         on_type: Type,
     },
+    /// An attempt to use an unsupported language feature was made.
     FeatureNotSupported {
+        /// The exact error span
         error_span: Span,
+        /// The name of the feature.
         feature_name: &'static str,
     },
+    /// Invalid argument count for a function
     InvalidArgumentCount {
+        /// The call span
         error_span: Span,
+        /// Expected possible numbers of arguments
         expected: &'static [u8],
+        /// The count of arguments received.
         got: u8,
     },
+    /// An overload for a function was not found
     OverloadNotFound {
+        /// The call span
         error_span: Span,
+        /// The call arguments
         params: Vec<Type>,
+        /// The function name
         function_name: String,
     },
+    /// Cannot unpack a type onto a point collection.
     CannotUnpack {
+        /// The span of the unpack attempt
         error_span: Span,
+        /// The type that cannot be unpacked.
         ty: Type,
     },
+    /// There's no implicit conversion between two types.
     ImplicitConversionDoesNotExist {
+        /// The conversion span
         error_span: Span,
+        /// The type that is attempted to be converted
         from: Type,
+        /// The target type
         to: Type,
     },
+    /// Invalid type of an operand of a binary operation
     InvalidOperandType {
+        /// The operation span
         error_span: Box<Span>,
+        /// The received type
         got: (Type, Box<Span>),
+        /// The operand
         op: String,
     },
+    /// An unexpected iterator was found in a let statement.
     LetStatUnexpectedIterator {
+        /// The variable span
         var_span: Span,
+        /// The statement's span.
         error_span: Span,
     },
+    /// More than one iterator was found in a let statement.
     LetStatMoreThanOneIterator {
+        /// The statement span
         error_span: Span,
+        /// First iterator's span
         first_span: Span,
+        /// Second iterator's span
         second_span: Span,
     },
+    /// There's a non-point value in a point collection
     NonPointInPointCollection {
+        /// The point collection span
         error_span: Span,
+        /// The non-point part of it.
         received: (Span, Type),
     },
+    /// An undefined flag was referenced
     FlagDoesNotExist {
+        /// The flag name
         flag_name: String,
+        /// The flag's span
         flag_span: Span,
+        /// The full span.
         error_span: Span,
+        /// The potential intended name
         suggested: Option<String>,
     },
+    /// A flag set expected as a flag value.
     FlagSetExpected {
+        /// The exact error span
         error_span: Span,
     },
-    StringExpected {
-        error_span: Span,
-    },
-    StringOrIdentExpected {
-        error_span: Span,
-    },
-    NonRawStringOrIdentExpected {
-        error_span: Span,
-    },
-    BooleanExpected {
-        error_span: Span,
-    },
-    NumberExpected {
-        error_span: Span,
-    },
-    InvalidIdentMathString {
-        error_span: Span,
-    },
+    /// A string was expected
+    StringExpected { error_span: Span },
+    /// A string or an identifier was expected.
+    StringOrIdentExpected { error_span: Span },
+    /// A non-raw string or an identifier was expected
+    NonRawStringOrIdentExpected { error_span: Span },
+    /// A bool value was expected.
+    BooleanExpected { error_span: Span },
+    /// A number value was expected
+    NumberExpected { error_span: Span },
+    /// The provided identifier cannot be converted into a math string.
+    InvalidIdentMathString { error_span: Span },
+    /// A flag's value was set more than once
     RedefinedFlag {
+        /// The exact error span
         error_span: Span,
+        /// The first definition's span
         first_defined: Span,
+        /// Name of the flag
         flag_name: String,
     },
+    /// Invalid value for an enumeration
     EnumInvalidValue {
+        /// The value span
         error_span: Span,
+        /// The possible enum values.
         available_values: &'static [&'static str],
+        /// The received, invalid value.
         received_value: String,
     },
+    /// A flag that must be set was not set.
     RequiredFlagNotSet {
+        /// The flag's name
         flag_name: &'static str,
+        /// The reason why it's required
         required_because: Span,
+        /// The flag's definition span, if any
         definition_span: Option<Span>,
+        /// The possible flag values.
         available_values: &'static [&'static str],
     },
+    /// A comparison between two values of a type does not exist
     ComparisonDoesNotExist {
         error_span: Span,
+        /// The problematic type
         ty: Type,
     },
-    EmptyLabel {
-        error_span: Span,
-    },
+    /// An empty lable was found
+    EmptyLabel { error_span: Span },
+    /// There's an unclosed special character in a math string
     UnclosedSpecial {
         error_span: Span,
+        /// The longest parsed special character
         parsed_special: String,
     },
+    /// An undefined special character was referenced
     SpecialNotRecognised {
         error_span: Span,
+        /// The read code
         code: String,
+        /// The potentially intended code.
         suggested: Option<String>,
     },
-    UnclosedString {
-        error_span: Span,
-    },
-    LabelIndexInsideIndex {
-        error_span: Span,
-    },
+    /// There's an unclosed string
+    UnclosedString { error_span: Span },
+    /// An index was found inside another index, in a math string
+    LabelIndexInsideIndex { error_span: Span },
+    /// An unexpected property was found
     UnexpectedDisplayOption {
         error_span: Span,
+        /// The unexpected property
         option: String,
+        /// The potentially intended property
         suggested: Option<String>,
     },
+    /// A property was repeated
     RepeatedDisplayOption {
+        /// The repeated property span
         error_span: Span,
+        /// The first property span
         first_span: Span,
+        /// The repeated option
         option: String,
     },
-    InvalidPC {
-        error_span: Span,
-    },
-    ZeroDenominator {
-        error_span: Span,
-    },
-    ExpectedFunction {
-        error_span: Span,
-    },
+    /// An invalid Point collection
+    InvalidPC { error_span: Span },
+    /// A denominator of zero
+    ZeroDenominator { error_span: Span },
+    /// A function name was expected
+    ExpectedFunction { error_span: Span },
 }
 
 impl Error {
+    /// Match against `ImplicitConversonDoesNotExist`
     #[must_use]
     pub fn as_implicit_does_not_exist(&self) -> Option<(&Span, &Type, &Type)> {
         match self {
@@ -238,6 +353,7 @@ impl Error {
         }
     }
 
+    /// Convert the error to a diagnostic
     #[must_use]
     #[allow(clippy::too_many_lines)]
     pub fn diagnostic(self) -> DiagnosticData {
@@ -597,6 +713,7 @@ impl Mul for SimpleUnit {
     }
 }
 
+/// How many different units are there, minus one for scalar
 const fn unit_count() -> usize {
     SimpleUnit::Scalar as usize
 }
@@ -605,30 +722,44 @@ const fn unit_count() -> usize {
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Default)]
 pub struct ComplexUnit([CompExponent; unit_count()]);
 
+/// Unit constants
 pub mod unit {
     use super::{ComplexUnit, SimpleUnit};
 
+    /// A distance
     pub const DISTANCE: ComplexUnit = ComplexUnit::new(SimpleUnit::Distance);
+    /// An angle
     pub const ANGLE: ComplexUnit = ComplexUnit::new(SimpleUnit::Angle);
+    /// A simple, unitless scalar.
     pub const SCALAR: ComplexUnit = ComplexUnit::new(SimpleUnit::Scalar);
 }
 
+/// Type constants
 pub mod ty {
     use super::{parser::Type, ComplexUnit, SimpleUnit};
 
+    /// The distance type
     pub const DISTANCE: Type = Type::Scalar(Some(ComplexUnit::new(SimpleUnit::Distance)));
+    /// The point type
     pub const POINT: Type = Type::Point;
+    /// The angle type
     pub const ANGLE: Type = Type::Scalar(Some(ComplexUnit::new(SimpleUnit::Angle)));
+    /// The line type
     pub const LINE: Type = Type::Line;
+    /// The circle type
     pub const CIRCLE: Type = Type::Circle;
+    /// The unitless scalar type
     pub const SCALAR: Type = Type::Scalar(Some(ComplexUnit::new(SimpleUnit::Scalar)));
+    /// The unknown-unit scalar type
     pub const SCALAR_UNKNOWN: Type = Type::Scalar(None);
 
+    /// A point collection of given length. A length of 0 signifies a generic point collection
     #[must_use]
     pub const fn collection(length: usize) -> Type {
         Type::PointCollection(length)
     }
 
+    /// A named bundle type.
     #[must_use]
     pub const fn bundle(t: &'static str) -> Type {
         Type::Bundle(t)
@@ -636,6 +767,7 @@ pub mod ty {
 }
 
 impl ComplexUnit {
+    /// Creates a new complex unit representing no unit.
     #[must_use]
     pub const fn new(simple: SimpleUnit) -> Self {
         let mut arr = [CompExponent::new_raw(0, 1); unit_count()];
@@ -648,6 +780,7 @@ impl ComplexUnit {
         Self(arr)
     }
 
+    /// Raises the unit to a power
     #[must_use]
     pub fn pow(mut self, exp: CompExponent) -> Self {
         for v in &mut self.0 {
@@ -758,89 +891,4 @@ impl DerefMut for ComplexUnit {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }
-}
-
-#[derive(Serialize, Debug, Clone)]
-pub struct HashableArc<T>(Arc<T>);
-
-impl<T> HashableArc<T> {
-    #[must_use]
-    pub fn new(content: Arc<T>) -> Self {
-        Self(content)
-    }
-}
-
-impl<T> Hash for HashableArc<T> {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        Arc::as_ptr(&self.0).hash(state);
-    }
-}
-
-impl<T> PartialEq for HashableArc<T> {
-    fn eq(&self, other: &Self) -> bool {
-        Arc::as_ptr(&self.0) == Arc::as_ptr(&other.0)
-    }
-}
-
-impl<T> Eq for HashableArc<T> {
-    fn assert_receiver_is_total_eq(&self) {}
-}
-
-#[derive(Debug)]
-pub struct HashableRc<T: ?Sized>(Rc<T>);
-
-impl<T: ?Sized> HashableRc<T> {
-    #[must_use]
-    pub fn new(content: Rc<T>) -> Self {
-        Self(content)
-    }
-}
-
-impl<T: ?Sized> Hash for HashableRc<T> {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        Rc::as_ptr(&self.0).hash(state);
-    }
-}
-
-impl<T: ?Sized> PartialEq for HashableRc<T> {
-    fn eq(&self, other: &Self) -> bool {
-        std::ptr::addr_eq(Rc::as_ptr(&self.0), Rc::as_ptr(&other.0))
-    }
-}
-
-impl<T: ?Sized> Eq for HashableRc<T> {
-    fn assert_receiver_is_total_eq(&self) {}
-}
-
-impl<T: ?Sized> Deref for HashableRc<T> {
-    type Target = Rc<T>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-pub struct HashableWeakArc<T>(sync::Weak<T>);
-
-impl<T> HashableWeakArc<T> {
-    #[must_use]
-    pub fn new(content: sync::Weak<T>) -> Self {
-        Self(content)
-    }
-}
-
-impl<T> Hash for HashableWeakArc<T> {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        sync::Weak::as_ptr(&self.0).hash(state);
-    }
-}
-
-impl<T> PartialEq for HashableWeakArc<T> {
-    fn eq(&self, other: &Self) -> bool {
-        sync::Weak::as_ptr(&self.0) == sync::Weak::as_ptr(&other.0)
-    }
-}
-
-impl<T> Eq for HashableWeakArc<T> {
-    fn assert_receiver_is_total_eq(&self) {}
 }
