@@ -1512,6 +1512,8 @@ pub enum ScalarData {
     Generic(Generic<Scalar>),
     /// A constant
     Number(ProcNum),
+    /// A distance literal not meant to be multiplied by the distance unit.
+    DstLiteral(ProcNum),
     /// Override the expression's unit.
     SetUnit(Expr<Scalar>, ComplexUnit),
     /// Distance between two points.
@@ -1562,6 +1564,7 @@ impl Display for ScalarData {
                     .join(", ")
             ),
             Self::Number(num) => write!(f, "{num}"),
+            Self::DstLiteral(dst) => write!(f, "={dst}"),
             Self::SetUnit(expr, _) => {
                 write!(f, "{expr}")
             }
@@ -1742,7 +1745,8 @@ impl Expr<Scalar> {
                         ScalarData::Free => {
                             ScalarData::SetUnit(self.clone_without_node(), unit.unwrap_or_default())
                         }
-                        ScalarData::PointPointDistance(_, _)
+                        ScalarData::DstLiteral(_)
+                        | ScalarData::PointPointDistance(_, _)
                         | ScalarData::PointLineDistance(_, _)
                         | ScalarData::ThreePointAngle(_, _, _)
                         | ScalarData::ThreePointAngleDir(_, _, _)
