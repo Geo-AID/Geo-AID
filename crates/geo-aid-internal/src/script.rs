@@ -1,4 +1,4 @@
-//! Everything relating in any way to GeoScript. This is where the language gets parsed,
+//! Everything relating in any way to `GeoScript`. This is where the language gets parsed,
 //! compiled and optimized. All errors are defined and reported here as well. The largest
 //! module of Geo-AID
 
@@ -25,7 +25,7 @@ pub mod parser;
 pub mod token;
 pub mod unroll;
 
-/// A GeoScript error
+/// A `GeoScript` error
 #[derive(Debug)]
 pub enum Error {
     /// Invalid token in the figure script.

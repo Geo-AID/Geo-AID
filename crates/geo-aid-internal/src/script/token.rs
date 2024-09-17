@@ -319,7 +319,7 @@ pub struct Question {
     pub span: Span,
 }
 
-/// Any valid token of GeoScript
+/// Any valid token of `GeoScript`
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Token {
     Semi(Semi),

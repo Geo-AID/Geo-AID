@@ -1,4 +1,4 @@
-//! GeoScript's builtin functions and types
+//! `GeoScript`'s builtin functions and types
 
 use super::unroll::Library;
 

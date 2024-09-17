@@ -400,7 +400,7 @@ impl Deref for FunctionDefinition {
     }
 }
 
-/// A GeoScript function.
+/// A `GeoScript` function.
 #[derive(Debug)]
 pub struct Function {
     /// Function's overloads.
@@ -684,7 +684,7 @@ impl IterNode {
 }
 
 /// A range-like iterator, except multidimensional. This in an iterator
-/// in Rust's sense, not in GeoScript's sense.
+/// in Rust's sense, not in `GeoScript`'s sense.
 #[derive(Debug)]
 pub struct MultiRangeIterator {
     /// The maximal indices.
@@ -734,7 +734,7 @@ impl MultiRangeIterator {
     }
 }
 
-/// An iterator (Rust) over iterator (GeoScript) variants.
+/// An iterator (Rust) over iterator (`GeoScript`) variants.
 #[derive(Debug)]
 pub struct IterTreeIterator<'r> {
     /// List of lists of parallel iterators with their ids, current indices and lengths.

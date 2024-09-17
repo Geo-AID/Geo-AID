@@ -2047,7 +2047,7 @@ fn optimize_cycle(rules: &mut Vec<Option<Rule>>, math: &mut Math, items: &mut Ve
     }
 }
 
-/// Loads a GeoScript script and compiles it into Math IR. Encapsulates the entire compiler's
+/// Loads a `GeoScript` script and compiles it into Math IR. Encapsulates the entire compiler's
 /// work.
 ///
 /// # Errors
