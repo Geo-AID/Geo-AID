@@ -1,3 +1,10 @@
+//! The unroll step is where syntatic sugars are extended, type checks made
+//! and general script validity is checked. Technically, a script that makes
+//! it past unrolling is elligible to directly compiling and generating with
+//! no in-between steps.
+//!
+//! This is also where all information on how to handle the figure is extracted.
+
 use crate::span;
 use geo_aid_derive::CloneWithNode;
 use geo_aid_figure::Style;
@@ -45,6 +52,7 @@ pub mod context;
 pub mod figure;
 pub mod flags;
 
+/// A helper trait for unrolling syntax nodes.
 trait Unroll<T = AnyExpr> {
     fn unroll(
         &self,
@@ -73,18 +81,22 @@ pub struct Variable<T: Displayed> {
     pub definition: Expr<T>,
 }
 
+/// A set of flags, also referenced to as a flag group.
 pub type FlagSet = HashMap<String, Flag>;
 
+/// A helper struct for constructing a flag set.
 pub struct FlagSetConstructor {
     pub flags: Vec<(String, Flag)>,
 }
 
 impl FlagSetConstructor {
+    /// Create a new, empty flag set.
     #[must_use]
     pub fn new() -> Self {
         Self { flags: Vec::new() }
     }
 
+    /// Add a string flag.
     #[must_use]
     pub fn add_ident<S: ToString>(mut self, name: &S) -> Self {
         self.flags.push((
@@ -99,6 +111,7 @@ impl FlagSetConstructor {
         self
     }
 
+    /// Add a string flag with a default
     #[must_use]
     pub fn add_ident_def<S: ToString>(mut self, name: &S, default: &S) -> Self {
         self.flags.push((
@@ -115,6 +128,7 @@ impl FlagSetConstructor {
         self
     }
 
+    /// Add a boolean flag
     #[must_use]
     pub fn add_bool<S: ToString>(mut self, name: &S) -> Self {
         self.flags.push((
@@ -129,6 +143,7 @@ impl FlagSetConstructor {
         self
     }
 
+    /// Add a boolean flag with a default
     #[must_use]
     pub fn add_bool_def<S: ToString>(mut self, name: &S, default: bool) -> Self {
         self.flags.push((
@@ -143,6 +158,7 @@ impl FlagSetConstructor {
         self
     }
 
+    /// Add a nested flag set
     #[must_use]
     pub fn add_set<S: ToString>(mut self, name: &S, set: FlagSetConstructor) -> Self {
         self.flags.push((
@@ -157,6 +173,7 @@ impl FlagSetConstructor {
         self
     }
 
+    /// Finish creating a flag set.
     #[must_use]
     pub fn finish(self) -> FlagSet {
         self.flags.into_iter().collect()
@@ -172,8 +189,11 @@ impl Default for FlagSetConstructor {
 /// A compiler flag.
 #[derive(Debug)]
 pub struct Flag {
+    /// The flag's name
     pub name: String,
+    /// The flag kind.
     pub kind: FlagKind,
+    /// The card type.
     pub ty: FlagType,
 }
 
@@ -202,6 +222,7 @@ impl Flag {
         }
     }
 
+    /// Get the span of where the flag is set. Only works with non-flagset flags.
     #[must_use]
     pub fn get_span(&self) -> Option<Span> {
         match &self.kind {
@@ -211,29 +232,38 @@ impl Flag {
     }
 }
 
+/// The type of this flag
 #[derive(Debug)]
 pub enum FlagType {
+    /// A nested flag set.
     Set,
+    /// True or false
     Boolean,
     String,
 }
 
-/// A compiler flag.
+/// The kind of a flag.
 #[derive(Debug)]
 pub enum FlagKind {
+    /// A specific setting for a value.
     Setting(FlagSetting),
+    /// A nested flag set
     Set(FlagSet),
 }
 
-/// A compiler flag value.
+/// A flag setting.
 #[derive(Debug)]
 pub enum FlagSetting {
+    /// A default value that has not been overriden (even if with the same value)
     Default(FlagValue),
+    /// An unset flag, for ones without default values.
     Unset,
+    /// An explicitly set value for a flag. NOT A FLAG SET.
     Set(FlagValue, Span),
 }
 
 impl FlagSetting {
+    /// Get the flag's value, if there's any.
     #[must_use]
     pub fn get_value(&self) -> Option<&FlagValue> {
         match self {
@@ -242,6 +272,7 @@ impl FlagSetting {
         }
     }
 
+    /// Get the span where the flag is set, if it is.
     #[must_use]
     pub fn get_span(&self) -> Option<Span> {
         match self {
@@ -287,11 +318,11 @@ pub struct RuleOverload {
     pub definition: RuleDefinition,
 }
 
-/// geoscript rule declaration
+/// geoscript rule definition as a function on the unroll context.
 type GeoRule =
     dyn Fn(AnyExpr, AnyExpr, &mut CompileContext, Properties, bool, ProcNum) -> Box<dyn Node>;
 
-/// A function definition.
+/// A rule definition.
 pub struct RuleDefinition(pub Box<GeoRule>);
 
 impl Debug for RuleDefinition {
@@ -308,7 +339,7 @@ impl Deref for RuleDefinition {
     }
 }
 
-/// A function.
+/// A rule kind.
 #[derive(Debug)]
 pub struct Rule {
     /// Rule's name
@@ -349,7 +380,7 @@ pub struct FunctionOverload {
     pub param_group: Option<Type>,
 }
 
-/// geoscript function declaration
+/// geoscript function definition as a code-generating function.
 type GeoFunc = dyn Fn(Vec<AnyExpr>, &mut CompileContext, Properties) -> AnyExpr;
 
 /// A function definition.
@@ -369,7 +400,7 @@ impl Deref for FunctionDefinition {
     }
 }
 
-/// A function.
+/// A GeoScript function.
 #[derive(Debug)]
 pub struct Function {
     /// Function's overloads.
@@ -424,6 +455,7 @@ impl Function {
             .find(|x| Function::match_params(&x.params, params, x.param_group.as_ref()))
     }
 
+    /// Get the type returned by this function.
     #[must_use]
     pub fn get_returned(&self, params: &[Type]) -> Type {
         self.get_overload(params)
@@ -443,6 +475,7 @@ pub struct Library {
 }
 
 impl Library {
+    /// Create a new empty library.
     #[must_use]
     pub fn new() -> Self {
         Self {
@@ -452,6 +485,7 @@ impl Library {
         }
     }
 
+    /// Get the bundle by its name.
     #[must_use]
     pub fn get_bundle(&self, name: &str) -> &HashSet<&'static str> {
         &self.bundles[name]
@@ -461,12 +495,16 @@ impl Library {
 /// Represents complicated iterator structures.
 #[derive(Debug)]
 pub struct IterTree {
+    /// The variants of the top-level iterator.
     pub variants: Vec<IterNode>,
+    /// The id of the top-level iterator.
     pub id: u8,
+    /// The span of the top-level iterator.
     pub span: Span,
 }
 
-/// A single node of `IterTree`.
+/// A single node of `IterTree`. Might have parallel iterator children.
+/// `IterNode`s represent single iterator variants.
 #[derive(Debug)]
 pub struct IterNode(Vec<IterTree>);
 
@@ -562,6 +600,8 @@ impl From<&ExplicitIterator> for IterTree {
 }
 
 impl IterTree {
+    /// Collect lengths of each iterator mapped to the iterators' ids.
+    ///
     /// # Errors
     /// Returns an error when there is an inconsistency in among iterators (same id, different lengths)
     /// or when an iterator with id x contains an iterator with id x.
@@ -579,11 +619,13 @@ impl IterTree {
 }
 
 impl IterNode {
+    /// Create an empty iterator tree node.
     #[must_use]
     pub fn new(content: Vec<IterTree>) -> Self {
         Self(content)
     }
 
+    /// Create an iterator node from two expressions. Used in binary operation unrolling.
     #[must_use]
     pub fn from2<const ITER1: bool, const ITER2: bool>(
         e1: &Expression<ITER1>,
@@ -594,6 +636,8 @@ impl IterNode {
         node
     }
 
+    /// Collect lengths of each iterator mapped to the iterators' ids.
+    ///
     /// # Panics
     /// Never.
     ///
@@ -639,14 +683,19 @@ impl IterNode {
     }
 }
 
-/// A range-like iterator, except multidimensional.
+/// A range-like iterator, except multidimensional. This in an iterator
+/// in Rust's sense, not in GeoScript's sense.
 #[derive(Debug)]
 pub struct MultiRangeIterator {
+    /// The maximal indices.
+    /// Maximal indices are first non-valid indice.s
     maxes: Vec<usize>,
+    /// Current range indices.
     currents: Vec<usize>,
 }
 
 impl MultiRangeIterator {
+    /// Create a new iterator based on maximal indices.
     #[must_use]
     pub fn new(maxes: Vec<usize>) -> Self {
         let l = maxes.len();
@@ -657,10 +706,12 @@ impl MultiRangeIterator {
         }
     }
 
+    /// Increment the iterator.
     pub fn increment(&mut self) -> Option<&Vec<usize>> {
         self.increment_place(self.currents.len() - 1)
     }
 
+    /// Increment the specific range.
     fn increment_place(&mut self, at: usize) -> Option<&Vec<usize>> {
         self.currents[at] += 1;
 
@@ -676,20 +727,24 @@ impl MultiRangeIterator {
         }
     }
 
+    /// Get current range indices.
     #[must_use]
     pub fn get_currents(&self) -> &Vec<usize> {
         &self.currents
     }
 }
 
+/// An iterator (Rust) over iterator (GeoScript) variants.
 #[derive(Debug)]
 pub struct IterTreeIterator<'r> {
     /// List of lists of parallel iterators with their ids, current indices and lengths.
     steps: Vec<(Vec<(&'r IterTree, usize)>, MultiRangeIterator)>,
+    /// Current index of each iterator.
     currents: Option<HashMap<u8, usize>>,
 }
 
 impl<'r> IterTreeIterator<'r> {
+    /// Create a new iterator from a single tree node.
     #[must_use]
     pub fn new(tree: &'r IterNode) -> Self {
         let mut this = Self {
@@ -702,6 +757,7 @@ impl<'r> IterTreeIterator<'r> {
         this
     }
 
+    /// Add a iterator tree node.
     fn add_node(&mut self, node: &'r IterNode) {
         if node.len() > 0 {
             let mut visited = Vec::new();
@@ -737,6 +793,7 @@ impl<'r> IterTreeIterator<'r> {
         }
     }
 
+    /// Update all iterators.
     fn update_iterators(&mut self) {
         let nodes = if let Some(node) = self.steps.last() {
             node.0
@@ -752,6 +809,7 @@ impl<'r> IterTreeIterator<'r> {
         }
     }
 
+    /// Update current indices.
     fn update_currents(&mut self) {
         let node = self.steps.last().unwrap();
         let currents = node.1.get_currents();
@@ -766,6 +824,7 @@ impl<'r> IterTreeIterator<'r> {
         }
     }
 
+    /// Increment this iterator.
     pub fn next(&mut self) {
         while let Some(node) = self.steps.last_mut() {
             if node.1.increment().is_some() {
@@ -780,6 +839,7 @@ impl<'r> IterTreeIterator<'r> {
         self.currents = None;
     }
 
+    /// Get current iterator indices.
     #[must_use]
     pub fn get_currents(&self) -> Option<&HashMap<u8, usize>> {
         self.currents.as_ref()
@@ -789,30 +849,46 @@ impl<'r> IterTreeIterator<'r> {
 /// The kind on the unrolled rule.
 #[derive(Debug)]
 pub enum UnrolledRuleKind {
+    /// A point equality rule (distance of 0)
     PointEq(Expr<Point>, Expr<Point>),
+    /// A scalar equality
     ScalarEq(Expr<Scalar>, Expr<Scalar>),
+    /// a > b
     Gt(Expr<Scalar>, Expr<Scalar>),
+    /// a < b
     Lt(Expr<Scalar>, Expr<Scalar>),
+    /// One of the rules must be true.
     Alternative(Vec<UnrolledRule>),
-    Bias(AnyExpr), // Bias an expression
+    /// Bias entities in an expression. Can alter behavior of some engines.
+    Bias(AnyExpr),
 }
 
+/// Helper trait for unrolled expression conversions.
 pub trait ConvertFrom<T>: Displayed {
+    /// Convert a value to `Self`.
+    ///
     /// # Errors
     /// Returns an error if the conversion is invalid.
     fn convert_from(value: T, context: &CompileContext) -> Expr<Self>;
 
+    /// Check if conversion from a value to `Self` can be made.
     fn can_convert_from(value: &T) -> bool;
 }
 
+/// Helper trait for unrolled expression conversions. Automatically implemented.
+/// Kinda like `Into`
 pub trait Convert
 where
     Self: Sized,
 {
+    /// Convert `self` into a specific type.
+    ///
     /// # Errors
     /// Returns an error if the conversion is invalid.
     fn convert<T: ConvertFrom<Self>>(self, context: &CompileContext) -> Expr<T>;
 
+    /// Check if `self` can be converted into a specific type.
+    ///
     /// # Errors
     /// Returns an error if the conversion is invalid.
     fn can_convert<T: ConvertFrom<Self>>(&self) -> bool;
@@ -828,6 +904,7 @@ impl<T> Convert for T {
     }
 }
 
+/// Helper trait for getting the type of a value.
 pub trait GetValueType {
     fn get_value_type(&self) -> Type;
 }
@@ -978,12 +1055,15 @@ macro_rules! impl_any_from_x {
     };
 }
 
+/// A generic expression, used with other types.
 #[derive(Debug, CloneWithNode)]
 pub enum Generic<T>
 where
     T: Displayed,
 {
+    /// A reference to a variable.
     VariableAccess(Rc<Variable<T>>),
+    /// A boxed expression. Used for artificial expression spanning.
     Boxed(Expr<T>),
     /// Dummy is a value specifically for continued unrolling after error occurrence.
     /// It should never show up in compilation step.
@@ -1002,12 +1082,18 @@ impl<T: Display + Displayed> Display for Generic<T> {
     }
 }
 
+/// An unrolled point expression
 #[derive(Debug, CloneWithNode)]
 pub enum Point {
+    /// A generic expression
     Generic(Generic<Self>),
+    /// Arithmetic mean of points as complex numbers.
     Average(ClonedVec<Expr<Point>>),
+    /// Intersection of two lines.
     LineLineIntersection(Expr<Line>, Expr<Line>),
+    /// Center of a circle.
     CircleCenter(Expr<Circle>),
+    /// A free point.
     Free,
 }
 
@@ -1046,6 +1132,7 @@ impl GetData for Point {
 }
 
 impl Expr<Point> {
+    /// Box this expression with a given span.
     #[must_use]
     pub fn boxed(mut self, span: Span) -> Self {
         let node = self.node.take();
@@ -1057,6 +1144,7 @@ impl Expr<Point> {
         }
     }
 
+    /// Get the point's x coordinate expression.
     #[must_use]
     pub fn x(self, span: Span, display: Properties, context: &CompileContext) -> Expr<Scalar> {
         let mut expr = Expr {
@@ -1072,6 +1160,7 @@ impl Expr<Point> {
         expr
     }
 
+    /// Get the point's y coordinate expression.
     #[must_use]
     pub fn y(self, span: Span, display: Properties, context: &CompileContext) -> Expr<Scalar> {
         let mut expr = Expr {
@@ -1165,10 +1254,13 @@ impl ConvertFrom<Expr<PointCollection>> for Point {
     }
 }
 
+/// An unrolled circle expression.
 #[derive(Debug, CloneWithNode)]
 pub enum Circle {
+    /// A generic expression
     Generic(Generic<Self>),
-    Circle(Expr<Point>, Expr<Scalar>), // Center, radius
+    /// A circle constructed from its center and radius.
+    Circle(Expr<Point>, Expr<Scalar>),
 }
 
 impl_x_from_x! {Circle}
@@ -1218,6 +1310,7 @@ impl GetData for Circle {
 }
 
 impl Expr<Circle> {
+    /// Box this expression with a given span.
     #[must_use]
     pub fn boxed(mut self, span: Span) -> Self {
         let node = self.node.take();
@@ -1229,6 +1322,7 @@ impl Expr<Circle> {
         }
     }
 
+    /// Get the circle's center expression.
     #[must_use]
     pub fn center(self, span: Span, display: Properties, context: &CompileContext) -> Expr<Point> {
         let mut expr = Expr {
@@ -1241,6 +1335,7 @@ impl Expr<Circle> {
         expr
     }
 
+    /// Get the circle's radius expression.
     #[must_use]
     pub fn radius(self, span: Span, display: Properties, context: &CompileContext) -> Expr<Scalar> {
         let mut expr = Expr {
@@ -1274,13 +1369,19 @@ impl Display for Circle {
     }
 }
 
+/// An unrolled line expression.
 #[derive(Debug, CloneWithNode)]
 pub enum Line {
+    /// A generic expression
     Generic(Generic<Self>),
+    /// A line going through two points.
     LineFromPoints(Expr<Point>, Expr<Point>),
+    /// A bisector line of an angle defined by three points.
     AngleBisector(Expr<Point>, Expr<Point>, Expr<Point>),
-    PerpendicularThrough(Expr<Line>, Expr<Point>), // Line, Point
-    ParallelThrough(Expr<Line>, Expr<Point>),      // Line, Point
+    /// A line perpendicular to another one, going through a specific point
+    PerpendicularThrough(Expr<Line>, Expr<Point>),
+    /// A line perpendicular to another one, going through a specific point
+    ParallelThrough(Expr<Line>, Expr<Point>),
 }
 
 impl Line {
@@ -1318,6 +1419,7 @@ impl GetData for Line {
 }
 
 impl Expr<Line> {
+    /// Box the expression with a span.
     #[must_use]
     pub fn boxed(mut self, span: Span) -> Self {
         let node = self.node.take();
@@ -1403,27 +1505,46 @@ impl Display for Line {
     }
 }
 
+/// An unrolled scalar expression
 #[derive(Debug, CloneWithNode)]
 pub enum ScalarData {
+    /// A generic expression
     Generic(Generic<Scalar>),
+    /// A constant
     Number(ProcNum),
-    DstLiteral(ProcNum),
+    /// Override the expression's unit.
     SetUnit(Expr<Scalar>, ComplexUnit),
+    /// Distance between two points.
     PointPointDistance(Expr<Point>, Expr<Point>),
+    /// Distance of a point from a line.
     PointLineDistance(Expr<Point>, Expr<Line>),
+    /// Minus expression
     Negate(Expr<Scalar>),
+    /// a + b
     Add(Expr<Scalar>, Expr<Scalar>),
+    /// a - b
     Subtract(Expr<Scalar>, Expr<Scalar>),
+    /// a * b
     Multiply(Expr<Scalar>, Expr<Scalar>),
+    /// a / b
     Divide(Expr<Scalar>, Expr<Scalar>),
+    /// Angle defined by three points.
     ThreePointAngle(Expr<Point>, Expr<Point>, Expr<Point>),
-    ThreePointAngleDir(Expr<Point>, Expr<Point>, Expr<Point>), // Directed angle
+    /// Directed angle defined by three points.
+    ThreePointAngleDir(Expr<Point>, Expr<Point>, Expr<Point>),
+    /// Angle between two lines.
     TwoLineAngle(Expr<Line>, Expr<Line>),
+    /// The arithmetic mean of scalars.
     Average(ClonedVec<Expr<Scalar>>),
+    /// Radius of a circle
     CircleRadius(Expr<Circle>),
+    /// Raise a scalar to a power
     Pow(Expr<Scalar>, CompExponent),
+    /// X coordinate of a point
     PointX(Expr<Point>),
+    /// Y coordinate of a point
     PointY(Expr<Point>),
+    /// A free scalar.
     Free,
 }
 
@@ -1441,7 +1562,6 @@ impl Display for ScalarData {
                     .join(", ")
             ),
             Self::Number(num) => write!(f, "{num}"),
-            Self::DstLiteral(num) => write!(f, "lit {num}"),
             Self::SetUnit(expr, _) => {
                 write!(f, "{expr}")
             }
@@ -1470,6 +1590,7 @@ impl Display for ScalarData {
     }
 }
 
+/// A scalar with a unit.
 #[derive(Debug, CloneWithNode)]
 pub struct Scalar {
     pub unit: Option<ComplexUnit>,
@@ -1561,6 +1682,7 @@ impl GetData for Scalar {
 }
 
 impl Expr<Scalar> {
+    /// Box the expression with a span.
     #[must_use]
     pub fn boxed(mut self, span: Span) -> Self {
         let node = self.node.take();
@@ -1575,10 +1697,12 @@ impl Expr<Scalar> {
         }
     }
 
+    /// Try to convert this scalar to the given unit.
+    ///
     /// # Errors
     /// Returns a conversion error if it is invalid.
     ///
-    /// Only valid conversions are None to another unit or self to self
+    /// Only valid conversions are `None` to another unit or `self` to `self`
     #[must_use]
     pub fn convert_unit(mut self, unit: Option<ComplexUnit>, context: &CompileContext) -> Self {
         let err = Error::ImplicitConversionDoesNotExist {
@@ -1618,8 +1742,7 @@ impl Expr<Scalar> {
                         ScalarData::Free => {
                             ScalarData::SetUnit(self.clone_without_node(), unit.unwrap_or_default())
                         }
-                        ScalarData::DstLiteral(_)
-                        | ScalarData::PointPointDistance(_, _)
+                        ScalarData::PointPointDistance(_, _)
                         | ScalarData::PointLineDistance(_, _)
                         | ScalarData::ThreePointAngle(_, _, _)
                         | ScalarData::ThreePointAngleDir(_, _, _)
@@ -1689,6 +1812,9 @@ impl Expr<Scalar> {
         !(unit.is_none() || self.data.unit.is_some() && self.data.unit != unit)
     }
 
+    /// Make the unit concrete. If the unit is a `None`, will make it
+    /// a unitless scalar. Otherwise will do nothing.
+    ///
     /// # Panics
     /// If bugged
     #[must_use]
@@ -1713,9 +1839,12 @@ impl Display for Scalar {
     }
 }
 
+/// Unrolled point collection expression data.
 #[derive(Debug, CloneWithNode)]
 pub enum PointCollectionData {
+    /// A generic expression
     Generic(Generic<PointCollection>),
+    /// A point collection in the form of a list of points.
     PointCollection(ClonedVec<Expr<Point>>),
 }
 
@@ -1736,6 +1865,8 @@ impl PointCollectionData {
         }
     }
 
+    /// Get the point at the given index.
+    ///
     /// # Panics
     /// If the collection isn't long enough
     #[must_use]
@@ -1770,9 +1901,12 @@ impl Display for PointCollectionData {
     }
 }
 
+/// An unrolled point collection with size information.
 #[derive(Debug, CloneWithNode)]
 pub struct PointCollection {
+    /// How many points this point collection has
     pub length: usize,
+    /// The defining data.
     pub data: PointCollectionData,
 }
 
@@ -1853,6 +1987,8 @@ impl ConvertFrom<Expr<PointCollection>> for PointCollection {
 }
 
 impl PointCollection {
+    /// An associated type getter doesn't know the collection length
+    /// so it returns a generic length of 0.
     #[must_use]
     pub fn get_type() -> Type {
         ty::collection(0)
@@ -1860,6 +1996,7 @@ impl PointCollection {
 }
 
 impl Expr<PointCollection> {
+    /// Box the expression with the given span.
     #[must_use]
     pub fn boxed(mut self, span: Span) -> Self {
         let node = self.node.take();
@@ -1874,6 +2011,9 @@ impl Expr<PointCollection> {
         }
     }
 
+    /// Check if the collection's length matches the given length.
+    /// If `length` is zero, any length is found matching.
+    ///
     /// # Errors
     /// Returns an error if lengths don't match up.
     #[must_use]
@@ -1897,12 +2037,13 @@ impl Expr<PointCollection> {
         }
     }
 
+    /// Get the point at a given index without taking the collection's node.
     #[must_use]
     pub fn index_without_node(&self, index: usize) -> Expr<Point> {
         self.data.data.index(index)
     }
 
-    /// Also takes the collection's node.
+    /// Get the point at a given index and take the collection's node.
     #[must_use]
     pub fn index_with_node(&mut self, index: usize) -> Expr<Point> {
         let mut point = self.data.data.index(index);
@@ -1927,9 +2068,12 @@ impl Display for PointCollection {
     }
 }
 
+/// An unrolled bundle expression data
 #[derive(Debug, CloneWithNode)]
 pub enum BundleData {
+    /// A generic expression
     Generic(Generic<Bundle>),
+    /// An explicit bundle construction.
     ConstructBundle(ClonedMap<String, AnyExpr>),
 }
 
@@ -1952,6 +2096,7 @@ impl Display for BundleData {
     }
 }
 
+/// An unrolled bundle expression with the bundle type's name.
 #[derive(Debug, CloneWithNode)]
 pub struct Bundle {
     pub name: &'static str,
@@ -1971,11 +2116,13 @@ impl_convert_err! {PointCollection -> Bundle}
 impl_make_variable! {Bundle {other: name, data: BundleData}}
 
 impl Bundle {
+    /// Associated type getter doesn't know the specific name, so always returns `"{}"`
     #[must_use]
     pub fn get_type() -> Type {
         ty::bundle("{}")
     }
 
+    /// Get the given field without taking its node.
     #[must_use]
     pub fn index(&self, field: &str) -> AnyExpr {
         match &self.data {
@@ -2010,6 +2157,7 @@ impl Dummy for Bundle {
 }
 
 impl Expr<Bundle> {
+    /// Box the expression with the given span.
     #[must_use]
     pub fn boxed(mut self, span: Span) -> Self {
         let node = self.node.take();
@@ -2024,11 +2172,14 @@ impl Expr<Bundle> {
         }
     }
 
+    /// Get a field's value without taking the bundle's node.
     #[must_use]
     pub fn index_without_node(&self, field: &str) -> AnyExpr {
         self.data.index(field)
     }
 
+    /// Get a field's value and take the bundle's node.
+    ///
     /// # Panics
     /// If the given field does not exist.
     #[must_use]
@@ -2080,6 +2231,8 @@ impl Expr<Bundle> {
         expr
     }
 
+    /// Check if the bundle's name matches the given name.
+    ///
     /// # Errors
     /// Returns an error if the bundle names don't match
     #[must_use]
@@ -2113,8 +2266,10 @@ impl Display for Bundle {
     }
 }
 
+/// A special unknown type used for pushing unrolling as far as possible.
 #[derive(Debug, CloneWithNode)]
 pub enum Unknown {
+    /// Can only be a generic expression.
     Generic(Generic<Unknown>),
 }
 
@@ -2149,6 +2304,7 @@ impl GetValueType for Unknown {
 }
 
 impl Expr<Unknown> {
+    /// Box the expression with the given span.
     #[must_use]
     pub fn boxed(mut self, span: Span) -> Self {
         let node = self.take_node();
@@ -2161,6 +2317,7 @@ impl Expr<Unknown> {
     }
 }
 
+/// A type-erased unrolled expression.
 #[derive(Debug, CloneWithNode)]
 pub enum AnyExpr {
     Point(Expr<Point>),
@@ -2195,6 +2352,7 @@ impl AnyExpr {
         }
     }
 
+    /// Get the expression's span.
     #[must_use]
     pub fn get_span(&self) -> Span {
         match self {
@@ -2208,6 +2366,7 @@ impl AnyExpr {
         }
     }
 
+    /// Replace the display node with the given node. Also returns the old node.
     pub fn replace_node(&mut self, with: Option<AnyExprNode>) -> Option<AnyExprNode> {
         Some(match self {
             Self::Point(v) => {
@@ -2236,6 +2395,7 @@ impl AnyExpr {
         })
     }
 
+    /// Get the node without taking it (reference).
     #[must_use]
     pub fn get_node(&self) -> Option<&dyn Node> {
         match self {
@@ -2257,6 +2417,7 @@ impl AnyExpr {
         }
     }
 
+    /// Get the expression's value type.
     #[must_use]
     pub fn get_type(&self) -> Type {
         match self {
@@ -2270,6 +2431,8 @@ impl AnyExpr {
         }
     }
 
+    /// Convert this expression to the given type.
+    ///
     /// # Errors
     /// Returns an error if the conversion is invalid.
     #[must_use]
@@ -2287,6 +2450,7 @@ impl AnyExpr {
         }
     }
 
+    /// Check if this expression is convertible to the given type.
     #[must_use]
     pub fn can_convert_to(&self, to: Type) -> bool {
         match to {
@@ -2300,9 +2464,8 @@ impl AnyExpr {
         }
     }
 
-    /// Checks if `self` is convertible to a scalar with a given unit.
-    ///
-    /// **NOTE**: When `unit` is `None`, it is treated as "ANY" unit.
+    /// Check if the expression is convertible to the given type.
+    /// Note that `unit` of `None` is ANY scalar, not UNKNOWN-UNIT scalar here.
     #[must_use]
     pub fn can_convert_to_scalar(&self, unit: Option<ComplexUnit>) -> bool {
         match self {
@@ -2315,6 +2478,7 @@ impl AnyExpr {
         }
     }
 
+    /// Check if the expression is convertible to a point collection of the given length.
     #[must_use]
     pub fn can_convert_to_collection(&self, len: usize) -> bool {
         match self {
@@ -2325,6 +2489,7 @@ impl AnyExpr {
         }
     }
 
+    /// Check if the expression is convertible to a bundle with the given name.
     #[must_use]
     pub fn can_convert_to_bundle(&self, name: &str) -> bool {
         match self {
@@ -2334,6 +2499,7 @@ impl AnyExpr {
         }
     }
 
+    /// Box an expression with the given span.
     #[must_use]
     pub fn boxed(self, span: Span) -> Self {
         match self {
@@ -2347,6 +2513,8 @@ impl AnyExpr {
         }
     }
 
+    /// Get the underlying variable's defining span.
+    ///
     /// # Panics
     /// Panics if not a variable.
     #[must_use]
@@ -2383,6 +2551,7 @@ impl AnyExpr {
         }
     }
 
+    /// Turn this expression into a variable with the given name.
     #[must_use]
     pub fn make_variable(self, name: String) -> Self {
         match self {
@@ -2429,6 +2598,7 @@ impl Display for AnyExpr {
     }
 }
 
+/// Helper function for displaying vectors.
 pub fn display_vec<T: Display>(v: &[T]) -> String {
     v.iter()
         .map(|x| format!("{x}"))
@@ -2436,32 +2606,43 @@ pub fn display_vec<T: Display>(v: &[T]) -> String {
         .join(", ")
 }
 
+/// A helper trait with functions for dummy values that pretend to be valid.
 pub trait Dummy {
+    /// Create a dummy value pretending to be a valid one.
     #[must_use]
     fn dummy() -> Self;
 
+    /// Check if this is a dummy value.
     #[must_use]
     fn is_dummy(&self) -> bool;
 }
 
+/// A trait with a single associated type. Used with expressions that can be displayed.
 pub trait Displayed: Sized {
+    /// The display node type to use for displaying `Self`
     type Node: Node;
 }
 
+/// Get the underlying data with no indirections.
 pub trait GetData {
+    /// Get the underlying data with no indirections.
     #[must_use]
     fn get_data(&self) -> &Self;
 }
 
+/// Used for distinction between cloning an expression AND taking its node
+/// and cloning an expression WITHOUT taking its node.
 pub trait CloneWithNode {
+    /// Clone `self` and take its node.
     #[must_use]
     fn clone_with_node(&mut self) -> Self;
 
+    /// Clone `self` without taking its node.
     #[must_use]
     fn clone_without_node(&self) -> Self;
 }
 
-/// Wrapper struct for a cloned vec.
+/// Wrapper struct for a cloned vec for use with the [`CloneWithNode`]
 #[derive(Debug)]
 pub struct ClonedVec<T>(pub Vec<T>);
 
@@ -2485,7 +2666,7 @@ impl<T> DerefMut for ClonedVec<T> {
     }
 }
 
-/// Wrapper struct for a cloned map.
+/// Wrapper struct for a cloned map used with the [`CloneWithNode`] trait.
 #[derive(Debug)]
 pub struct ClonedMap<K, V>(pub HashMap<K, V>);
 
@@ -2551,14 +2732,19 @@ impl<K: Hash + CloneWithNode + Eq, V: CloneWithNode> CloneWithNode for ClonedMap
     }
 }
 
+/// An unrolled expression with a span and a display node.
 #[derive(Debug)]
 pub struct Expr<T: Displayed> {
+    /// The expression kind.
     pub data: Rc<T>,
+    /// The expression's span.
     pub span: Span,
+    /// The expression's display node, if any.
     pub node: Option<HierarchyNode<T::Node>>,
 }
 
 impl<T: GetData + Displayed> Expr<T> {
+    /// Get the underlying data without any indirections.
     #[must_use]
     pub fn get_data(&self) -> &T {
         self.data.get_data()
@@ -2606,6 +2792,7 @@ impl<T: CloneWithNode + Displayed> Expr<T> {
         }
     }
 
+    /// Take the expression's display node.
     pub fn take_node(&mut self) -> Option<HierarchyNode<T::Node>> {
         self.node.take()
     }
@@ -2621,10 +2808,14 @@ impl<T: CloneWithNode + Displayed + Dummy> Dummy for Expr<T> {
     }
 }
 
+/// An unrolled rule with a kind and additional data.
 #[derive(Debug)]
 pub struct UnrolledRule {
+    /// The kind of this rule
     pub kind: UnrolledRuleKind,
+    /// Whether the rule is inverted
     pub inverted: bool,
+    /// The rule's weight
     pub weight: ProcNum,
 }
 
@@ -2667,7 +2858,7 @@ pub fn construct_point_name(letter: char, primes: u8) -> String {
     String::from(letter) + &"'".repeat(primes as usize)
 }
 
-/// Replaces all Parameter unrolled expressions with the given parameters.
+/// Replaces all parameter unrolled expressions with the given parameters.
 #[allow(clippy::module_name_repetitions)]
 #[must_use]
 pub fn unroll_parameters(
@@ -2679,6 +2870,7 @@ pub fn unroll_parameters(
     definition(params, context, display)
 }
 
+/// Fetch the variable's defining expression by its name.
 fn fetch_variable(context: &CompileContext, name: &str, variable_span: Span) -> AnyExpr {
     let mut var = if let Some(var) = context.variables.get(name) {
         var.clone_without_node()
@@ -2759,10 +2951,13 @@ impl Unroll for SimpleExpression {
     }
 }
 
+/// A function reference: either a named one or a method.
 #[derive(Debug)]
 pub enum FuncRef {
     Function(String),
+    /// Method with the given name on the given value.
     Method(String, AnyExpr),
+    /// An invalid function reference
     Invalid,
 }
 
@@ -3380,6 +3575,8 @@ impl<const ITER: bool> Unroll for Expression<ITER> {
 //     }
 // }
 
+/// A generic helper function for finding the string most similar to the given one
+/// from a list of strings.
 pub fn most_similar<'r, I: IntoIterator<Item = &'r T>, T: AsRef<str> + ?Sized + 'r>(
     expected: I,
     received: &str,
@@ -3398,11 +3595,17 @@ pub fn most_similar<'r, I: IntoIterator<Item = &'r T>, T: AsRef<str> + ?Sized + 
         .map(|v| v.0.to_string())
 }
 
+/// Properties, commonly used for display options.
 #[derive(Debug)]
 pub struct Properties {
+    /// Name-(span, value) pairs.
     props: HashMap<String, (Span, PropertyValue)>,
+    /// Whether the properties are safe to close.
     finished: bool,
+    /// Errors encountered when parsing properties
     errors: Vec<Error>,
+    /// Expected properties (not mandatory). Used for finding most similar
+    /// properties to the ones that were never read.
     expected: Vec<&'static str>,
 }
 
@@ -3443,6 +3646,7 @@ impl Default for Properties {
 }
 
 impl Properties {
+    /// Finish parsing these properties and submit all their errors.
     pub fn finish(mut self, context: &CompileContext) {
         self.finished = true;
 
@@ -3462,6 +3666,7 @@ impl Properties {
         context.extend_errors(mem::take(&mut self.errors));
     }
 
+    /// Get a property value by its name.
     #[must_use]
     pub fn get<T: FromProperty>(&mut self, property: &'static str) -> Property<T> {
         if let Some((_, prop)) = self.props.remove(property) {
@@ -3487,10 +3692,12 @@ impl Properties {
         }
     }
 
+    /// Ignore the given property.
     pub fn ignore(&mut self, property: &'static str) {
         self.props.remove(property);
     }
 
+    /// Add a property along with a value if it is not present yet.
     pub fn add_if_not_present(
         &mut self,
         property: &'static str,
@@ -3501,6 +3708,7 @@ impl Properties {
             .or_insert((key_span, value));
     }
 
+    /// Merge the properties with other properties. Automatically finished the other properties.
     #[must_use]
     pub fn merge_with(mut self, mut other: Properties) -> Self {
         self.errors.extend(mem::take(&mut other.errors));
@@ -3525,6 +3733,7 @@ impl Properties {
         self
     }
 
+    /// Ignore all unread properties.
     fn ignore_all(&mut self) {
         self.props.clear();
     }
@@ -3556,6 +3765,7 @@ impl Drop for Properties {
     }
 }
 
+/// A single property with an optional value and an optional span.
 #[derive(Debug, Clone)]
 pub struct Property<T> {
     value: Option<T>,
@@ -3563,21 +3773,25 @@ pub struct Property<T> {
 }
 
 impl<T> Property<T> {
+    /// Get the property's value, consuming it.
     #[must_use]
     pub fn get(self) -> Option<T> {
         self.value
     }
 
+    /// Get the property's value or a default if the value is not present.
     #[must_use]
     pub fn get_or(self, default: T) -> T {
         self.value.unwrap_or(default)
     }
 
+    /// Get the property's span if it exists.
     #[must_use]
     pub fn get_span(&self) -> Option<Span> {
         self.span
     }
 
+    /// Make this property into a [`MaybeUnset`]
     #[must_use]
     pub fn maybe_unset(self, default: T) -> MaybeUnset<T> {
         let mut value = MaybeUnset::new(default);
@@ -3588,12 +3802,14 @@ impl<T> Property<T> {
 }
 
 impl<T> Property<Result<T, Error>> {
+    /// Get the value or, in case of an error, a default alternative.
     #[must_use]
     pub fn ok_or(self, default: T) -> T {
         self.value.and_then(Result::ok).unwrap_or(default)
     }
 }
 
+/// Create a named variable from the unrolled expression in a `let` statement.
 fn create_variable_named(
     stat: &LetStatement,
     context: &mut CompileContext,
@@ -3646,7 +3862,8 @@ fn create_variable_named(
     }
 }
 
-/// If the lhs of let statement is a point collection, the rhs has to be unpacked.
+/// Create a point collection variable based from an unrolled expression in a `let` statement.
+/// If the `lhs` of let statement is a point collection, the `rhs` has to be unpacked.
 fn create_variable_collection(
     stat: &LetStatement,
     context: &mut CompileContext,
@@ -3731,6 +3948,7 @@ fn create_variable_collection(
     Ok(())
 }
 
+/// Create variables from a `let` statement.
 fn create_variables(
     stat: &LetStatement,
     context: &mut CompileContext,
@@ -3829,6 +4047,7 @@ fn create_variables(
     Ok(variable_nodes)
 }
 
+/// Unroll a ref statement.
 fn unroll_ref(
     stat: &RefStatement,
     context: &mut CompileContext,
@@ -3879,6 +4098,7 @@ fn unroll_ref(
     Ok(nodes)
 }
 
+/// Unroll a `let` statement.
 fn unroll_let(
     mut stat: LetStatement,
     context: &mut CompileContext,
@@ -3948,6 +4168,7 @@ fn unroll_let(
     Ok(nodes)
 }
 
+/// Unroll an equality rule.
 fn unroll_eq(
     lhs: AnyExpr,
     rhs: AnyExpr,
@@ -4033,6 +4254,7 @@ fn unroll_eq(
     }
 }
 
+/// Unroll a greater-than rule.
 fn unroll_gt(
     lhs: Expr<Scalar>,
     rhs: Expr<Scalar>,
@@ -4070,6 +4292,7 @@ fn unroll_gt(
     }
 }
 
+/// Unroll a lower-than rule.
 fn unroll_lt(
     lhs: Expr<Scalar>,
     rhs: Expr<Scalar>,
@@ -4107,6 +4330,7 @@ fn unroll_lt(
     }
 }
 
+/// Unroll a generic rule.
 fn unroll_rule(
     (lhs, op, rhs): (AnyExpr, &RuleOperator, AnyExpr),
     context: &mut CompileContext,
@@ -4200,6 +4424,7 @@ fn unroll_rule(
     }
 }
 
+/// Unroll a general rule statement.
 fn unroll_rule_statement(
     rule: &RuleStatement,
     context: &mut CompileContext,
@@ -4234,6 +4459,7 @@ fn unroll_rule_statement(
     Ok(nodes)
 }
 
+/// Set a boolean flag.
 fn set_flag_bool(flag: &mut Flag, stmt: &FlagStatement) -> Result<(), Error> {
     match &stmt.value {
         super::parser::FlagValue::Set(_) => {
@@ -4305,10 +4531,12 @@ fn set_flag_bool(flag: &mut Flag, stmt: &FlagStatement) -> Result<(), Error> {
     Ok(())
 }
 
+/// Set a flag's value.
 fn set_flag(set: &mut FlagSet, flag: &FlagStatement, context: &CompileContext) {
     set_flag_recursive(set, flag, context, 0);
 }
 
+/// Set a flag's value.
 fn set_flag_recursive(
     set: &mut FlagSet,
     flag: &FlagStatement,
