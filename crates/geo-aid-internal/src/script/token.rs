@@ -1,3 +1,5 @@
+//! All functionality for turning scripts into series of tokens.
+
 use std::{fmt::Display, iter::Peekable};
 
 use serde::Serialize;
@@ -7,24 +9,29 @@ use self::number::{ParsedFloat, ParsedInt, ParsedIntBuilder};
 use super::{parser::Parse, Error};
 use geo_aid_derive::Parse;
 
-/// Re-exports and zero-cost abstractions of number types used by geo-aid.
 pub mod number;
 
 /// Defines a position in the script.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize)]
 pub struct Position {
+    /// The line number, starting at 1
     pub line: usize,
+    /// The column index (character index), starting at 1
     pub column: usize,
 }
 
 /// Defines a span in the script.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub struct Span {
+    /// Starting position (included)
     pub start: Position,
+    /// Ending position (exluded)
     pub end: Position,
 }
 
 impl Span {
+    /// Create a span containing both `self` and `other`. If one of them is empty,
+    /// returns the other.
     #[must_use]
     pub fn join(self, other: Span) -> Self {
         if self.is_empty() {
@@ -47,17 +54,20 @@ impl Span {
         }
     }
 
+    /// Check if the spans are overlapping (share a position)
     #[must_use]
     pub fn overlaps(self, other: Span) -> bool {
         (self.start <= other.start && self.end >= other.start)
             || (other.start <= self.start && other.end >= self.start)
     }
 
+    /// Check if the span is contained within a single line
     #[must_use]
     pub const fn is_single_line(&self) -> bool {
         self.start.line == self.end.line
     }
 
+    /// Create an empty span. This is a special value used in different cases.
     #[must_use]
     pub const fn empty() -> Self {
         Span {
@@ -66,8 +76,9 @@ impl Span {
         }
     }
 
+    /// Check if the span is empty (`start == end`)
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.start == self.end
     }
 }
@@ -87,6 +98,8 @@ impl Ord for Span {
     }
 }
 
+/// A helper span macro accepting start line and column and end line and column.
+/// All numbers are 1-based
 #[macro_export]
 macro_rules! span {
     ($start_ln:expr, $start_col:expr, $end_ln:expr, $end_col:expr) => {
@@ -306,6 +319,7 @@ pub struct Question {
     pub span: Span,
 }
 
+/// Any valid token of GeoScript
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Token {
     Semi(Semi),
@@ -388,6 +402,7 @@ impl Display for Token {
 }
 
 impl Token {
+    /// Get the token's span.
     #[must_use]
     pub fn get_span(&self) -> Span {
         match self {
@@ -425,11 +440,16 @@ impl Token {
     }
 }
 
-/// A name.
+/// A name identifier, as opposed to a point collection identifier.
+/// For more details, see [`PointCollection`]
 #[derive(Debug, Clone)]
 pub struct NamedIdent {
+    /// The identifier span
     pub span: Span,
+    /// The identifier characters
     pub ident: String,
+    /// How likely it is that this identifier should have been a collection.
+    /// Used for error reporting.
     pub collection_likeness: f64,
 }
 
@@ -468,19 +488,25 @@ impl Display for PointCollectionItem {
     }
 }
 
-/// A point collection composed of point characters and the number of `'` characters following them.
+/// A point collection composed of single point identifiers.
+/// A point identifier is an uppercase alphabetic character and a number of `'` characters following it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PointCollection {
+    /// Each point identifier of this collection
     pub collection: Vec<PointCollectionItem>,
     pub span: Span,
 }
 
 impl PointCollection {
+    /// How many points are in this collection
     #[must_use]
     pub fn len(&self) -> usize {
         self.collection.len()
     }
 
+    /// Whether this collection is empty.
+    /// It's here mostly to shut clippy up. Point collections cannot
+    /// be 0-length.
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.collection.is_empty()
@@ -536,7 +562,7 @@ impl Display for Ident {
     }
 }
 
-/// A number.
+/// A number token. Can represent an integer or a decimal.
 #[derive(Debug, Clone, PartialEq, Eq, Parse)]
 #[parse(token)]
 pub enum Number {
@@ -545,6 +571,7 @@ pub enum Number {
 }
 
 impl Number {
+    /// Convert this number to a float.
     #[must_use]
     pub fn to_float(&self) -> f64 {
         match self {
@@ -553,6 +580,7 @@ impl Number {
         }
     }
 
+    /// Check if this token represents a 0.
     #[must_use]
     pub fn is_zero(&self) -> bool {
         match self {
@@ -561,6 +589,7 @@ impl Number {
         }
     }
 
+    /// Check if this token represents a 1.
     #[must_use]
     pub fn is_one(&self) -> bool {
         match self {
@@ -583,6 +612,7 @@ impl Display for Number {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TokInteger {
     pub span: Span,
+    /// The parsed integer.
     pub parsed: ParsedInt,
 }
 
@@ -592,11 +622,13 @@ impl Display for TokInteger {
     }
 }
 
-/// The floating-point part of a number
+/// A decimal number.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TokFloat {
     pub span: Span,
+    /// The splitting dot.
     pub dot: Dot,
+    /// The parsed digits.
     pub parsed: ParsedFloat,
 }
 
@@ -606,10 +638,13 @@ impl Display for TokFloat {
     }
 }
 
+/// Check if `c` is a valid character for an identifier.
 fn is_identifier_character(c: char) -> bool {
     c.is_alphabetic() || c.is_ascii_digit() || c == '_' || c == '\''
 }
 
+/// Read an identifier (without distinguishing point collections from names)
+/// from a char iterator.
 fn read_identifier<I: Iterator<Item = char>>(
     it: &mut Peekable<I>,
     position: &mut Position,
@@ -638,6 +673,7 @@ fn read_identifier<I: Iterator<Item = char>>(
     )
 }
 
+/// Read a string literal from a string iterator.
 fn read_string<I: Iterator<Item = char>>(
     it: &mut Peekable<I>,
     position: &mut Position,
@@ -717,6 +753,7 @@ fn read_string<I: Iterator<Item = char>>(
     })
 }
 
+/// Read a number token from a char iterator.
 fn read_number<I: Iterator<Item = char>>(it: &mut Peekable<I>, position: &mut Position) -> Number {
     let mut integer = ParsedIntBuilder::new();
     let mut floating = None;
@@ -856,6 +893,7 @@ fn dispatch_ident(sp: Span, ident: String) -> Ident {
     Ident::Collection(collection)
 }
 
+/// Recognise special characters
 fn tokenize_special<I: Iterator<Item = char>>(
     position: &mut Position,
     tokens: &mut Vec<Token>,
@@ -953,7 +991,7 @@ fn tokenize_special<I: Iterator<Item = char>>(
     Ok(())
 }
 
-/// Tokenizes the given script.
+/// Tokenizes the given script (turns it into a series of tokens).
 ///
 /// # Errors
 /// Emits an appropriate error if the script is invalid and tokenization fails.
