@@ -9,7 +9,7 @@ use crate::script::token::{Position, Span};
 /// The kind of a diagnostic
 #[derive(Debug, Clone, Copy)]
 pub enum DiagnosticKind {
-    /// A language error`
+    /// A language error
     Error,
     /// Some information
     Note,

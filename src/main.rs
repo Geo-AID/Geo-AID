@@ -154,9 +154,6 @@ fn main() {
                     strictness: args.strictness,
                     samples: args.samples,
                     worker_count: args.worker_count,
-                    mean_count: args.mean_count,
-                    max_mean_delta: args.delta_max_mean,
-                    max_adjustment: args.adjustment_max,
                 },
                 &intermediate,
             );

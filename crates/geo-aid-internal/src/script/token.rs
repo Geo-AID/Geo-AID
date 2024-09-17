@@ -78,7 +78,7 @@ impl Span {
 
     /// Check if the span is empty (`start == end`)
     #[must_use]
-    pub const fn is_empty(&self) -> bool {
+    pub fn is_empty(&self) -> bool {
         self.start == self.end
     }
 }
