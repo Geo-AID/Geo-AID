@@ -1,19 +1,18 @@
+//! # Geo-AID's optimization engines.
+//!
+//! Details on how each works is provided in the math doc,
+//! but generic, simplified descriptions are also provided here.
+
 use std::collections::VecDeque;
 
-/// Random Adjustment Generation Engine - adjustables are randomly adjusted before rating the figure's quality.
-pub mod rage;
-
-/// Gradient-Led Iterative Descent Engine
-pub mod glide;
-
 pub mod compiler;
-
-/// A helper module for thread pools for use in generation.
+pub mod glide;
+pub mod rage;
 mod thread_pool;
 
 /// Helper struct for managing mean quality of last `n` qualities.
 ///
-/// Detects if the sum of last `entry_count` quality deltas exceeds `limit`.
+/// Detects if the arithmetic mean of last `entry_count` quality deltas exceeds `limit`.
 pub(crate) struct QualityRecord {
     queue: VecDeque<f64>,
     entry_count: usize,
@@ -23,6 +22,8 @@ pub(crate) struct QualityRecord {
 }
 
 impl QualityRecord {
+    /// Create a new quality record that counts the last `entry_count` qualities
+    /// And reports that generation should stop when their arithmetic mean exceeds `limit`.
     #[must_use]
     pub fn new(entry_count: usize, limit: f64) -> Self {
         #[allow(clippy::cast_precision_loss)]
@@ -60,7 +61,7 @@ impl QualityRecord {
         self.quality = 0.0;
     }
 
-    /// Current quality
+    /// Get current (latest) quality
     pub fn get_quality(&self) -> f64 {
         self.quality
     }

@@ -1,16 +1,23 @@
+//! Utilities for console printing of diagnostics.
+
 use std::{collections::BTreeMap, fmt::Display, path::Path};
 
 use crossterm::style::{Color, Stylize};
 
 use crate::script::token::{Position, Span};
 
+/// The kind of a diagnostic
 #[derive(Debug, Clone, Copy)]
 pub enum DiagnosticKind {
+    /// A language error
     Error,
+    /// Some information
     Note,
+    /// A suggestion
     Help,
 }
 
+/// Get the terminal color for the given diagnostic kind.
 #[must_use]
 pub fn get_color(kind: DiagnosticKind) -> Color {
     match kind {
@@ -22,64 +29,102 @@ pub fn get_color(kind: DiagnosticKind) -> Color {
     }
 }
 
+/// The kind of an annotation
 #[derive(Debug, Clone, Copy)]
 pub enum AnnotationKind {
+    /// Additional context
     Note,
+    /// A helpful suggestion, e.g. a fix
     Help,
 }
 
+/// A set of annotations typically attached to a main diagnostic
 #[derive(Debug)]
 struct AnnotationSet {
     span: Span,
     annotations: Vec<AnnotationPrivate>,
 }
 
+/// Annotation data
 #[derive(Debug)]
 struct AnnotationPrivate {
+    /// The annotation message
     message: String,
+    /// The annotation kind
     kind: AnnotationKind,
 }
 
+/// An annotation providing additional information or help
+/// regarding a diagnostic
 pub struct Annotation {
+    /// What kind of a diagnostic this is
     pub kind: AnnotationKind,
+    /// The annotation's message
     pub message: String,
+    /// The span this diagnostic relates to
     pub at: Span,
 }
 
+/// A suggested change in code
 #[derive(Debug, Clone)]
 pub struct Change {
+    /// The span to be replaced
     pub span: Span,
+    /// The new contents.
+    ///
     /// Instead of a simple string, we use a vector of lines to make the
     /// rendering process more reliable.
     pub new_content: Vec<String>,
 }
 
+/// A suggested fix for a diagnostic
 #[derive(Debug)]
 pub struct Fix {
+    /// Changes that this fix introduces
     pub changes: Vec<Change>,
+    /// A message describing the suggested fix
     pub message: String,
 }
 
+/// A diagnostic
 pub struct Diagnostic<'r> {
+    /// The kind of this diagnostic
     kind: DiagnosticKind,
+    /// Annotations provided along the diagnostic
     annotations: Vec<AnnotationSet>,
+    /// Notes (spanless annotations) provided along the diagnostic
     notes: Vec<(AnnotationKind, String)>,
+    /// The main diagnostic message.
     message: String,
+    /// Notes with a span. They're the same as annotations, but
+    /// show up separately from the main diagnostic view.
+    /// This field cannot be manually constructed and is
+    /// automatically filled when two annotations have overlapping spans.
     annotated_notes: BTreeMap<Position, Diagnostic<'r>>,
+    /// Suggested fixes
     fixes: Vec<Fix>,
+    /// The source of this code.
     file: &'r Path,
+    /// The code itself.
     script: &'r str,
 }
 
+/// The data used to construct a diagnostic.
 pub struct DiagnosticData {
+    /// The main diagnostic message.
     pub message: String,
+    /// Diagnostic's spans
     pub spans: Vec<Span>,
+    /// Annotations provided along the diagnostics
     pub annotations: Vec<Annotation>,
+    /// Spanless notes provided along the diagnostic
     pub notes: Vec<(AnnotationKind, String)>,
+    /// Suggested fixes for the diagnostic
     pub fixes: Vec<Fix>,
 }
 
 impl DiagnosticData {
+    /// Creates an empty diagnostic with just a message.
     #[must_use]
     pub fn new<S: ToString + ?Sized>(message: &S) -> Self {
         Self {
@@ -91,18 +136,21 @@ impl DiagnosticData {
         }
     }
 
+    /// Add a note (spanless annotation) to the diagnostic.
     #[must_use]
     pub fn add_note(mut self, kind: AnnotationKind, message: String) -> Self {
         self.notes.push((kind, message));
         self
     }
 
+    /// Add a span for the diagnostic
     #[must_use]
     pub fn add_span(mut self, sp: Span) -> Self {
         self.spans.push(sp);
         self
     }
 
+    /// Add an annotation (message with a span).
     #[must_use]
     pub fn add_annotation<S: ToString + ?Sized>(
         mut self,
@@ -118,6 +166,7 @@ impl DiagnosticData {
         self
     }
 
+    /// Add an annotation if `message` is `Some`
     #[must_use]
     pub fn add_annotation_opt_msg<S: ToString + ?Sized>(
         mut self,
@@ -135,6 +184,7 @@ impl DiagnosticData {
         self
     }
 
+    /// Add an annotation if `span` is `Some`
     #[must_use]
     pub fn add_annotation_opt_span<S: ToString + ?Sized>(
         mut self,
@@ -152,6 +202,7 @@ impl DiagnosticData {
         self
     }
 
+    /// Suggest a fix
     #[must_use]
     pub fn add_fix(mut self, fix: Fix) -> Self {
         self.fixes.push(fix);
@@ -160,6 +211,7 @@ impl DiagnosticData {
 }
 
 impl<'r> Diagnostic<'r> {
+    /// Prepare all of the diagnostic's spans
     fn find_spans(
         spans: Vec<Span>,
         kind: DiagnosticKind,
@@ -233,6 +285,7 @@ impl<'r> Diagnostic<'r> {
         (annotation_sets, annotated_notes)
     }
 
+    /// Create a new diagnostic based on diagnostic data, a source and a piece of code.
     #[must_use]
     pub fn new(
         kind: DiagnosticKind,

@@ -1,3 +1,6 @@
+//! Functionality for parsing numbers, including managing operations with
+//! arbitrary precision.
+
 use num_bigint::BigInt;
 use num_complex::Complex;
 use std::cmp::Ordering;
@@ -11,16 +14,21 @@ use num_rational::{BigRational, Rational64};
 use num_traits::{CheckedAdd, CheckedMul, FromPrimitive, One, ToPrimitive, Zero};
 use serde::Serialize;
 
+/// An error while parsing an integer.
 #[derive(Debug)]
 pub struct ParseIntError;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-/// Unsigned integer for parsing
+/// Unsigned parsed integer of arbitrary size.
 pub struct ParsedInt {
+    /// Decimal digits of this number, most significant first.
+    /// If a zero, has a single `0` digit. Otherwise no leading zeros.
     digits: Vec<u8>,
 }
 
 impl ParsedInt {
+    /// Parse this number as the given type.
+    ///
     /// # Errors
     /// Returns an error if the value is too big to fit in the given type.
     pub fn parse<T: Zero + CheckedMul + CheckedAdd + FromPrimitive>(
@@ -48,11 +56,13 @@ impl ParsedInt {
             .fold(0.0, |v, item| v * 10.0 + item.to_f64().unwrap())
     }
 
+    /// Check if this number is a 0.
     #[must_use]
     pub fn is_zero(&self) -> bool {
         self.digits[0] == 0
     }
 
+    /// Check if this number is a 1.
     #[must_use]
     pub fn is_one(&self) -> bool {
         self.digits[0] == 1 && self.digits.len() == 1
@@ -72,21 +82,27 @@ impl Display for ParsedInt {
     }
 }
 
+/// A utility builder struct for parsing integers.
 #[derive(Debug, Default)]
 pub struct ParsedIntBuilder {
+    /// Digits of the number, most significant first.
+    /// Holds no other invariants.
     digits: Vec<u8>,
 }
 
 impl ParsedIntBuilder {
+    /// Create a new, empty builder.
     #[must_use]
     pub fn new() -> Self {
         Self { digits: Vec::new() }
     }
 
+    /// Push a digit at the end of this number.
     pub fn push_digit(&mut self, digit: u8) {
         self.digits.push(digit);
     }
 
+    /// Validate the number.
     #[must_use]
     pub fn build(self) -> ParsedInt {
         ParsedInt {
@@ -104,13 +120,17 @@ impl ParsedIntBuilder {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-/// Signed integer for parsing.
+/// Signed arbitrary precision decimal for parsing.
 pub struct ParsedFloat {
+    /// The integer part
     integral: ParsedInt,
+    /// Decimal digits, most significant first.
     decimal: Vec<u8>,
 }
 
 impl ParsedFloat {
+    /// Parse this as a `f64`
+    ///
     /// # Panics
     /// Should not.
     #[must_use]
@@ -126,11 +146,13 @@ impl ParsedFloat {
                 })
     }
 
+    /// Check if this is a `0`.
     #[must_use]
     pub fn is_zero(&self) -> bool {
         self.integral.is_zero() && self.decimal.is_empty()
     }
 
+    /// Check if this is a `1`
     #[must_use]
     pub fn is_one(&self) -> bool {
         self.integral.is_one() && self.decimal.is_empty()
@@ -151,17 +173,22 @@ impl Display for ParsedFloat {
     }
 }
 
+/// A utility builder for decimal numbers.
 #[derive(Debug)]
 pub struct ParsedFloatBuilder {
+    /// The integral part
     integral: ParsedInt,
+    /// Digits, most significant first.
     digits: Vec<u8>,
 }
 
 impl ParsedFloatBuilder {
+    /// Push a decimal digit at the end.
     pub fn push_digit(&mut self, digit: u8) {
         self.digits.push(digit);
     }
 
+    /// Build a valid decimal.
     #[must_use]
     pub fn build(self) -> ParsedFloat {
         let mut digits = Vec::new();
@@ -184,6 +211,7 @@ impl ParsedFloatBuilder {
     }
 }
 
+/// A parsed number of arbitrary size and precision.
 #[derive(Debug, Clone)]
 pub enum Parsed {
     Int(ParsedInt),
@@ -199,11 +227,13 @@ impl Display for Parsed {
     }
 }
 
-/// Number for processing
+/// Arbitrary precision complex number for processing
 #[derive(Debug, Clone, Hash, Serialize, PartialEq, Eq)]
 pub struct ProcNum(Complex<BigRational>);
 
 impl ProcNum {
+    /// Turn this into a floating point 64-bit precision complex number.
+    ///
     /// # Panics
     /// A panic is a bug
     #[must_use]
@@ -211,6 +241,8 @@ impl ProcNum {
         geometry::Complex::new(self.0.re.to_f64().unwrap(), self.0.im.to_f64().unwrap())
     }
 
+    /// Pi as this number type.
+    ///
     /// # Panics
     /// A panic is a bug.
     #[must_use]
@@ -385,8 +417,9 @@ impl From<&Number> for ProcNum {
     }
 }
 
-/// Number for computing
+/// 64-bit float. Aliased for potential changes in the future
 pub type CompFloat = f64;
 
-/// Exponent type
+/// Rational exponent type. 64-bit numerator and denumerator. Aliased for potential
+/// changes in the future.
 pub type CompExponent = Rational64;

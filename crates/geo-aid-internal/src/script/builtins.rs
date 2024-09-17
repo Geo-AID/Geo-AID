@@ -1,3 +1,5 @@
+//! `GeoScript`'s builtin functions and types
+
 use super::unroll::Library;
 
 pub mod angle;
@@ -34,6 +36,7 @@ pub mod prelude {
 }
 
 /// Returns what size of point collection can the given bundle type be cast onto.
+/// 0 signifies that casting is not possible
 pub const fn get_bundle_pc(_name: &'static str) -> usize {
     0
 }
@@ -73,6 +76,7 @@ pub fn register(library: &mut Library) {
 
 /// Helper macros
 pub mod macros {
+    /// Call a function with given arguments, context, and possibly properties.
     macro_rules! call {
         ($fig:ident : $func:ident($($arg:expr),*)) => {
             $func($($arg),*, $fig, $crate::script::unroll::Properties::from(None))
@@ -82,6 +86,7 @@ pub mod macros {
         };
     }
 
+    /// Get the expression at given index in a point collection.
     macro_rules! index {
         (no-node $col:expr, $at:expr) => {
             ($col).index_without_node($at)
@@ -91,6 +96,7 @@ pub mod macros {
         };
     }
 
+    /// Get a specific field from a bundle.
     macro_rules! field {
         (node POINT $bundle:expr, $at:ident with $context:ident) => {
             $crate::script::unroll::Convert::convert::<$crate::script::unroll::Point>(
@@ -106,6 +112,7 @@ pub mod macros {
         };
     }
 
+    /// Create a constant number expression
     macro_rules! number {
         ($v:expr) => {
             $crate::script::builtins::macros::number!(SCALAR $v)
@@ -134,6 +141,7 @@ pub mod macros {
         };
     }
 
+    /// Construct a bundle from a name and fields
     macro_rules! construct_bundle {
         ($t:ident { $($field:ident : $value:expr),* $(,)? }) => {{
             let mut fields = std::collections::HashMap::new();

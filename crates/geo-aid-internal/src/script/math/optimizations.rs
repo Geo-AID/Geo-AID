@@ -1,3 +1,6 @@
+//! Module containing all of optimizing functionality that requries finding patterns
+//! and enables rule removal and entity redefining.
+
 use crate::script::math::{
     ContainsEntity, DeepClone, EntityKind, ExprKind, ExprType, Math, VarIndex,
 };

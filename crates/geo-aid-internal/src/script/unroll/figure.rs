@@ -1,3 +1,5 @@
+//! Everything related to unrolled figures.
+
 use crate::script::figure::{CircleItem, LineItem, PointItem, RayItem};
 use crate::script::math::Build;
 use crate::{
@@ -18,12 +20,16 @@ use super::{
 
 /// A node is a trait characterising objects meant to be parts of the figure's display tree.
 pub trait Node: Debug {
+    /// Set the general display flag that decides whether this node and its children should be displayed.
     fn set_display(&mut self, display: bool);
 
+    /// Get whether this node should be displayed.
     fn get_display(&self) -> bool;
 
+    /// Build this node.
     fn build(self: Box<Self>, build: &mut Build);
 
+    /// Build this node, with an unboxed `self` type.
     fn build_unboxed(self, compiler: &mut Build)
     where
         Self: Sized,
@@ -32,18 +38,24 @@ pub trait Node: Debug {
     }
 }
 
+/// Helper trait for building nodes out of unrolled expressions.
 pub trait FromExpr<T: Displayed>: Node + Sized {
+    /// Build a node out of an unrolled expression.
     #[must_use]
     fn from_expr(expr: &Expr<T>, display: Properties, context: &CompileContext) -> Self;
 }
 
+/// Helper type for identifying whether a value was explicitly set or it is left default.
 #[derive(Debug, Clone, Copy)]
 pub struct MaybeUnset<T> {
+    /// Inner value.
     value: T,
+    /// Whether it was explicitly set.
     set: bool,
 }
 
 impl<T> MaybeUnset<T> {
+    /// Create a new unset value.
     pub fn new(default: T) -> Self {
         Self {
             value: default,
@@ -51,6 +63,8 @@ impl<T> MaybeUnset<T> {
         }
     }
 
+    /// Create a new value from an `Option`. If it is `Some`, the value is considered set with
+    /// the contained value. Otherwise it is considered unset with the default.
     pub fn new_or(default: T, value: Option<T>) -> Self {
         let set = value.is_some();
 
@@ -60,10 +74,12 @@ impl<T> MaybeUnset<T> {
         }
     }
 
+    /// Check if this value was explicitly set.
     pub fn is_set(&self) -> bool {
         self.set
     }
 
+    /// Set this value. Explicitly.
     pub fn set(&mut self, value: T) {
         self.value = value;
         self.set = true;
@@ -103,6 +119,7 @@ impl<T> MaybeUnset<T> {
         set
     }
 
+    /// Get a reference to the contained value.
     #[must_use]
     pub fn get(&self) -> &T {
         &self.value
@@ -117,10 +134,12 @@ impl<T> MaybeUnset<T> {
         }
     }
 
+    /// Unwrap this value from the [`MaybeUnset`] wrapper. Never panics.
     pub fn unwrap(self) -> T {
         self.value
     }
 
+    /// Map this value using a function. The `set` flag is carried over.
     #[must_use]
     pub fn map<U, P: FnOnce(T) -> U>(self, f: P) -> MaybeUnset<U> {
         MaybeUnset {
@@ -137,6 +156,7 @@ impl<T> AsRef<T> for MaybeUnset<T> {
 }
 
 impl<T: Clone> MaybeUnset<T> {
+    /// Clone the underlying value.
     #[must_use]
     pub fn get_cloned(&self) -> T {
         self.value.clone()
@@ -149,6 +169,7 @@ impl<T: Clone> MaybeUnset<T> {
 }
 
 impl<T: Copy> MaybeUnset<T> {
+    /// Copy the underlying value.
     #[must_use]
     pub fn get_copied(&self) -> T {
         self.value
@@ -177,9 +198,12 @@ impl<T: Default> Default for MaybeUnset<T> {
     }
 }
 
+/// A node that represents multiple node. No hierarchy is involved.
 #[derive(Debug)]
 pub struct CollectionNode {
+    /// Whether the node should be displayed.
     pub display: MaybeUnset<bool>,
+    /// Nodes
     pub children: Vec<Box<dyn Node>>,
 }
 
@@ -190,6 +214,7 @@ impl Default for CollectionNode {
 }
 
 impl CollectionNode {
+    /// Create a new, empty, displayed collection node.
     #[must_use]
     pub fn new() -> Self {
         Self {
@@ -198,6 +223,7 @@ impl CollectionNode {
         }
     }
 
+    /// Create a new, empty collection node with given display properties
     #[must_use]
     pub fn from_display(mut display: Properties, context: &CompileContext) -> Self {
         let node = Self {
@@ -210,14 +236,17 @@ impl CollectionNode {
         node
     }
 
+    /// Push a node.
     pub fn push<T: Node + 'static>(&mut self, node: T) {
         self.children.push(Box::new(node));
     }
 
+    /// Push a boxed node.
     pub fn push_boxed(&mut self, node: Box<dyn Node>) {
         self.children.push(node);
     }
 
+    /// Extend the nodes.
     pub fn extend<T: Node + 'static, U: IntoIterator<Item = T>>(&mut self, nodes: U) {
         self.children
             .extend(nodes.into_iter().map(|x| Box::new(x) as Box<dyn Node>));
@@ -242,14 +271,21 @@ impl Node for CollectionNode {
     }
 }
 
+/// Nodes can have associated nodes. They're a special kind of nodes unique to specific expressions.
+/// Usually utilized by builtins.
 pub trait BuildAssociated<T: Node>: Debug {
+    /// Build the associated node.
     fn build_associated(self: Box<Self>, build: &mut Build, associated: &mut HierarchyNode<T>);
 }
 
+/// Associated data used in constructing the associated node.
 #[derive(Debug)]
 pub enum AssociatedData {
+    /// A boolean value
     Bool(MaybeUnset<bool>),
+    /// A style (brush) value
     Style(MaybeUnset<Style>),
+    /// A line type - line, ray or segment.
     LineType(MaybeUnset<LineType>),
 }
 
@@ -300,9 +336,13 @@ impl From<MaybeUnset<LineType>> for AssociatedData {
 /// Contains a root node, apart from its children. Simulates a hierarchy.
 #[derive(Debug)]
 pub struct HierarchyNode<T: Node> {
+    /// The root node.
     pub root: Box<T>,
+    /// The child nodes.
     pub children: Vec<Box<dyn Node>>,
+    /// The associated node.
     pub associated: Option<Box<dyn BuildAssociated<T>>>,
+    /// Associated data for associated node construction.
     pub associated_data: HashMap<&'static str, AssociatedData>,
 }
 
@@ -342,6 +382,7 @@ impl<U: Displayed, T: FromExpr<U>> FromExpr<U> for HierarchyNode<T> {
 }
 
 impl<T: Node> HierarchyNode<T> {
+    /// Create a new hierarchy node from its root. No children initially.
     pub fn new(root: T) -> Self {
         Self {
             root: Box::new(root),
@@ -351,14 +392,17 @@ impl<T: Node> HierarchyNode<T> {
         }
     }
 
+    /// Push a child.
     pub fn push_child<U: Node + 'static>(&mut self, node: U) {
         self.children.push(Box::new(node));
     }
 
+    /// Extend boxed children.
     pub fn extend_boxed<Iter: IntoIterator<Item = Box<dyn Node>>>(&mut self, nodes: Iter) {
         self.children.extend(nodes);
     }
 
+    /// Extend children.
     pub fn extend_children<U: Node + 'static, Iter: IntoIterator<Item = U>>(
         &mut self,
         nodes: Iter,
@@ -367,24 +411,31 @@ impl<T: Node> HierarchyNode<T> {
             .extend(nodes.into_iter().map(|x| Box::new(x) as Box<dyn Node>));
     }
 
+    /// Set the associated node.
     pub fn set_associated<U: BuildAssociated<T> + 'static>(&mut self, associated: U) {
         self.associated = Some(Box::new(associated));
     }
 
+    /// Inset associated data with a specific key.
     pub fn insert_data<U: Into<AssociatedData>>(&mut self, key: &'static str, data: U) {
         self.associated_data.insert(key, data.into());
     }
 
+    /// Get associated data.
     #[must_use]
     pub fn get_data(&self, key: &'static str) -> Option<&AssociatedData> {
         self.associated_data.get(key)
     }
 }
 
+/// Node for point collections
 #[derive(Debug)]
 pub struct PCNode {
+    /// Whether to display the node
     pub display: MaybeUnset<bool>,
+    /// The child nodes of the collection's points
     pub children: Vec<Option<HierarchyNode<<Point as Displayed>::Node>>>,
+    /// Properties are stored for later processing as they might be used for conversions.
     pub props: Option<Properties>,
 }
 
@@ -395,6 +446,7 @@ impl Default for PCNode {
 }
 
 impl PCNode {
+    /// Create a new, empty point collection node.
     #[must_use]
     pub fn new() -> Self {
         Self {
@@ -404,10 +456,12 @@ impl PCNode {
         }
     }
 
+    /// Push a child node.
     pub fn push(&mut self, node: Option<HierarchyNode<<Point as Displayed>::Node>>) {
         self.children.push(node);
     }
 
+    /// Extend child nodes.
     pub fn extend<U: IntoIterator<Item = Option<HierarchyNode<<Point as Displayed>::Node>>>>(
         &mut self,
         nodes: U,
@@ -454,6 +508,7 @@ macro_rules! impl_from_for_any {
     };
 }
 
+/// Type-erased node for all unrolled expression nodes.
 #[derive(Debug)]
 pub enum AnyExprNode {
     Point(HierarchyNode<<Point as Displayed>::Node>),
@@ -474,6 +529,7 @@ impl_from_for_any! {Bundle}
 impl_from_for_any! {Unknown}
 
 impl AnyExprNode {
+    /// Erase `self`'s type completely.
     #[must_use]
     pub fn to_dyn(self) -> Box<dyn Node> {
         match self {
@@ -603,9 +659,12 @@ impl Node for AnyExprNode {
     }
 }
 
+/// Node for bundles
 #[derive(Debug)]
 pub struct BundleNode {
+    /// Whether to display the node.
     pub display: MaybeUnset<bool>,
+    /// Field-bound child nodes.
     pub children: HashMap<String, AnyExpr>,
 }
 
@@ -626,6 +685,7 @@ impl Dummy for BundleNode {
 }
 
 impl BundleNode {
+    /// Create a new, empty bundle node.
     #[must_use]
     pub fn new() -> Self {
         Self {
@@ -634,6 +694,7 @@ impl BundleNode {
         }
     }
 
+    /// Insert a field to construct its node from.
     pub fn insert<T: Displayed>(&mut self, key: String, expr: Expr<T>)
     where
         AnyExpr: From<Expr<T>>,
@@ -641,6 +702,7 @@ impl BundleNode {
         self.children.insert(key, AnyExpr::from(expr));
     }
 
+    /// Extend fields
     pub fn extend<U: IntoIterator<Item = (String, AnyExpr)>>(&mut self, nodes: U) {
         self.children.extend(nodes);
     }
@@ -666,6 +728,7 @@ impl Node for BundleNode {
     }
 }
 
+/// An empty node that is never displayed.
 #[derive(Debug)]
 pub struct EmptyNode;
 
@@ -689,13 +752,20 @@ impl Node for EmptyNode {
     fn build(self: Box<Self>, _build: &mut Build) {}
 }
 
+/// A node for points
 #[derive(Debug)]
 pub struct PointNode {
+    /// Whether to display the node
     pub display: MaybeUnset<bool>,
+    /// The point's label
     pub label: MaybeUnset<MathString>,
+    /// Whether to display the label
     pub display_label: MaybeUnset<bool>,
+    /// Whether to display the point's dot.
     pub display_dot: MaybeUnset<bool>,
+    /// Default label to use if `label` is empty.
     pub default_label: MathString,
+    /// Defining expression
     pub expr: Expr<Point>,
 }
 
@@ -768,13 +838,20 @@ impl FromExpr<Point> for PointNode {
     }
 }
 
+/// Node for a circle
 #[derive(Debug)]
 pub struct CircleNode {
+    /// Whether to display the node
     pub display: MaybeUnset<bool>,
+    /// The circle's label
     pub label: MaybeUnset<MathString>,
+    /// Whether to display the label
     pub display_label: MaybeUnset<bool>,
+    /// Default label to use if `label` is empty
     pub default_label: MathString,
+    /// How to draw the circle (brush)
     pub style: MaybeUnset<Style>,
+    /// The defining expression
     pub expr: Expr<Circle>,
 }
 
@@ -914,14 +991,22 @@ property_enum_impl! {
     }
 }
 
+/// Node for a line
 #[derive(Debug)]
 pub struct LineNode {
+    /// Whether to display the node
     pub display: MaybeUnset<bool>,
+    /// The line's label
     pub label: MaybeUnset<MathString>,
+    /// Whether to display the label
     pub display_label: MaybeUnset<bool>,
+    /// Default label to use if `label` is empty.
     pub default_label: MathString,
+    /// The type of this line
     pub line_type: MaybeUnset<LineType>,
+    /// How to draw the line (brush)
     pub style: MaybeUnset<Style>,
+    /// Defining expression
     pub expr: Expr<Line>,
 }
 
@@ -1049,9 +1134,12 @@ impl FromExpr<Line> for LineNode {
     }
 }
 
+/// A node for a scalar.
 #[derive(Debug)]
 pub struct ScalarNode {
+    /// Whether to display the node
     pub display: MaybeUnset<bool>,
+    /// Defining expression
     pub expr: Expr<Scalar>,
 }
 

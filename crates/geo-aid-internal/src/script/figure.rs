@@ -1,3 +1,6 @@
+//! Geo-AID's figure Intermediate Representation and all definitions related to it.
+//! Note that a part of it is also located in `geo-aid-figure`
+
 use std::{fmt::Display, str::FromStr};
 
 use crate::geometry::ValueEnum;
@@ -18,10 +21,14 @@ use super::{
     Error,
 };
 
+/// A drawn point
 #[derive(Debug, Clone)]
 pub struct PointItem {
+    /// Index of the defining expression
     pub id: VarIndex,
+    /// Label of this point
     pub label: MathString,
+    /// Whether to display a small circle in its place
     pub display_dot: bool,
 }
 
@@ -46,10 +53,14 @@ impl From<PointItem> for Item {
     }
 }
 
+/// A drawn circle
 #[derive(Debug, Clone)]
 pub struct CircleItem {
+    /// Index of the defining expression
     pub id: VarIndex,
+    /// Label of this circle
     pub label: MathString,
+    /// How to draw the circle (brush)
     pub style: Style,
 }
 
@@ -74,10 +85,14 @@ impl From<CircleItem> for Item {
     }
 }
 
+/// A drawn line
 #[derive(Debug, Clone)]
 pub struct LineItem {
+    /// Index of the defining expression
     pub id: VarIndex,
+    /// Label of this line
     pub label: MathString,
+    /// How to draw the line (brush)
     pub style: Style,
 }
 
@@ -102,11 +117,16 @@ impl From<LineItem> for Item {
     }
 }
 
+/// A drawn ray (half-line)
 #[derive(Debug, Clone)]
 pub struct RayItem {
+    /// Index of the expression defining the ray's origin (end point).
     pub p_id: VarIndex,
+    /// Index of the expression defining the ray's guiding point
     pub q_id: VarIndex,
+    /// The ray's label
     pub label: MathString,
+    /// How to draw the ray (brush)
     pub style: Style,
 }
 
@@ -133,11 +153,16 @@ impl From<RayItem> for Item {
     }
 }
 
+/// A drawn segment
 #[derive(Debug, Clone)]
 pub struct SegmentItem {
+    /// Index of the expression defining the first endpoint
     pub p_id: VarIndex,
+    /// Index of the expression defining the second endpoint
     pub q_id: VarIndex,
+    /// The segment's label
     pub label: MathString,
+    /// How to draw the segment (brush)
     pub style: Style,
 }
 
@@ -164,6 +189,7 @@ impl Reconstruct for SegmentItem {
     }
 }
 
+/// A type-erased drawn item of the figure
 #[derive(Debug, Clone)]
 pub enum Item {
     Point(PointItem),
@@ -204,7 +230,7 @@ pub struct Figure {
     pub entities: Vec<EntityKind>,
     /// Variables used by the figure
     pub variables: Vec<math::Expr<()>>,
-    /// Drawn items with meta
+    /// Drawn items
     pub items: Vec<Item>,
 }
 
@@ -219,7 +245,7 @@ pub struct Generated {
     pub items: Vec<Item>,
 }
 
-/// A series of math characters.
+/// A [`MathString`] with a [`Span`].
 #[derive(Debug, Clone)]
 pub struct SpannedMathString {
     pub string: MathString,
@@ -227,6 +253,7 @@ pub struct SpannedMathString {
 }
 
 impl SpannedMathString {
+    /// Create an empty math string with a span.
     #[must_use]
     pub fn new(span: Span) -> Self {
         Self {
@@ -235,6 +262,11 @@ impl SpannedMathString {
         }
     }
 
+    /// Return `Some` with `self` if the string should be displayed by default.
+    /// A string should be displayed by default if it consists of one alphabetical
+    /// (either special or literal) and is possibly followed by primes (') and an index
+    /// of any length.
+    ///
     /// # Panics
     /// Any panic here is a bug.
     #[must_use]
@@ -290,6 +322,8 @@ impl SpannedMathString {
         }
     }
 
+    /// Try to parse the given string as a math string.
+    ///
     /// # Errors
     /// Returns an error on parsing errors.
     pub fn parse(content: &str, content_span: Span) -> Result<Self, Error> {

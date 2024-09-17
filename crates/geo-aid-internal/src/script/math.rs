@@ -1,3 +1,7 @@
+//! Math stage is responsible for most if not all of the optimizations the compiler does.
+//! It's at this point where rules are analyzed, expressions normalized, patterns that
+//! can be optimized optimized. It's the final and most important stage of compilation.
+
 use crate::script::figure::Item;
 use crate::script::math::optimizations::ZeroLineDst;
 use crate::script::token::number::{CompExponent, ProcNum};
@@ -31,12 +35,17 @@ use super::{
 
 mod optimizations;
 
+/// The `optimizations` flag group. Currently empty.
+/// Has nothing to do with the [`optimizations`] module.
 #[derive(Debug, Clone)]
 pub struct Optimizations {}
 
+/// Compiler flags.
 #[derive(Debug, Clone)]
 pub struct Flags {
+    /// The `optimizations` flag group.
     pub optimizations: Optimizations,
+    /// Whether to include point inequalitiy rules.
     pub point_inequalities: bool,
 }
 
@@ -49,6 +58,7 @@ impl Default for Flags {
     }
 }
 
+/// Helper trait for getting the type of the expression.
 pub trait GetMathType {
     #[must_use]
     fn get_math_type() -> ExprType;
@@ -78,7 +88,11 @@ impl GetMathType for unroll::Scalar {
     }
 }
 
+/// Deep clone a mathematical expression. This is different from `Clone` in that
+/// it works with the math stage's flattened memory model and deep clones all of
+/// an expression's dependencies (subexpressions).
 pub trait DeepClone {
+    /// Perform a deep clone.
     #[must_use]
     fn deep_clone(&self, math: &mut Math) -> Self;
 }
@@ -101,7 +115,9 @@ impl<T: DeepClone> DeepClone for Vec<T> {
     }
 }
 
+/// Compare two things using the math context.
 trait Compare {
+    /// Compare two things.
     #[must_use]
     fn compare(&self, other: &Self, math: &Math) -> Ordering;
 }
@@ -116,7 +132,9 @@ impl<T: Compare> Compare for Vec<T> {
     }
 }
 
+/// Check if an expression contains an entity.
 trait ContainsEntity {
+    /// Checks if an expression contains the specified entity.
     fn contains_entity(&self, entity: EntityId, math: &Math) -> bool;
 }
 
@@ -144,21 +162,31 @@ impl<T: ContainsEntity> ContainsEntity for Vec<T> {
     }
 }
 
+/// Defines how the reconstruction process should affect a given entity.
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum EntityBehavior {
+    /// Map this id to another id.
     MapEntity(EntityId),
+    /// Map this id to another expression (deep clones the expression)
     MapVar(VarIndex),
 }
 
+/// A context for the recosntruction process.
 pub struct ReconstructCtx<'r> {
+    /// Beheaviors of each entity
     entity_replacement: &'r [EntityBehavior],
+    /// Old expressions
     old_vars: &'r [Expr<()>],
+    /// New, reconstructed expressions.
     new_vars: Vec<Expr<()>>,
+    /// Old entities.
     old_entities: &'r [EntityKind],
+    /// New, reconstructed entities.
     new_entities: Vec<Option<EntityKind>>,
 }
 
 impl<'r> ReconstructCtx<'r> {
+    /// Create a new context
     #[must_use]
     fn new(
         entity_replacement: &'r [EntityBehavior],
@@ -180,6 +208,7 @@ impl<'r> ReconstructCtx<'r> {
         ctx
     }
 
+    /// Reconstruct an entity.
     fn reconstruct_entity(&mut self, id: EntityId) {
         if self.new_entities[id.0].is_none() {
             self.new_entities[id.0] = Some(self.old_entities[id.0].clone().reconstruct(self));
@@ -187,11 +216,19 @@ impl<'r> ReconstructCtx<'r> {
     }
 }
 
+/// The main actor in reconstruction process.
+///
+/// The point of a reconstruction is to remove all potential forward references
+/// for the sake of later processing. This means that if a reconstructed expression
+/// requires some other expressions to be computed before it can be computed itself,
+/// those expressions will have a smaller index in the expression vector.
 pub trait Reconstruct {
+    /// Reconstruct the value.
     #[must_use]
     fn reconstruct(self, ctx: &mut ReconstructCtx) -> Self;
 }
 
+/// Helper for reconstructing entities.
 fn reconstruct_entity(entity_id: EntityId, ctx: &mut ReconstructCtx) -> ExprKind {
     match &ctx.entity_replacement[entity_id.0] {
         EntityBehavior::MapEntity(id) => {
@@ -232,7 +269,10 @@ impl<T: Reconstruct> Reconstruct for Vec<T> {
     }
 }
 
+/// Helper for finding entities inside rules and expressions.
 trait FindEntities {
+    /// Find all entities in this expression based on the entities
+    /// found in all previous expressions.
     fn find_entities(
         &self,
         previous: &[HashSet<EntityId>],
@@ -262,11 +302,18 @@ impl FindEntities for Vec<VarIndex> {
     }
 }
 
+/// Helper trait for converting unrolled expressions into math expressions.
 pub trait FromUnrolled<T: Displayed> {
+    /// Load the unroll expression
     fn load(expr: &Unrolled<T>, math: &mut Expand) -> Self;
 }
 
+/// Helper trait for normalizing expressions.
 trait Normalize {
+    /// Normalization is a crucial step for further processing.
+    /// Usually normalized expressions and rules have their parameters
+    /// ordered. There can also be extra requirements on certain kinds
+    /// but they are documented in their respective places.
     fn normalize(&mut self, math: &mut Math);
 }
 
@@ -307,6 +354,7 @@ impl ContainsEntity for VarIndex {
     }
 }
 
+/// The primitive type of an expression.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash, Serialize)]
 pub enum ExprType {
     Number,
@@ -316,6 +364,7 @@ pub enum ExprType {
     Circle,
 }
 
+/// A mathematical expression with a flattened memory model.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Recursive, Hash, Serialize)]
 #[recursive(
     impl ContainsEntity for Self {
@@ -347,107 +396,97 @@ pub enum ExprType {
     }
 )]
 pub enum ExprKind {
+    /// An entity referece.
     #[recursive(override_reconstruct = reconstruct_entity)]
-    Entity {
-        id: EntityId,
-    },
+    Entity { id: EntityId },
 
     // POINT
-    /// k and l must be ordered
-    LineLineIntersection {
-        k: VarIndex,
-        l: VarIndex,
-    },
-    /// Items must be sorted
-    AveragePoint {
-        items: Vec<VarIndex>,
-    },
-    CircleCenter {
-        circle: VarIndex,
-    },
+    /// An intersection of two lines: `k` and `l`
+    LineLineIntersection { k: VarIndex, l: VarIndex },
+    /// The arithmetic mean of given point expressions
+    AveragePoint { items: Vec<VarIndex> },
+    /// Center of a circle.
+    CircleCenter { circle: VarIndex },
 
     // NUMBER
-    /// plus and minus must be sorted and must not contain other sums. An aggregated constant, if any, must be at the end.
+    /// Sum of numbers.
+    ///
+    /// A normalized sum must be sorted and must not contain other sums or negations.
+    /// An aggregated constant, if any, must be at the end.
     Sum {
+        /// Items to add.
         plus: Vec<VarIndex>,
+        /// Items to subtract.
         minus: Vec<VarIndex>,
     },
-    /// times and by must be sorted and must not contain other sums. An aggregated constant, if any, must be at the end.
+    /// Product of numbers.
+    ///
+    /// A normalized product must be sorted and must not contain other products.
+    /// An aggregated constant, if any, must be at the end.
     Product {
+        /// Items to multiply by.
         times: Vec<VarIndex>,
+        /// Items to divide by.
         by: Vec<VarIndex>,
     },
-    Const {
-        value: ProcNum,
-    },
+    /// A constant.
+    Const { value: ProcNum },
+    /// Raising a value to a power. Raises both parts of the number (real and imaginary) to the same power.
+    /// This is NOT equivalent to exponentiating a complex.
     PartialPower {
         value: VarIndex,
         exponent: CompExponent,
     },
-    /// p and q must be ordered
-    PointPointDistance {
-        p: VarIndex,
-        q: VarIndex,
-    },
-    PointLineDistance {
-        point: VarIndex,
-        line: VarIndex,
-    },
-    /// p and r must be ordered
+    /// A distance between two points.
+    PointPointDistance { p: VarIndex, q: VarIndex },
+    /// A distance of a point from a line.
+    PointLineDistance { point: VarIndex, line: VarIndex },
+    /// An angle defined by three points (arm, origin, arm)
     ThreePointAngle {
+        /// Angle's one arm.
         p: VarIndex,
+        /// Angle's origin
         q: VarIndex,
+        /// Angle's other arm
         r: VarIndex,
     },
-    /// p and r must be ordered
+    /// A directed angle defined by three points (arm, origin, arm)
     ThreePointAngleDir {
+        /// Angle's first arm.
         p: VarIndex,
+        /// Angle's origin.
         q: VarIndex,
+        /// Angle's second arm.
         r: VarIndex,
     },
-    /// k and l must be ordered
-    TwoLineAngle {
-        k: VarIndex,
-        l: VarIndex,
-    },
-    PointX {
-        point: VarIndex,
-    },
-    PointY {
-        point: VarIndex,
-    },
+    /// The angle described by two lines.
+    TwoLineAngle { k: VarIndex, l: VarIndex },
+    /// The real part of a point.
+    PointX { point: VarIndex },
+    /// The imaginary part of a point.
+    PointY { point: VarIndex },
 
     // Line
-    /// Normalized iff `p` and `q` are in ascending order
-    PointPoint {
-        p: VarIndex,
-        q: VarIndex,
-    },
-    /// Normalized iff `a` and `c` are in ascending order (`b` must stay in the middle)
+    /// A line through two points.
+    PointPoint { p: VarIndex, q: VarIndex },
+    /// The angle bisector line.
     AngleBisector {
         p: VarIndex,
         q: VarIndex,
         r: VarIndex,
     },
-    /// Always normalized
-    ParallelThrough {
-        point: VarIndex,
-        line: VarIndex,
-    },
-    /// Always normalized
-    PerpendicularThrough {
-        point: VarIndex,
-        line: VarIndex,
-    },
+    /// A line parallel to another `line` going through a `point`
+    ParallelThrough { point: VarIndex, line: VarIndex },
+    /// A line perpendicular to another `line` going through a `point`
+    PerpendicularThrough { point: VarIndex, line: VarIndex },
 
     // Circle
-    ConstructCircle {
-        center: VarIndex,
-        radius: VarIndex,
-    },
+    /// A circle constructed from its center and radius.
+    ConstructCircle { center: VarIndex, radius: VarIndex },
 }
 
 impl ExprKind {
+    /// Get the id of a variant. Used for comparison
     #[must_use]
     pub fn variant_id(&self) -> usize {
         match self {
@@ -474,6 +513,7 @@ impl ExprKind {
         }
     }
 
+    /// Compare two expressions.
     #[must_use]
     #[allow(clippy::too_many_lines)]
     pub fn compare(&self, other: &Self, math: &Math) -> Ordering {
@@ -654,6 +694,7 @@ impl ExprKind {
             })
     }
 
+    /// Get the expression's type.
     #[must_use]
     pub fn get_type<M>(&self, expressions: &[Expr<M>], entities: &[Entity<M>]) -> ExprType {
         match self {
@@ -1031,6 +1072,9 @@ impl Normalize for ExprKind {
     }
 }
 
+/// Distance units must have special treatment as they need to be represented by a special
+/// entity. This function makes sure this entity is inserted and raised to the right power
+/// corresponding to the unit.
 fn fix_dst(expr: ExprKind, unit: Option<ComplexUnit>, math: &mut Expand) -> ExprKind {
     match unit {
         None => expr,
@@ -1057,6 +1101,7 @@ fn fix_dst(expr: ExprKind, unit: Option<ComplexUnit>, math: &mut Expand) -> Expr
     }
 }
 
+/// A utility iterator for merging two sorted iterators.
 #[derive(Debug, Clone)]
 pub struct Merge<T, I, J, F>
 where
@@ -1072,6 +1117,7 @@ where
 impl<T, I: Iterator<Item = T>, J: Iterator<Item = T>, F: FnMut(&T, &T) -> Ordering>
     Merge<T, I, J, F>
 {
+    /// Create a new merger.
     #[must_use]
     pub fn new<A: IntoIterator<IntoIter = I>, B: IntoIterator<IntoIter = J>>(
         a: A,
@@ -1085,6 +1131,7 @@ impl<T, I: Iterator<Item = T>, J: Iterator<Item = T>, F: FnMut(&T, &T) -> Orderi
         }
     }
 
+    /// Merge this iterator with another iterator.
     #[must_use]
     pub fn merge_with<It: IntoIterator<Item = T>>(
         self,
@@ -1101,6 +1148,7 @@ impl<T, I: Iterator<Item = T>, J: Iterator<Item = T>, F: FnMut(&T, &T) -> Orderi
 impl<T, F: FnMut(&T, &T) -> Ordering>
     Merge<T, std::option::IntoIter<T>, std::option::IntoIter<T>, F>
 {
+    /// Create an empty merge iterator.
     #[must_use]
     pub fn empty(f: F) -> Self {
         Self::new(None, None, f)
@@ -1129,6 +1177,7 @@ impl<T, I: Iterator<Item = T>, J: Iterator<Item = T>, F: FnMut(&T, &T) -> Orderi
     }
 }
 
+/// Normalize a sum. Specific normalization rules are given in [`ExprKind::Sum`] documentation.
 fn normalize_sum(plus: &mut Vec<VarIndex>, minus: &mut Vec<VarIndex>, math: &mut Math) {
     let plus_v = mem::take(plus);
     let minus_v = mem::take(minus);
@@ -1176,6 +1225,7 @@ fn normalize_sum(plus: &mut Vec<VarIndex>, minus: &mut Vec<VarIndex>, math: &mut
     *minus = minus_final;
 }
 
+/// Normalize a sum. Specific normalization rules are given in [`ExprKindi::Product`] documentation.
 fn normalize_product(times: &mut Vec<VarIndex>, by: &mut Vec<VarIndex>, math: &mut Math) {
     let times_v = mem::take(times);
     let by_v = mem::take(by);
@@ -1223,6 +1273,7 @@ fn normalize_product(times: &mut Vec<VarIndex>, by: &mut Vec<VarIndex>, math: &m
     *by = by_final;
 }
 
+/// An expression with some metadata and a type.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Hash, Serialize)]
 pub struct Expr<M> {
     pub meta: M,
@@ -1231,6 +1282,7 @@ pub struct Expr<M> {
 }
 
 impl<M> Expr<M> {
+    /// Get the expression's type.
     #[must_use]
     pub fn get_type(&self, expressions: &[Expr<M>], entities: &[Entity<M>]) -> ExprType {
         self.kind.get_type(expressions, entities)
@@ -1266,6 +1318,7 @@ impl<M> Normalize for Expr<M> {
 }
 
 impl Expr<()> {
+    /// Create a new expression with a kind and a type.
     #[must_use]
     pub fn new(kind: ExprKind, ty: ExprType) -> Self {
         Self { kind, meta: (), ty }
@@ -1293,12 +1346,19 @@ impl Expr<()> {
     }
 )]
 pub enum RuleKind {
+    /// Equality of two points (distance of 0)
     PointEq(VarIndex, VarIndex),
+    /// Equality of two numbers
     NumberEq(VarIndex, VarIndex),
+    /// a < b
     Lt(VarIndex, VarIndex),
+    /// a > b
     Gt(VarIndex, VarIndex),
+    /// At least one of the rules must be satisfied
     Alternative(Vec<RuleKind>),
+    /// The inverse of a rule
     Invert(Box<RuleKind>),
+    /// A special bias rule for making the entity more stable in certain engines.
     Bias,
 }
 
@@ -1351,10 +1411,15 @@ impl FindEntities for RuleKind {
     }
 }
 
+/// A rule along if its aggregated information. Note that `entities`
+/// is not filled until the final steps of compilation.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Rule {
+    /// The kind of this rule
     pub kind: RuleKind,
+    /// The rule's weight
     pub weight: ProcNum,
+    /// Entities this rule affects.
     pub entities: Vec<EntityId>,
 }
 
@@ -1402,6 +1467,8 @@ impl Reindex for Rule {
 }
 
 impl RuleKind {
+    /// Load a rule from an [`UnrolledRule`].
+    ///
     /// # Returns
     /// A normalized rule.
     fn load(rule: &UnrolledRule, math: &mut Expand) -> Self {
@@ -1427,6 +1494,8 @@ impl RuleKind {
 }
 
 impl Rule {
+    /// Load a rule from an [`UnrolledRule`].
+    ///
     /// # Returns
     /// A normalized rule.
     fn load(rule: &UnrolledRule, math: &mut Expand) -> Self {
@@ -1458,27 +1527,29 @@ impl Normalize for Rule {
     }
 }
 
+/// The adjusted (optimized) part of IR.
 #[derive(Debug)]
 pub struct Adjusted {
+    /// Expressions needed for rules and entities.
     pub variables: Vec<Expr<()>>,
+    /// Rules binding the figure
     pub rules: Vec<Rule>,
+    /// Entities of the figure.
     pub entities: Vec<EntityKind>,
 }
 
+/// The full Math IR, the ultimate result of the entire compiler
 #[derive(Debug)]
 pub struct Intermediate {
+    /// A figure IR.
     pub figure: Figure,
-    /// Ready for generation
+    /// The adjusted, later optimized part.
     pub adjusted: Adjusted,
+    /// Compiler flags.
     pub flags: Flags,
 }
 
-#[derive(Debug, Clone)]
-pub struct Entry {
-    pub expr: Expr<()>,
-    pub uses: usize,
-}
-
+/// An entity along with some metadata.
 #[derive(Debug, Clone, Serialize)]
 pub struct Entity<M> {
     pub kind: EntityKind,
@@ -1486,6 +1557,7 @@ pub struct Entity<M> {
 }
 
 impl<M> Entity<M> {
+    /// Get the entity's type.
     #[must_use]
     pub fn get_type(&self, expressions: &[Expr<M>], entities: &[Entity<M>]) -> ExprType {
         match &self.kind {
@@ -1498,6 +1570,7 @@ impl<M> Entity<M> {
     }
 }
 
+/// The kind of an entity.
 #[derive(Debug, Clone, Recursive, Serialize)]
 #[recursive(
     impl ContainsEntity for Self {
@@ -1515,11 +1588,18 @@ impl<M> Entity<M> {
     }
 )]
 pub enum EntityKind {
+    /// A free point with two degrees of freedom.
     FreePoint,
+    /// A point bound to a specific line, only one relative degree of freedom.
     PointOnLine { line: VarIndex },
+    /// A point bound to a specific circle, only one relative degree of freedom.
     PointOnCircle { circle: VarIndex },
+    /// A free real with one degree of freedom
     FreeReal,
+    /// A special distance unit entity, effectively a free real.
     DistanceUnit,
+    /// A bind. Never shows up past the compilation stage. It serves as a temporary
+    /// value in-between compilation steps.
     Bind(VarIndex),
 }
 
@@ -1580,6 +1660,7 @@ impl ContainsEntity for EntityId {
     }
 }
 
+/// A context struct for loading unrolled data.
 #[derive(Debug, Clone, Default)]
 pub struct Expand {
     /// Expressions are mapped to the record entries.
@@ -1608,17 +1689,19 @@ impl DerefMut for Expand {
     }
 }
 
+/// A math stage context used across the whole compilation process.
 #[derive(Debug, Clone, Default)]
 pub struct Math {
-    /// All found entities
+    /// All figure's entities
     pub entities: Vec<EntityKind>,
-    /// Dst variable
+    /// Distance unit, if exists.
     pub dst_var: OnceCell<EntityId>,
-    /// Collected expressions
+    /// Collected expressions in flattened layout.
     pub expr_record: Vec<Expr<()>>,
 }
 
 impl Expand {
+    /// Load an unrolled expression. Also stores it in the variable record.
     pub fn load<T: Displayed + GetMathType + Debug + GetData + 'static>(
         &mut self,
         unrolled: &Unrolled<T>,
@@ -1630,6 +1713,7 @@ impl Expand {
         self.store(expr, T::get_math_type())
     }
 
+    /// Load an unrolled expression without storing it.
     pub fn load_no_store<T: Displayed + GetMathType + GetData + Debug + 'static>(
         &mut self,
         unrolled: &Unrolled<T>,
@@ -1657,17 +1741,21 @@ impl Expand {
 }
 
 impl Math {
+    /// Store an expression in the expression record.
     #[must_use]
     pub fn store(&mut self, expr: ExprKind, ty: ExprType) -> VarIndex {
         self.expr_record.push(Expr::new(expr, ty));
         VarIndex(self.expr_record.len() - 1)
     }
 
+    /// Compare two expressions referenced by indices.
     #[must_use]
     pub fn compare(&self, a: &VarIndex, b: &VarIndex) -> Ordering {
         self.at(a).kind.compare(&self.at(b).kind, self)
     }
 
+    /// Get the distance unit and generate it if it doesn't exist.
+    ///
     /// # Panics
     /// Will never.
     #[must_use]
@@ -1685,33 +1773,40 @@ impl Math {
         self.store(ExprKind::Entity { id }, ExprType::Number)
     }
 
+    /// Get the expression at given index.
     #[must_use]
     pub fn at(&self, index: &VarIndex) -> &Expr<()> {
         &self.expr_record[index.0]
     }
 
+    /// Add an entity to the record.
     fn add_entity(&mut self, entity: EntityKind) -> EntityId {
         self.entities.push(entity);
         EntityId(self.entities.len() - 1)
     }
 
+    /// Add a free point entity.
     pub fn add_point(&mut self) -> EntityId {
         self.add_entity(EntityKind::FreePoint)
     }
 
+    /// Add a free real entity.
     pub fn add_real(&mut self) -> EntityId {
         self.add_entity(EntityKind::FreeReal)
     }
 }
 
-/// Used explicitly for figure building.
+/// Used explicitly for figure IR building.
 #[derive(Debug, Clone, Default)]
 pub struct Build {
+    /// A loading context for unrolled data.
     expand: Expand,
+    /// Aggregated items to be drawn on the figure.
     items: Vec<Item>,
 }
 
 impl Build {
+    /// Load an unrolled expression.
     pub fn load<T: Displayed + GetMathType + Debug + GetData + 'static>(
         &mut self,
         expr: &Unrolled<T>,
@@ -1759,6 +1854,7 @@ pub struct IndexMap {
 }
 
 impl IndexMap {
+    /// Create a new, identity map.
     #[must_use]
     pub fn new() -> Self {
         Self {
@@ -1766,6 +1862,7 @@ impl IndexMap {
         }
     }
 
+    /// Get the value `a` maps to.
     #[must_use]
     pub fn get(&self, mut a: usize) -> usize {
         for m in &self.mappings {
@@ -1790,7 +1887,12 @@ impl IndexMap {
     }
 }
 
+/// Helper trait for reindexing process.
+///
+/// Reindexing is responsible for eliminating expression duplicates.
+/// It must be performed on a structure with no forward references.
 pub trait Reindex {
+    /// Reindex the expression/rule according to the given map.
     fn reindex(&mut self, map: &IndexMap);
 }
 
@@ -1945,6 +2047,9 @@ fn optimize_cycle(rules: &mut Vec<Option<Rule>>, math: &mut Math, items: &mut Ve
     }
 }
 
+/// Loads a `GeoScript` script and compiles it into Math IR. Encapsulates the entire compiler's
+/// work.
+///
 /// # Errors
 /// Returns an error if the script is not a valid one.
 /// Any errors should result from tokenizing, parsing and unrolling, not mathing.

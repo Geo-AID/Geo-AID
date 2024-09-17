@@ -1,3 +1,5 @@
+//! General functionality contained in the unroll context.
+
 use num_traits::{One, Zero};
 use paste::paste;
 use std::cell::RefCell;
@@ -17,7 +19,7 @@ use super::{
     Scalar, ScalarData, UnrolledRule, UnrolledRuleKind,
 };
 
-/// The context of compilation process.
+/// The context of unroll process.
 #[allow(clippy::module_name_repetitions)]
 #[derive(Debug)]
 pub struct CompileContext {
@@ -38,6 +40,7 @@ impl Default for CompileContext {
 }
 
 impl CompileContext {
+    /// Create a new context.
     #[must_use]
     pub fn new() -> Self {
         Self {
@@ -48,10 +51,12 @@ impl CompileContext {
         }
     }
 
+    /// Push an error.
     pub fn push_error(&self, err: Error) {
         self.errors.borrow_mut().push(err);
     }
 
+    /// Turn a `Result` into an `Option` while pushing the error if present.
     pub fn ok<T>(&self, res: Result<T, Error>) -> Option<T> {
         match res {
             Ok(v) => Some(v),
@@ -62,22 +67,27 @@ impl CompileContext {
         }
     }
 
+    /// Take the context's errors.
     pub fn take_errors(&mut self) -> Vec<Error> {
         mem::take(&mut self.errors.borrow_mut())
     }
 
+    /// Extend the context's errors
     pub fn extend_errors<I: IntoIterator<Item = Error>>(&self, iter: I) {
         self.errors.borrow_mut().extend(iter);
     }
 
+    /// Whether the unroll step finished with no errors.
     pub fn valid(&self) -> bool {
         self.errors.borrow().is_empty()
     }
 
+    /// Push a rule.
     pub fn push_rule(&self, rule: UnrolledRule) {
         self.rules.borrow_mut().push(rule);
     }
 
+    /// Take the context's rules.
     pub fn take_rules(&mut self) -> Vec<UnrolledRule> {
         mem::take(&mut self.rules.borrow_mut())
     }
@@ -85,6 +95,7 @@ impl CompileContext {
 
 /// Everything related to circles.
 impl CompileContext {
+    /// A point lies on circle rule.
     pub fn point_on_circle(&mut self, lhs: &Expr<Point>, rhs: &Expr<Circle>, weight: ProcNum) {
         self.push_rule(UnrolledRule {
             kind: UnrolledRuleKind::ScalarEq(
@@ -99,6 +110,7 @@ impl CompileContext {
         });
     }
 
+    /// A point lies on line rule.
     pub fn point_on_line(&mut self, lhs: &Expr<Point>, rhs: &Expr<Line>, weight: ProcNum) {
         self.push_rule(UnrolledRule {
             kind: UnrolledRuleKind::ScalarEq(
@@ -111,6 +123,7 @@ impl CompileContext {
     }
 }
 
+/// Helper macro for taking nodes out of multiple expressions.
 #[macro_export]
 macro_rules! take_nodes {
     () => {
@@ -132,6 +145,7 @@ macro_rules! take_nodes {
     }
 }
 
+/// Helper macro for a generic expression function.
 macro_rules! generic_expr {
     {$f:ident($v0:ident : $t0:ident, $($v:ident : $t:ident),* $(,)?) -> Scalar[inferred] :: $k:ident} => {
         paste! {
@@ -179,6 +193,7 @@ macro_rules! generic_expr {
 
 // Expression constructors
 impl CompileContext {
+    /// Create an expression with properties and nodes.
     pub fn expr_with<T: Displayed>(
         &self,
         content: T,
@@ -202,6 +217,7 @@ impl CompileContext {
         expr
     }
 
+    /// An average pointe expression with display options.
     pub fn average_p_display(
         &self,
         mut points: Vec<Expr<Point>>,
@@ -215,10 +231,12 @@ impl CompileContext {
         self.expr_with(Point::Average(points.into()), display, nodes)
     }
 
+    /// Average point expression with no properties.
     pub fn average_p(&self, points: Vec<Expr<Point>>) -> Expr<Point> {
         self.average_p_display(points, Properties::from(None))
     }
 
+    /// Average scalar expression with display options.
     pub fn average_s_display(
         &self,
         mut values: Vec<Expr<Scalar>>,
@@ -239,10 +257,12 @@ impl CompileContext {
         )
     }
 
+    /// Average scalar expression with no properties.
     pub fn average_s(&self, points: Vec<Expr<Scalar>>) -> Expr<Scalar> {
         self.average_s_display(points, Properties::from(None))
     }
 
+    /// Set unit expression with properties.
     pub fn set_unit_display(
         &self,
         mut v: Expr<Scalar>,
@@ -262,18 +282,22 @@ impl CompileContext {
         )
     }
 
+    /// Set unit expression with no properties.
     pub fn set_unit(&self, v: Expr<Scalar>, unit: ComplexUnit) -> Expr<Scalar> {
         self.set_unit_display(v, unit, Properties::default())
     }
 
+    /// Free point expression with properties.
     pub fn free_point_display(&self, display: Properties) -> Expr<Point> {
         self.expr_with(Point::Free, display, Vec::new())
     }
 
+    /// Free point expression with no properties.
     pub fn free_point(&self) -> Expr<Point> {
         self.free_point_display(Properties::default())
     }
 
+    /// Free scalar expression with properties.
     pub fn free_scalar_display(&self, display: Properties) -> Expr<Scalar> {
         self.expr_with(
             Scalar {
@@ -285,6 +309,7 @@ impl CompileContext {
         )
     }
 
+    /// Free scalar expression with no properties.
     pub fn free_scalar(&self) -> Expr<Scalar> {
         self.free_scalar_display(Properties::default())
     }
@@ -308,6 +333,7 @@ impl CompileContext {
     generic_expr! {div(a: Scalar, b: Scalar) -> Scalar[inferred]::Divide}
 }
 
+/// Helper macro for general rule functions.
 macro_rules! generic_rule {
     ($f:ident($lhs:ident, $rhs:ident) -> $r:ident) => {
         paste! {
@@ -337,6 +363,7 @@ macro_rules! generic_rule {
 
 // Rule constructors
 impl CompileContext {
+    /// Make a rule with properties and nodes.
     fn rule_with<N: Node + 'static, M: Node + 'static>(
         &mut self,
         kind: UnrolledRuleKind,

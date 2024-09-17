@@ -1,3 +1,5 @@
+//! The `Segment` type and function
+
 use crate::{
     script::{figure::SegmentItem, math::Build, parser::PropertyValue, token::StrLit},
     span,
@@ -8,6 +10,7 @@ use crate::script::token::Span;
 use geo_aid_derive::overload;
 use geo_aid_figure::math_string::MathString;
 
+/// `Segment(point, point)` - a segment connecting two points.
 fn segment_function_point_point(
     mut a: Expr<Point>,
     mut b: Expr<Point>,
@@ -69,6 +72,7 @@ impl BuildAssociated<BundleNode> for Associated {
     }
 }
 
+/// The length of a segment
 #[allow(clippy::needless_pass_by_value)]
 fn len(segment: Expr<Bundle>, context: &CompileContext, mut display: Properties) -> Expr<Scalar> {
     display.add_if_not_present(
@@ -90,6 +94,7 @@ fn len(segment: Expr<Bundle>, context: &CompileContext, mut display: Properties)
     )
 }
 
+/// Register the type and the function
 pub fn register(library: &mut Library) {
     library.functions.insert(
         String::from("Segment"),

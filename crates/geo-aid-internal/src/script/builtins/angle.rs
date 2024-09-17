@@ -1,3 +1,4 @@
+/// The `angle` function
 use crate::script::{
     figure::{LineItem, RayItem, SegmentItem},
     math::Build,
@@ -7,7 +8,7 @@ use super::prelude::*;
 use geo_aid_derive::overload;
 use geo_aid_figure::math_string::MathString;
 
-/// angle(point, point, point) - angle depicted by 3 points.
+/// angle(point, point, point) - angle delimited by 3 points.
 fn angle_function_point_point_point(
     a: Expr<Point>,
     b: Expr<Point>,
@@ -43,6 +44,7 @@ fn angle_function_point_point_point(
 #[derive(Debug)]
 pub struct Associated;
 
+/// Helper function for adding the angle's arms to the figure
 pub fn display_angle_arms(
     build: &mut Build,
     a_expr: &Expr<Point>,
@@ -149,7 +151,7 @@ impl BuildAssociated<ScalarNode> for Associated {
     }
 }
 
-/// angle(line, line) - distance between a point and a line.
+/// angle(line, line) - angle between two lines.
 fn angle_function_line_line(
     k: Expr<Line>,
     l: Expr<Line>,
@@ -159,6 +161,7 @@ fn angle_function_line_line(
     context.angle_ll_display(k, l, display)
 }
 
+/// Register the function
 pub fn register(library: &mut Library) {
     library.functions.insert(
         String::from("angle"),

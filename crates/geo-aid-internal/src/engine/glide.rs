@@ -1,3 +1,8 @@
+//! Glide - Gradient-Led Iterative Descent Engine
+//!
+//! This is simply an implementation of the gradient descent
+//! method. Details are described in the math doc.
+
 use crate::engine::compiler::{Compiled, FigureFn};
 use crate::engine::thread_pool::ThreadPool;
 use crate::engine::QualityRecord;
@@ -7,24 +12,38 @@ use geo_aid_math::{Context, Func};
 use rand::Rng;
 use std::time::{Duration, Instant};
 
+/// Glide runtime.
 pub struct Glide {
+    /// Generation params
     params: Params,
+    /// Figure error function
     error_fn: Func,
+    /// Figure gradient function
     gradient_fn: Func,
+    /// Figure function
     figure_fn: FigureFn,
+    /// Current best state
     inputs: Vec<f64>,
 }
 
+/// Parameters modifying the behavior of Glide
 #[derive(Clone, Copy)]
 pub struct Params {
+    /// How strictly the rules are applied
     pub strictness: f64,
+    /// How many samples to try out in search for a global minimum.
     pub samples: usize,
+    /// How many threads to use
     pub worker_count: usize,
+    /// How many last quality deltas to use in mean calculation.
     pub mean_count: usize,
+    /// If the arithmetic mean of the last `mean_count` deltas ever goes below
+    /// this number, the generation process stops.
     pub max_mean_delta: f64,
 }
 
 impl Glide {
+    /// Creates a new runtime based on parameters and Math IR
     #[must_use]
     pub fn new(params: Params, intermediate: &Intermediate) -> Self {
         let Compiled {
@@ -64,6 +83,9 @@ impl Glide {
         }
     }
 
+    /// Performs a generation over the previously specified sample count.
+    /// Executes `sample_complete` every time a sample is completed.
+    /// Returns how long the whole process took.
     pub fn generate(&mut self, mut sample_complete: impl FnMut()) -> Duration {
         let start = Instant::now();
         let input_count = self.inputs.len();
@@ -151,10 +173,15 @@ struct GenerateContext {
     quality_record: QualityRecord,
 }
 
+/// Initial speed (gradient coefficient)
 const INITIAL_SPEED: f64 = 1.0;
+/// If the dot product of last gradient and new gradient is lower than this,
+/// speed decreases.
 const DOT_THRESHOLD: f64 = 0.0;
+/// If the speed ever goes below this value, generation stops.
 const SPEED_LIMIT: f64 = 1e-6;
 
+/// Finds the nearest local minimum based on the provided sample (and the remainder of context)
 fn descend(ctx: &mut GenerateContext) {
     let mut speed = INITIAL_SPEED;
     let mut error = [0.0];
@@ -210,6 +237,7 @@ fn descend(ctx: &mut GenerateContext) {
     }
 }
 
+/// A dot product of two vectors
 fn dot(u: &[f64], v: &[f64]) -> f64 {
     u.iter()
         .copied()

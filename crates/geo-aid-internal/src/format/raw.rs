@@ -1,14 +1,20 @@
+//! Geo-AID is capable of outputting its figures in plaintext, human-readable format.
+//! This capability is currently very limited and largely untested, especially UX wise.
+
 use crate::format::Draw;
 use geo_aid_figure::{
     CircleItem, Figure, Label, LineItem, PointItem, Position, Style, TwoPointItem,
 };
 
+/// The raw format writer
 #[derive(Debug, Default)]
 pub struct Raw {
+    /// The current file contents
     content: String,
 }
 
 impl Raw {
+    /// Get the human readable name of the requested [`Style`]
     fn get_style_name(style: Style) -> &'static str {
         match style {
             Style::Dotted => "dotted",
@@ -18,6 +24,7 @@ impl Raw {
         }
     }
 
+    /// Draw a styled segment delimited by two points.
     fn draw_simple_segment(
         &mut self,
         (p1, p2): (Position, Position),

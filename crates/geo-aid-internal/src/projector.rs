@@ -1,3 +1,5 @@
+//! Converts the generated figure to a ready-to-draw form - [`geo_aid_figure::Figure`].
+
 use crate::geometry;
 use crate::geometry::{Circle, Complex, Line, ValueEnum};
 pub use geo_aid_figure as figure;
@@ -15,6 +17,7 @@ use crate::script::figure::{
 };
 use crate::script::math::{EntityKind, Expr, ExprType, Flags};
 
+/// Projector context.
 struct Projector {
     /// Variables used by the figure
     pub variables: Vec<MathVariable>,
@@ -92,6 +95,7 @@ impl Projector {
         }
     }
 
+    /// Get the point's label position relative to the point.
     fn get_label_position_rel(&self, point: Complex) -> Position {
         let mut vectors = Vec::new();
 
@@ -193,6 +197,7 @@ impl Projector {
     }
 }
 
+/// Converts a [`VarIndex`] to its value.
 trait UnVar<T> {
     /// Returns the actual variable value.
     fn un_var(&self, id: &VarIndex) -> Option<T>;
@@ -216,9 +221,11 @@ impl UnVar<Circle> for Projector {
     }
 }
 
+/// A helper trait for projecting (preparing) drawn items.
 trait Project<T> {
     type Result;
 
+    /// Prepare the given item for drawing.
     fn project(&mut self, item: T) -> Self::Result;
 }
 
@@ -418,9 +425,14 @@ impl Project<CircleItem> for Projector {
 //     }
 // }
 
+/// Represents the transform used by the projector to fit all
+/// items on the canvas with a proper margin.
 struct Transform {
+    /// The offset to apply to all items
     offset: Complex,
+    /// The scale to apply to all items.
     scale: f64,
+    /// The margin - a translation to apply to all items.
     margin: Complex,
 }
 
@@ -430,6 +442,7 @@ impl Transform {
         (pt + self.offset) * self.scale + self.margin
     }
 
+    /// Translate a generator-space line to figure-space line
     fn transform_line(&self, ln: Line) -> Line {
         Line {
             origin: self.transform_point(ln.origin),
@@ -437,6 +450,7 @@ impl Transform {
         }
     }
 
+    /// Translate a generator-space circle to figure-space circle.
     fn transform_circle(&self, circle: Circle) -> Circle {
         Circle {
             center: self.transform_point(circle.center),
@@ -444,6 +458,7 @@ impl Transform {
         }
     }
 
+    /// Translate a generator-space distance to figure-space distance
     fn transform_dst(&self, dst: f64) -> f64 {
         dst * self.scale
     }

@@ -1,16 +1,22 @@
+//! Geo-AID is capable of outputting its figures in LaTeX, using tikz and tikz-euclide packages.
+
 use crate::format::Draw;
 use geo_aid_figure::math_string::{MathChar, MathIndex, MathSpecial, MathString, SPECIAL_MATH};
 use geo_aid_figure::{CircleItem, Figure, LineItem, PointItem, Position, Style, TwoPointItem};
 use num_traits::ToPrimitive;
 use std::string::String;
 
+/// The LaTeX format writer.
 #[derive(Debug, Default)]
 pub struct Latex {
+    /// The current file contents
     content: String,
+    /// The scale used for drawn objects.
     scale: f64,
 }
 
 impl Latex {
+    /// Convert the given math string into a LaTeX string.
     fn math_to_latex(math: &MathString) -> String {
         let mut s = String::new();
 
@@ -34,6 +40,7 @@ impl Latex {
         s
     }
 
+    /// Get the tikz name of the requested [`Style`]
     fn get_style_name(style: Style) -> &'static str {
         match style {
             Style::Dotted => "dotted",
@@ -43,6 +50,7 @@ impl Latex {
         }
     }
 
+    /// Draw a styled segment delimited by two points.
     fn draw_simple_segment(&mut self, points: &(Position, Position), style: Style) {
         let pos1 = points.0 * self.scale;
         let pos2 = points.1 * self.scale;

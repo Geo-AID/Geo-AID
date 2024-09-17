@@ -1,3 +1,5 @@
+//! Utility crate providing functions for geometry computations.
+
 use std::{
     fmt::Display,
     iter::{Product, Sum},
@@ -7,46 +9,52 @@ use std::{
 use geo_aid_figure::Position;
 use serde::Serialize;
 
-/// Represents a complex number located on a "unit" plane.
+/// Represents a complex number
 #[derive(Debug, Clone, Copy, Serialize)]
 pub struct Complex {
-    /// X coordinate located in range [0, 1).
+    /// The real part
     pub real: f64,
-    /// Y coordinate located in range [0, 1).
+    /// The imaginary part.
     pub imaginary: f64,
 }
 
 impl Complex {
+    /// Create a new complex from its real and imaginary parts.
     #[must_use]
     #[inline]
     pub const fn new(real: f64, imaginary: f64) -> Self {
         Self { real, imaginary }
     }
 
+    /// Convert a real to a complex.
     #[must_use]
     pub const fn real(real: f64) -> Self {
         Self::new(real, 0.0)
     }
 
+    /// Create a new complex from its polar representation.
     #[must_use]
     pub fn polar(theta: f64, radius: f64) -> Self {
         Self::new(theta.cos(), theta.sin()) * radius
     }
 
+    /// Complex zero.
     #[must_use]
     #[inline]
     pub const fn zero() -> Self {
         Self::new(0.0, 0.0)
     }
 
+    /// Complex one.
     #[must_use]
     #[inline]
     pub const fn one() -> Self {
         Self::new(1.0, 0.0)
     }
 
+    /// The imaginary unit.
     #[must_use]
-    pub fn i() -> Self {
+    pub const fn i() -> Self {
         Self::new(0.0, 1.0)
     }
 
@@ -56,31 +64,37 @@ impl Complex {
         Complex::new(-self.imaginary, self.real)
     }
 
+    /// The magnitude of the complex, also called its modulus.
     #[must_use]
     pub fn magnitude(self) -> f64 {
         f64::sqrt(self.real.powi(2) + self.imaginary.powi(2))
     }
 
+    /// The complex's conjugate (a - bi)
     #[must_use]
     pub fn conjugate(self) -> Complex {
         Complex::new(self.real, -self.imaginary)
     }
 
+    /// Multiply the complex's parts by other complex's parts (ab + cdi)
     #[must_use]
     pub fn partial_mul(self, other: Complex) -> Complex {
         Complex::new(self.real * other.real, self.imaginary * other.imaginary)
     }
 
+    /// Divide the complex's parts by other complex's parts (a/b + (c/d)i)
     #[must_use]
     pub fn partial_div(self, other: Complex) -> Complex {
         Complex::new(self.real / other.real, self.imaginary / other.imaginary)
     }
 
+    /// Compute the complex's argument
     #[must_use]
     pub fn arg(self) -> f64 {
         f64::atan2(self.imaginary, self.real)
     }
 
+    /// Normalize the complex by dividing it by its own magnitude.
     #[must_use]
     pub fn normalize(self) -> Complex {
         self / self.magnitude()
@@ -92,6 +106,7 @@ impl Complex {
         self.real * self.real + self.imaginary * self.imaginary
     }
 
+    /// A square root. Chooses the one with non-negative imaginary part.
     #[must_use]
     pub fn sqrt(self) -> Complex {
         // The formula used here doesn't work for negative reals. We can use a trick here to bypass that restriction.
@@ -318,9 +333,13 @@ pub struct Line {
 }
 
 impl Line {
+    /// Creates a new line from its origin and a direction vector
     #[must_use]
     pub fn new(origin: Complex, direction: Complex) -> Self {
-        Self { origin, direction }
+        Self {
+            origin,
+            direction: direction.normalize(),
+        }
     }
 }
 
@@ -395,6 +414,7 @@ impl From<ValueEnum> for geo_aid_figure::Value {
     }
 }
 
+/// Get the line going through `p1` and `p2`
 #[must_use]
 pub fn get_line(p1: Complex, p2: Complex) -> Line {
     Line {

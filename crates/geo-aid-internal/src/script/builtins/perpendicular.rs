@@ -1,3 +1,5 @@
+//! The `perpendicular_through` function
+
 use super::prelude::*;
 use geo_aid_derive::overload;
 
@@ -11,6 +13,7 @@ pub fn line_point(
     context.perpendicular_through_display(line, point, display)
 }
 
+/// Register the function
 pub fn register(library: &mut Library) {
     library.functions.insert(
         String::from("perpendicular_through"),

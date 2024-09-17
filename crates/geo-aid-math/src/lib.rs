@@ -1,14 +1,17 @@
 mod compiler;
 
+/// A feature-specific floating point representation.
 #[cfg(feature = "f64")]
 pub type Float = f64;
 #[cfg(not(feature = "f64"))]
 pub type Float = f32;
 
+/// A compiled expression.
 #[must_use]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Expr(usize);
 
+/// A comparison between two expressions.
 #[derive(Debug, Clone, Copy)]
 pub struct Comparison {
     pub a: Expr,
@@ -16,6 +19,7 @@ pub struct Comparison {
     pub kind: ComparisonKind,
 }
 
+/// The primitive kind of a comparison.
 #[derive(Debug, Clone, Copy)]
 pub enum ComparisonKind {
     Eq,
@@ -26,43 +30,66 @@ pub enum ComparisonKind {
     Lteq,
 }
 
+/// A condition for ternary operators
 #[derive(Debug, Clone, Copy)]
 pub enum Condition {
     Comparison(Comparison),
 }
 
+/// The kind of an expression. Internal use only.
 #[derive(Debug, Clone, Copy)]
 enum ExprKind {
+    /// A constant number
     Constant(Float),
+    /// a + b
     Add(Expr, Expr),
+    /// a - b
     Sub(Expr, Expr),
+    /// a * b
     Mul(Expr, Expr),
+    /// a / b
     Div(Expr, Expr),
+    /// An input at an index
     Input(usize),
+    /// sine of a value
     Sin(Expr),
+    /// cosine of a value
     Cos(Expr),
+    /// inverse cosine
     Acos(Expr),
+    /// atan2 function
     Atan2(Expr, Expr),
+    /// -expr
     Neg(Expr),
+    /// If condition is true, returns first expression. Otherwise returns the second one.
     Ternary(Condition, Expr, Expr),
+    /// Raise expression to a real power.
     Pow(Expr, Float),
 }
 
+/// An entry in the expression record.
 #[derive(Debug, Clone, Copy)]
 struct Entry {
+    /// Kind of this expression
     kind: ExprKind,
+    /// The index of derivatives of this expression to the `derivatives` vector.
     derivatives: Option<usize>,
 }
 
+/// Compilation context. Necessary for any expression manipulation and compilation.
 #[derive(Debug, Clone)]
 pub struct Context {
+    /// Input count.
     inputs: usize,
+    /// Expression vector.
     exprs: Vec<Entry>,
-    /// Indices of expressions holding derivatives w.r.t. respective inputs
+    /// Derivatives w.r.t. respective inputs. Every `inputs` next entries are a set
+    /// of derivatives.
     derivatives: Vec<Expr>,
 }
 
 impl Context {
+    /// Create a new context prepared to handle a given amount of inputs.
     #[must_use]
     pub fn new(inputs: usize) -> Self {
         let mut exprs = Vec::new();
@@ -97,10 +124,12 @@ impl Context {
         }
     }
 
+    /// Print the expression as a string. Use only for debugging, brace for long output.
     pub fn stringify(&self, expr: Expr) -> String {
         self.stringify_kind(self.exprs[expr.0].kind)
     }
 
+    /// Helper for the [`stringify`] function
     fn stringify_kind(&self, expr_kind: ExprKind) -> String {
         match expr_kind {
             ExprKind::Constant(v) => format!("{v:.2}"),
@@ -132,6 +161,7 @@ impl Context {
         }
     }
 
+    /// Helper for the [`stringify`] function.
     fn stringify_condition(&self, condition: Condition) -> String {
         match condition {
             Condition::Comparison(cmp) => {
@@ -151,6 +181,7 @@ impl Context {
         }
     }
 
+    /// Push an expression without derivatives.
     fn push_expr_nodiff(&mut self, kind: ExprKind) -> Expr {
         let id = self.exprs.len();
         self.exprs.push(Entry {
@@ -160,6 +191,7 @@ impl Context {
         Expr(id)
     }
 
+    /// Push an expression with its derivatives.
     fn push_expr(&mut self, kind: ExprKind, derivatives: Vec<Expr>) -> Expr {
         assert_eq!(self.inputs, derivatives.len());
         let id = self.exprs.len();
@@ -426,12 +458,14 @@ impl Context {
     }
 }
 
+/// A callable function accepting inputs and outputs (as mutable reference)
 #[derive(Clone, Copy)]
 pub struct Func {
     func: fn(*const Float, *mut Float),
 }
 
 impl Func {
+    /// Call this function with `inputs` and collect the outputs into `dst`
     pub fn call(&self, inputs: &[Float], dst: &mut [Float]) {
         (self.func)(inputs.as_ptr(), dst.as_mut_ptr());
     }

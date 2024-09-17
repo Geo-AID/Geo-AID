@@ -1,3 +1,5 @@
+//! The `degrees` function.
+
 #[allow(unused_imports)]
 use crate::script::token::number::ProcNum;
 use geo_aid_derive::overload;
@@ -6,6 +8,7 @@ use num_traits::FromPrimitive;
 
 use super::prelude::*;
 
+/// Register the function
 pub fn register(library: &mut Library) {
     library.functions.insert(
         String::from("degrees"),

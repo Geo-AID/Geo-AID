@@ -1,6 +1,9 @@
+//! The `Line` function
+
 use super::prelude::*;
 use geo_aid_derive::overload;
 
+/// `Line(point, point)` - a line through two points
 pub fn function_pp(
     a: Expr<Point>,
     b: Expr<Point>,
@@ -17,6 +20,7 @@ pub fn function_pp(
     ln
 }
 
+/// Register the function
 pub fn register(library: &mut Library) {
     library.functions.insert(
         String::from("Line"),

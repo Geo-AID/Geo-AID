@@ -1,3 +1,5 @@
+//! The `format` module contains all functionality related to outputting figures in given formats.
+
 use geo_aid_figure::{CircleItem, Figure, Item, LineItem, PointItem, TwoPointItem};
 use std::{fs::File, io::Write, path::Path};
 
@@ -6,7 +8,10 @@ pub mod latex;
 pub mod raw;
 pub mod svg;
 
+/// A utility trait covering most common operations.
 pub trait Draw {
+    /// Draws the figure.
+    ///
     /// # Errors
     /// In case of io failure.
     fn draw(&mut self, target: &Path, figure: &Figure) -> Result<(), std::io::Error> {
@@ -33,20 +38,25 @@ pub trait Draw {
         }
     }
 
+    /// Called when starting to draw
     fn begin(&mut self, _output: &Figure) {}
 
+    /// Draw a single point.
     fn draw_point(&mut self, _point: &PointItem) {
         unimplemented!("support for point rendering not implemented")
     }
 
+    /// Draw a single line.
     fn draw_line(&mut self, _line: &LineItem) {
         unimplemented!("support for line rendering not implemented")
     }
 
+    /// Draw a single ray (half-line)
     fn draw_ray(&mut self, _ray: &TwoPointItem) {
         unimplemented!("support for ray rendering not implemented")
     }
 
+    /// Draw a single segment, delimited by two points.
     fn draw_segment(&mut self, _segment: &TwoPointItem) {
         unimplemented!("support for segment rendering not implemented")
     }
@@ -55,9 +65,11 @@ pub trait Draw {
     //     unimplemented!("support for angle rendering not implemented")
     // }
 
+    /// Draw a single circle.
     fn draw_circle(&mut self, _circle: &CircleItem) {
         unimplemented!("support for circle rendering not implemented")
     }
 
+    /// Finish drawing.
     fn end(&mut self) -> &str;
 }

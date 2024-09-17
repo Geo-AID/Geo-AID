@@ -1,3 +1,5 @@
+//! Compiling mathematical expressions with the Cranelift backend.
+
 use crate::{ComparisonKind, Condition, Context, Expr, ExprKind, Float};
 use cranelift::codegen::ir::immediates::Offset32;
 use cranelift::codegen::ir::{FuncRef, Function, UserExternalName};
@@ -11,6 +13,7 @@ const FLOAT: Type = types::F64;
 #[cfg(not(feature = "f64"))]
 const FLOAT: Type = types::F32;
 
+/// External functions.
 #[derive(Clone, Copy)]
 struct External {
     sin: FuncRef,
@@ -20,6 +23,7 @@ struct External {
     atan2: FuncRef,
 }
 
+/// Link an external function.
 fn link_float_func(
     func: &mut Function,
     module: &mut JITModule,
@@ -45,6 +49,7 @@ fn link_float_func(
     })
 }
 
+/// Link all external functions.
 fn link_external(func: &mut Function, module: &mut JITModule) -> External {
     let sin = link_float_func(func, module, 1, "sin");
     let cos = link_float_func(func, module, 1, "cos");
@@ -61,6 +66,7 @@ fn link_external(func: &mut Function, module: &mut JITModule) -> External {
     }
 }
 
+/// Compile given expressions.
 #[must_use]
 pub fn compile(
     context: &Context,
@@ -148,6 +154,7 @@ pub fn compile(
     unsafe { mem::transmute(func) }
 }
 
+/// Compile a single expression.
 fn compile_expr(builder: &mut FunctionBuilder, kind: ExprKind, external: External) -> Value {
     match kind {
         ExprKind::Constant(v) => float_constant(builder, v),
@@ -252,15 +259,18 @@ fn compile_expr(builder: &mut FunctionBuilder, kind: ExprKind, external: Externa
     }
 }
 
+/// Get the expression's variable. Assumes it exists in the first place.
 fn var(expr: Expr) -> Variable {
     Variable::new(expr.0 + 2)
 }
 
+/// Creates a constant float value.
 #[cfg(feature = "f64")]
 fn float_constant(builder: &mut FunctionBuilder, value: Float) -> Value {
     builder.ins().f64const(value)
 }
 
+/// Creates a constant float value.
 #[cfg(not(feature = "f64"))]
 fn float_constant(builder: &mut FunctionBuilder, value: Float) -> Value {
     builder.ins().f32const(value)
