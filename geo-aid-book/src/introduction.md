@@ -1,4 +1,7 @@
-![Geo-AID logo](images/logo.svg)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="images/logo-dark-mode.svg">
+  <img alt="Geo-AID Logo" src="images/logo-light-mode.png">
+</picture>
 
 # Introduction
 

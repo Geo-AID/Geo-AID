@@ -1,5 +1,7 @@
-![Geo-AID Logo](logo/full-white.svg#gh-dark-mode-only)
-![Geo-AID Logo](logo/full-black.svg#gh-light-mode-only)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="logo/full-white.svg">
+  <img alt="Geo-AID Logo" src="logo/full-black.svg">
+</picture>
 
 # Geo-AID
 
