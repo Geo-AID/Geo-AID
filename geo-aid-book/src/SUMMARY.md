@@ -29,4 +29,4 @@
     - [Display system](./reference/display-system.md)
     - [Weight system](./reference/weight-system.md)
     - [Flags](./reference/flags.md)
-- [Math behind Geo-AID](https://www.overleaf.com/read/nnjqztpynydm#156b73)
+- [Math behind Geo-AID](./math.md)
