@@ -11,7 +11,6 @@ use crate::engine::thread_pool::ThreadPool;
 use crate::geometry::Complex;
 use crate::script::math::EntityKind;
 use geo_aid_math::Func;
-use serde::Serialize;
 
 mod magic_box;
 
@@ -82,7 +81,7 @@ pub struct Generator {
 }
 
 /// The kind of an adjustable (entity)
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AdjustableTemplate {
     /// A free point
     Point,

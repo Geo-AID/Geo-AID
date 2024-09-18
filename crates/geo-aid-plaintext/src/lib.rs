@@ -1,19 +1,38 @@
 //! Geo-AID is capable of outputting its figures in plaintext, human-readable format.
 //! This capability is currently very limited and largely untested, especially UX wise.
 
-use crate::format::Draw;
 use geo_aid_figure::{
-    CircleItem, Figure, Label, LineItem, PointItem, Position, Style, TwoPointItem,
+    CircleItem, Figure, Item, Label, LineItem, PointItem, Position, Style, TwoPointItem,
 };
 
 /// The raw format writer
 #[derive(Debug, Default)]
-pub struct Raw {
+pub struct Plaintext {
     /// The current file contents
     content: String,
 }
 
-impl Raw {
+impl Plaintext {
+    /// Get the figure in plaintext format.
+    #[must_use]
+    pub fn draw(figure: &Figure) -> String {
+        let mut plain = Self::default();
+
+        for item in &figure.items {
+            match item {
+                Item::Point(point) => plain.draw_point(point),
+                Item::Line(line) => plain.draw_line(line),
+                Item::Ray(ray) => plain.draw_ray(ray),
+                Item::Segment(segment) => plain.draw_segment(segment),
+                Item::Circle(circle) => plain.draw_circle(circle),
+            }
+        }
+
+        plain.content
+    }
+}
+
+impl Plaintext {
     /// Get the human readable name of the requested [`Style`]
     fn get_style_name(style: Style) -> &'static str {
         match style {
@@ -43,10 +62,6 @@ impl Raw {
             p2.y
         );
     }
-}
-
-impl Draw for Raw {
-    fn begin(&mut self, _output: &Figure) {}
 
     fn draw_point(&mut self, point: &PointItem) {
         let label = point
@@ -101,9 +116,5 @@ impl Draw for Raw {
             circle.center.y,
             circle.radius,
         );
-    }
-
-    fn end(&mut self) -> &str {
-        &self.content
     }
 }

@@ -11,7 +11,6 @@ geo_aid_derive = { version = "0.5.1", path = "../geo_aid_derive" }
 geo-aid-figure = { version = "0.5.1", path = "../geo-aid-figure" }
 crossterm = "0.27.0"
 serde = { version = "1.0.210", features = ["derive"] }
-serde_json = "1.0.128"
 strsim = "0.11"
 num-traits = "0.2.19"
 num-derive = "0.4.2"

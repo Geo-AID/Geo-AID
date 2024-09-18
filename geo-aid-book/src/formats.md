@@ -17,7 +17,7 @@ most tested - ways of drawing the figure.
 Machine-readable [JSON](https://www.json.org/json-en.html) format according to the Schema available in Geo-AID's
 repository. Can be used to integrate other tools with Geo-AID.
 
-## Raw
+## Plaintext
 
 A human-readable format, pure [text](https://en.wikipedia.org/wiki/Plain_text). Contains descriptions of the positions
 of each object in the figure.

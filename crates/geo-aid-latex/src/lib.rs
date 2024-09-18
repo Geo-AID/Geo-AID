@@ -1,8 +1,9 @@
 //! Geo-AID is capable of outputting its figures in LaTeX, using tikz and tikz-euclide packages.
 
-use crate::format::Draw;
 use geo_aid_figure::math_string::{MathChar, MathIndex, MathSpecial, MathString, SPECIAL_MATH};
-use geo_aid_figure::{CircleItem, Figure, LineItem, PointItem, Position, Style, TwoPointItem};
+use geo_aid_figure::{
+    CircleItem, Figure, Item, LineItem, PointItem, Position, Style, TwoPointItem,
+};
 use num_traits::ToPrimitive;
 use std::string::String;
 
@@ -16,6 +17,28 @@ pub struct Latex {
 }
 
 impl Latex {
+    /// Get the figure in LaTeX format.
+    #[must_use]
+    pub fn draw(figure: &Figure) -> String {
+        let mut latex = Self::default();
+
+        latex.begin(figure);
+
+        for item in &figure.items {
+            match item {
+                Item::Point(point) => latex.draw_point(point),
+                Item::Line(line) => latex.draw_line(line),
+                Item::Ray(ray) => latex.draw_ray(ray),
+                Item::Segment(segment) => latex.draw_segment(segment),
+                Item::Circle(circle) => latex.draw_circle(circle),
+            }
+        }
+
+        latex.end();
+
+        latex.content
+    }
+
     /// Convert the given math string into a LaTeX string.
     fn math_to_latex(math: &MathString) -> String {
         let mut s = String::new();
@@ -70,9 +93,7 @@ impl Latex {
             Self::get_style_name(style)
         );
     }
-}
 
-impl Draw for Latex {
     fn begin(&mut self, figure: &Figure) {
         self.content = String::from(
             r"

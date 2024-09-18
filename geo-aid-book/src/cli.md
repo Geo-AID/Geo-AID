@@ -57,8 +57,8 @@
       The SVG format renderer
     - `json`:
       The JSON (machine-readable) format renderer
-    - `raw`:
-      The raw (human-readable) format renderer
+    - `plaintext`:
+      The plaintext (human-readable) format renderer
 
 * `--width <WIDTH>` — Canvas width (treated very differently for LaTeX)
 

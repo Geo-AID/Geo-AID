@@ -1,15 +1,39 @@
 //! Geo-AID is capable of outputting figures as a simple svg file. This file may not be possible
 //! to display everywhere, but it should be suitable for most cases.
 
-use geo_aid_figure::{CircleItem, Figure, LineItem, PointItem, Position, Style, TwoPointItem};
-
-use crate::format::Draw;
+use geo_aid_figure::{
+    CircleItem, Figure, Item, LineItem, PointItem, Position, Style, TwoPointItem,
+};
 
 /// The SVG format writer.
 #[derive(Debug, Default)]
 pub struct Svg {
     /// Current file contents
     content: String,
+}
+
+impl Svg {
+    /// Get the figure in SVG format.
+    #[must_use]
+    pub fn draw(figure: &Figure) -> String {
+        let mut svg = Self::default();
+
+        svg.begin(figure);
+
+        for item in &figure.items {
+            match item {
+                Item::Point(point) => svg.draw_point(point),
+                Item::Line(line) => svg.draw_line(line),
+                Item::Ray(ray) => svg.draw_ray(ray),
+                Item::Segment(segment) => svg.draw_segment(segment),
+                Item::Circle(circle) => svg.draw_circle(circle),
+            }
+        }
+
+        svg.end();
+
+        svg.content
+    }
 }
 
 impl Svg {
@@ -45,9 +69,7 @@ impl Svg {
             p2.y
         );
     }
-}
 
-impl Draw for Svg {
     fn begin(&mut self, figure: &Figure) {
         self.content += &format!(
             r#"
@@ -131,8 +153,7 @@ impl Draw for Svg {
         );
     }
 
-    fn end(&mut self) -> &str {
+    fn end(&mut self) {
         self.content += "</g> </g> </svg>";
-        &self.content
     }
 }

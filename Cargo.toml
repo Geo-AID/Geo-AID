@@ -15,6 +15,10 @@ clap-markdown = "0.1.4"
 crossterm = "0.27.0"
 
 geo-aid-internal = { version = "0.5.1", path = "crates/geo-aid-internal" }
+geo-aid-svg = { version = "0.5.1", path = "crates/geo-aid-svg" }
+geo-aid-latex = { version = "0.5.1", path = "crates/geo-aid-latex" }
+geo-aid-plaintext = { version = "0.5.1", path = "crates/geo-aid-plaintext" }
+geo-aid-json = { version = "0.5.1", path = "crates/geo-aid-json" }
 
 [profile.dev]
 opt-level = 1
