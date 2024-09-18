@@ -1,6 +1,6 @@
 [package]
-name = "geo-aid-internal"
-description = "Internals of Geo-AID. Can be used for creating alternative interfaces."
+name = "geo-aid-script"
+description = "Geo-AID's subcrate for parsing GeoScript."
 version = "0.5.1"
 edition = "2021"
 license = "MIT"
@@ -9,12 +9,9 @@ repository = "https://github.com/Geo-AID/geo-aid/"
 [dependencies]
 geo_aid_derive = { version = "0.5.1", path = "../geo_aid_derive" }
 geo-aid-figure = { version = "0.5.1", path = "../geo-aid-figure" }
-geo-aid-math = { version = "0.5.1", path = "../geo-aid-math" }
-geo-aid-script = { version = "0.5.1", path = "../geo-aid-script" }
-rand = "0.8.5"
 crossterm = "0.27.0"
-serde = { version = "1.0.203", features = ["derive", "rc"] }
-serde_json = "1.0"
+serde = { version = "1.0.210", features = ["derive"] }
+serde_json = "1.0.128"
 strsim = "0.11"
 num-traits = "0.2.19"
 num-derive = "0.4.2"

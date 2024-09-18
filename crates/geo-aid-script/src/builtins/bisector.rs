@@ -1,6 +1,6 @@
 //! The `bisector` function
 
-use crate::script::math::Build;
+use crate::math::Build;
 
 use super::{angle::display_angle_arms, prelude::*};
 use geo_aid_derive::overload;

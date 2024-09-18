@@ -7,11 +7,11 @@ use std::mem;
 use std::rc::Rc;
 use std::{collections::HashMap, fmt::Debug};
 
-use crate::script::builtins::macros::number;
-use crate::script::token::number::ProcNum;
-use crate::script::unroll::{AnyExpr, CloneWithNode};
-use crate::script::{unit, ComplexUnit, Error};
+use crate::builtins::macros::number;
 use crate::span;
+use crate::token::number::ProcNum;
+use crate::unroll::{AnyExpr, CloneWithNode};
+use crate::{unit, ComplexUnit, Error};
 
 use super::figure::FromExpr;
 use super::{
@@ -137,11 +137,11 @@ macro_rules! take_nodes {
         }
     };
     ($nodes:ident << $v:ident, $($x:ident),*) => {
-        $nodes.extend($v.take_node().map(|node| Box::new(node) as Box<dyn $crate::script::unroll::Node>));
+        $nodes.extend($v.take_node().map(|node| Box::new(node) as Box<dyn $crate::unroll::Node>));
         take_nodes!{$nodes << $($x),*}
     };
     ($nodes:ident << $v:ident) => {
-        $nodes.extend($v.take_node().map(|node| Box::new(node) as Box<dyn $crate::script::unroll::Node>));
+        $nodes.extend($v.take_node().map(|node| Box::new(node) as Box<dyn $crate::unroll::Node>));
     }
 }
 

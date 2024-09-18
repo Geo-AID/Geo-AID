@@ -1,10 +1,8 @@
 //! Module containing all of optimizing functionality that requries finding patterns
 //! and enables rule removal and entity redefining.
 
-use crate::script::math::{
-    ContainsEntity, DeepClone, EntityKind, ExprKind, ExprType, Math, VarIndex,
-};
-use crate::script::token::number::ProcNum;
+use crate::math::{ContainsEntity, DeepClone, EntityKind, ExprKind, ExprType, Math, VarIndex};
+use crate::token::number::ProcNum;
 use num_traits::{FromPrimitive, Zero};
 
 use super::{Rule, RuleKind};

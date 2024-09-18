@@ -5,7 +5,7 @@ use num_traits::{One, Zero};
 use std::rc::Rc;
 
 use super::prelude::*;
-use crate::script::token::number::ProcNum;
+use crate::token::number::ProcNum;
 
 /// `point lies_on circle` - a point lies on a circle.
 fn pt_lies_on_circle(

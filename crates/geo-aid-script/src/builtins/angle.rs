@@ -1,5 +1,5 @@
 /// The `angle` function
-use crate::script::{
+use crate::{
     figure::{LineItem, RayItem, SegmentItem},
     math::Build,
 };

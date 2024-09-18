@@ -4,8 +4,8 @@
 use geo_aid_derive::Parse;
 use num_traits::Zero;
 
-use crate::script::builtins;
-use crate::script::token::number::ProcNum;
+use crate::builtins;
+use crate::token::number::ProcNum;
 use std::fmt::Formatter;
 use std::{
     fmt::{Debug, Display},

@@ -4,7 +4,7 @@
 use std::{fmt::Display, str::FromStr};
 
 use crate::geometry::ValueEnum;
-use crate::script::math::{EntityKind, IndexMap, Reconstruct, ReconstructCtx, Reindex};
+use crate::math::{EntityKind, IndexMap, Reconstruct, ReconstructCtx, Reindex};
 use geo_aid_figure::math_string::{
     MathChar, MathIndex, MathSpecial, MathString, ParseErrorKind, SPECIAL_MATH,
 };

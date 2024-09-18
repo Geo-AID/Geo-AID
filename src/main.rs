@@ -12,9 +12,9 @@ use geo_aid_internal::format::svg::Svg;
 use geo_aid_internal::projector;
 use geo_aid_internal::script::figure::Generated;
 use geo_aid_internal::{
-    cli::{Diagnostic, DiagnosticKind},
     engine::rage::Rage,
     format::Draw,
+    script::cli::{Diagnostic, DiagnosticKind},
     script::math,
 };
 use std::time::Duration;

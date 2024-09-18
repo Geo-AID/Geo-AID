@@ -2,10 +2,10 @@
 //! It's at this point where rules are analyzed, expressions normalized, patterns that
 //! can be optimized optimized. It's the final and most important stage of compilation.
 
-use crate::script::figure::Item;
-use crate::script::math::optimizations::ZeroLineDst;
-use crate::script::token::number::{CompExponent, ProcNum};
-use crate::script::unroll::figure::Node;
+use crate::figure::Item;
+use crate::math::optimizations::ZeroLineDst;
+use crate::token::number::{CompExponent, ProcNum};
+use crate::unroll::figure::Node;
 use derive_recursive::Recursive;
 use geo_aid_figure::{EntityIndex as EntityId, VarIndex};
 use num_traits::{FromPrimitive, One, Zero};

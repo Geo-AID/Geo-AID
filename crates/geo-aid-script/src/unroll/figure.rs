@@ -1,14 +1,11 @@
 //! Everything related to unrolled figures.
 
-use crate::script::figure::{CircleItem, LineItem, PointItem, RayItem};
-use crate::script::math::Build;
+use crate::figure::{CircleItem, LineItem, PointItem, RayItem};
+use crate::math::Build;
 use crate::{
-    script::{
-        figure::SpannedMathString as MathString,
-        parser::{FromProperty, Parse, PropertyValue},
-        Error,
-    },
-    span,
+    figure::SpannedMathString as MathString,
+    parser::{FromProperty, Parse, PropertyValue},
+    span, Error,
 };
 use geo_aid_figure::Style;
 use std::{collections::HashMap, fmt::Debug, ops::Deref};

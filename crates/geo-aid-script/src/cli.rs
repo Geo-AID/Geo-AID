@@ -4,7 +4,7 @@ use std::{collections::BTreeMap, fmt::Display, path::Path};
 
 use crossterm::style::{Color, Stylize};
 
-use crate::script::token::{Position, Span};
+use crate::token::{Position, Span};
 
 /// The kind of a diagnostic
 #[derive(Debug, Clone, Copy)]

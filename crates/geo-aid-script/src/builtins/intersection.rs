@@ -1,6 +1,6 @@
 //! The `intersection` function
 
-use crate::script::math::Build;
+use crate::math::Build;
 
 use super::prelude::*;
 use geo_aid_derive::overload;

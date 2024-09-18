@@ -9,7 +9,7 @@ use std::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, SubAssign};
 use std::{fmt::Display, mem};
 
 use crate::geometry;
-use crate::script::token::Number;
+use crate::token::Number;
 use num_rational::{BigRational, Rational64};
 use num_traits::{CheckedAdd, CheckedMul, FromPrimitive, One, ToPrimitive, Zero};
 use serde::Serialize;

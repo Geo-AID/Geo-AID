@@ -1,12 +1,9 @@
 //! The `Segment` type and function
 
-use crate::{
-    script::{figure::SegmentItem, math::Build, parser::PropertyValue, token::StrLit},
-    span,
-};
+use crate::{figure::SegmentItem, math::Build, parser::PropertyValue, span, token::StrLit};
 
 use super::prelude::*;
-use crate::script::token::Span;
+use crate::token::Span;
 use geo_aid_derive::overload;
 use geo_aid_figure::math_string::MathString;
 

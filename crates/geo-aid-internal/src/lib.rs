@@ -1,8 +1,7 @@
 #![warn(clippy::pedantic)]
 
-pub mod cli;
 pub mod engine;
 pub mod format;
-pub mod geometry;
 pub mod projector;
-pub mod script;
+pub use geo_aid_script as script;
+pub use geo_aid_script::geometry;

@@ -19,7 +19,7 @@ pub mod segment;
 
 /// A prelude for builtin functions.
 pub mod prelude {
-    pub(crate) use crate::script::{
+    pub(crate) use crate::{
         builtins::macros::*,
         unit,
         unroll::{
@@ -79,7 +79,7 @@ pub mod macros {
     /// Call a function with given arguments, context, and possibly properties.
     macro_rules! call {
         ($fig:ident : $func:ident($($arg:expr),*)) => {
-            $func($($arg),*, $fig, $crate::script::unroll::Properties::from(None))
+            $func($($arg),*, $fig, $crate::unroll::Properties::from(None))
         };
         ($fig:ident : $func:ident($($arg:expr),*) with $props:expr) => {
             $func($($arg),*, $fig, $props)
@@ -99,13 +99,13 @@ pub mod macros {
     /// Get a specific field from a bundle.
     macro_rules! field {
         (node POINT $bundle:expr, $at:ident with $context:ident) => {
-            $crate::script::unroll::Convert::convert::<$crate::script::unroll::Point>(
+            $crate::unroll::Convert::convert::<$crate::unroll::Point>(
                 ($bundle).index_with_node(stringify!($at)),
                 $context,
             )
         };
         (no-node POINT $bundle:expr, $at:ident with $context:ident) => {
-            $crate::script::unroll::Convert::convert::<$crate::script::unroll::Point>(
+            $crate::unroll::Convert::convert::<$crate::unroll::Point>(
                 ($bundle).index_without_node(stringify!($at)),
                 $context,
             )
@@ -115,14 +115,14 @@ pub mod macros {
     /// Create a constant number expression
     macro_rules! number {
         ($v:expr) => {
-            $crate::script::builtins::macros::number!(SCALAR $v)
+            $crate::builtins::macros::number!(SCALAR $v)
         };
         (=$v:expr) => {
-            $crate::script::unroll::Expr {
+            $crate::unroll::Expr {
                 span: $crate::span!(0, 0, 0, 0),
-                data: std::rc::Rc::new($crate::script::unroll::Scalar {
-                    unit: Some($crate::script::unit::DISTANCE),
-                    data: $crate::script::unroll::ScalarData::DstLiteral(
+                data: std::rc::Rc::new($crate::unroll::Scalar {
+                    unit: Some($crate::unit::DISTANCE),
+                    data: $crate::unroll::ScalarData::DstLiteral(
                         $v.clone()
                     )
                 }),
@@ -130,11 +130,11 @@ pub mod macros {
             }
         };
         ($t:ident $v:expr) => {
-            $crate::script::unroll::Expr {
+            $crate::unroll::Expr {
                 span: $crate::span!(0, 0, 0, 0),
-                data: std::rc::Rc::new($crate::script::unroll::Scalar {
-                    unit: Some($crate::script::unit::$t),
-                    data: $crate::script::unroll::ScalarData::Number($v)
+                data: std::rc::Rc::new($crate::unroll::Scalar {
+                    unit: Some($crate::unit::$t),
+                    data: $crate::unroll::ScalarData::Number($v)
                 }),
                 node: None
             }
@@ -145,21 +145,21 @@ pub mod macros {
     macro_rules! construct_bundle {
         ($t:ident { $($field:ident : $value:expr),* $(,)? }) => {{
             let mut fields = std::collections::HashMap::new();
-            let mut node = $crate::script::unroll::figure::BundleNode::new();
+            let mut node = $crate::unroll::figure::BundleNode::new();
 
             $(
-                let mut v = $crate::script::unroll::CloneWithNode::clone_with_node(&mut $value);
-                node.insert(stringify!($field).to_string(), $crate::script::unroll::CloneWithNode::clone_with_node(&mut v));
-                fields.insert(stringify!($field).to_string(), $crate::script::unroll::AnyExpr::from(v));
+                let mut v = $crate::unroll::CloneWithNode::clone_with_node(&mut $value);
+                node.insert(stringify!($field).to_string(), $crate::unroll::CloneWithNode::clone_with_node(&mut v));
+                fields.insert(stringify!($field).to_string(), $crate::unroll::AnyExpr::from(v));
             )*
 
-            $crate::script::unroll::Expr {
+            $crate::unroll::Expr {
                 span: $crate::span!(0, 0, 0, 0),
-                data: std::rc::Rc::new($crate::script::unroll::Bundle {
+                data: std::rc::Rc::new($crate::unroll::Bundle {
                     name: stringify!($t),
-                    data: $crate::script::unroll::BundleData::ConstructBundle(fields.into())
+                    data: $crate::unroll::BundleData::ConstructBundle(fields.into())
                 }),
-                node: Some($crate::script::unroll::figure::HierarchyNode::new(node))
+                node: Some($crate::unroll::figure::HierarchyNode::new(node))
             }
         }};
     }

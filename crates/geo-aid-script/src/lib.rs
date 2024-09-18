@@ -7,10 +7,7 @@ use std::{
     ops::{Deref, DerefMut, Div, Mul},
 };
 
-use crate::{
-    cli::{AnnotationKind, Change, DiagnosticData, Fix},
-    span,
-};
+use crate::cli::{AnnotationKind, Change, DiagnosticData, Fix};
 use geo_aid_figure::math_string::SPECIAL_MATH;
 use num_traits::{One, Zero};
 use serde::Serialize;
@@ -19,7 +16,9 @@ use self::parser::Type;
 use self::token::{number::CompExponent, NamedIdent, Span, Token};
 
 mod builtins;
+pub mod cli;
 pub mod figure;
+pub mod geometry;
 pub mod math;
 pub mod parser;
 pub mod token;

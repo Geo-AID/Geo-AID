@@ -21,9 +21,9 @@ use std::{
     write,
 };
 
-use crate::script::builtins::macros::index;
-use crate::script::figure::SpannedMathString;
-use crate::script::ty;
+use crate::builtins::macros::index;
+use crate::figure::SpannedMathString;
+use crate::ty;
 
 use self::context::CompileContext;
 use self::figure::{

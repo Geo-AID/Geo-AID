@@ -103,12 +103,12 @@ impl Ord for Span {
 #[macro_export]
 macro_rules! span {
     ($start_ln:expr, $start_col:expr, $end_ln:expr, $end_col:expr) => {
-        $crate::script::token::Span {
-            start: $crate::script::token::Position {
+        $crate::token::Span {
+            start: $crate::token::Position {
                 line: $start_ln,
                 column: $start_col,
             },
-            end: $crate::script::token::Position {
+            end: $crate::token::Position {
                 line: $end_ln,
                 column: $end_col,
             },
