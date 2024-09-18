@@ -1,0 +1,11 @@
+[package]
+name = "geo-aid-latex"
+description = "Support for LaTeX output from Geo-AID."
+version = "0.5.1"
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/Geo-AID/Geo-AID"
+
+[dependencies]
+geo-aid-figure = { version = "0.5.1", path = "../geo-aid-figure" }
+num-traits = "0.2.19"

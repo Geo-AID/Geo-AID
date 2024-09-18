@@ -49,285 +49,11 @@ fn create_type_from_def(ident: &Ident, generics: &Generics) -> Type {
     }
 }
 
-#[proc_macro_derive(Execute)]
-pub fn derive_execute(input: TokenStream) -> TokenStream {
-    let input = parse_macro_input!(input as DeriveInput);
-
-    let enum_name = input.ident;
-    let enum_data = match &input.data {
-        Data::Enum(v) => v,
-        _ => panic!("invalid Execute input"),
-    };
-    let variant1 = enum_data.variants.iter().map(|v| &v.ident);
-
-    let expanded = quote! {
-        impl Execute for #enum_name {
-            unsafe fn execute(&self, args: &mut [Value]) {
-                match self {
-                    #(Self::#variant1(v) => v.execute(args),)*
-                }
-            }
-        }
-    };
-
-    expanded.into()
-}
-
-// enum DefinitionParam {
-//     Entity,
-//     NoEntity,
-//     Variable,
-//     Sequence,
-//     Map,
-//     Expression,
-//     Order(Expr),
-// }
-
-// impl DefinitionParam {
-//     #[must_use]
-//     pub fn is_entity(&self) -> bool {
-//         matches!(self, Self::Entity)
-//     }
-// }
-
-// impl Parse for DefinitionParam {
-//     fn parse(input: ParseStream) -> syn::Result<Self> {
-//         let ident: Ident = input.parse()?;
-
-//         Ok(match ident.to_string().as_str() {
-//             "entity" => Self::Entity,
-//             "order" => Self::Order({
-//                 let content;
-//                 let _ = parenthesized!(content in input);
-
-//                 content.parse()?
-//             }),
-//             "no_entity" => Self::NoEntity,
-//             "variable" => Self::Variable,
-//             "sequence" => Self::Sequence,
-//             "map" => Self::Map,
-//             &_ => panic!("invalid def"),
-//         })
-//     }
-// }
-
-// impl From<&Vec<Attribute>> for DefinitionParam {
-//     fn from(value: &Vec<Attribute>) -> Self {
-//         value
-//             .iter()
-//             .find(|a| a.path().is_ident("def"))
-//             .map_or(DefinitionParam::Expression, |x| x.parse_args().unwrap())
-//     }
-// }
-
-// fn definition_handle_enum(
-//     name: &Ident,
-//     generics: &Generics,
-//     attrs: &Vec<Attribute>,
-//     enum_data: &DataEnum,
-// ) -> TokenStream {
-//     let where_clause = &generics.where_clause;
-
-//     let variant1_code = enum_data.variants.iter().map(|variant| {
-//         let name = &variant.ident;
-
-//         let field_ident = variant.fields.iter().map(|f| {
-//             if DefinitionParam::from(&f.attrs).is_entity() {
-//                 format_ident!("id")
-//             } else {
-//                 format_ident!("_")
-//             }
-//         });
-
-//         let field_getter = if let DefinitionParam::Order(order) = DefinitionParam::from(attrs) {
-//             quote! {#order}
-//         } else {
-//             variant
-//                 .fields
-//                 .iter()
-//                 .find(|f| DefinitionParam::from(&f.attrs).is_entity())
-//                 .map_or_else(
-//                     || quote! {0},
-//                     |_| {
-//                         quote! {
-//                             context.get_entity(*id).order(context)
-//                         }
-//                     },
-//                 )
-//         };
-
-//         let fields = if variant.fields.is_empty() {
-//             quote! {}
-//         } else {
-//             quote! {(#(#field_ident),*)}
-//         };
-
-//         quote! {
-//             Self::#name #fields => {
-//                 #field_getter
-//             }
-//         }
-//     });
-
-//     let variant2_code = enum_data.variants.iter().map(|variant| {
-//         let name = &variant.ident;
-
-//         let field_ident = (0..variant.fields.len()).map(|i| format_ident!("v{i}"));
-
-//         let field_checker = variant.fields.iter().enumerate().map(|(i, field)| {
-//             let field_ident = format_ident!("v{i}");
-//             let field_def = DefinitionParam::from(&field.attrs);
-
-//             match field_def {
-//                 DefinitionParam::Entity => quote! {
-//                     (if *#field_ident == entity {
-//                         true
-//                     } else {
-//                         context.get_entity(*#field_ident).contains_entity(entity, context)
-//                     })
-//                 },
-//                 DefinitionParam::Variable => quote! {
-//                     #field_ident.borrow().definition.contains_entity(entity, context)
-//                 },
-//                 DefinitionParam::Sequence => quote! {
-//                     #field_ident.iter().any(|x| x.contains_entity(entity, context))
-//                 },
-//                 DefinitionParam::Map => quote! {
-//                     #field_ident.values().any(|x| x.contains_entity(entity, context))
-//                 },
-//                 DefinitionParam::NoEntity | DefinitionParam::Order(_) => quote! {
-//                     false
-//                 },
-//                 DefinitionParam::Expression => quote! {
-//                     #field_ident.contains_entity(entity, context)
-//                 },
-//             }
-//         });
-
-//         let fields = if variant.fields.is_empty() {
-//             quote! {}
-//         } else {
-//             quote! {(#(#field_ident),*)}
-//         };
-
-//         quote! {
-//             Self::#name #fields => {
-//                 #(#field_checker ||)* false
-//             }
-//         }
-//     });
-
-//     let expanded = quote! {
-//         impl #generics Definition for #name #generics #where_clause {
-//             fn order(&self, context: &CompileContext) -> usize {
-//                 match self {
-//                     #(#variant1_code)*
-//                 }
-//             }
-
-//             fn contains_entity(&self, entity: usize, context: &CompileContext) -> bool {
-//                 match self {
-//                     #(#variant2_code)*
-//                 }
-//             }
-//         }
-//     };
-//     // panic!("{}", expanded.to_string());
-
-//     expanded.into()
-// }
-
-// #[proc_macro_derive(Definition, attributes(def))]
-// pub fn derive_definition(input: TokenStream) -> TokenStream {
-//     let input = parse_macro_input!(input as DeriveInput);
-
-//     let name = &input.ident;
-//     let generics = &input.generics;
-
-//     match &input.data {
-//         Data::Enum(v) => definition_handle_enum(name, generics, &input.attrs, v),
-//         Data::Struct(struct_data) => {
-//             let order_field_code = if struct_data.fields.is_empty() {
-//                 quote! {0}
-//             } else {
-//                 struct_data
-//                     .fields
-//                     .iter()
-//                     .flat_map(|field| {
-//                         if DefinitionParam::from(&field.attrs).is_entity() {
-//                             let field_name = field.ident.as_ref().unwrap();
-//                             Some(quote! {
-//                                 self.#field_name.order(context)
-//                             })
-//                         } else {
-//                             None
-//                         }
-//                     })
-//                     .next()
-//                     .unwrap()
-//             };
-
-//             let contains_field_code = if struct_data.fields.is_empty() {
-//                 quote! {false}
-//             } else {
-//                 struct_data
-//                     .fields
-//                     .iter()
-//                     .flat_map(|field| {
-//                         if DefinitionParam::from(&field.attrs).is_entity() {
-//                             let field_name = field.ident.as_ref().unwrap();
-//                             Some(quote! {
-//                                 self.#field_name.contains_entity(entity, context)
-//                             })
-//                         } else {
-//                             None
-//                         }
-//                     })
-//                     .next()
-//                     .unwrap()
-//             };
-
-//             let expanded = quote! {
-//                 impl Definition for #name {
-//                     fn order(&self, context: &CompileContext) -> usize {
-//                         #order_field_code
-//                     }
-
-//                     fn contains_entity(&self, entity: usize, context: &CompileContext) -> bool {
-//                         #contains_field_code
-//                     }
-//                 }
-//             };
-
-//             expanded.into()
-//         }
-//         _ => panic!("unsupported"),
-//     }
-// }
-
 enum GType {
     Simple(Ident),
     Collection(usize),
     Bundle(String),
 }
-
-// impl GType {
-//     fn get_conversion_target(&self) -> Ident {
-//         match self {
-//             GType::Simple(s) => match s.to_string().as_str() {
-//                 "DISTANCE"
-//                 | "ANGLE"
-//                 | "SCALAR" => format_ident!("Scalar"),
-//                 "POINT" => format_ident!("Point"),
-//                 "CIRCLE" => format_ident!("Circle"),
-//                 "LINE" => format_ident!("Line"),
-//                 &_ => unreachable!()
-//             },
-//             GType::Collection(_) => format_ident!("PointCollection"),
-//             GType::Bundle(_) => format_ident!("Bundle")
-//         }
-//     }
-// }
 
 struct OverloadFunction {
     params: Vec<GType>,
@@ -351,13 +77,13 @@ impl ToTokens for GType {
     fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
         match self {
             GType::Simple(ident) => tokens.extend(quote! {
-                crate::script::ty::#ident
+                crate::ty::#ident
             }),
             GType::Collection(l) => tokens.extend(quote! {
-                crate::script::ty::collection(#l)
+                crate::ty::collection(#l)
             }),
             GType::Bundle(name) => tokens.extend(quote! {
-                crate::script::ty::bundle(#name)
+                crate::ty::bundle(#name)
             }),
         }
     }
@@ -461,12 +187,12 @@ pub fn overload(input: TokenStream) -> TokenStream {
 
             let converted_it = params.iter().map(|_| {
                 quote! {
-                    crate::script::unroll::Convert::convert(args.next().unwrap(), context),
+                    crate::unroll::Convert::convert(args.next().unwrap(), context),
                 }
             });
 
             let converted_group = param_group.as_ref().map(|_| quote! {
-                args.map(|x| crate::script::unroll::Convert::convert(x, context)).collect::<Vec<_>>(),
+                args.map(|x| crate::unroll::Convert::convert(x, context)).collect::<Vec<_>>(),
             }).into_iter();
 
             let param_group_it = param_group
@@ -474,12 +200,12 @@ pub fn overload(input: TokenStream) -> TokenStream {
                 .map_or_else(|| quote! {None}, |x| quote! {Some(#x)});
 
             let expanded = quote! {
-                crate::script::unroll::FunctionOverload {
+                crate::unroll::FunctionOverload {
                     returned_type: #return_type,
-                    definition: crate::script::unroll::FunctionDefinition(Box::new(
+                    definition: crate::unroll::FunctionDefinition(Box::new(
                         |args, context, display| {
                             let mut args = args.into_iter();
-                            crate::script::unroll::AnyExpr::from((#func)(
+                            crate::unroll::AnyExpr::from((#func)(
                                 #(#converted_it)*
                                 #(#converted_group)*
                                 context,
@@ -497,12 +223,12 @@ pub fn overload(input: TokenStream) -> TokenStream {
         }
         OverloadInput::Rule(OverloadRule { lhs, rhs, func }) => {
             let expanded = quote! {
-                crate::script::unroll::RuleOverload {
-                    definition: crate::script::unroll::RuleDefinition(Box::new(
-                        |lhs, rhs, context: &mut crate::script::unroll::context::CompileContext, properties, invert, weight| {
+                crate::unroll::RuleOverload {
+                    definition: crate::unroll::RuleDefinition(Box::new(
+                        |lhs, rhs, context: &mut crate::unroll::context::CompileContext, properties, invert, weight| {
                             std::boxed::Box::new((#func)(
-                                crate::script::unroll::Convert::convert(lhs, context),
-                                crate::script::unroll::Convert::convert(rhs, context),
+                                crate::unroll::Convert::convert(lhs, context),
+                                crate::unroll::Convert::convert(rhs, context),
                                 context,
                                 properties,
                                 invert,
@@ -699,7 +425,7 @@ pub fn derive_parse(input: TokenStream) -> TokenStream {
                     type FirstToken = #name;
 
                     fn parse<'t, I: Iterator<Item = &'t Token> + Clone>(
-                        input: &mut crate::script::parser::InputStream<'t, I>,
+                        input: &mut crate::parser::InputStream<'t, I>,
                     ) -> Result<Self, Error> {
                         match input.get_token()? {
                             Token::#name(tok) => Ok(tok.clone()),
@@ -720,7 +446,7 @@ pub fn derive_parse(input: TokenStream) -> TokenStream {
                         type FirstToken = #name;
 
                         fn parse<'t, I: Iterator<Item = &'t Token> + Clone>(
-                            input: &mut crate::script::parser::InputStream<'t, I>,
+                            input: &mut crate::parser::InputStream<'t, I>,
                         ) -> Result<Self, Error> {
                             match input.get_token()? {
                                 Token::#name(tok) => Ok(tok.clone()),
@@ -771,7 +497,7 @@ pub fn derive_parse(input: TokenStream) -> TokenStream {
                         type FirstToken = #first_token;
 
                         fn parse<'t, I: Iterator<Item = &'t Token> + Clone>(
-                            input: &mut crate::script::parser::InputStream<'t, I>,
+                            input: &mut crate::parser::InputStream<'t, I>,
                         ) -> Result<Self, Error> {
                             input.expect_token()?;
 
@@ -827,7 +553,7 @@ pub fn derive_parse(input: TokenStream) -> TokenStream {
                         type FirstToken = #first_token;
 
                         fn parse<'t, I: Iterator<Item = &'t Token> + Clone>(
-                            input: &mut crate::script::parser::InputStream<'t, I>,
+                            input: &mut crate::parser::InputStream<'t, I>,
                         ) -> Result<Self, Error> {
                             Ok(Self {
                                 #(#field: input.parse()?,)*

@@ -5,18 +5,17 @@ use crossterm::{cursor, terminal, ExecutableCommand, QueueableCommand};
 use geo_aid_internal::engine::glide::Glide;
 use geo_aid_internal::engine::rage::GenParams;
 use geo_aid_internal::engine::{glide, rage};
-use geo_aid_internal::format::json::Json;
-use geo_aid_internal::format::latex::Latex;
-use geo_aid_internal::format::raw::Raw;
-use geo_aid_internal::format::svg::Svg;
 use geo_aid_internal::projector;
 use geo_aid_internal::script::figure::Generated;
 use geo_aid_internal::{
-    cli::{Diagnostic, DiagnosticKind},
     engine::rage::Rage,
-    format::Draw,
+    script::cli::{Diagnostic, DiagnosticKind},
     script::math,
 };
+use geo_aid_json::Json;
+use geo_aid_latex::Latex;
+use geo_aid_plaintext::Plaintext;
+use geo_aid_svg::Svg;
 use std::time::Duration;
 use std::{
     fs::{self, File},
@@ -90,7 +89,7 @@ enum Format {
     /// JSON (machine-readable) format according to the Schema included in the repository.
     Json,
     /// Plain text (human-readable) format.
-    Raw,
+    Plaintext,
 }
 
 struct GenerationResult {
@@ -228,19 +227,15 @@ fn main() {
     let flags = Arc::new(intermediate.flags);
     let rendered = projector::project(generated, &flags, canvas_size);
 
-    match args.format {
-        Format::Latex => {
-            Latex::default().draw(&args.output, &rendered).unwrap();
-        }
-        Format::Json => {
-            Json.draw(&args.output, &rendered).unwrap();
-        }
-        Format::Svg => {
-            Svg::default().draw(&args.output, &rendered).unwrap();
-        }
-        Format::Raw => {
-            Raw::default().draw(&args.output, &rendered).unwrap();
-        }
+    let file_contents = match args.format {
+        Format::Latex => Latex::draw(&rendered),
+        Format::Json => Json::draw(&rendered),
+        Format::Svg => Svg::draw(&rendered),
+        Format::Plaintext => Plaintext::draw(&rendered),
+    };
+
+    if let Err(err) = fs::write(&args.output, file_contents) {
+        println!("Failed to write a file: {err}");
     }
 
     println!(

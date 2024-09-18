@@ -1,0 +1,21 @@
+[package]
+name = "geo-aid-script"
+description = "Geo-AID's subcrate for parsing GeoScript."
+version = "0.5.1"
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/Geo-AID/geo-aid/"
+
+[dependencies]
+geo_aid_derive = { version = "0.5.1", path = "../geo_aid_derive" }
+geo-aid-figure = { version = "0.5.1", path = "../geo-aid-figure" }
+crossterm = "0.27.0"
+serde = { version = "1.0.210", features = ["derive"] }
+strsim = "0.11"
+num-traits = "0.2.19"
+num-derive = "0.4.2"
+num-complex = { version = "0.4.6", features = ["serde"] }
+num-bigint = { version = "0.4.5", features = ["serde"] }
+num-rational = { version = "0.4.2", features = ["serde"] }
+paste = "1.0"
+derive_recursive = "1.0.3"
