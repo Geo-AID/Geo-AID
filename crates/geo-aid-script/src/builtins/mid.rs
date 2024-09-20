@@ -20,16 +20,28 @@ fn function_scalar(
     context.average_s_display(args, display)
 }
 
-/// Register the function
+// Registers the `mid` function.
+//
+// # Note:
+//     Moved `...DISTANCE` rule to the end
+//     to avoid ambiguity with two-point rule (2-P).
+//     mid(AB) should be interpreted as mid(A, B), and
+//     not as average of one number, the length of AB.
+//     This is somewhat temporary, eventually we should
+//     have a way of specifying that there should be
+//     at least two `DISTANCE arguments in the last rule.
 pub fn register(library: &mut Library) {
     library.functions.insert(
         String::from("mid"),
         Function {
             overloads: vec![
                 overload!((...ANGLE) -> ANGLE : function_scalar),
-                overload!((...DISTANCE) -> DISTANCE : function_scalar),
                 overload!((...POINT) -> POINT : function_point),
                 overload!((...SCALAR) -> SCALAR : function_scalar),
+                overload!((2-P) -> POINT : |mut col: Expr<PointCollection>, context, display| call!(context:function_point(
+                        vec![index!(node col, 0), index!(node col, 1)]
+                    )with display)),
+                overload!((...DISTANCE) -> DISTANCE : function_scalar),
             ],
         },
     );
