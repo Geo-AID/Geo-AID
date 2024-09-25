@@ -98,11 +98,10 @@ impl VarKind {
 
 impl<'f> Geogebra<'f> {
     /// Get the figure in SVG format.
-    #[must_use]
     pub fn draw(figure: &'f Figure, writer: impl Write + Seek) -> Result<(), std::io::Error> {
         let mut ggb = Self {
             workspace: Ggb::default(),
-            figure: &figure,
+            figure,
             variables: Vec::new(),
             entities: Vec::new(),
             draw_entities: Vec::new(),
