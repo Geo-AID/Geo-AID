@@ -59,6 +59,8 @@
       The JSON (machine-readable) format renderer
     - `plaintext`:
       The plaintext (human-readable) format renderer
+    - `geogebra`:
+      The GeoGebra workspace format (*.ggb) renderer
 
 * `--width <WIDTH>` — Canvas width (treated very differently for LaTeX)
 

@@ -1,6 +1,6 @@
 # Renderers
 
-Geo-AID supports four different renderers, also called drawers. One more is planned.
+Geo-AID supports five different renderers, also called drawers.
 
 ## LaTeX
 
@@ -24,4 +24,6 @@ of each object in the figure.
 
 ## GeoGebra
 
-Work in progress, Geo-AID will support outputting in the GeoGebra format importable in the very tool.
+You can import Geogebra (*.ggb) output directly in GeoGebra by either choosing "load" from the menu in the app
+or simply by dragging the file onto the tool. This format has not been extensively tested and you may encounter bugs.
+If you do, please report them.
