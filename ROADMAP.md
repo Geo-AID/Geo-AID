@@ -9,9 +9,6 @@ Will do, but yet unassigned.
 - It's always more docs
 - Quantum points
 - More engines (?)
-- GeoGebra drawer
-- Extraction of drawers to external crates (will help with e.g. reusing the code for a browser-based interface to
-  Geo-AID)
 - A simple equation solver, crucial for handling distance literals well.
 - Label support for circles, lines, etc. including smart label assignment for distances.
 - Distance and angle equality support (for the presentation layer, the rules have always supported it)

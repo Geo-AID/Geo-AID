@@ -8,7 +8,7 @@ use crate::script::figure::Generated;
 use crate::script::math::{
     Entity, EntityKind, Expr, ExprKind, ExprType, Intermediate, Rule, RuleKind,
 };
-use geo_aid_figure::VarIndex;
+use geo_aid_figure::{EntityIndex, VarIndex};
 use geo_aid_math::{Comparison, ComparisonKind, Condition, Context, Expr as CompiledExpr};
 use num_traits::ToPrimitive;
 use std::f64::consts::PI;
@@ -62,8 +62,27 @@ pub fn compile(intermediate: &Intermediate) -> Compiled {
     );
 
     // Collect all expressions necessary for figure drawing.
+
+    // Including the entities
+    let mut entity_values = Vec::new();
+    for (i, ent) in intermediate.figure.entities.iter().enumerate() {
+        let v = Expr {
+            meta: (),
+            kind: ExprKind::Entity { id: EntityIndex(i) },
+            ty: match ent {
+                EntityKind::FreePoint
+                | EntityKind::PointOnLine { line: _ }
+                | EntityKind::PointOnCircle { circle: _ } => ExprType::Point,
+                EntityKind::FreeReal | EntityKind::DistanceUnit => ExprType::Number,
+                EntityKind::Bind(_) => unreachable!(),
+            },
+        };
+
+        entity_values.push(compiler.compile_value(&v));
+    }
+
     let mut exprs = Vec::new();
-    for value in &compiler.variables {
+    for value in compiler.variables.iter().chain(&entity_values) {
         match value {
             ValueExpr::This(this) => exprs.push(*this),
             ValueExpr::Line(line) => exprs.extend([
@@ -87,7 +106,7 @@ pub fn compile(intermediate: &Intermediate) -> Compiled {
         outputs.resize(outs_len, 0.0);
         exprs.call(inputs, outputs.as_mut_slice());
 
-        get_figure(&fig, inputs, &outputs)
+        get_figure(&fig, &outputs)
     });
 
     // Reset the compiler and gather rule errors.
@@ -808,7 +827,7 @@ fn get_complex<I: Iterator<Item = f64>>(value: &mut I) -> Complex {
 
 /// Create a figure based on its IR, figure's inputs and
 /// computed values for all figure's expressions.
-fn get_figure(figure: &crate::script::figure::Figure, inputs: &[f64], values: &[f64]) -> Generated {
+fn get_figure(figure: &crate::script::figure::Figure, values: &[f64]) -> Generated {
     let mut value = values.iter().copied();
 
     // println!("{:#?}, {values:?}", figure.variables);
@@ -833,16 +852,15 @@ fn get_figure(figure: &crate::script::figure::Figure, inputs: &[f64], values: &[
         });
     }
 
-    let mut input = inputs.iter().copied();
-
     let mut entities = Vec::new();
     for ent in &figure.entities {
         let v = match ent {
-            EntityKind::FreePoint => ValueEnum::Complex(get_complex(&mut input)),
             EntityKind::PointOnCircle { .. }
             | EntityKind::PointOnLine { .. }
-            | EntityKind::DistanceUnit
-            | EntityKind::FreeReal => ValueEnum::Complex(Complex::real(input.next().unwrap())),
+            | EntityKind::FreePoint => ValueEnum::Complex(get_complex(&mut value)),
+            EntityKind::DistanceUnit | EntityKind::FreeReal => {
+                ValueEnum::Complex(Complex::real(get_complex(&mut value).real))
+            }
             EntityKind::Bind(_) => unreachable!(),
         };
         entities.push(Entity {

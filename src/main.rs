@@ -2,6 +2,7 @@
 
 use clap::{Parser, ValueEnum};
 use crossterm::{cursor, terminal, ExecutableCommand, QueueableCommand};
+use geo_aid_geogebra::Geogebra;
 use geo_aid_internal::engine::glide::Glide;
 use geo_aid_internal::engine::rage::GenParams;
 use geo_aid_internal::engine::{glide, rage};
@@ -90,6 +91,8 @@ enum Format {
     Json,
     /// Plain text (human-readable) format.
     Plaintext,
+    /// Geogebra workspace format (*.ggb)
+    Geogebra,
 }
 
 struct GenerationResult {
@@ -227,15 +230,21 @@ fn main() {
     let flags = Arc::new(intermediate.flags);
     let rendered = projector::project(generated, &flags, canvas_size);
 
-    let file_contents = match args.format {
-        Format::Latex => Latex::draw(&rendered),
-        Format::Json => Json::draw(&rendered),
-        Format::Svg => Svg::draw(&rendered),
-        Format::Plaintext => Plaintext::draw(&rendered),
-    };
+    match File::create(&args.output) {
+        Ok(mut file) => {
+            let res = match args.format {
+                Format::Latex => file.write_all(Latex::draw(&rendered).as_bytes()),
+                Format::Json => file.write_all(Json::draw(&rendered).as_bytes()),
+                Format::Svg => file.write_all(Svg::draw(&rendered).as_bytes()),
+                Format::Plaintext => file.write_all(Plaintext::draw(&rendered).as_bytes()),
+                Format::Geogebra => Geogebra::draw(&rendered, file),
+            };
 
-    if let Err(err) = fs::write(&args.output, file_contents) {
-        println!("Failed to write a file: {err}");
+            if let Err(err) = res {
+                println!("Failed to write a file: {err}");
+            }
+        }
+        Err(err) => println!("Failed to write a file: {err}"),
     }
 
     println!(
