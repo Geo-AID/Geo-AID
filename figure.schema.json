@@ -6,12 +6,12 @@
   "properties": {
     "width": {
       "description": "The width of the image",
-      "type": "integer",
+      "type": "number",
       "exclusiveMinimum": 0
     },
     "height": {
       "description": "The height of the image",
-      "type": "integer",
+      "type": "number",
       "exclusiveMinimum": 0
     },
     "expressions": {

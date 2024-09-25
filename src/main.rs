@@ -61,11 +61,11 @@ struct Args {
     #[arg(long, short, default_value_t = Format::Svg, value_enum)]
     format: Format,
     /// Canvas width
-    #[arg(long, default_value_t = 500)]
-    width: usize,
+    #[arg(long)]
+    width: Option<f64>,
     /// Canvas height
-    #[arg(long, default_value_t = 500)]
-    height: usize,
+    #[arg(long)]
+    height: Option<f64>,
     /// Where to put the log output
     #[arg(long, short)]
     log: Option<PathBuf>,
@@ -116,10 +116,22 @@ fn main() {
     }
 
     let Ok(script) = fs::read_to_string(&args.input) else {
-        println!("Failed to read file. Does it exist?");
+        println!("Failed to read script file. Does it exist?");
         return;
     };
-    let canvas_size = (args.width, args.height);
+
+    let width = args.width.unwrap_or_else(|| match args.format {
+        Format::Json => 1.0,
+        Format::Geogebra
+        | Format::Latex
+        | Format::Plaintext => 5.0,
+        Format::Svg => 500.0
+    });
+    let height = args.height.unwrap_or(width);
+
+    if width <= 0.0001 || height <= 0.0001 {
+        println!("Both dimensions must be positive.");
+    }
 
     let intermediate = match math::load_script(&script) {
         Ok(v) => v,
@@ -228,7 +240,8 @@ fn main() {
     };
 
     let flags = Arc::new(intermediate.flags);
-    let rendered = projector::project(generated, &flags, canvas_size);
+
+    let rendered = projector::project(generated, &flags, (width, height));
 
     match File::create(&args.output) {
         Ok(mut file) => {

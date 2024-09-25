@@ -235,7 +235,7 @@ async fn main() {
             let figure = projector::project(
                 (fig.figure_func)(&fig.current_state),
                 &fig.flags,
-                (screen_width() as usize - 300, screen_height() as usize),
+                (screen_width() as f64 - 300.0, screen_height() as f64),
             );
 
             draw_figure(&figure, BLACK);
@@ -251,7 +251,7 @@ async fn main() {
             let figure = projector::project(
                 (fig.figure_func)(&state),
                 &fig.flags,
-                (screen_width() as usize - 300, screen_height() as usize),
+                (screen_width() as f64 - 300.0, screen_height() as f64),
             );
 
             draw_figure(&figure, GREEN);
