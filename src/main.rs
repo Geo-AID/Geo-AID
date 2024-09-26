@@ -34,8 +34,9 @@ use std::{
 struct Args {
     /// The input script file.
     input: PathBuf,
-    /// The output target.
-    output: PathBuf,
+    /// The output directory.
+    #[arg(long, short)]
+    output: Option<PathBuf>,
     /// The engine to use for figure generation.
     #[arg(long, short, default_value_t = Engine::Glide, value_enum)]
     engine: Engine,
@@ -57,9 +58,9 @@ struct Args {
     /// How strict are the rules. Negative values make the engine less strict. Zero is not allowed.
     #[arg(long, short, default_value_t = 2.0)]
     strictness: f64,
-    /// Target format.
-    #[arg(long, short, default_value_t = Format::Svg, value_enum)]
-    format: Format,
+    /// Target formats.
+    #[arg(long, short, default_value = "svg")]
+    format: Vec<Format>,
     /// Canvas width
     #[arg(long)]
     width: Option<f64>,
@@ -120,18 +121,17 @@ fn main() {
         return;
     };
 
-    let width = args.width.unwrap_or_else(|| match args.format {
-        Format::Json => 1.0,
-        Format::Geogebra
-        | Format::Latex
-        | Format::Plaintext => 5.0,
-        Format::Svg => 500.0
-    });
-    let height = args.height.unwrap_or(width);
-
-    if width <= 0.0001 || height <= 0.0001 {
+    if args.width.is_some_and(|x| x <= 0.0001) || args.height.is_some_and(|x| x <= 0.0001) {
         println!("Both dimensions must be positive.");
     }
+
+    let target_path = args.output.unwrap_or_else(|| args.input.parent().unwrap().to_path_buf());
+    if !target_path.is_dir() {
+        println!("Output path must be a directory.");
+        return;
+    }
+
+    let target_name = args.input.file_name().unwrap();
 
     let intermediate = match math::load_script(&script) {
         Ok(v) => v,
@@ -241,23 +241,43 @@ fn main() {
 
     let flags = Arc::new(intermediate.flags);
 
-    let rendered = projector::project(generated, &flags, (width, height));
+    for format in args.format.iter().copied() {
 
-    match File::create(&args.output) {
-        Ok(mut file) => {
-            let res = match args.format {
-                Format::Latex => file.write_all(Latex::draw(&rendered).as_bytes()),
-                Format::Json => file.write_all(Json::draw(&rendered).as_bytes()),
-                Format::Svg => file.write_all(Svg::draw(&rendered).as_bytes()),
-                Format::Plaintext => file.write_all(Plaintext::draw(&rendered).as_bytes()),
-                Format::Geogebra => Geogebra::draw(&rendered, file),
-            };
+        let width = args.width.unwrap_or_else(|| match format {
+            Format::Json => 1.0,
+            Format::Geogebra
+            | Format::Latex
+            | Format::Plaintext => 5.0,
+            Format::Svg => 500.0
+        });
+        let height = args.height.unwrap_or(width);
 
-            if let Err(err) = res {
-                println!("Failed to write a file: {err}");
+        let rendered = projector::project(generated.clone(), &flags, (width, height));
+        
+        let final_path = target_path.join(target_name).with_extension(match format {
+            Format::Latex => "tex",
+            Format::Svg => "svg",
+            Format::Json => "json",
+            Format::Plaintext => "txt",
+            Format::Geogebra => "ggb",
+        });
+
+        match File::create(&final_path) {
+            Ok(mut file) => {
+                let res = match format {
+                    Format::Latex => file.write_all(Latex::draw(&rendered).as_bytes()),
+                    Format::Json => file.write_all(Json::draw(&rendered).as_bytes()),
+                    Format::Svg => file.write_all(Svg::draw(&rendered).as_bytes()),
+                    Format::Plaintext => file.write_all(Plaintext::draw(&rendered).as_bytes()),
+                    Format::Geogebra => Geogebra::draw(&rendered, file),
+                };
+    
+                if let Err(err) = res {
+                    println!("Failed to write a file: {err}");
+                }
             }
+            Err(err) => println!("Failed to write a file: {err}"),
         }
-        Err(err) => println!("Failed to write a file: {err}"),
     }
 
     println!(
