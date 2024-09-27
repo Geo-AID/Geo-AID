@@ -5,6 +5,7 @@
 - **Geogebra Format**: Support for Geogebra format introced.
 - **GeoScript**: `mid`, when given a single point collection of length 2, now returns the midpoint of the segment.
 - **GeoScript**: Fixed various conversion false positive diagnostics.
+- **Projector**: When creating circle items, the radius will now always be non-negative.
 
 ## Version 0.5.1
 
