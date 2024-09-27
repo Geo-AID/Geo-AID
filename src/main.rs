@@ -125,7 +125,9 @@ fn main() {
         println!("Both dimensions must be positive.");
     }
 
-    let target_path = args.output.unwrap_or_else(|| args.input.parent().unwrap().to_path_buf());
+    let target_path = args
+        .output
+        .unwrap_or_else(|| args.input.parent().unwrap().to_path_buf());
     if !target_path.is_dir() {
         println!("Output path must be a directory.");
         return;
@@ -242,18 +244,15 @@ fn main() {
     let flags = Arc::new(intermediate.flags);
 
     for format in args.format.iter().copied() {
-
-        let width = args.width.unwrap_or_else(|| match format {
+        let width = args.width.unwrap_or(match format {
             Format::Json => 1.0,
-            Format::Geogebra
-            | Format::Latex
-            | Format::Plaintext => 5.0,
-            Format::Svg => 500.0
+            Format::Geogebra | Format::Latex | Format::Plaintext => 5.0,
+            Format::Svg => 500.0,
         });
         let height = args.height.unwrap_or(width);
 
         let rendered = projector::project(generated.clone(), &flags, (width, height));
-        
+
         let final_path = target_path.join(target_name).with_extension(match format {
             Format::Latex => "tex",
             Format::Svg => "svg",
@@ -271,7 +270,7 @@ fn main() {
                     Format::Plaintext => file.write_all(Plaintext::draw(&rendered).as_bytes()),
                     Format::Geogebra => Geogebra::draw(&rendered, file),
                 };
-    
+
                 if let Err(err) = res {
                     println!("Failed to write a file: {err}");
                 }

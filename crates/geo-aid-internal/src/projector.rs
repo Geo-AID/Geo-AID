@@ -558,7 +558,7 @@ pub fn project(figure: Generated, _flags: &Arc<Flags>, canvas_size: (f64, f64)) 
     total_size.imaginary = f64::max(total_size.imaginary, 0.1);
 
     #[allow(clippy::cast_precision_loss)]
-    let size1 = Complex::new(canvas_size.0 as f64, canvas_size.1 as f64);
+    let size1 = Complex::new(canvas_size.0, canvas_size.1);
     let size09 = size1 * 0.9;
     let size005 = size1 * 0.05;
 
