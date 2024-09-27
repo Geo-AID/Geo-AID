@@ -43,3 +43,7 @@ The ultimate goal of Geo-AID is to reduce the pain related to figure drawing to 
 ## How to contribute?
 
 If You're interested in contributing to Geo-AID, feel free to check out the [contribution guide](CONTRIBUTING.md).
+
+## The Community
+
+Join the conversation on [Discord](https://discord.gg/6yaMUSXm).

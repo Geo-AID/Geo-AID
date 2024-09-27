@@ -107,6 +107,9 @@ When submitting a request, remember to always test if the code builds and to for
 correctness of your code. It can be done by running `test.py` with `python`. It runs all tests located in the `tests`
 catalog.
 
+Note that unless explicitly stated, your code contribution is licensed under the MIT license with no additional terms
+or conditions.
+
 4. Math
 
 If you think you know how to improve or implement something from a mathematical standpoint, go ahead and contact me.

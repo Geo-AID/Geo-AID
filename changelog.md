@@ -1,3 +1,12 @@
+## Version 0.6.0
+
+- **Interface**: The command line interface changed to support generating output in multiple formats.
+- **Interface**: Fixed figure sizing.
+- **Geogebra Format**: Support for Geogebra format introced.
+- **GeoScript**: `mid`, when given a single point collection of length 2, now returns the midpoint of the segment.
+- **GeoScript**: Fixed various conversion false positive diagnostics.
+- **Projector**: When creating circle items, the radius will now always be non-negative.
+
 ## Version 0.5.1
 
 - **Glide**: Fixed that Glide wouldn't actually try to optimize the figure (a typo).
