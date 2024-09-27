@@ -1,14 +1,14 @@
 [package]
 name = "geo-aid-script"
 description = "Geo-AID's subcrate for parsing GeoScript."
-version = "0.5.1"
+version = "0.6.0"
 edition = "2021"
 license = "MIT"
 repository = "https://github.com/Geo-AID/geo-aid/"
 
 [dependencies]
-geo_aid_derive = { version = "0.5.1", path = "../geo_aid_derive" }
-geo-aid-figure = { version = "0.5.1", path = "../geo-aid-figure" }
+geo_aid_derive = { version = "0.6.0", path = "../geo_aid_derive" }
+geo-aid-figure = { version = "0.6.0", path = "../geo-aid-figure" }
 crossterm = "0.27.0"
 serde = { version = "1.0.210", features = ["derive"] }
 strsim = "0.11"
