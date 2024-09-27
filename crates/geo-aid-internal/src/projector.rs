@@ -365,7 +365,7 @@ impl Project<CircleItem> for Projector {
     fn project(&mut self, item: CircleItem) -> Self::Result {
         let circle: Circle = self.un_var(&item.id).unwrap();
         let center = circle.center;
-        let radius = circle.radius;
+        let radius = circle.radius.abs();
         self.circles.push(circle);
 
         RenderedCircle {
