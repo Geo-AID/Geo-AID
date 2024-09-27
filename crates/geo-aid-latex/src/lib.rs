@@ -12,8 +12,6 @@ use std::string::String;
 pub struct Latex {
     /// The current file contents
     content: String,
-    /// The scale used for drawn objects.
-    scale: f64,
 }
 
 impl Latex {
@@ -22,7 +20,7 @@ impl Latex {
     pub fn draw(figure: &Figure) -> String {
         let mut latex = Self::default();
 
-        latex.begin(figure);
+        latex.begin();
 
         for item in &figure.items {
             match item {
@@ -75,9 +73,6 @@ impl Latex {
 
     /// Draw a styled segment delimited by two points.
     fn draw_simple_segment(&mut self, points: &(Position, Position), style: Style) {
-        let pos1 = points.0 * self.scale;
-        let pos2 = points.1 * self.scale;
-
         self.content += &format!(
             r#"
                 \begin{{scope}}
@@ -86,15 +81,15 @@ impl Latex {
                     \tkzDrawSegment[{}](A,B)
                 \end{{scope}}
             "#,
-            pos1.x,
-            pos1.y,
-            pos2.x,
-            pos2.y,
+            points.0.x,
+            points.0.y,
+            points.1.x,
+            points.1.y,
             Self::get_style_name(style)
         );
     }
 
-    fn begin(&mut self, figure: &Figure) {
+    fn begin(&mut self) {
         self.content = String::from(
             r"
                 \documentclass{article}
@@ -105,14 +100,10 @@ impl Latex {
                 \begin{tikzpicture}
             ",
         );
-        #[allow(clippy::cast_precision_loss)]
-        let size = (figure.width.get() as f64, figure.height.get() as f64);
-
-        self.scale = f64::min(10.0 / size.0, 10.0 / size.1);
     }
 
     fn draw_point(&mut self, point: &PointItem) {
-        let pos = point.position * self.scale;
+        let pos = point.position;
         let id = format!("expr{}", point.id);
 
         self.content += &format!(
@@ -123,7 +114,7 @@ impl Latex {
         );
 
         if let Some(label) = &point.label {
-            let label_pos = label.position * self.scale;
+            let label_pos = label.position;
 
             self.content += &format!(
                 r#"
@@ -235,13 +226,12 @@ impl Latex {
     // }
 
     fn draw_circle(&mut self, circle: &CircleItem) {
-        let pos1 = circle.center * self.scale;
-        let pos2 = (circle.center
+        let pos1 = circle.center;
+        let pos2 = circle.center
             + Position {
                 x: circle.radius,
                 y: 0.0,
-            })
-            * self.scale;
+            };
 
         self.content += &format!(
             r#"

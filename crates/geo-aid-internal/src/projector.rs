@@ -9,7 +9,6 @@ use geo_aid_figure::{
     TwoPointItem as RenderedTwoPoint, VarIndex,
 };
 use std::f64::consts::PI;
-use std::num::NonZeroU64;
 use std::sync::Arc;
 
 use crate::script::figure::{
@@ -499,7 +498,7 @@ impl Transform {
 /// # Panics
 /// Any panic is a bug.
 #[allow(clippy::too_many_lines)]
-pub fn project(figure: Generated, _flags: &Arc<Flags>, canvas_size: (usize, usize)) -> Figure {
+pub fn project(figure: Generated, _flags: &Arc<Flags>, canvas_size: (f64, f64)) -> Figure {
     let mut entities: Vec<_> = figure.entities;
     let mut expressions: Vec<_> = figure.variables;
     let items = figure.items;
@@ -559,7 +558,7 @@ pub fn project(figure: Generated, _flags: &Arc<Flags>, canvas_size: (usize, usiz
     total_size.imaginary = f64::max(total_size.imaginary, 0.1);
 
     #[allow(clippy::cast_precision_loss)]
-    let size1 = Complex::new(canvas_size.0 as f64, canvas_size.1 as f64);
+    let size1 = Complex::new(canvas_size.0, canvas_size.1);
     let size09 = size1 * 0.9;
     let size005 = size1 * 0.05;
 
@@ -633,12 +632,8 @@ pub fn project(figure: Generated, _flags: &Arc<Flags>, canvas_size: (usize, usiz
     }
 
     Figure {
-        width: u64::try_from(canvas_size.0)
-            .and_then(NonZeroU64::try_from)
-            .unwrap(),
-        height: u64::try_from(canvas_size.1)
-            .and_then(NonZeroU64::try_from)
-            .unwrap(),
+        width: canvas_size.0,
+        height: canvas_size.1,
         expressions: projector
             .variables
             .into_iter()

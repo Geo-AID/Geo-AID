@@ -1,5 +1,8 @@
 # Command-Line Interface of Geo-AID
 
+By default, whenever run, Geo-AID will generate a file in the same location with a different extension matching the requested format. If multiple formats were provided,
+multiple files with different extensions are generated. This behavior can be modified with the `--output option`.
+
 **Command Overview:**
 
 * [`Geo-AID`](#Geo-AID)
@@ -11,9 +14,10 @@
 ###### **Arguments:**
 
 * `<INPUT>` — The input script file
-* `<OUTPUT>` — The output target
 
 ###### **Options:**
+
+* `-o`, `--output <DIR>` - Where the output file(s) should be created. Must point to an existing directory.
 
 * `-d`, `--delta-max-mean <DELTA_MAX_MEAN>` — The maximum mean quality delta. Geo-AID will keep doing generation cycles
   until the average quality delta over the last `m` cycles gets below `d`.
@@ -46,21 +50,23 @@
   for different adjustables.
 
   Default value: `0.5`
-* `-r`, `--renderer <RENDERER>` — What renderer to use.
+* `-f`, `--format <FORMAT>` — What format to generate.
 
   Default value: `svg`
 
   Possible values:
     - `latex`:
-      The LaTeX + tikz renderer
+      The LaTeX + tikz format
     - `svg`:
       The SVG format renderer
     - `json`:
-      The JSON (machine-readable) format renderer
+      The JSON (machine-readable) format
     - `plaintext`:
-      The plaintext (human-readable) format renderer
+      The plaintext (human-readable) format
     - `geogebra`:
-      The GeoGebra workspace format (*.ggb) renderer
+      The GeoGebra workspace format (*.ggb)
+  
+  Multiple formats can be provided, each after a `-f` or `--format.`
 
 * `--width <WIDTH>` — Canvas width (treated very differently for LaTeX)
 

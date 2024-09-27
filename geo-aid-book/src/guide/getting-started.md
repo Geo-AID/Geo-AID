@@ -66,7 +66,7 @@ AB = BC;
 and run it with the following command:
 
 ```shell
-geo-aid figure.geo figure.svg
+geo-aid figure.geo
 ```
 
 After a short wait a new file `figure.svg` should show up. Open it in any SVG previewer (could even be your browser) and

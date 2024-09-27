@@ -11,7 +11,7 @@ use crate::math_string::MathString;
 use num_rational::Rational64;
 use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
-use std::num::{NonZeroI64, NonZeroU64};
+use std::num::NonZeroI64;
 use std::ops::{Add, Deref, DerefMut, Mul};
 
 /// Math strings are Geo-AID's way of handling text involving math-specific notation.
@@ -195,9 +195,9 @@ impl Add for Position {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Figure {
     /// The width of the image
-    pub width: NonZeroU64,
+    pub width: f64,
     /// The height of the image
-    pub height: NonZeroU64,
+    pub height: f64,
     /// Expressions used by the image
     pub expressions: Vec<Expression>,
     /// Entities in the image

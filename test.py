@@ -25,7 +25,7 @@ for file in os.scandir("tests"):
 
         proc = subprocess.Popen([
             "cargo", "run", "--release", "--",
-            file.path, os.path.join(output, "result.svg"),
+            file.path, "-o", os.path.join(output),
             "-l", os.path.join(output, "log.log"),
             "-f", "svg", "-e", engine
         ])
