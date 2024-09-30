@@ -5,17 +5,16 @@ use crate::{
 };
 
 use super::prelude::*;
-use geo_aid_derive::overload;
 use geo_aid_figure::math_string::MathString;
 
 /// angle(point, point, point) - angle delimited by 3 points.
-fn angle_function_point_point_point(
+fn angle_function_ppp(
     a: Expr<Point>,
     b: Expr<Point>,
     c: Expr<Point>,
     context: &CompileContext,
     mut display: Properties,
-) -> Expr<Scalar> {
+) -> Angle {
     let display_arms = display.get("display_arms").maybe_unset(true);
     let arms_style = display.get("arms_style").maybe_unset(Style::default());
     let arms_type = display.get("arms_type").maybe_unset(LineType::Segment);
@@ -29,7 +28,7 @@ fn angle_function_point_point_point(
 
         node.set_associated(Associated);
     }
-    expr
+    expr.into()
 }
 
 /// ```
@@ -152,31 +151,29 @@ impl BuildAssociated<ScalarNode> for Associated {
 }
 
 /// angle(line, line) - angle between two lines.
-fn angle_function_line_line(
+fn angle_function_ll(
     k: Expr<Line>,
     l: Expr<Line>,
     context: &CompileContext,
     display: Properties,
-) -> Expr<Scalar> {
-    context.angle_ll_display(k, l, display)
+) -> Angle {
+    context.angle_ll_display(k, l, display).into()
 }
 
 /// Register the function
 pub fn register(library: &mut Library) {
-    library.functions.insert(
-        String::from("angle"),
-        Function {
-            overloads: vec![
-                overload!((3-P) -> ANGLE {
-                    |mut col: Expr<PointCollection>, context, display| call!(context:angle_function_point_point_point(
-                        index!(node col, 0),
-                        index!(node col, 1),
-                        index!(node col, 2)
-                    ) with display)
-                }),
-                overload!((POINT, POINT, POINT) -> ANGLE : angle_function_point_point_point),
-                overload!((LINE, LINE) -> ANGLE : angle_function_line_line),
-            ],
-        },
+    library.add(
+        Function::new("angle")
+            .overload(|mut col: Pc<3>, context: &CompileContext, display| {
+                angle_function_ppp(
+                    index!(node col,0),
+                    index!(node col,1),
+                    index!(node col,2),
+                    context,
+                    display,
+                )
+            })
+            .overload(angle_function_ppp)
+            .overload(angle_function_ll),
     );
 }

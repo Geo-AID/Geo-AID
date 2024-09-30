@@ -2,7 +2,6 @@
 
 use super::prelude::*;
 use crate::{figure::SegmentItem, math::Build, unroll::Convert};
-use geo_aid_derive::overload;
 use geo_aid_figure::math_string::MathString;
 
 /// `dst(point, point)` - distance between two points.
@@ -11,7 +10,7 @@ pub fn distance_function_pp(
     b: Expr<Point>,
     context: &CompileContext,
     mut display: Properties,
-) -> Expr<Scalar> {
+) -> Distance {
     let display_segment = display.get("display_segment").maybe_unset(true);
     let style = display.get("style").maybe_unset(Style::Solid);
 
@@ -23,7 +22,7 @@ pub fn distance_function_pp(
         node.insert_data("style", style);
     }
 
-    expr
+    expr.into()
 }
 
 /// `dst(point, line)` - distance of a point from a line.
@@ -32,7 +31,7 @@ fn distance_function_pl(
     k: Expr<Line>,
     context: &CompileContext,
     mut display: Properties,
-) -> Expr<Scalar> {
+) -> Distance {
     let display_segment = display.get("display_segment").maybe_unset(true);
     let style = display.get("style").maybe_unset(Style::Dashed);
 
@@ -44,15 +43,11 @@ fn distance_function_pl(
         node.insert_data("style", style);
     }
 
-    expr
+    expr.into()
 }
 
 /// Convert a point collection to a distance.
-fn distance_convert_pc(
-    mut pc: Expr<PointCollection>,
-    context: &CompileContext,
-    display: Properties,
-) -> Expr<Scalar> {
+fn distance_convert_pc(mut pc: Pc<2>, context: &CompileContext, display: Properties) -> Distance {
     if let Some(node) = pc.node.as_mut() {
         node.root.props = Some(
             node.root
@@ -63,7 +58,7 @@ fn distance_convert_pc(
         );
     }
 
-    pc.convert(context)
+    pc.0.convert(context).into()
 }
 
 /// ```
@@ -127,31 +122,24 @@ impl BuildAssociated<ScalarNode> for Associated {
 
 /// Register the function
 pub fn register(library: &mut Library) {
-    library.functions.insert(
-        String::from("dst"),
-        Function {
-            overloads: vec![
-                overload!((2-P) -> DISTANCE : distance_convert_pc),
-                overload!((DISTANCE) -> DISTANCE {
-                    |v: Expr<Scalar>, context: &CompileContext, display: Properties| {
-                        display.finish(context);
-                        v
-                    }
-                }),
-                overload!((SCALAR) -> DISTANCE {
-                    |v: Expr<Scalar>, context: &CompileContext, display: Properties| {
-                        display.finish(context);
-                        context.set_unit(v, unit::DISTANCE)
-                    }
-                }),
-                overload!((POINT, POINT) -> DISTANCE : distance_function_pp),
-                overload!((POINT, LINE) -> DISTANCE : distance_function_pl),
-                overload!((LINE, POINT) -> DISTANCE {
-                    |k: Expr<Line>, a: Expr<Point>, context: &CompileContext, display| call!(context:distance_function_pl(
-                        a, k
-                    ) with display)
-                }),
-            ],
-        },
+    library.add(
+        Function::new("dst")
+            .overload(distance_convert_pc)
+            .overload(
+                |v: Distance, context: &CompileContext, display: Properties| {
+                    display.finish(context);
+                    v
+                },
+            )
+            .overload(|v: Unitless, context: &CompileContext, display| {
+                Distance::from(context.set_unit_display(v.0, unit::DISTANCE, display))
+            })
+            .overload(distance_function_pp)
+            .overload(distance_function_pl)
+            .overload(
+                |line: Expr<Line>, point: Expr<Point>, context: &CompileContext, display| {
+                    distance_function_pl(point, line, context, display)
+                },
+            ),
     );
 }

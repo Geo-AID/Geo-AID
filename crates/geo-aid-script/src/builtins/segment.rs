@@ -12,7 +12,7 @@ define_bundle! { Segment {} }
 fn segment_function_point_point(
     mut a: Expr<Point>,
     mut b: Expr<Point>,
-    context: &mut CompileContext,
+    context: &CompileContext,
     mut display: Properties,
 ) -> Segment {
     let mut expr = construct_bundle!(Segment { A: a, B: b });
@@ -72,7 +72,7 @@ impl BuildAssociated<BundleNode> for Associated {
 
 /// The length of a segment TODO: Scalar with unit return type.
 #[allow(clippy::needless_pass_by_value)]
-fn len(segment: Segment, context: &mut CompileContext, mut display: Properties) -> Expr<Scalar> {
+fn len(segment: Segment, context: &mut CompileContext, mut display: Properties) -> Distance {
     display.add_if_not_present(
         "display_segment",
         (
@@ -97,7 +97,7 @@ pub fn register(library: &mut Library) {
     library
         .add(
             Function::new("Segment")
-                .overload(|mut col: Pc<2>, context: &mut CompileContext, display| {
+                .overload(|mut col: Pc<2>, context: &CompileContext, display| {
                     segment_function_point_point(
                         index!(node col,0),
                         index!(node col,1),

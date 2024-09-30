@@ -11,6 +11,7 @@ use geo_aid_figure::Style;
 use num_traits::{One, Zero};
 use std::collections::HashSet;
 use std::fmt::Formatter;
+use std::marker::PhantomData;
 use std::mem;
 use std::{
     collections::{hash_map::Entry, HashMap},
@@ -309,104 +310,47 @@ impl FlagValue {
     }
 }
 
-/// An overload of a function in `GeoScript`.
-#[derive(Debug)]
-pub struct RuleOverload {
-    /// The parameter types.
-    pub params: (Type, Type),
-    /// The definition.
-    pub definition: RuleDefinition,
-}
-
-/// geoscript rule definition as a function on the unroll context.
-type GeoRule =
-    dyn Fn(AnyExpr, AnyExpr, &mut CompileContext, Properties, bool, ProcNum) -> Box<dyn Node>;
-
-/// A rule definition.
-pub struct RuleDefinition(pub Box<GeoRule>);
-
-impl Debug for RuleDefinition {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "function definition")
-    }
-}
-
-impl Deref for RuleDefinition {
-    type Target = Box<GeoRule>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-/// A rule kind.
-#[derive(Debug)]
+/// A rule operator.
 pub struct Rule {
     /// Rule's name
-    pub name: String,
+    pub name: &'static str,
     /// Rule's overloads.
-    pub overloads: Vec<RuleOverload>,
+    pub overloads: Vec<Box<dyn RuleOverload>>,
 }
 
 impl Rule {
-    /// Checks if the given params can be converted into the expected params.
-    ///
-    /// # Panics
-    /// Never. Shut up, clippy.
+    /// Create a new rule with no overloads
     #[must_use]
-    pub fn match_params(expected: (&Type, &Type), received: (&Type, &Type)) -> bool {
-        received.0.can_cast(expected.0) && received.1.can_cast(expected.1)
+    pub fn new(name: &'static str) -> Self {
+        Self {
+            name,
+            overloads: Vec::new(),
+        }
+    }
+
+    /// Add an overload to this rule
+    #[must_use]
+    pub fn overload<M>(mut self, f: impl IntoRuleOverload<M>) -> Self {
+        self.overloads.push(Box::new(f.into_overload()));
+        self
     }
 
     /// Tries to find an overload for the given param types.
     #[must_use]
-    pub fn get_overload(&self, received: (&Type, &Type)) -> Option<&RuleOverload> {
+    pub fn get_overload(&self, lhs: &AnyExpr, rhs: &AnyExpr) -> Option<&dyn RuleOverload> {
         self.overloads
             .iter()
-            .find(|x| Rule::match_params((&x.params.0, &x.params.1), received))
-    }
-}
-
-/// An overload of a function in `GeoScript`.
-#[derive(Debug)]
-pub struct FunctionOverload {
-    /// The parameter types.
-    pub params: Vec<Type>,
-    /// The returned type
-    pub returned_type: Type,
-    /// The definition.
-    pub definition: FunctionDefinition,
-    /// Possible parameter group
-    pub param_group: Option<Type>,
-}
-
-/// geoscript function definition as a code-generating function.
-type GeoFunc = dyn Fn(Vec<AnyExpr>, &mut CompileContext, Properties) -> AnyExpr;
-
-/// A function definition.
-pub struct FunctionDefinition(pub Box<GeoFunc>);
-
-impl Debug for FunctionDefinition {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "function definition")
-    }
-}
-
-impl Deref for FunctionDefinition {
-    type Target = Box<GeoFunc>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
+            .map(AsRef::as_ref)
+            .find(|x| x.matches(lhs, rhs))
     }
 }
 
 /// A `GeoScript` function.
-#[derive(Debug)]
 pub struct Function {
     /// Name of this function.
     pub name: &'static str,
     /// Function's overloads.
-    pub overloads: Vec<FunctionOverload>,
+    pub overloads: Vec<Box<dyn Overload>>,
 }
 
 impl Function {
@@ -421,112 +365,261 @@ impl Function {
 
     /// Add a new overload to this function.
     #[must_use]
-    pub fn overload<In, Out>(mut self, f: impl IntoOverload<In, Out>) -> Self {
-        self.overloads.push(f.into_overload());
+    pub fn overload<Marker>(mut self, f: impl IntoOverload<Marker>) -> Self {
+        self.overloads.push(Box::new(f.into_overload()));
         self
-    }
-
-    /// Checks if the given params can be converted into the expected params.
-    ///
-    /// # Panics
-    /// Never. Shut up, clippy.
-    #[must_use]
-    pub fn match_params(expected: &[Type], received: &[Type], param_group: Option<&Type>) -> bool {
-        if let Some(ty) = param_group {
-            if expected.len() < received.len() {
-                let mut received = received.iter();
-
-                for param in expected {
-                    if !received.next().unwrap().can_cast(param) {
-                        return false;
-                    }
-                }
-
-                for param in received {
-                    if !param.can_cast(ty) {
-                        return false;
-                    }
-                }
-
-                true
-            } else {
-                false
-            }
-        } else if expected.len() == received.len() {
-            for (i, param) in expected.iter().enumerate() {
-                if !received[i].can_cast(param) {
-                    return false;
-                }
-            }
-
-            true
-        } else {
-            false
-        }
     }
 
     /// Tries to find an overload for the given param types.
     #[must_use]
-    pub fn get_overload(&self, params: &[Type]) -> Option<&FunctionOverload> {
+    pub fn get_overload(&self, params: &[AnyExpr]) -> Option<&dyn Overload> {
         self.overloads
             .iter()
-            .find(|x| Function::match_params(&x.params, params, x.param_group.as_ref()))
+            .map(AsRef::as_ref)
+            .find(|x| x.get_returned_type(params).is_some())
     }
+}
 
-    /// Get the type returned by this function.
+/// Trait for function overloads
+pub trait Overload {
+    /// Get the return type for the given parameters. Returns `None` if the overload
+    /// cannot be called with these parameters.
     #[must_use]
-    pub fn get_returned(&self, params: &[Type]) -> Type {
-        self.get_overload(params)
-            .map_or(Type::Unknown, |x| x.returned_type)
+    fn get_returned_type(&self, params: &[AnyExpr]) -> Option<Type>;
+
+    /// Unroll the function for the given params. The resulting expression
+    /// matches the type returned by `get_returned_type`.
+    #[must_use]
+    fn unroll(
+        &self,
+        params: Vec<AnyExpr>,
+        context: &mut CompileContext,
+        props: Properties,
+    ) -> AnyExpr;
+}
+
+/// An overload of a function in `GeoScript`.
+#[derive(Debug)]
+pub struct FunctionOverload<F, A, R, C>(F, PhantomData<(A, R, C)>);
+
+macro_rules! tuple_size {
+    () => {
+        0
+    };
+    ($first:ident $(, $arg:ident)*) => {
+        1 + tuple_size!($($arg),*)
     }
 }
 
-/// Helper trait for overloading a function
-pub trait IntoOverload<In, Out>: Sized {
-    /// Turn this into a function overload.
-    fn into_overload(self) -> FunctionOverload;
-}
-
-macro_rules! impl_overload {
+macro_rules! impl_overload_function {
     ($($arg:ident),* $(,)?) => {
-        impl<$($arg,)* R, F> IntoOverload<($($arg,)*), R> for F
+        impl<$($arg,)* R, F> Overload for FunctionOverload<F, ($($arg,)*), R, &mut CompileContext>
         where
             $($arg: GeoType + 'static,)*
             R: GeoType + Into<AnyExpr> + 'static,
-            F: Fn($($arg,)* &mut CompileContext, Properties) -> R + 'static
+            F: Fn($($arg,)* &mut CompileContext, Properties) -> R
         {
-            fn into_overload(self) -> FunctionOverload {
-                FunctionOverload {
-                    params: vec![$($arg::get_type()),*],
-                    returned_type: R::get_type(),
-                    param_group: None,
-                    definition: FunctionDefinition(Box::new(move |params, context, props| {
-                        #[allow(unused_mut, unused_variables)]
-                        let mut param = params.into_iter();
-                        self(
-                            $($arg::Target::convert_from(param.next().unwrap(), context).into(),)*
-                            context, props
-                        ).into()
-                    }))
+            fn get_returned_type(&self, params: &[AnyExpr]) -> Option<Type> {
+                let types = [$($arg::get_type()),*];
+                if params.len() == tuple_size!($($arg),*)
+                    && params
+                    .iter()
+                    .map(|p| p.get_type())
+                    .zip(types)
+                    .all(|(a, b)| a.can_cast(&b)) {
+                    Some(R::get_type())
+                } else {
+                    None
                 }
+            }
+
+            fn unroll(&self, params: Vec<AnyExpr>, context: &mut CompileContext, props: Properties) -> AnyExpr {
+                #[allow(unused_mut, unused_variables)]
+                let mut param = params.into_iter();
+                (self.0)(
+                    $($arg::Target::convert_from(param.next().unwrap(), context).into(),)*
+                    context, props
+                ).into()
+            }
+        }
+
+        impl<$($arg,)* R, F> Overload for FunctionOverload<F, ($($arg,)*), R, &CompileContext>
+        where
+            $($arg: GeoType + 'static,)*
+            R: GeoType + Into<AnyExpr> + 'static,
+            F: Fn($($arg,)* &CompileContext, Properties) -> R
+        {
+            fn get_returned_type(&self, params: &[AnyExpr]) -> Option<Type> {
+                let types = [$($arg::get_type()),*];
+                if params.len() == tuple_size!($($arg),*)
+                    && params
+                    .iter()
+                    .map(|p| p.get_type())
+                    .zip(types)
+                    .all(|(a, b)| a.can_cast(&b)) {
+                    Some(R::get_type())
+                } else {
+                    None
+                }
+            }
+
+            fn unroll(&self, params: Vec<AnyExpr>, context: &mut CompileContext, props: Properties) -> AnyExpr {
+                #[allow(unused_mut, unused_variables)]
+                let mut param = params.into_iter();
+                (self.0)(
+                    $($arg::Target::convert_from(param.next().unwrap(), context).into(),)*
+                    context, props
+                ).into()
             }
         }
     };
 }
 
-impl_overload! {}
-impl_overload! {T0}
-impl_overload! {T0, T1}
-impl_overload! {T0, T1, T2}
-impl_overload! {T0, T1, T2, T3}
+/// Helper trait for overloading a function. Features a special marker for
+/// managing possible different implementations on the same type.
+pub trait IntoOverload<Marker>: Sized {
+    /// Target overload type
+    type Target: Overload + 'static;
+
+    /// Turn this into a function overload.
+    fn into_overload(self) -> Self::Target;
+}
+
+impl<T: Overload + 'static> IntoOverload<T> for T {
+    type Target = T;
+
+    fn into_overload(self) -> Self::Target {
+        self
+    }
+}
+
+macro_rules! impl_into_overload {
+    ($($arg:ident),* $(,)?) => {
+        impl<$($arg,)* R, F> IntoOverload<(F, ($($arg,)*), R, &mut CompileContext)> for F
+        where
+            $($arg: GeoType + 'static,)*
+            R: GeoType + Into<AnyExpr> + 'static,
+            F: Fn($($arg,)* &mut CompileContext, Properties) -> R + 'static
+        {
+            type Target = FunctionOverload<F, ($($arg,)*), R, &'static mut CompileContext>;
+
+            fn into_overload(self) -> Self::Target {
+                FunctionOverload(self, PhantomData)
+            }
+        }
+
+        impl<$($arg,)* R, F> IntoOverload<(F, ($($arg,)*), R, &CompileContext)> for F
+        where
+            $($arg: GeoType + 'static,)*
+            R: GeoType + Into<AnyExpr> + 'static,
+            F: Fn($($arg,)* &CompileContext, Properties) -> R + 'static
+        {
+            type Target = FunctionOverload<F, ($($arg,)*), R, &'static CompileContext>;
+
+            fn into_overload(self) -> Self::Target {
+                FunctionOverload(self, PhantomData)
+            }
+        }
+
+        impl_overload_function! {$($arg),*}
+    };
+}
+
+impl_into_overload! {}
+impl_into_overload! {T0}
+impl_into_overload! {T0, T1}
+impl_into_overload! {T0, T1, T2}
+impl_into_overload! {T0, T1, T2, T3}
+
+/// Trait for rule overloads
+pub trait RuleOverload {
+    /// Check if this overload can be called with the given expressions.
+    #[must_use]
+    fn matches(&self, lhs: &AnyExpr, rhs: &AnyExpr) -> bool;
+
+    /// Unroll this rule.
+    #[must_use]
+    fn unroll(
+        &self,
+        lhs: AnyExpr,
+        rhs: AnyExpr,
+        context: &mut CompileContext,
+        props: Properties,
+        inverted: bool,
+        weight: ProcNum,
+    ) -> Box<dyn Node>;
+}
+
+/// Trait for things convertible into rule overloads
+pub trait IntoRuleOverload<Marker> {
+    type Target: RuleOverload + 'static;
+
+    fn into_overload(self) -> Self::Target;
+}
+
+impl<T: RuleOverload + 'static> IntoRuleOverload<T> for T {
+    type Target = Self;
+
+    fn into_overload(self) -> Self::Target {
+        self
+    }
+}
+
+impl<
+        L: GeoType + 'static,
+        R: GeoType + 'static,
+        N: Node + 'static,
+        F: Fn(L, R, &mut CompileContext, Properties, bool, ProcNum) -> N + 'static,
+    > IntoRuleOverload<(L, R, F)> for F
+{
+    type Target = FunctionRuleOverload<L, R, F>;
+
+    fn into_overload(self) -> Self::Target {
+        FunctionRuleOverload(self, PhantomData)
+    }
+}
+
+/// A rule overload made from a function.
+pub struct FunctionRuleOverload<L, R, F>(F, PhantomData<(L, R)>);
+
+impl<
+        L: GeoType,
+        R: GeoType,
+        N: Node + 'static,
+        F: Fn(L, R, &mut CompileContext, Properties, bool, ProcNum) -> N,
+    > RuleOverload for FunctionRuleOverload<L, R, F>
+{
+    fn matches(&self, lhs: &AnyExpr, rhs: &AnyExpr) -> bool {
+        lhs.can_convert_to(L::get_type()) && rhs.can_convert_to(R::get_type())
+    }
+
+    fn unroll(
+        &self,
+        lhs: AnyExpr,
+        rhs: AnyExpr,
+        context: &mut CompileContext,
+        props: Properties,
+        inverted: bool,
+        weight: ProcNum,
+    ) -> Box<dyn Node> {
+        Box::new((self.0)(
+            L::from(lhs.convert(context)),
+            R::from(rhs.convert(context)),
+            context,
+            props,
+            inverted,
+            weight,
+        ))
+    }
+}
 
 /// The library of all rules and functions available in geoscript.
-#[derive(Debug, Default)]
+#[derive(Default)]
 pub struct Library {
     /// Functions
     pub functions: HashMap<&'static str, Function>,
     /// The rule operators.
-    pub rule_ops: HashMap<&'static str, Rc<Rule>>,
+    pub rule_ops: HashMap<&'static str, Rule>,
     /// Bundle types.
     pub bundles: HashMap<&'static str, HashSet<&'static str>>,
 }
@@ -563,6 +656,12 @@ pub trait Addable {
 impl Addable for Function {
     fn add_to(self, library: &mut Library) {
         library.functions.insert(self.name, self);
+    }
+}
+
+impl Addable for Rule {
+    fn add_to(self, library: &mut Library) {
+        library.rule_ops.insert(self.name, self);
     }
 }
 
@@ -1459,6 +1558,13 @@ impl Display for Circle {
     }
 }
 
+impl GeoType for Expr<Circle> {
+    type Target = Circle;
+
+    fn get_type() -> Type {
+        ty::CIRCLE
+    }
+}
 /// An unrolled line expression.
 #[derive(Debug, CloneWithNode)]
 pub enum Line {
@@ -1592,6 +1698,14 @@ impl Display for Line {
                 write!(f, "parallel-through({l}, {p})")
             }
         }
+    }
+}
+
+impl GeoType for Expr<Line> {
+    type Target = Line;
+
+    fn get_type() -> Type {
+        ty::LINE
     }
 }
 
@@ -1743,7 +1857,7 @@ impl ConvertFrom<Expr<PointCollection>> for Scalar {
                 }
             }
 
-            expr
+            expr.0
         } else {
             convert_err!(PointCollection(value) -> Scalar with context)
         }
@@ -1918,14 +2032,6 @@ impl Expr<Scalar> {
         } else {
             self
         }
-    }
-}
-
-impl GeoType for Expr<Scalar> {
-    type Target = Scalar;
-
-    fn get_type() -> Type {
-        ty::SCALAR
     }
 }
 
@@ -2512,6 +2618,14 @@ impl AnyExpr {
     }
 
     #[must_use]
+    pub fn to_scalar(self) -> Option<Expr<Scalar>> {
+        match self {
+            Self::Scalar(v) => Some(v),
+            _ => None,
+        }
+    }
+
+    #[must_use]
     pub fn as_point(&self) -> Option<&Expr<Point>> {
         match self {
             Self::Point(v) => Some(v),
@@ -2558,7 +2672,7 @@ impl AnyExpr {
         match to {
             Type::Point => self.can_convert::<Point>(),
             Type::Line => self.can_convert::<Line>(),
-            Type::Scalar(unit) => self.can_convert_to_scalar(unit),
+            Type::Scalar(unit) => self.can_convert_to_scalar(unit).is_some(),
             Type::PointCollection(len) => self.can_convert_to_collection(len),
             Type::Circle => self.can_convert::<Circle>(),
             Type::Bundle(name) => self.can_convert_to_bundle(name),
@@ -2568,15 +2682,19 @@ impl AnyExpr {
 
     /// Check if the expression is convertible to the given type.
     /// Note that `unit` of `None` is ANY scalar, not UNKNOWN-UNIT scalar here.
+    /// Returns `None` if conversion isn't possible and `Some` with a unit
+    /// this value would be converted to. If `unit` is `None` and the value
+    /// is also an unknown-unit scalar, `Some(None)` is returned.
     #[must_use]
-    pub fn can_convert_to_scalar(&self, unit: Option<ComplexUnit>) -> bool {
+    pub fn can_convert_to_scalar(&self, unit: Option<ComplexUnit>) -> Option<Option<ComplexUnit>> {
         match self {
-            Self::Line(_) | Self::Bundle(_) | Self::Circle(_) | Self::Point(_) => false,
-            Self::PointCollection(v) => {
-                v.data.length == 2 && (unit == Some(unit::DISTANCE) || unit.is_none())
-            }
-            Self::Scalar(u) => u.data.unit == unit || u.data.unit.is_none() || unit.is_none(),
-            Self::Unknown(_) => true,
+            Self::Line(_) | Self::Bundle(_) | Self::Circle(_) | Self::Point(_) => None,
+            Self::PointCollection(v) => (v.data.length == 2
+                && (unit == Some(unit::DISTANCE) || unit.is_none()))
+            .then_some(Some(unit::DISTANCE)),
+            Self::Scalar(u) => (u.data.unit == unit || u.data.unit.is_none() || unit.is_none())
+                .then_some(u.data.unit.or(unit)),
+            Self::Unknown(_) => Some(unit),
         }
     }
 
@@ -2960,18 +3078,6 @@ pub fn construct_point_name(letter: char, primes: u8) -> String {
     String::from(letter) + &"'".repeat(primes as usize)
 }
 
-/// Replaces all parameter unrolled expressions with the given parameters.
-#[allow(clippy::module_name_repetitions)]
-#[must_use]
-pub fn unroll_parameters(
-    definition: &FunctionDefinition,
-    params: Vec<AnyExpr>,
-    display: Properties,
-    context: &mut CompileContext,
-) -> AnyExpr {
-    definition(params, context, display)
-}
-
 /// Fetch the variable's defining expression by its name.
 fn fetch_variable(context: &CompileContext, name: &str, variable_span: Span) -> AnyExpr {
     let mut var = if let Some(var) = context.variables.get(name) {
@@ -3142,22 +3248,8 @@ impl Unroll for ExprCall {
         }
 
         let res = if let Some(func) = library.functions.get(func_name.as_str()) {
-            let param_types: Vec<_> = params.iter().map(AnyExpr::get_type).collect();
-
-            if let Some(overload) = func.get_overload(&param_types) {
-                let params = params
-                    .into_iter()
-                    .enumerate()
-                    .map(|(i, param)| {
-                        if i < overload.params.len() {
-                            param.convert_to(overload.params[i], context)
-                        } else {
-                            param.convert_to(overload.param_group.unwrap(), context)
-                        }
-                    })
-                    .collect();
-
-                let ret = unroll_parameters(&overload.definition, params, display, context);
+            if let Some(overload) = func.get_overload(&params) {
+                let ret = overload.unroll(params, context, display);
 
                 return ret.boxed(self.get_span());
             }
@@ -3165,7 +3257,7 @@ impl Unroll for ExprCall {
             context.push_error(Error::OverloadNotFound {
                 error_span: self.get_span(),
                 function_name: func_name.clone(),
-                params: param_types,
+                params: params.iter().map(AnyExpr::get_type).collect(),
             });
 
             Expr {
@@ -4482,12 +4574,9 @@ fn unroll_rule(
         RuleOperator::Defined(op) => {
             let weight = display.get("weight").get_or(ProcNum::one());
 
-            let (def, lhs, rhs) = if let Some(func) = library.rule_ops.get(op.ident.as_str()) {
-                if let Some(overload) = func.get_overload((&lhs.get_type(), &rhs.get_type())) {
-                    let lhs = lhs.convert_to(overload.params.0, context);
-                    let rhs = rhs.convert_to(overload.params.1, context);
-
-                    (&overload.definition, lhs, rhs)
+            let overload = if let Some(func) = library.rule_ops.get(op.ident.as_str()) {
+                if let Some(overload) = func.get_overload(&lhs, &rhs) {
+                    overload
                 } else {
                     context.push_error(Error::OverloadNotFound {
                         error_span: op.span,
@@ -4513,7 +4602,7 @@ fn unroll_rule(
                 return Box::new(EmptyNode);
             };
 
-            def(lhs, rhs, context, display, inverted, weight)
+            overload.unroll(lhs, rhs, context, display, inverted, weight)
         }
         RuleOperator::Inverted(op) => unroll_rule(
             (lhs, &op.operator, rhs),

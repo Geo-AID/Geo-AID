@@ -1,45 +1,40 @@
 //! The circle function
 
-use super::prelude::*;
-use geo_aid_derive::overload;
+use super::{prelude::*, ScalarUnit};
 
 /// Circle constructor. Creates a circle based off of its center and radius.
 fn circle_function(
     center: Expr<Point>,
-    radius: Expr<Scalar>,
+    radius: Distance,
     context: &CompileContext,
     display: Properties,
 ) -> Expr<Circle> {
-    context.circle_display(center, radius, display)
+    context.circle_display(center, radius.0, display)
 }
 
 /// Register the function
 pub fn register(library: &mut Library) {
-    library.functions.insert(
-        String::from("Circle"),
-        Function {
-            overloads: vec![
-                overload!((POINT, DISTANCE) -> CIRCLE : circle_function),
-                overload!((DISTANCE, POINT) -> CIRCLE {
-                    |radius: Expr<Scalar>, center: Expr<Point>, context, display| call!(context:circle_function(center, radius) with display)
-                }),
-                overload!(() -> CIRCLE {
-                    |context: &mut CompileContext, display| {
-                        let mut center = context.free_point();
-                        let mut radius = context.free_scalar();
+    library.add(
+        Function::new("Circle")
+            .overload(circle_function)
+            .overload(
+                |radius: Distance, center: Expr<Point>, context: &CompileContext, display| {
+                    circle_function(center, radius, context, display)
+                },
+            )
+            .overload(|context: &mut CompileContext, display| {
+                let mut center = context.free_point();
+                let mut radius = context.free_scalar();
 
-                        center.take_node();
-                        radius.take_node();
+                center.take_node();
+                radius.take_node();
 
-                        call!(
-                            context:circle_function(
-                                center,
-                                context.set_unit(radius, unit::DISTANCE)
-                            ) with display
-                        )
-                    }
-                })
-            ],
-        },
+                circle_function(
+                    center,
+                    ScalarUnit::from(context.set_unit(radius, unit::DISTANCE)),
+                    context,
+                    display,
+                )
+            }),
     );
 }

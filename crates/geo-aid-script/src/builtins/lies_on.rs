@@ -1,10 +1,8 @@
 //! The `lies_on` rule
 
-use geo_aid_derive::overload;
 use num_traits::{One, Zero};
-use std::rc::Rc;
 
-use super::prelude::*;
+use super::{prelude::*, segment::Segment};
 use crate::token::number::ProcNum;
 
 /// `point lies_on circle` - a point lies on a circle.
@@ -72,9 +70,8 @@ fn pt_lies_on_line(
 }
 
 /// `pc lies_on circle` - a point collection lies on a circle.
-#[allow(clippy::needless_pass_by_value)]
 fn col_lies_on_circle(
-    mut lhs: Expr<PointCollection>,
+    mut lhs: Pc<0>,
     mut rhs: Expr<Circle>,
     context: &mut CompileContext,
     display: Properties,
@@ -134,7 +131,7 @@ fn col_lies_on_circle(
 /// `point lies_on segment` - a point lies on a segment (on the containing line, between the delimiting points)
 fn pt_lies_on_segment(
     mut lhs: Expr<Point>,
-    mut rhs: Expr<Bundle>,
+    mut rhs: Segment,
     context: &mut CompileContext,
     display: Properties,
     inverted: bool,
@@ -210,16 +207,11 @@ fn pt_lies_on_segment(
 
 /// Register the rule
 pub fn register(library: &mut Library) {
-    library.rule_ops.insert(
-        String::from("lies_on"),
-        Rc::new(Rule {
-            name: String::from("lies_on"),
-            overloads: vec![
-                overload!(POINT lies_on CIRCLE : pt_lies_on_circle),
-                overload!(POINT lies_on LINE : pt_lies_on_line),
-                overload!(0-P lies_on CIRCLE : col_lies_on_circle),
-                overload!(POINT lies_on Segment : pt_lies_on_segment),
-            ],
-        }),
+    library.add(
+        Rule::new("lies_on")
+            .overload(pt_lies_on_circle)
+            .overload(pt_lies_on_line)
+            .overload(col_lies_on_circle)
+            .overload(pt_lies_on_segment),
     );
 }

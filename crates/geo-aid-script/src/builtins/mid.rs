@@ -1,23 +1,50 @@
+use crate::{
+    parser::Type,
+    unroll::{AnyExpr, Overload},
+};
+
 /// The `mid` function.
 use super::prelude::*;
-use geo_aid_derive::overload;
 
-/// `mid(point...)` - the arithmetic mean of points as complexes.
-pub fn function_point(
-    args: Vec<Expr<Point>>,
-    context: &CompileContext,
-    display: Properties,
-) -> Expr<Point> {
-    context.average_p_display(args, display)
-}
+struct MidScalar;
 
-/// `mid(scalar...)` - the arithmetic mean of reals
-fn function_scalar(
-    args: Vec<Expr<Scalar>>,
-    context: &CompileContext,
-    display: Properties,
-) -> Expr<Scalar> {
-    context.average_s_display(args, display)
+impl Overload for MidScalar {
+    fn get_returned_type(&self, params: &[AnyExpr]) -> Option<Type> {
+        // This overload is only valid if all params are scalars of the same unit.
+        // To check this, we convert the first param to a scalar of any unit,
+        // get its type and check if every next param can also be converted.
+
+        let mut unit = None;
+
+        for param in params {
+            if let Some(u) = param.can_convert_to_scalar(unit) {
+                unit = u;
+            } else {
+                return None;
+            }
+        }
+
+        Some(Type::Scalar(unit))
+    }
+
+    fn unroll(
+        &self,
+        params: Vec<AnyExpr>,
+        context: &mut CompileContext,
+        props: Properties,
+    ) -> AnyExpr {
+        let ty = self.get_returned_type(&params).unwrap();
+
+        context
+            .average_s_display(
+                params
+                    .into_iter()
+                    .map(|x| x.convert_to(ty, context).to_scalar().unwrap())
+                    .collect(),
+                props,
+            )
+            .into()
+    }
 }
 
 // Registers the `mid` function.
@@ -31,18 +58,16 @@ fn function_scalar(
 //     have a way of specifying that there should be
 //     at least two `DISTANCE arguments in the last rule.
 pub fn register(library: &mut Library) {
-    library.functions.insert(
-        String::from("mid"),
-        Function {
-            overloads: vec![
-                overload!((...ANGLE) -> ANGLE : function_scalar),
-                overload!((...POINT) -> POINT : function_point),
-                overload!((...SCALAR) -> SCALAR : function_scalar),
-                overload!((2-P) -> POINT : |mut col: Expr<PointCollection>, context, display| call!(context:function_point(
-                        vec![index!(node col, 0), index!(node col, 1)]
-                    )with display)),
-                overload!((...DISTANCE) -> DISTANCE : function_scalar),
-            ],
-        },
+    library.add(
+        Function::new("mid")
+            .overload(|mut col: Pc<0>, context: &CompileContext, props| {
+                context.average_p_display(
+                    (0..col.0.data.length)
+                        .map(|i| index!(node col, i))
+                        .collect(),
+                    props,
+                )
+            })
+            .overload(MidScalar),
     );
 }

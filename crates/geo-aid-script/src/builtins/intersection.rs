@@ -3,10 +3,9 @@
 use crate::math::Build;
 
 use super::prelude::*;
-use geo_aid_derive::overload;
 
 /// `intesection(line, line)` - intersection of two lines.
-fn intersection_function_line_line(
+fn intersection_function_ll(
     k: Expr<Line>,
     l: Expr<Line>,
     context: &CompileContext,
@@ -38,10 +37,5 @@ impl BuildAssociated<PointNode> for Associated {
 
 /// Register the function
 pub fn register(library: &mut Library) {
-    library.functions.insert(
-        String::from("intersection"),
-        Function {
-            overloads: vec![overload!((LINE, LINE) -> POINT : intersection_function_line_line)],
-        },
-    );
+    library.add(Function::new("intersection").overload(intersection_function_ll));
 }

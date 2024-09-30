@@ -2,9 +2,12 @@
 
 use std::ops::{Deref, DerefMut};
 
+use num_rational::Ratio;
+
 use crate::{
     parser::Type,
-    unroll::{Expr, GeoType, PointCollection},
+    unit,
+    unroll::{AnyExpr, Expr, GeoType, PointCollection, Scalar},
     ComplexUnit,
 };
 
@@ -28,7 +31,7 @@ pub mod segment;
 /// A prelude for builtin functions.
 pub mod prelude {
     pub(crate) use crate::{
-        builtins::{macros::*, Pc},
+        builtins::{macros::*, Angle, Distance, Pc, Unitless},
         unit,
         unroll::{
             context::CompileContext,
@@ -37,7 +40,7 @@ pub mod prelude {
                 PointNode, ScalarNode,
             },
             Bundle, Circle, CloneWithNode, Expr, Function, GeoType, Library, Line, Point,
-            PointCollection, Properties, Rule, Scalar, ScalarData, UnrolledRule, UnrolledRuleKind,
+            Properties, Rule, ScalarData, UnrolledRule, UnrolledRuleKind,
         },
     };
     pub(crate) use geo_aid_figure::Style;
@@ -76,36 +79,71 @@ impl<const N: usize> DerefMut for Pc<N> {
 }
 
 /// Scalar with a specific unit.
-pub struct ScalarUnit<const U: ComplexUnit>(pub Expr<Scalar>);
+pub struct ScalarUnit<
+    const DST_NUM: i64,
+    const DST_DENOM: i64,
+    const ANG_NUM: i64,
+    const ANG_DENOM: i64,
+>(pub Expr<Scalar>);
 
-impl<const N: usize> GeoType for Pc<N> {
-    type Target = PointCollection;
-
-    fn get_type() -> Type {
-        Type::PointCollection(N)
+impl<const DST_NUM: i64, const DST_DENOM: i64, const ANG_NUM: i64, const ANG_DENOM: i64>
+    ScalarUnit<DST_NUM, DST_DENOM, ANG_NUM, ANG_DENOM>
+{
+    #[must_use]
+    pub fn get_unit() -> ComplexUnit {
+        unit::DISTANCE.pow(Ratio::new(DST_NUM, DST_DENOM))
+            * &unit::ANGLE.pow(Ratio::new(ANG_NUM, ANG_DENOM))
     }
 }
 
-impl<const N: usize> From<Expr<PointCollection>> for Pc<N> {
-    fn from(value: Expr<PointCollection>) -> Self {
-        assert!(value.data.length == N || N == 0);
+impl<const DST_NUM: i64, const DST_DENOM: i64, const ANG_NUM: i64, const ANG_DENOM: i64> GeoType
+    for ScalarUnit<DST_NUM, DST_DENOM, ANG_NUM, ANG_DENOM>
+{
+    type Target = Scalar;
+
+    fn get_type() -> Type {
+        Type::Scalar(Some(Self::get_unit()))
+    }
+}
+
+impl<const DST_NUM: i64, const DST_DENOM: i64, const ANG_NUM: i64, const ANG_DENOM: i64>
+    From<Expr<Scalar>> for ScalarUnit<DST_NUM, DST_DENOM, ANG_NUM, ANG_DENOM>
+{
+    fn from(value: Expr<Scalar>) -> Self {
+        assert_eq!(value.data.unit, Some(Self::get_unit()));
         Self(value)
     }
 }
 
-impl<const N: usize> Deref for Pc<N> {
-    type Target = Expr<PointCollection>;
+impl<const DST_NUM: i64, const DST_DENOM: i64, const ANG_NUM: i64, const ANG_DENOM: i64> Deref
+    for ScalarUnit<DST_NUM, DST_DENOM, ANG_NUM, ANG_DENOM>
+{
+    type Target = Expr<Scalar>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
-impl<const N: usize> DerefMut for Pc<N> {
+impl<const DST_NUM: i64, const DST_DENOM: i64, const ANG_NUM: i64, const ANG_DENOM: i64> DerefMut
+    for ScalarUnit<DST_NUM, DST_DENOM, ANG_NUM, ANG_DENOM>
+{
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }
 }
+
+impl<const DST_NUM: i64, const DST_DENOM: i64, const ANG_NUM: i64, const ANG_DENOM: i64>
+    From<ScalarUnit<DST_NUM, DST_DENOM, ANG_NUM, ANG_DENOM>> for AnyExpr
+{
+    fn from(value: ScalarUnit<DST_NUM, DST_DENOM, ANG_NUM, ANG_DENOM>) -> Self {
+        value.0.into()
+    }
+}
+
+pub type Distance = ScalarUnit<1, 1, 0, 1>;
+pub type Angle = ScalarUnit<0, 1, 1, 1>;
+pub type Unitless = ScalarUnit<0, 1, 0, 1>;
 
 /// Returns what size of point collection can the given bundle type be cast onto.
 /// 0 signifies that casting is not possible
@@ -148,16 +186,6 @@ pub fn register(library: &mut Library) {
 
 /// Helper macros
 pub mod macros {
-    /// Call a function with given arguments, context, and possibly properties.
-    macro_rules! call {
-        ($fig:ident : $func:ident($($arg:expr),*)) => {
-            $func($($arg),*, $fig, $crate::unroll::Properties::from(None))
-        };
-        ($fig:ident : $func:ident($($arg:expr),*) with $props:expr) => {
-            $func($($arg),*, $fig, $props)
-        };
-    }
-
     /// Get the expression at given index in a point collection.
     macro_rules! index {
         (no-node $col:expr, $at:expr) => {
@@ -278,5 +306,5 @@ pub mod macros {
         };
     }
 
-    pub(crate) use {call, construct_bundle, define_bundle, field, index, number};
+    pub(crate) use {construct_bundle, define_bundle, field, index, number};
 }
