@@ -144,6 +144,12 @@ struct Dst {
 
 ## `mid`
 
+* `mid(col: 0-P)`
+
+**Return Type**: [Point](.types/primitives.md#Point)
+
+**Returns**: The middle point of all points in the collection.
+
 **Note**: The following functions allow any positive numbers of arguments.
 
 * `mid(v_1: Scalar (any unit u), v_2 Scalar (the same unit u), ..., v_n: Scalar (the same unit u))`
@@ -152,7 +158,7 @@ struct Dst {
 
 **Returns**: The average value of `v_1`, `v_2`, ... `v_n`.
 
-* `mid(P_1: Point, P_2 Point, ..., P_n: Point)`
+* `mid(P_1: Point, P_2: Point, ..., P_n: Point)`
 
 **Return type**: [Point](./types/primitives.md#Point)
 
