@@ -4,8 +4,9 @@ use crate::{figure::SegmentItem, math::Build, parser::PropertyValue, span, token
 
 use super::prelude::*;
 use crate::token::Span;
-use geo_aid_derive::overload;
 use geo_aid_figure::math_string::MathString;
+
+define_bundle! { Segment {} }
 
 /// `Segment(point, point)` - a segment connecting two points.
 fn segment_function_point_point(
@@ -13,7 +14,7 @@ fn segment_function_point_point(
     mut b: Expr<Point>,
     context: &CompileContext,
     mut display: Properties,
-) -> Expr<Bundle> {
+) -> Segment {
     let mut expr = construct_bundle!(Segment { A: a, B: b });
 
     if let Some(node) = &mut expr.node {
@@ -69,9 +70,9 @@ impl BuildAssociated<BundleNode> for Associated {
     }
 }
 
-/// The length of a segment
+/// The length of a segment TODO: Scalar with unit return type.
 #[allow(clippy::needless_pass_by_value)]
-fn len(segment: Expr<Bundle>, context: &CompileContext, mut display: Properties) -> Expr<Scalar> {
+fn len(segment: Segment, context: &mut CompileContext, mut display: Properties) -> Distance {
     display.add_if_not_present(
         "display_segment",
         (
@@ -93,27 +94,20 @@ fn len(segment: Expr<Bundle>, context: &CompileContext, mut display: Properties)
 
 /// Register the type and the function
 pub fn register(library: &mut Library) {
-    library.functions.insert(
-        String::from("Segment"),
-        Function {
-            overloads: vec![
-                overload!((2-P) -> Segment {
-                    |mut col: Expr<PointCollection>, context, display| call!(context:segment_function_point_point(
-                        index!(node col, 0),
-                        index!(node col, 1)
-                    ) with display)
-                }),
-                overload!((POINT, POINT) -> Segment : segment_function_point_point),
-            ],
-        },
-    );
-
-    library.functions.insert(
-        String::from("[Segment]::len"),
-        Function {
-            overloads: vec![overload!((Segment) -> Scalar : len)],
-        },
-    );
+    library
+        .add(
+            Function::new("Segment")
+                .overload(|mut col: Pc<2>, context: &CompileContext, display| {
+                    segment_function_point_point(
+                        index!(node col,0),
+                        index!(node col,1),
+                        context,
+                        display,
+                    )
+                })
+                .overload(segment_function_point_point),
+        )
+        .add(Function::new("[Segment]::len").overload(len));
 
     library.bundles.insert("Segment", ["A", "B"].into());
 }

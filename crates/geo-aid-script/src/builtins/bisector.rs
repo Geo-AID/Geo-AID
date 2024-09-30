@@ -3,7 +3,6 @@
 use crate::math::Build;
 
 use super::{angle::display_angle_arms, prelude::*};
-use geo_aid_derive::overload;
 
 /// bisector(point, point, point) - an angle's bisector.
 pub fn point_point_point(
@@ -96,37 +95,33 @@ pub fn point_point(
     context: &CompileContext,
     display: Properties,
 ) -> Expr<Line> {
-    use super::mid::function_point;
     use super::perpendicular::line_point;
 
-    call!(context:line_point(
+    line_point(
         context.line(a.clone_without_node(), b.clone_without_node()),
-        call!(context:function_point(vec![a, b]))
-    ) with display)
+        context.average_p(vec![a, b]),
+        context,
+        display,
+    )
 }
 
 /// Register the function
 pub fn register(library: &mut Library) {
-    library.functions.insert(
-        String::from("bisector"),
-        Function {
-            overloads: vec![
-                overload!((3-P) -> LINE {
-                    |mut col: Expr<PointCollection>, context, display| call!(context:point_point_point(
-                        index!(node col, 0),
-                        index!(node col, 1),
-                        index!(node col, 2)
-                    ) with display)
-                }),
-                overload!((POINT, POINT, POINT) -> LINE : point_point_point),
-                overload!((2-P) -> LINE {
-                    |mut col: Expr<PointCollection>, context, display| call!(context:point_point(
-                        index!(node col, 0),
-                        index!(node col, 1)
-                    ) with display)
-                }),
-                overload!((POINT, POINT) -> LINE : point_point),
-            ],
-        },
+    library.add(
+        Function::new("bisector")
+            .overload(|mut col: Pc<3>, context: &CompileContext, display| {
+                point_point_point(
+                    index!(node col,0),
+                    index!(node col,1),
+                    index!(node col,2),
+                    context,
+                    display,
+                )
+            })
+            .overload(point_point_point)
+            .overload(|mut col: Pc<2>, context: &mut CompileContext, display| {
+                point_point(index!(node col,0), index!(node col,1), context, display)
+            })
+            .overload(point_point),
     );
 }

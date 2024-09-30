@@ -1,7 +1,6 @@
 //! The `Line` function
 
 use super::prelude::*;
-use geo_aid_derive::overload;
 
 /// `Line(point, point)` - a line through two points
 pub fn function_pp(
@@ -22,18 +21,11 @@ pub fn function_pp(
 
 /// Register the function
 pub fn register(library: &mut Library) {
-    library.functions.insert(
-        String::from("Line"),
-        Function {
-            overloads: vec![
-                overload!((2-P) -> LINE {
-                    |mut col: Expr<PointCollection>, context, display| call!(context:function_pp(
-                        index!(node col, 0),
-                        index!(node col, 1)
-                    ) with display)
-                }),
-                overload!((POINT, POINT) -> LINE : function_pp),
-            ],
-        },
+    library.add(
+        Function::new("Line")
+            .overload(|mut col: Pc<2>, context: &CompileContext, display| {
+                function_pp(index!(node col,0), index!(node col,1), context, display)
+            })
+            .overload(function_pp),
     );
 }

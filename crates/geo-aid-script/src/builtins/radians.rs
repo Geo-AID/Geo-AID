@@ -1,16 +1,12 @@
 //! The `radians` function.
 
 use super::prelude::*;
-use geo_aid_derive::overload;
 
 /// Register the function
 pub fn register(library: &mut Library) {
-    library.functions.insert(
-        String::from("radians"),
-        Function {
-            overloads: vec![overload!((SCALAR) -> ANGLE {
-                |v: Expr<Scalar>, context: &CompileContext, display| context.set_unit_display(v, unit::ANGLE, display)
-            })],
+    library.add(Function::new("radians").overload(
+        |v: Unitless, context: &CompileContext, display| {
+            Angle::from(context.set_unit_display(v.0, unit::ANGLE, display))
         },
-    );
+    ));
 }

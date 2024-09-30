@@ -1,5 +1,16 @@
 //! `GeoScript`'s builtin functions and types
 
+use std::ops::{Deref, DerefMut};
+
+use num_rational::Ratio;
+
+use crate::{
+    parser::Type,
+    unit,
+    unroll::{AnyExpr, Expr, GeoType, PointCollection, Scalar},
+    ComplexUnit,
+};
+
 use super::unroll::Library;
 
 pub mod angle;
@@ -20,7 +31,7 @@ pub mod segment;
 /// A prelude for builtin functions.
 pub mod prelude {
     pub(crate) use crate::{
-        builtins::macros::*,
+        builtins::{macros::*, Angle, Distance, Pc, Unitless},
         unit,
         unroll::{
             context::CompileContext,
@@ -28,12 +39,111 @@ pub mod prelude {
                 BuildAssociated, BundleNode, CollectionNode, HierarchyNode, LineNode, LineType,
                 PointNode, ScalarNode,
             },
-            Bundle, Circle, CloneWithNode, Expr, Function, Library, Line, Point, PointCollection,
-            Properties, Rule, Scalar, ScalarData, UnrolledRule, UnrolledRuleKind,
+            Bundle, Circle, CloneWithNode, Expr, Function, GeoType, Library, Line, Point,
+            Properties, Rule, ScalarData, UnrolledRule, UnrolledRuleKind,
         },
     };
     pub(crate) use geo_aid_figure::Style;
 }
+
+/// Point collection with a specific size
+pub struct Pc<const N: usize>(pub Expr<PointCollection>);
+
+impl<const N: usize> GeoType for Pc<N> {
+    type Target = PointCollection;
+
+    fn get_type() -> Type {
+        Type::PointCollection(N)
+    }
+}
+
+impl<const N: usize> From<Expr<PointCollection>> for Pc<N> {
+    fn from(value: Expr<PointCollection>) -> Self {
+        assert!(value.data.length == N || N == 0);
+        Self(value)
+    }
+}
+
+impl<const N: usize> Deref for Pc<N> {
+    type Target = Expr<PointCollection>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<const N: usize> DerefMut for Pc<N> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+/// Scalar with a specific unit.
+pub struct ScalarUnit<
+    const DST_NUM: i64,
+    const DST_DENOM: i64,
+    const ANG_NUM: i64,
+    const ANG_DENOM: i64,
+>(pub Expr<Scalar>);
+
+impl<const DST_NUM: i64, const DST_DENOM: i64, const ANG_NUM: i64, const ANG_DENOM: i64>
+    ScalarUnit<DST_NUM, DST_DENOM, ANG_NUM, ANG_DENOM>
+{
+    #[must_use]
+    pub fn get_unit() -> ComplexUnit {
+        unit::DISTANCE.pow(Ratio::new(DST_NUM, DST_DENOM))
+            * &unit::ANGLE.pow(Ratio::new(ANG_NUM, ANG_DENOM))
+    }
+}
+
+impl<const DST_NUM: i64, const DST_DENOM: i64, const ANG_NUM: i64, const ANG_DENOM: i64> GeoType
+    for ScalarUnit<DST_NUM, DST_DENOM, ANG_NUM, ANG_DENOM>
+{
+    type Target = Scalar;
+
+    fn get_type() -> Type {
+        Type::Scalar(Some(Self::get_unit()))
+    }
+}
+
+impl<const DST_NUM: i64, const DST_DENOM: i64, const ANG_NUM: i64, const ANG_DENOM: i64>
+    From<Expr<Scalar>> for ScalarUnit<DST_NUM, DST_DENOM, ANG_NUM, ANG_DENOM>
+{
+    fn from(value: Expr<Scalar>) -> Self {
+        assert_eq!(value.data.unit, Some(Self::get_unit()));
+        Self(value)
+    }
+}
+
+impl<const DST_NUM: i64, const DST_DENOM: i64, const ANG_NUM: i64, const ANG_DENOM: i64> Deref
+    for ScalarUnit<DST_NUM, DST_DENOM, ANG_NUM, ANG_DENOM>
+{
+    type Target = Expr<Scalar>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<const DST_NUM: i64, const DST_DENOM: i64, const ANG_NUM: i64, const ANG_DENOM: i64> DerefMut
+    for ScalarUnit<DST_NUM, DST_DENOM, ANG_NUM, ANG_DENOM>
+{
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl<const DST_NUM: i64, const DST_DENOM: i64, const ANG_NUM: i64, const ANG_DENOM: i64>
+    From<ScalarUnit<DST_NUM, DST_DENOM, ANG_NUM, ANG_DENOM>> for AnyExpr
+{
+    fn from(value: ScalarUnit<DST_NUM, DST_DENOM, ANG_NUM, ANG_DENOM>) -> Self {
+        value.0.into()
+    }
+}
+
+pub type Distance = ScalarUnit<1, 1, 0, 1>;
+pub type Angle = ScalarUnit<0, 1, 1, 1>;
+pub type Unitless = ScalarUnit<0, 1, 0, 1>;
 
 /// Returns what size of point collection can the given bundle type be cast onto.
 /// 0 signifies that casting is not possible
@@ -76,16 +186,6 @@ pub fn register(library: &mut Library) {
 
 /// Helper macros
 pub mod macros {
-    /// Call a function with given arguments, context, and possibly properties.
-    macro_rules! call {
-        ($fig:ident : $func:ident($($arg:expr),*)) => {
-            $func($($arg),*, $fig, $crate::unroll::Properties::from(None))
-        };
-        ($fig:ident : $func:ident($($arg:expr),*) with $props:expr) => {
-            $func($($arg),*, $fig, $props)
-        };
-    }
-
     /// Get the expression at given index in a point collection.
     macro_rules! index {
         (no-node $col:expr, $at:expr) => {
@@ -153,16 +253,58 @@ pub mod macros {
                 fields.insert(stringify!($field).to_string(), $crate::unroll::AnyExpr::from(v));
             )*
 
-            $crate::unroll::Expr {
+            $t::from($crate::unroll::Expr {
                 span: $crate::span!(0, 0, 0, 0),
                 data: std::rc::Rc::new($crate::unroll::Bundle {
                     name: stringify!($t),
                     data: $crate::unroll::BundleData::ConstructBundle(fields.into())
                 }),
                 node: Some($crate::unroll::figure::HierarchyNode::new(node))
-            }
+            })
         }};
     }
 
-    pub(crate) use {call, construct_bundle, field, index, number};
+    /// Define a new bundle type
+    macro_rules! define_bundle {
+        ($t:ident {}) => {
+            pub struct $t(Expr<Bundle>);
+
+            impl GeoType for $t {
+                type Target = Bundle;
+
+                fn get_type() -> $crate::parser::Type {
+                    $crate::parser::Type::Bundle(stringify!($t))
+                }
+            }
+
+            impl From<Expr<Bundle>> for $t {
+                fn from(value: Expr<Bundle>) -> Self {
+                    assert_eq!(value.data.name, stringify!($t));
+                    Self(value)
+                }
+            }
+
+            impl std::ops::Deref for $t {
+                type Target = Expr<Bundle>;
+
+                fn deref(&self) -> &Self::Target {
+                    &self.0
+                }
+            }
+
+            impl std::ops::DerefMut for $t {
+                fn deref_mut(&mut self) -> &mut Self::Target {
+                    &mut self.0
+                }
+            }
+
+            impl From<$t> for $crate::unroll::AnyExpr {
+                fn from(value: $t) -> Self {
+                    value.0.into()
+                }
+            }
+        };
+    }
+
+    pub(crate) use {construct_bundle, define_bundle, field, index, number};
 }
