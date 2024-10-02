@@ -72,7 +72,7 @@ impl Debugger {
                 if ui.button("Randomize").clicked() {
                     let mut rng = rand::thread_rng();
                     figure.current_state = (0..figure.current_state.len())
-                        .map(|_| rng.gen::<f64>() * 10.0)
+                        .map(|_| rng.gen::<f64>() * 10.0 - 5.0)
                         .collect();
                 }
             } else {

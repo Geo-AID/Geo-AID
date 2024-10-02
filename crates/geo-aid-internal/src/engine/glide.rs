@@ -72,7 +72,7 @@ impl Glide {
         let total_error = context.pow(total_error_power, mean_exponent.recip());
 
         let mut rng = rand::thread_rng();
-        let inputs = (0..input_count).map(|_| rng.gen::<f64>() * 10.0);
+        let inputs = (0..input_count).map(|_| rng.gen::<f64>() * 10.0 - 5.0);
 
         Self {
             params,
@@ -122,7 +122,7 @@ impl Glide {
                 }
 
                 for input in &mut ctx.sample {
-                    *input = rng.gen::<f64>() * 10.0;
+                    *input = rng.gen::<f64>() * 10.0 - 5.0;
                 }
 
                 samples_launched += 1;

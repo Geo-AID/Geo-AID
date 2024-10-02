@@ -131,7 +131,7 @@ impl Generator {
             inputs: {
                 let mut v = Vec::new();
                 v.reserve_exact(input_count);
-                v.resize_with(input_count, rand::random);
+                v.resize_with(input_count, || rand::random::<f64>() * 10.0 - 5.0);
                 v
             },
             qualities: {
