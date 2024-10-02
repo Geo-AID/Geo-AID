@@ -9,16 +9,21 @@ use super::prelude::*;
 
 /// Register the function
 pub fn register(library: &mut Library) {
-    library.add(Function::new("degrees").overload(
-        |v: Unitless, context: &CompileContext, display| {
-            Angle::from(context.set_unit_display(
-                context.mult(
+    library.add(
+        Function::new("degrees")
+            .overload(|v: Unitless, context: &CompileContext, display| {
+                Angle::from(context.mult_display(
                     v.0,
-                    number!(ProcNum::pi() / &ProcNum::from_i32(180).unwrap()),
-                ),
-                unit::ANGLE,
-                display,
-            ))
-        },
-    ));
+                    number!(ANGLE ProcNum::pi() / &ProcNum::from_i32(180).unwrap()),
+                    display,
+                ))
+            })
+            .overload(|v: Angle, context: &CompileContext, display| {
+                Unitless::from(context.div_display(
+                    v.0,
+                    number!(ANGLE ProcNum::pi() / &ProcNum::from_i32(180).unwrap()),
+                    display,
+                ))
+            }),
+    );
 }

@@ -212,9 +212,9 @@ impl<'r> Compiler<'r> {
         let one_side = self.context.mul(a_minus_threshold, a_minus_threshold);
         self.context.ternary(
             Condition::Comparison(Comparison {
-                a,
-                b: threshold,
-                kind: ComparisonKind::Lt,
+                a: threshold,
+                b: a,
+                kind: ComparisonKind::Gt,
             }),
             one_side,
             Context::zero(),
@@ -235,7 +235,7 @@ impl<'r> Compiler<'r> {
                 let five = self.context.constant(5.0);
                 self.context.mul(mag, five)
             }
-            RuleKind::Lt(b, a) | RuleKind::Gt(a, b) => self.gt(a, b),
+            RuleKind::Gt(a, b) => self.gt(a, b),
             RuleKind::Alternative(rules) => {
                 // necessary because borrowing
                 let qualities: Vec<_> = rules

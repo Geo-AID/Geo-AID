@@ -6,6 +6,7 @@ use crate::figure::Item;
 use crate::math::optimizations::ZeroLineDst;
 use crate::token::number::{CompExponent, ProcNum};
 use crate::unroll::figure::Node;
+use crate::unroll::flags::Flag;
 use derive_recursive::Recursive;
 use geo_aid_figure::{EntityIndex as EntityId, VarIndex};
 use num_traits::{FromPrimitive, One, Zero};
@@ -23,7 +24,7 @@ use std::rc::Rc;
 
 use self::optimizations::{EqExpressions, EqPointDst, RightAngle};
 
-use super::unroll::{Flag, GetData};
+use super::unroll::GetData;
 use super::{
     figure::Figure,
     unroll::{
@@ -1350,8 +1351,6 @@ pub enum RuleKind {
     PointEq(VarIndex, VarIndex),
     /// Equality of two numbers
     NumberEq(VarIndex, VarIndex),
-    /// a < b
-    Lt(VarIndex, VarIndex),
     /// a > b
     Gt(VarIndex, VarIndex),
     /// At least one of the rules must be satisfied
@@ -1366,7 +1365,6 @@ impl Display for RuleKind {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             RuleKind::PointEq(a, b) | RuleKind::NumberEq(a, b) => write!(f, "{a} = {b}"),
-            RuleKind::Lt(a, b) => write!(f, "{a} < {b}"),
             RuleKind::Gt(a, b) => write!(f, "{a} > {b}"),
             RuleKind::Alternative(v) => {
                 for kind in v {
@@ -1391,7 +1389,7 @@ impl FindEntities for RuleKind {
         let mut set = HashSet::new();
 
         match self {
-            Self::PointEq(a, b) | Self::NumberEq(a, b) | Self::Lt(a, b) | Self::Gt(a, b) => {
+            Self::PointEq(a, b) | Self::NumberEq(a, b) | Self::Gt(a, b) => {
                 set.extend(previous[a.0].iter().copied());
                 set.extend(previous[b.0].iter().copied());
             }
@@ -1447,7 +1445,7 @@ impl Reconstruct for Rule {
 impl Reindex for RuleKind {
     fn reindex(&mut self, map: &IndexMap) {
         match self {
-            Self::PointEq(a, b) | Self::NumberEq(a, b) | Self::Lt(a, b) | Self::Gt(a, b) => {
+            Self::PointEq(a, b) | Self::NumberEq(a, b) | Self::Gt(a, b) => {
                 a.reindex(map);
                 b.reindex(map);
             }
@@ -1476,7 +1474,6 @@ impl RuleKind {
             UnrolledRuleKind::PointEq(a, b) => Self::PointEq(math.load(a), math.load(b)),
             UnrolledRuleKind::ScalarEq(a, b) => Self::NumberEq(math.load(a), math.load(b)),
             UnrolledRuleKind::Gt(a, b) => Self::Gt(math.load(a), math.load(b)),
-            UnrolledRuleKind::Lt(a, b) => Self::Lt(math.load(a), math.load(b)),
             UnrolledRuleKind::Alternative(rules) => {
                 Self::Alternative(rules.iter().map(|x| Self::load(x, math)).collect())
             }
@@ -1516,7 +1513,7 @@ impl Normalize for RuleKind {
                 }
             }
             Self::Alternative(v) => v.sort(),
-            Self::Invert(_) | Self::Bias | Self::Gt(_, _) | Self::Lt(_, _) => (),
+            Self::Invert(_) | Self::Bias | Self::Gt(_, _) => (),
         }
     }
 }
