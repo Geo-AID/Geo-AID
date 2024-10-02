@@ -128,6 +128,54 @@ fn col_lies_on_circle(
     node
 }
 
+/// `pc lies_on line` - a point collection lies on a line.
+fn col_lies_on_line(
+    mut lhs: Pc<0>,
+    mut rhs: Expr<Line>,
+    context: &mut CompileContext,
+    display: Properties,
+    inverted: bool,
+    weight: ProcNum,
+) -> CollectionNode {
+    let len = lhs.data.length;
+
+    let mut node = CollectionNode::from_display(display, context);
+
+    for i in 0..len {
+        node.push(pt_lies_on_line(
+            index!(node lhs, i),
+            rhs.clone_with_node(),
+            context,
+            Properties::default(),
+            inverted,
+            weight.clone(),
+        ));
+    }
+
+    /*
+     * For a collection of A_1, A_2, ... A_n, we check if A_n lies between A_(n-1) and A_(n+1):
+     * (A_1, A_2, A_3), (A_2, A_3, A_4), ... (A_n-1, A_n, A_1)
+     */
+
+    if !inverted {
+        for i in 1..(len - 1) {
+            context.push_rule(UnrolledRule {
+                kind: UnrolledRuleKind::ScalarEq(
+                    context.add(
+                        context.distance_pp(index!(no-node lhs, i - 1), index!(no-node lhs, i)),
+                        context.distance_pp(index!(no-node lhs, i), index!(no-node lhs, i + 1)),
+                    ),
+                    context.distance_pp(index!(no-node lhs, i - 1), index!(no-node lhs, i + 1)),
+                ),
+                inverted: false,
+                weight: weight.clone(),
+            });
+        }
+    }
+
+    node
+}
+
 /// `point lies_on segment` - a point lies on a segment (on the containing line, between the delimiting points)
 fn pt_lies_on_segment(
     mut lhs: Expr<Point>,
@@ -212,6 +260,7 @@ pub fn register(library: &mut Library) {
             .overload(pt_lies_on_circle)
             .overload(pt_lies_on_line)
             .overload(col_lies_on_circle)
-            .overload(pt_lies_on_segment),
+            .overload(pt_lies_on_segment)
+            .overload(col_lies_on_line),
     );
 }

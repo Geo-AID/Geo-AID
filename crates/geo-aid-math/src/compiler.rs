@@ -213,9 +213,7 @@ fn compile_expr(builder: &mut FunctionBuilder, kind: ExprKind, external: Externa
                         ComparisonKind::Eq => FloatCC::Equal,
                         ComparisonKind::Neq => FloatCC::NotEqual,
                         ComparisonKind::Gt => FloatCC::GreaterThan,
-                        ComparisonKind::Lt => FloatCC::LessThan,
                         ComparisonKind::Gteq => FloatCC::GreaterThanOrEqual,
-                        ComparisonKind::Lteq => FloatCC::LessThanOrEqual,
                     };
                     let a = builder.use_var(var(cmp.a));
                     let b = builder.use_var(var(cmp.b));

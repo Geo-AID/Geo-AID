@@ -82,6 +82,12 @@ struct Bisector {
 
 **Returns**: an angle with the given measurement in degrees. Related: [radians](#radians)
 
+* `degrees(value: Scalar (angle))`
+
+**Return type**: [Scalar (scalar)](./types/primitives.md#Scalar)
+
+**Returns**: the angle value in degrees. Related: [radians](#radians)
+
 ## `dst`
 
 * `dst(AB: 2-P)`
@@ -197,6 +203,12 @@ struct Dst {
 **Return type**: [Scalar (angle)](./types/primitives.md#Scalar)
 
 **Returns**: an angle with the given measurement in radians. Related: [degrees](#degrees)
+
+* `radians(value: Scalar (angle))`
+
+**Return type**: [Scalar (no unit)](./types/primitives.md#Scalar)
+
+**Returns**: the value of the angle in radians. Related: [degrees](#degrees)
 
 ## `Segment`
 

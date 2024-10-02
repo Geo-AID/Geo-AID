@@ -27,3 +27,9 @@ Tells Geo-AID that point `P` lies on (has zero distance) from circle `omega`. No
 Tells Geo-AID that points in the collection `col` lie on (have zero distance) from circle `omega` *in exactly the given order*. Note: zero distance rules do not have any impact on the distance variable and decrease figure stability much less than other distance rules.
 
 **Note**: When negated, creates rules for the points not to be on the circle. Points that are on the circle, just not in the given order will not satisfy this rule.
+
+* `col: 0-P lies_on k: Line`
+
+Tells Geo-AID that points in the collection `col` lie on (have zero distance) from line `k` *in exactly the given order*. Note: zero distance rules do not have any impact on the distance variable and decrease figure stability much less than other distance rules.
+
+**Note**: When negated, creates rules for the points not to be on the ;ome. Points that are on the line, just not in the given order will not satisfy this rule.

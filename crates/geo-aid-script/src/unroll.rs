@@ -6,6 +6,7 @@
 //! This is also where all information on how to handle the figure is extracted.
 
 use crate::span;
+use flags::FlagSetConstructor;
 use geo_aid_derive::CloneWithNode;
 use geo_aid_figure::Style;
 use num_traits::{One, Zero};
@@ -41,9 +42,9 @@ use super::token::Number;
 use super::{
     builtins,
     parser::{
-        BinaryOperator, DisplayProperties, ExplicitIterator, Expression, FlagStatement,
-        ImplicitIterator, LetStatement, Parse, PredefinedRuleOperator, PropertyValue, Punctuated,
-        RuleOperator, RuleStatement, SimpleExpression, SimpleExpressionKind, Statement, Type,
+        BinaryOperator, DisplayProperties, ExplicitIterator, Expression, ImplicitIterator,
+        LetStatement, Parse, PredefinedRuleOperator, PropertyValue, Punctuated, RuleOperator,
+        RuleStatement, SimpleExpression, SimpleExpressionKind, Statement, Type,
     },
     token::{self, Ident, NamedIdent, PointCollection as PCToken, Span},
     unit, ComplexUnit, Error,
@@ -80,234 +81,6 @@ pub struct Variable<T: Displayed> {
     pub definition_span: Span,
     /// Variable's definition.
     pub definition: Expr<T>,
-}
-
-/// A set of flags, also referenced to as a flag group.
-pub type FlagSet = HashMap<String, Flag>;
-
-/// A helper struct for constructing a flag set.
-pub struct FlagSetConstructor {
-    pub flags: Vec<(String, Flag)>,
-}
-
-impl FlagSetConstructor {
-    /// Create a new, empty flag set.
-    #[must_use]
-    pub fn new() -> Self {
-        Self { flags: Vec::new() }
-    }
-
-    /// Add a string flag.
-    #[must_use]
-    pub fn add_ident<S: ToString>(mut self, name: &S) -> Self {
-        self.flags.push((
-            name.to_string(),
-            Flag {
-                name: name.to_string(),
-                kind: FlagKind::Setting(FlagSetting::Unset),
-                ty: FlagType::String,
-            },
-        ));
-
-        self
-    }
-
-    /// Add a string flag with a default
-    #[must_use]
-    pub fn add_ident_def<S: ToString>(mut self, name: &S, default: &S) -> Self {
-        self.flags.push((
-            name.to_string(),
-            Flag {
-                name: name.to_string(),
-                kind: FlagKind::Setting(FlagSetting::Default(FlagValue::String(
-                    default.to_string(),
-                ))),
-                ty: FlagType::String,
-            },
-        ));
-
-        self
-    }
-
-    /// Add a boolean flag
-    #[must_use]
-    pub fn add_bool<S: ToString>(mut self, name: &S) -> Self {
-        self.flags.push((
-            name.to_string(),
-            Flag {
-                name: name.to_string(),
-                kind: FlagKind::Setting(FlagSetting::Unset),
-                ty: FlagType::Boolean,
-            },
-        ));
-
-        self
-    }
-
-    /// Add a boolean flag with a default
-    #[must_use]
-    pub fn add_bool_def<S: ToString>(mut self, name: &S, default: bool) -> Self {
-        self.flags.push((
-            name.to_string(),
-            Flag {
-                name: name.to_string(),
-                kind: FlagKind::Setting(FlagSetting::Default(FlagValue::Bool(default))),
-                ty: FlagType::Boolean,
-            },
-        ));
-
-        self
-    }
-
-    /// Add a nested flag set
-    #[must_use]
-    pub fn add_set<S: ToString>(mut self, name: &S, set: FlagSetConstructor) -> Self {
-        self.flags.push((
-            name.to_string(),
-            Flag {
-                name: name.to_string(),
-                kind: FlagKind::Set(set.finish()),
-                ty: FlagType::Set,
-            },
-        ));
-
-        self
-    }
-
-    /// Finish creating a flag set.
-    #[must_use]
-    pub fn finish(self) -> FlagSet {
-        self.flags.into_iter().collect()
-    }
-}
-
-impl Default for FlagSetConstructor {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-/// A compiler flag.
-#[derive(Debug)]
-pub struct Flag {
-    /// The flag's name
-    pub name: String,
-    /// The flag kind.
-    pub kind: FlagKind,
-    /// The card type.
-    pub ty: FlagType,
-}
-
-impl Flag {
-    #[must_use]
-    pub fn as_set(&self) -> Option<&FlagSet> {
-        match &self.kind {
-            FlagKind::Setting(_) => None,
-            FlagKind::Set(set) => Some(set),
-        }
-    }
-
-    #[must_use]
-    pub fn as_bool(&self) -> Option<bool> {
-        match &self.kind {
-            FlagKind::Setting(setting) => setting.get_value().and_then(FlagValue::as_bool).copied(),
-            FlagKind::Set(_) => None,
-        }
-    }
-
-    #[must_use]
-    pub fn as_ident(&self) -> Option<&String> {
-        match &self.kind {
-            FlagKind::Setting(setting) => setting.get_value().and_then(FlagValue::as_string),
-            FlagKind::Set(_) => None,
-        }
-    }
-
-    /// Get the span of where the flag is set. Only works with non-flagset flags.
-    #[must_use]
-    pub fn get_span(&self) -> Option<Span> {
-        match &self.kind {
-            FlagKind::Setting(setting) => setting.get_span(),
-            FlagKind::Set(_) => None,
-        }
-    }
-}
-
-/// The type of this flag
-#[derive(Debug)]
-pub enum FlagType {
-    /// A nested flag set.
-    Set,
-    /// True or false
-    Boolean,
-    String,
-}
-
-/// The kind of a flag.
-#[derive(Debug)]
-pub enum FlagKind {
-    /// A specific setting for a value.
-    Setting(FlagSetting),
-    /// A nested flag set
-    Set(FlagSet),
-}
-
-/// A flag setting.
-#[derive(Debug)]
-pub enum FlagSetting {
-    /// A default value that has not been overriden (even if with the same value)
-    Default(FlagValue),
-    /// An unset flag, for ones without default values.
-    Unset,
-    /// An explicitly set value for a flag. NOT A FLAG SET.
-    Set(FlagValue, Span),
-}
-
-impl FlagSetting {
-    /// Get the flag's value, if there's any.
-    #[must_use]
-    pub fn get_value(&self) -> Option<&FlagValue> {
-        match self {
-            FlagSetting::Default(v) | FlagSetting::Set(v, _) => Some(v),
-            FlagSetting::Unset => None,
-        }
-    }
-
-    /// Get the span where the flag is set, if it is.
-    #[must_use]
-    pub fn get_span(&self) -> Option<Span> {
-        match self {
-            FlagSetting::Default(_) | FlagSetting::Unset => None,
-            FlagSetting::Set(_, sp) => Some(*sp),
-        }
-    }
-}
-
-/// A compiler flag value.
-#[derive(Debug)]
-pub enum FlagValue {
-    String(String),
-    Bool(bool),
-}
-
-impl FlagValue {
-    #[must_use]
-    pub fn as_bool(&self) -> Option<&bool> {
-        if let Self::Bool(v) = self {
-            Some(v)
-        } else {
-            None
-        }
-    }
-
-    #[must_use]
-    pub fn as_string(&self) -> Option<&String> {
-        if let Self::String(v) = self {
-            Some(v)
-        } else {
-            None
-        }
-    }
 }
 
 /// A rule operator.
@@ -1028,8 +801,6 @@ pub enum UnrolledRuleKind {
     ScalarEq(Expr<Scalar>, Expr<Scalar>),
     /// a > b
     Gt(Expr<Scalar>, Expr<Scalar>),
-    /// a < b
-    Lt(Expr<Scalar>, Expr<Scalar>),
     /// One of the rules must be true.
     Alternative(Vec<UnrolledRule>),
     /// Bias entities in an expression. Can alter behavior of some engines.
@@ -2703,7 +2474,7 @@ impl AnyExpr {
     pub fn can_convert_to_collection(&self, len: usize) -> bool {
         match self {
             Self::Line(_) | Self::Bundle(_) | Self::Circle(_) | Self::Scalar(_) => false,
-            Self::PointCollection(v) => v.data.length == len,
+            Self::PointCollection(v) => v.data.length == len || len == 0,
             Self::Point(_) => len == 1,
             Self::Unknown(_) => true,
         }
@@ -3048,9 +2819,6 @@ impl Display for UnrolledRule {
             UnrolledRuleKind::ScalarEq(a, b) => write!(f, "{a} {inv}= {b}"),
             UnrolledRuleKind::Gt(a, b) => {
                 write!(f, "{a} {} {b}", if self.inverted { "<=" } else { ">" })
-            }
-            UnrolledRuleKind::Lt(a, b) => {
-                write!(f, "{a} {} {b}", if self.inverted { ">=" } else { "<" })
             }
             UnrolledRuleKind::Alternative(v) => {
                 write!(
@@ -4486,44 +4254,6 @@ fn unroll_gt(
     }
 }
 
-/// Unroll a lower-than rule.
-fn unroll_lt(
-    lhs: Expr<Scalar>,
-    rhs: Expr<Scalar>,
-    context: &mut CompileContext,
-    full_span: Span,
-    inverted: bool,
-    display: Properties,
-) -> Box<dyn Node> {
-    if lhs.data.unit.is_some() {
-        let rhs = if rhs.can_convert_unit(lhs.data.unit) {
-            rhs.convert_unit(lhs.data.unit, context)
-        } else {
-            context.push_error(Error::InconsistentTypes {
-                expected: (lhs.get_value_type(), Box::new(lhs.span)),
-                got: (rhs.get_value_type(), Box::new(rhs.span)),
-                error_span: Box::new(full_span),
-            });
-
-            Expr {
-                span: rhs.span,
-                node: rhs.node,
-                data: Rc::new(Scalar::dummy()),
-            }
-            .convert_unit(lhs.data.unit, context)
-        };
-
-        context.lt_display(lhs, rhs, inverted, display)
-    } else if rhs.data.unit.is_some() {
-        let lhs = lhs.convert_unit(rhs.data.unit, context);
-        context.lt_display(lhs, rhs, inverted, display)
-    } else {
-        let lhs = lhs.convert_unit(Some(unit::SCALAR), context);
-        let rhs = rhs.convert_unit(Some(unit::SCALAR), context);
-        context.lt_display(lhs, rhs, inverted, display)
-    }
-}
-
 /// Unroll a generic rule.
 fn unroll_rule(
     (lhs, op, rhs): (AnyExpr, &RuleOperator, AnyExpr),
@@ -4538,9 +4268,9 @@ fn unroll_rule(
             PredefinedRuleOperator::Eq(_) => {
                 unroll_eq(lhs, rhs, context, full_span, inverted, display)
             }
-            PredefinedRuleOperator::Lt(_) => unroll_lt(
-                lhs.convert(context),
+            PredefinedRuleOperator::Lt(_) => unroll_gt(
                 rhs.convert(context),
+                lhs.convert(context),
                 context,
                 full_span,
                 inverted,
@@ -4562,9 +4292,9 @@ fn unroll_rule(
                 !inverted,
                 display,
             ),
-            PredefinedRuleOperator::Gteq(_) => unroll_lt(
-                lhs.convert(context),
+            PredefinedRuleOperator::Gteq(_) => unroll_gt(
                 rhs.convert(context),
+                lhs.convert(context),
                 context,
                 full_span,
                 !inverted,
@@ -4650,161 +4380,6 @@ fn unroll_rule_statement(
     Ok(nodes)
 }
 
-/// Set a boolean flag.
-fn set_flag_bool(flag: &mut Flag, stmt: &FlagStatement) -> Result<(), Error> {
-    match &stmt.value {
-        super::parser::FlagValue::Set(_) => {
-            return Err(Error::BooleanExpected {
-                error_span: stmt.get_span(),
-            })
-        }
-        super::parser::FlagValue::Ident(ident) => match &mut flag.kind {
-            FlagKind::Setting(s) => match s {
-                FlagSetting::Default(_) | FlagSetting::Unset => {
-                    *s = FlagSetting::Set(
-                        FlagValue::Bool(match ident.ident.as_str() {
-                            "enabled" | "on" | "true" => true,
-                            "disabled" | "off" | "false" => false,
-                            _ => {
-                                return Err(Error::BooleanExpected {
-                                    error_span: stmt.get_span(),
-                                })
-                            }
-                        }),
-                        stmt.get_span(),
-                    );
-                }
-                FlagSetting::Set(_, sp) => {
-                    return Err(Error::RedefinedFlag {
-                        error_span: stmt.get_span(),
-                        first_defined: *sp,
-                        flag_name: flag.name.clone(),
-                    })
-                }
-            },
-            FlagKind::Set(_) => unreachable!(),
-        },
-        super::parser::FlagValue::Number(num) => match &mut flag.kind {
-            FlagKind::Setting(s) => match s {
-                FlagSetting::Default(_) | FlagSetting::Unset => {
-                    *s = FlagSetting::Set(
-                        FlagValue::Bool(match num {
-                            Number::Integer(i) => match i.parsed.parse::<u8>() {
-                                Ok(0) => false,
-                                Ok(1) => true,
-                                _ => {
-                                    return Err(Error::BooleanExpected {
-                                        error_span: stmt.get_span(),
-                                    })
-                                }
-                            },
-                            Number::Float(_) => {
-                                return Err(Error::BooleanExpected {
-                                    error_span: stmt.get_span(),
-                                })
-                            }
-                        }),
-                        stmt.get_span(),
-                    );
-                }
-                FlagSetting::Set(_, sp) => {
-                    return Err(Error::RedefinedFlag {
-                        error_span: stmt.get_span(),
-                        first_defined: *sp,
-                        flag_name: flag.name.clone(),
-                    })
-                }
-            },
-            FlagKind::Set(_) => unreachable!(),
-        },
-    }
-
-    Ok(())
-}
-
-/// Set a flag's value.
-fn set_flag(set: &mut FlagSet, flag: &FlagStatement, context: &CompileContext) {
-    set_flag_recursive(set, flag, context, 0);
-}
-
-/// Set a flag's value.
-fn set_flag_recursive(
-    set: &mut FlagSet,
-    flag: &FlagStatement,
-    context: &CompileContext,
-    depth: usize,
-) {
-    let Some(flag_ref) = set.get_mut(&flag.name.name.get(depth).unwrap().ident) else {
-        let flag_name = flag.name.name.get(depth).unwrap().ident.clone();
-
-        let suggested = most_similar(set.keys(), &flag_name);
-
-        context.push_error(Error::FlagDoesNotExist {
-            flag_name,
-            flag_span: flag.name.get_span(),
-            error_span: flag.get_span(),
-            suggested,
-        });
-
-        // Pretend the flag doesn't exist.
-        return;
-    };
-
-    if flag.name.name.len() - 1 == depth {
-        match flag_ref.ty {
-            FlagType::Set => match &flag.value {
-                super::parser::FlagValue::Set(set) => match &mut flag_ref.kind {
-                    FlagKind::Setting(_) => unreachable!(),
-                    FlagKind::Set(s) => {
-                        for stat in &set.flags {
-                            set_flag(s, stat, context);
-                        }
-                    }
-                },
-                super::parser::FlagValue::Ident(_) | super::parser::FlagValue::Number(_) => {
-                    context.push_error(Error::FlagSetExpected {
-                        error_span: flag.get_span(),
-                    });
-                }
-            },
-            FlagType::Boolean => {
-                context.ok(set_flag_bool(flag_ref, flag));
-            }
-            FlagType::String => match &flag.value {
-                super::parser::FlagValue::Number(_) | super::parser::FlagValue::Set(_) => {
-                    context.push_error(Error::StringExpected {
-                        error_span: flag.get_span(),
-                    });
-                }
-                super::parser::FlagValue::Ident(ident) => match &mut flag_ref.kind {
-                    FlagKind::Setting(s) => match s {
-                        FlagSetting::Default(_) | FlagSetting::Unset => {
-                            *s = FlagSetting::Set(
-                                FlagValue::String(ident.ident.clone()),
-                                flag.get_span(),
-                            );
-                        }
-                        FlagSetting::Set(_, sp) => {
-                            context.push_error(Error::RedefinedFlag {
-                                error_span: flag.get_span(),
-                                first_defined: *sp,
-                                flag_name: flag_ref.name.clone(),
-                            });
-                        }
-                    },
-                    FlagKind::Set(_) => unreachable!(),
-                },
-            },
-        }
-    } else if let FlagKind::Set(set) = &mut flag_ref.kind {
-        set_flag_recursive(set, flag, context, depth + 1);
-    } else {
-        context.push_error(Error::FlagSetExpected {
-            error_span: flag.get_span(),
-        });
-    }
-}
-
 /// Unrolls the given script. All iterators are expanded and all conversions applied. The output can be immediately compiled.
 ///
 /// # Errors
@@ -4840,7 +4415,7 @@ pub fn unroll(input: &str) -> Result<(CompileContext, CollectionNode), Vec<Error
         .finish();
 
     for flag in statements.iter().filter_map(Statement::as_flag) {
-        set_flag(&mut flags, flag, &context);
+        flags::set_flag(&mut flags, flag, &context);
     }
 
     context.flags = flags;

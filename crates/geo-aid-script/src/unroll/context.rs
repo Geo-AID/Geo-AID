@@ -14,9 +14,10 @@ use crate::unroll::{AnyExpr, CloneWithNode};
 use crate::{unit, ComplexUnit, Error};
 
 use super::figure::FromExpr;
+use super::flags::FlagSet;
 use super::{
-    Circle, CollectionNode, Displayed, Expr, FlagSet, HierarchyNode, Line, Node, Point, Properties,
-    Scalar, ScalarData, UnrolledRule, UnrolledRuleKind,
+    Circle, CollectionNode, Displayed, Expr, HierarchyNode, Line, Node, Point, Properties, Scalar,
+    ScalarData, UnrolledRule, UnrolledRuleKind,
 };
 
 /// The context of unroll process.
@@ -391,5 +392,4 @@ impl CompileContext {
     generic_rule! {scalar_eq(Scalar, Scalar) -> ScalarEq}
     generic_rule! {point_eq(Point, Point) -> PointEq}
     generic_rule! {gt(Scalar, Scalar) -> Gt}
-    generic_rule! {lt(Scalar, Scalar) -> Lt}
 }

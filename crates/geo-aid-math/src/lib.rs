@@ -25,9 +25,7 @@ pub enum ComparisonKind {
     Eq,
     Neq,
     Gt,
-    Lt,
     Gteq,
-    Lteq,
 }
 
 /// A condition for ternary operators
@@ -171,9 +169,7 @@ impl Context {
                     ComparisonKind::Eq => "=",
                     ComparisonKind::Neq => "!=",
                     ComparisonKind::Gt => ">",
-                    ComparisonKind::Lt => "<",
                     ComparisonKind::Gteq => "≥",
-                    ComparisonKind::Lteq => "≤",
                 };
 
                 format!("{a} {sign} {b}")
@@ -377,9 +373,9 @@ impl Context {
     pub fn min(&mut self, a: Expr, b: Expr) -> Expr {
         self.ternary(
             Condition::Comparison(Comparison {
-                a,
-                b,
-                kind: ComparisonKind::Lt,
+                a: b,
+                b: a,
+                kind: ComparisonKind::Gt,
             }),
             a,
             b,
@@ -404,9 +400,9 @@ impl Context {
     /// Takes the absolute value.
     pub fn abs(&mut self, v: Expr) -> Expr {
         let cond = Condition::Comparison(Comparison {
-            a: Self::zero(),
-            b: v,
-            kind: ComparisonKind::Lt,
+            a: v,
+            b: Self::zero(),
+            kind: ComparisonKind::Gt,
         });
 
         // `dabs(a) = if a > 0 da else -da`
