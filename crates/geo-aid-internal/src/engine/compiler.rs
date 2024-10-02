@@ -483,9 +483,9 @@ impl<'r> Compiler<'r> {
             ExprKind::PointPoint { p, q } => {
                 let p = self.variables[p.0].to_complex();
                 let q = self.variables[q.0].to_complex();
-                let p_minus_q = p.sub(q, &mut self.context);
-                let mag = p_minus_q.modulus(&mut self.context);
-                let normalized = p_minus_q.div_real(mag, &mut self.context);
+                let q_minus_p = q.sub(p, &mut self.context);
+                let mag = q_minus_p.modulus(&mut self.context);
+                let normalized = q_minus_p.div_real(mag, &mut self.context);
                 LineExpr {
                     origin: p,
                     direction: normalized,
