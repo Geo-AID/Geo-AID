@@ -19,6 +19,9 @@ def run_command(command: str) -> None:
     proc.communicate()
     proc.wait()
 
+    if proc.returncode != 0:
+        raise RuntimeError(f"command {command} failed.")
+
 
 def run_cargo_build() -> None:
     command = "cargo build --verbose --workspace"
