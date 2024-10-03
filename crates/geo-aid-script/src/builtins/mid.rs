@@ -1,10 +1,34 @@
 use crate::{
     parser::Type,
-    unroll::{AnyExpr, Overload},
+    unroll::{AnyExpr, Convert, Overload},
 };
 
-/// The `mid` function.
 use super::prelude::*;
+
+struct MidPoint;
+
+impl Overload for MidPoint {
+    fn get_returned_type(&self, params: &[AnyExpr]) -> Option<Type> {
+        params
+            .iter()
+            .all(|p| p.can_convert_to(Type::Point))
+            .then_some(Type::Point)
+    }
+
+    fn unroll(
+        &self,
+        params: Vec<AnyExpr>,
+        context: &mut CompileContext,
+        props: Properties,
+    ) -> AnyExpr {
+        context
+            .average_p_display(
+                params.into_iter().map(|x| x.convert(context)).collect(),
+                props,
+            )
+            .into()
+    }
+}
 
 struct MidScalar;
 
@@ -68,6 +92,7 @@ pub fn register(library: &mut Library) {
                     props,
                 )
             })
-            .overload(MidScalar),
+            .overload(MidScalar)
+            .overload(MidPoint),
     );
 }

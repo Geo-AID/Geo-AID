@@ -14,5 +14,13 @@ fn line_point(
 
 /// Register the function
 pub fn register(library: &mut Library) {
-    library.add(Function::new("parallel_through").overload(line_point));
+    library.add(
+        Function::new("parallel_through")
+            .overload(line_point)
+            .overload(
+                |point: Expr<Point>, line: Expr<Line>, context: &CompileContext, props| {
+                    line_point(line, point, context, props)
+                },
+            ),
+    );
 }
