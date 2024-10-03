@@ -43,7 +43,7 @@ def run_cargo_clippy() -> None:
     run_command(command)
 
 
-def run_unit_tests_from_directory(engine: str) -> None:
+def run_unit_tests_from_directory(engine: str, print_output=bool) -> None:
     # First, we run all tests through Geo-AID to their respective directories.
     tests = []
     for file in os.scandir("tests"):
@@ -56,12 +56,21 @@ def run_unit_tests_from_directory(engine: str) -> None:
 
             os.makedirs(output, exist_ok=True)
 
-            proc = subprocess.Popen([
+            cmd = [
                 "cargo", "run", "--release", "--",
                 file.path, "-o", os.path.join(output),
                 "-l", os.path.join(output, "log.log"),
                 "-f", "svg", "-e", engine
-            ])
+            ]
+
+            if print_output:
+                cmd = [
+                    "cargo", "run", "--release", "--",
+                    file.path, "-o", os.path.join(output),
+                    "-f", "svg", "-e", engine
+                ]
+
+            proc = subprocess.Popen(cmd)
 
             proc.communicate()
             proc.wait()
@@ -134,6 +143,13 @@ def run_unit_tests_from_directory(engine: str) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
+
+    parser.add_argument(
+        '--print_output',
+        action="store_true",
+        help="When set, all output will be printed to stdout."
+    )
+
     parser.add_argument(
         'engine',
         choices=[e.value for e in Engine],  # This will be ['glide', 'rage']
@@ -141,6 +157,7 @@ def main() -> None:
         default=Engine.GLIDE.value,  # Default to "glide"
         help="Choose an engine: 'glide' or 'rage'. Default is 'glide'."
     )
+
 
     args = parser.parse_args()
 
@@ -150,7 +167,7 @@ def main() -> None:
     run_cargo_test()
     run_cargo_fmt()
     run_cargo_clippy()
-    run_unit_tests_from_directory(engine)
+    run_unit_tests_from_directory(engine, args.print_output)
 
 
 if __name__ == "__main__":
