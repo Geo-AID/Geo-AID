@@ -1,3 +1,4 @@
+import argparse
 import subprocess
 import os
 import sys
@@ -5,6 +6,27 @@ from pathlib import Path
 from typing import List, Tuple
 import csv
 import time
+import enum
+
+
+class Engine(enum.Enum):
+    GLIDE = "glide"
+    RAGE = "rage"
+
+
+def run_command(command: str) -> None:
+    proc = subprocess.Popen(command.split())
+    proc.communicate()
+    proc.wait()
+
+    if proc.returncode != 0:
+        raise RuntimeError(f"command {command} failed.")
+
+
+def run_cargo_build() -> None:
+    command = "cargo build --verbose --workspace"
+    run_command(command)
+
 
 def run_cargo_test() -> None:
     command = "cargo test --verbose --workspace"
