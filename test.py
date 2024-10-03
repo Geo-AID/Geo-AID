@@ -40,17 +40,7 @@ def run_cargo_clippy() -> None:
     run_command(command)
 
 
-def main() -> None:
-
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        'engine',
-        choices=[e.value for e in Engine],  # This will be ['glide', 'rage']
-        nargs='?',  # Makes it optional
-        default=Engine.GLIDE.value,  # Default to "glide"
-        help="Choose an engine: 'glide' or 'rage'. Default is 'glide'."
-    )
-
+def run_unit_tests_from_directory(engine: str) -> None:
     # First, we run all tests through Geo-AID to their respective directories.
     tests = []
     for file in os.scandir("tests"):
@@ -136,6 +126,27 @@ def main() -> None:
             total_time_new / testcount,
             (total_time_new - total_time_old) / testcount
         ])
+
+def main() -> None:
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        'engine',
+        choices=[e.value for e in Engine],  # This will be ['glide', 'rage']
+        nargs='?',  # Makes it optional
+        default=Engine.GLIDE.value,  # Default to "glide"
+        help="Choose an engine: 'glide' or 'rage'. Default is 'glide'."
+    )
+
+    args = parser.parse_args()
+
+    engine = args.engine
+
+    run_cargo_build()
+    run_cargo_test()
+    run_cargo_fmt()
+    run_cargo_clippy()
+    run_unit_tests_from_directory(engine)
 
 
 if __name__ == "__main__":
