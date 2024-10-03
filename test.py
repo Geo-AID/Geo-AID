@@ -1,4 +1,3 @@
-import argparse
 import subprocess
 import os
 import sys
@@ -58,7 +57,7 @@ def run_unit_tests_from_directory(engine: str) -> None:
 
             proc = subprocess.Popen([
                 "cargo", "run", "--release", "--",
-                file.path, "-o", os.path.join(output),
+                file.path, "-o", os.path.join(output, "result.svg"),
                 "-l", os.path.join(output, "log.log"),
                 "-f", "svg", "-e", engine
             ])
