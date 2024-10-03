@@ -51,11 +51,6 @@ def main() -> None:
         help="Choose an engine: 'glide' or 'rage'. Default is 'glide'."
     )
 
-    # if len(sys.argv) == 1:
-    #     engine = "glide"
-    # else:
-    #     engine = sys.argv[1]
-
     # First, we run all tests through Geo-AID to their respective directories.
     tests = []
     for file in os.scandir("tests"):
