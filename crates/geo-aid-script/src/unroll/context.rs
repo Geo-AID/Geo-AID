@@ -7,7 +7,7 @@ use std::mem;
 use std::rc::Rc;
 use std::{collections::HashMap, fmt::Debug};
 
-use crate::builtins::macros::number;
+use super::library::macros::number;
 use crate::span;
 use crate::token::number::ProcNum;
 use crate::unroll::{AnyExpr, CloneWithNode};

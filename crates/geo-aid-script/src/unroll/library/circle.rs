@@ -15,7 +15,7 @@ fn circle_function(
 /// Register the function
 pub fn register(library: &mut Library) {
     library.add(
-        Function::new("Circle")
+        Function::new("circle")
             .overload(circle_function)
             .overload(
                 |radius: Distance, center: Expr<Point>, context: &CompileContext, display| {

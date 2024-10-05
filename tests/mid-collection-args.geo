@@ -2,7 +2,7 @@
 # argument should return the mean of the points.
 # #156
 
-let A, B = Point(), Point();
+let A, B = Point();
 
 let C = mid(AB);
 

@@ -4,8 +4,8 @@
 use geo_aid_derive::Parse;
 use num_traits::Zero;
 
-use crate::builtins;
 use crate::token::number::ProcNum;
+use crate::unroll::library;
 use std::fmt::Formatter;
 use std::{
     fmt::{Debug, Display},
@@ -974,7 +974,7 @@ impl Type {
                 if into == self {
                     true
                 } else if let Type::PointCollection(count) = into {
-                    builtins::get_bundle_pc(name) == *count
+                    library::get_bundle_pc(name) == *count
                 } else {
                     false
                 }

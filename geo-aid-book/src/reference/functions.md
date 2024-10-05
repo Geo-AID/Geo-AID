@@ -1,5 +1,8 @@
 # Functions
 
+Here are listed all of GeoScript's functions. Note that, the names are case-insensitive.
+Overloads are listed in the order they are checked.
+
 ## `angle`
 
 * `angle(ABC: 3-P)`
@@ -74,7 +77,7 @@ struct Bisector {
 
 **Returns**: a circle with an adjusted (free point) `center` and an adjusted (free scalar) `radius`.
 
-## `degrees`
+## `degrees` (alias `deg`)
 
 * `degrees(value: Scalar (no unit))`
 
@@ -148,6 +151,17 @@ struct Dst {
 
 **Note**: `display_dot` property is not currently supported.
 
+## `line`
+
+* `line(col: 2-PC)`
+* `line(P: Point, Q: Point)`
+
+**Return type**: [Line](./types/primitives.md#Line)
+
+**Returns**: a line through two given points.
+
+**Displays**: The created line.
+
 ## `mid`
 
 * `mid(col: 0-P)`
@@ -170,7 +184,7 @@ struct Dst {
 
 **Returns**: The middle point of `P_1`, `P_2`, ... `P_n`. Special cases: when `n=2`, the middle of a segment; When `n=3`, the centroid of a triangle.
 
-## `parallel_through`
+## `parallel_through` (alias `parallel`)
 
 * `parallel_through(P: Point, k: Line)`
 * `parallel_through(k: Line, P: Point)`
@@ -179,7 +193,7 @@ struct Dst {
 
 **Returns**: a line parallel to `k`, passing through `P`.
 
-## `perpendicular_through`
+## `perpendicular_through` (alias `perpendicular`)
 
 * `perpendicular_through(P: Point, k: Line)`
 * `perpendicular_through(k: Line, P: Point)`
@@ -196,7 +210,7 @@ struct Dst {
 
 **Returns**: an adjusted (free) point.
 
-## `radians`
+## `radians` (alias `rad`)
 
 * `radians(value: Scalar (no unit))`
 

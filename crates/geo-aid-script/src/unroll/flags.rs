@@ -253,7 +253,7 @@ fn set_flag_recursive(
     let Some(flag_ref) = set.get_mut(&flag.name.name.get(depth).unwrap().ident) else {
         let flag_name = flag.name.name.get(depth).unwrap().ident.clone();
 
-        let suggested = most_similar(set.keys(), &flag_name);
+        let suggested = most_similar(set.keys(), &flag_name).cloned();
 
         context.push_error(Error::FlagDoesNotExist {
             flag_name,

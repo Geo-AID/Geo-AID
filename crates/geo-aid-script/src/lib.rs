@@ -15,7 +15,6 @@ use serde::Serialize;
 use self::parser::Type;
 use self::token::{number::CompExponent, NamedIdent, Span, Token};
 
-mod builtins;
 pub mod cli;
 pub mod figure;
 pub mod geometry;
@@ -123,7 +122,7 @@ pub enum Error {
         /// The function name
         function_name: String,
         /// The potentially intended name.
-        suggested: Option<String>,
+        suggested: Option<&'static str>,
     },
     /// An undefined method was referenced.
     UndefinedMethod {
@@ -145,7 +144,7 @@ pub enum Error {
         /// The type the field was searched on
         on_type: Type,
         /// The potentially intended name.
-        suggested: Option<String>,
+        suggested: Option<&'static str>,
     },
     /// A field was referenced on type with no fields.
     NoFieldsOnType {
@@ -316,7 +315,7 @@ pub enum Error {
         /// The unexpected property
         option: String,
         /// The potentially intended property
-        suggested: Option<String>,
+        suggested: Option<&'static str>,
     },
     /// A property was repeated
     RepeatedDisplayOption {

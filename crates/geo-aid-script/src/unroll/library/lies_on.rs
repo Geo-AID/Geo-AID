@@ -257,6 +257,7 @@ fn pt_lies_on_segment(
 pub fn register(library: &mut Library) {
     library.add(
         Rule::new("lies_on")
+            .alias("on")
             .overload(pt_lies_on_circle)
             .overload(pt_lies_on_line)
             .overload(col_lies_on_circle)

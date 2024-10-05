@@ -5,7 +5,7 @@ use super::prelude::*;
 /// Register the function
 pub fn register(library: &mut Library) {
     library.add(
-        Function::new("Point").overload(|context: &CompileContext, props| {
+        Function::new("point").overload(|context: &CompileContext, props| {
             context.expr_with(Point::Free, props, Vec::new())
         }),
     );

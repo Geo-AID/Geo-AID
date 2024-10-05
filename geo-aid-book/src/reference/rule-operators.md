@@ -1,12 +1,15 @@
 # Rule operators
 
+Here are listed all of GeoScript's rules. Note that, the names are case-insensitive.
+Overloads are listed in the order they are checked.
+
 ## Comparison
 
 The operators `<`, `<=`, `>`, `>=` are only allowed between [Scalars](./types/primitives.md#scalar) of the same unit. They are simple comparison operators with their rules evaluated based on the relative difference between the two values.
 
 The operator `=` (and its negation, `!=`) is allowed between [Scalars](./types/primitives.md#scalar) of the same unit and [Points](./types/primitives.md#point). Its rule is evaluated based on the absolute distance between the two values.
 
-## `lies_on`
+## `lies_on` (alias `on`)
 
 All uses accept `weight` property.
 
