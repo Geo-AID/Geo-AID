@@ -68,12 +68,12 @@ multiple files with different extensions are generated. This behavior can be mod
   
   Multiple formats can be provided, each after a `-f` or `--format.`
 
-* `--width <WIDTH>` — Canvas width (treated very differently for LaTeX)
+* `--width <WIDTH>` — Canvas width.
 
-  Default value: `500`
+  Default value: `500` for `svg`, `10` for `latex`, `5` for `json` and `geogebra`, `1` for `json`.
 * `--height <HEIGHT>` — Canvas height (treated very differently for LaTeX)
 
-  Default value: `500`
+  Default value: equal to width (e.g. if `width` is set to `300`, default value for `height` is `300`).
 * `-l`, `--log <LOG>` — Where to put the log output. Geo-AID has a logging feature for concise information about the
   rendering process (quality and time).
 

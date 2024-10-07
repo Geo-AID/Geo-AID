@@ -91,7 +91,7 @@ struct Bisector {
 
 **Returns**: the angle value in degrees. Related: [radians](#radians)
 
-## `dst`
+## `dst` (alias `len`)
 
 * `dst(AB: 2-P)`
 * `dst(A: Point, B: Point)`

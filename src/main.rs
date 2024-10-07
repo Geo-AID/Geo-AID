@@ -246,7 +246,8 @@ fn main() {
     for format in args.format.iter().copied() {
         let width = args.width.unwrap_or(match format {
             Format::Json => 1.0,
-            Format::Geogebra | Format::Latex | Format::Plaintext => 5.0,
+            Format::Geogebra | Format::Plaintext => 5.0,
+            Format::Latex => 10.0,
             Format::Svg => 500.0,
         });
         let height = args.height.unwrap_or(width);

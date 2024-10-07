@@ -198,7 +198,7 @@ macro_rules! impl_overload_function {
                 #[allow(unused_mut, unused_variables)]
                 let mut param = params.into_iter();
                 (self.0)(
-                    $($arg::Target::convert_from(param.next().unwrap(), context).into(),)*
+                    $($arg::Target::convert_from(param.next().unwrap().convert_to($arg::get_type(), context), context).into(),)*
                     context, props
                 ).into()
             }
@@ -495,7 +495,9 @@ pub trait Addable {
 impl Addable for Function {
     fn add_to(mut self, library: &mut Library) {
         for alias in mem::take(&mut self.aliases) {
-            library.rule_ops.insert(alias, Definition::Alias(self.name));
+            library
+                .functions
+                .insert(alias, Definition::Alias(self.name));
         }
 
         library

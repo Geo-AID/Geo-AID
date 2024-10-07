@@ -95,7 +95,7 @@ impl Projector {
     }
 
     /// Get the point's label position relative to the point.
-    fn get_label_position_rel(&self, point: Complex) -> Position {
+    fn get_label_position_rel(&self, point: Complex, min_size: f64) -> Position {
         let mut vectors = Vec::new();
 
         // Checking the lines for proximity.
@@ -141,7 +141,7 @@ impl Projector {
         let mut vec_iter = vectors.iter();
         vec_iter.next();
 
-        let radius = 10.0;
+        let radius = 15.0;
 
         if vectors.is_empty() {
             // No vectors associated with the given point.
@@ -183,7 +183,8 @@ impl Projector {
             let bisector_vec = Complex::polar(
                 bisector_angle,
                 (radius / (biggest_angle / 2.0).sin()).min(radius),
-            );
+            ) * min_size
+                / 500.0;
 
             // to do -> better scaling
             if flip {
@@ -561,6 +562,7 @@ pub fn project(figure: Generated, _flags: &Arc<Flags>, canvas_size: (f64, f64)) 
     let size1 = Complex::new(canvas_size.0, canvas_size.1);
     let size09 = size1 * 0.9;
     let size005 = size1 * 0.05;
+    let min_size = f64::min(canvas_size.0, canvas_size.1);
 
     // The scaled frame should be at most (and equal for at least one dimension) 90% of the size of the desired image (margins for rendering).
     let scale = f64::min(
@@ -627,7 +629,7 @@ pub fn project(figure: Generated, _flags: &Arc<Flags>, canvas_size: (f64, f64)) 
     for point in rendered.iter_mut().filter_map(Rendered::as_point_mut) {
         let pos = point.position;
         if let Some(label) = &mut point.label {
-            label.position = pos + projector.get_label_position_rel(pos.into());
+            label.position = pos + projector.get_label_position_rel(pos.into(), min_size);
         }
     }
 

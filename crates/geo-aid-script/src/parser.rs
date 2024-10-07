@@ -979,7 +979,7 @@ impl Type {
                     false
                 }
             }
-            Type::Unknown => false,
+            Type::Unknown => true,
         }
     }
 }

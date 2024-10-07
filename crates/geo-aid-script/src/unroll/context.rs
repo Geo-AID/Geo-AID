@@ -330,8 +330,48 @@ impl CompileContext {
     generic_expr! {circle(center: Point, radius: Scalar) -> Circle::Circle}
     generic_expr! {add(a: Scalar, b: Scalar) -> Scalar[inferred]::Add}
     generic_expr! {sub(a: Scalar, b: Scalar) -> Scalar[inferred]::Subtract}
-    generic_expr! {mult(a: Scalar, b: Scalar) -> Scalar[inferred]::Multiply}
-    generic_expr! {div(a: Scalar, b: Scalar) -> Scalar[inferred]::Divide}
+
+    pub fn mult_display(
+        &self,
+        mut a: Expr<Scalar>,
+        mut b: Expr<Scalar>,
+        display: Properties,
+    ) -> Expr<Scalar> {
+        let nodes = take_nodes!(a, b);
+        self.expr_with(
+            Scalar {
+                unit: a.data.unit.zip(b.data.unit).map(|(a, b)| a * &b),
+                data: ScalarData::Multiply(a, b),
+            },
+            display,
+            nodes,
+        )
+    }
+
+    pub fn mult(&self, a: Expr<Scalar>, b: Expr<Scalar>) -> Expr<Scalar> {
+        self.mult_display(a, b, Properties::default())
+    }
+
+    pub fn div_display(
+        &self,
+        mut a: Expr<Scalar>,
+        mut b: Expr<Scalar>,
+        display: Properties,
+    ) -> Expr<Scalar> {
+        let nodes = take_nodes!(a, b);
+        self.expr_with(
+            Scalar {
+                unit: a.data.unit.zip(b.data.unit).map(|(a, b)| a / &b),
+                data: ScalarData::Divide(a, b),
+            },
+            display,
+            nodes,
+        )
+    }
+
+    pub fn div(&self, a: Expr<Scalar>, b: Expr<Scalar>) -> Expr<Scalar> {
+        self.div_display(a, b, Properties::default())
+    }
 }
 
 /// Helper macro for general rule functions.

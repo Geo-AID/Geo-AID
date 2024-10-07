@@ -1,6 +1,6 @@
 //! Everything related to unrolled figures.
 
-use crate::figure::{CircleItem, LineItem, PointItem, RayItem};
+use crate::figure::{CircleItem, LineItem, PointItem, RayItem, SegmentItem};
 use crate::math::Build;
 use crate::{
     figure::SpannedMathString as MathString,
@@ -1093,7 +1093,7 @@ impl Node for LineNode {
                     Line::LineFromPoints(a, b) => {
                         let p_id = build.load(a);
                         let q_id = build.load(b);
-                        build.add(RayItem {
+                        build.add(SegmentItem {
                             p_id,
                             q_id,
                             label: label.string,
@@ -1109,8 +1109,6 @@ impl Node for LineNode {
 
 impl FromExpr<Line> for LineNode {
     fn from_expr(expr: &Expr<Line>, mut props: Properties, context: &CompileContext) -> Self {
-        let _ = props.get::<MathString>("default-label");
-
         let node = Self {
             display: props.get("display").maybe_unset(true),
             label: props
