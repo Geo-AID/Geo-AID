@@ -124,6 +124,7 @@ impl BuildAssociated<ScalarNode> for Associated {
 pub fn register(library: &mut Library) {
     library.add(
         Function::new("dst")
+            .alias("len")
             .overload(distance_convert_pc)
             .overload(
                 |v: Distance, context: &CompileContext, display: Properties| {

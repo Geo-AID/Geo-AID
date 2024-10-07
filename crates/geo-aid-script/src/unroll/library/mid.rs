@@ -1,9 +1,9 @@
 use crate::{
     parser::Type,
-    unroll::{AnyExpr, Convert, Overload},
+    unroll::{AnyExpr, Convert},
 };
 
-use super::prelude::*;
+use super::{prelude::*, Overload};
 
 struct MidPoint;
 

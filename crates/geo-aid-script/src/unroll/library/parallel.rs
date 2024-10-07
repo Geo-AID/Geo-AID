@@ -1,21 +1,22 @@
-//! The `perpendicular_through` function
+//! The `parallel_through` function
 
 use super::prelude::*;
 
-/// `perpendicular_through(line, point)` - returns a line perpendicular to the 1st argument going through point at 2nd argument.
-pub fn line_point(
+/// `parallel_through(line, point)` - returns a line parallel to the 1st argument going through point at 2nd argument.
+fn line_point(
     line: Expr<Line>,
     point: Expr<Point>,
     context: &CompileContext,
     display: Properties,
 ) -> Expr<Line> {
-    context.perpendicular_through_display(line, point, display)
+    context.parallel_through_display(line, point, display)
 }
 
 /// Register the function
 pub fn register(library: &mut Library) {
     library.add(
-        Function::new("perpendicular_through")
+        Function::new("parallel_through")
+            .alias("parallel")
             .overload(line_point)
             .overload(
                 |point: Expr<Point>, line: Expr<Line>, context: &CompileContext, props| {

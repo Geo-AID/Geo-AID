@@ -11,6 +11,7 @@ use super::prelude::*;
 pub fn register(library: &mut Library) {
     library.add(
         Function::new("degrees")
+            .alias("deg")
             .overload(|v: Unitless, context: &CompileContext, display| {
                 Angle::from(context.mult_display(
                     v.0,

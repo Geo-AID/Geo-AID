@@ -337,7 +337,7 @@ impl SpannedMathString {
 
             match err.kind {
                 ParseErrorKind::SpecialNotRecognised(special) => {
-                    let suggested = most_similar(&SPECIAL_MATH, &special);
+                    let suggested = most_similar(&SPECIAL_MATH, &special).map(ToString::to_string);
 
                     Error::SpecialNotRecognised {
                         error_span,

@@ -104,7 +104,7 @@ impl Latex {
 
     fn draw_point(&mut self, point: &PointItem) {
         let pos = point.position;
-        let id = format!("expr{}", point.id);
+        let id = format!("expr{}", point.id.0);
 
         self.content += &format!(
             r#"

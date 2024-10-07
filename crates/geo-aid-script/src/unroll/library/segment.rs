@@ -96,7 +96,7 @@ fn len(segment: Segment, context: &mut CompileContext, mut display: Properties) 
 pub fn register(library: &mut Library) {
     library
         .add(
-            Function::new("Segment")
+            Function::new("segment")
                 .overload(|mut col: Pc<2>, context: &CompileContext, display| {
                     segment_function_point_point(
                         index!(node col,0),
@@ -107,7 +107,7 @@ pub fn register(library: &mut Library) {
                 })
                 .overload(segment_function_point_point),
         )
-        .add(Function::new("[Segment]::len").overload(len));
+        .add(Function::new("[segment]::len").overload(len));
 
     library.bundles.insert("Segment", ["A", "B"].into());
 }

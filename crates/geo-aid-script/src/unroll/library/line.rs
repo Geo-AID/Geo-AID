@@ -22,7 +22,7 @@ pub fn function_pp(
 /// Register the function
 pub fn register(library: &mut Library) {
     library.add(
-        Function::new("Line")
+        Function::new("line")
             .overload(|mut col: Pc<2>, context: &CompileContext, display| {
                 function_pp(index!(node col,0), index!(node col,1), context, display)
             })
