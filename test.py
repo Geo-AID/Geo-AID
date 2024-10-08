@@ -75,6 +75,11 @@ def run_unit_tests_from_directory(engine: str, print_output=bool) -> None:
             proc.communicate()
             proc.wait()
 
+    if not print_output:
+        retrieve_results(tests)
+
+
+def retrieve_results(tests: list[str]) -> None:
     records = [
         ["Name", "Result", "Previous quality", "New quality", "Delta", "Previous time", "New time", "Delta"]
     ]
@@ -90,7 +95,6 @@ def run_unit_tests_from_directory(engine: str, print_output=bool) -> None:
         if os.path.exists(os.path.join(dir, "log-pre.log")):
             with open(os.path.join(dir, "log-pre.log")) as fp:
                 lines = fp.readlines()
-                # print(lines)
 
                 old_quality = float(lines[1].strip())
                 old_time = float(lines[2].strip())
@@ -103,7 +107,6 @@ def run_unit_tests_from_directory(engine: str, print_output=bool) -> None:
 
         with open(os.path.join(dir, "log.log")) as fp:
             lines = fp.readlines()
-            # print(lines)
 
             if lines[0].strip() == "0":
                 new_result = "ok"
@@ -151,6 +154,12 @@ def main() -> None:
     )
 
     parser.add_argument(
+        '--presubmit_checks',
+        action="store_true",
+        help="When set, all presubmit checks will be run."
+    )
+
+    parser.add_argument(
         'engine',
         choices=[e.value for e in Engine],  # This will be ['glide', 'rage']
         nargs='?',  # Makes it optional
@@ -163,10 +172,14 @@ def main() -> None:
 
     engine = args.engine
 
-    run_cargo_build()
-    run_cargo_test()
-    run_cargo_fmt()
-    run_cargo_clippy()
+    presubmit_checks = args.presubmit_checks
+
+    if presubmit_checks:
+        run_cargo_build()
+        run_cargo_test()
+        run_cargo_fmt()
+        run_cargo_clippy()
+
     run_unit_tests_from_directory(engine, args.print_output)
 
 
