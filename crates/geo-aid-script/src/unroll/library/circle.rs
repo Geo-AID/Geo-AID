@@ -94,6 +94,7 @@ pub fn register(library: &mut Library) {
         ))
         .add(
             Function::new("circumcircle")
+                .alias("[point collection (3)]::circumcircle")
                 .overload(circumcircle)
                 .overload(|mut col: Pc<3>, context: &CompileContext, props| {
                     circumcircle(
@@ -105,15 +106,18 @@ pub fn register(library: &mut Library) {
                     )
                 }),
         )
-        .add(Function::new("incircle").overload(incircle).overload(
-            |mut col: Pc<3>, context: &CompileContext, props| {
-                incircle(
-                    index!(node col, 0),
-                    index!(node col, 1),
-                    index!(node col, 2),
-                    context,
-                    props,
-                )
-            },
-        ));
+        .add(
+            Function::new("incircle")
+                .alias("[point collection (3)]::incircle")
+                .overload(incircle)
+                .overload(|mut col: Pc<3>, context: &CompileContext, props| {
+                    incircle(
+                        index!(node col, 0),
+                        index!(node col, 1),
+                        index!(node col, 2),
+                        context,
+                        props,
+                    )
+                }),
+        );
 }
