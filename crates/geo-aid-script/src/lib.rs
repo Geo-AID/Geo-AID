@@ -135,23 +135,10 @@ pub enum Error {
         /// The type the method was searched on.
         on_type: Type,
     },
-    /// An undeifned field was referenced
-    UndefinedField {
-        /// The reference span
+    /// An attempt to access a field of a value has been made.
+    FieldAccess {
+        /// The access span
         error_span: Span,
-        /// The field name
-        field: String,
-        /// The type the field was searched on
-        on_type: Type,
-        /// The potentially intended name.
-        suggested: Option<&'static str>,
-    },
-    /// A field was referenced on type with no fields.
-    NoFieldsOnType {
-        /// The reference span
-        error_span: Span,
-        /// The type the field was searched on.
-        on_type: Type,
     },
     /// An attempt to use an unsupported language feature was made.
     FeatureNotSupported {
@@ -447,23 +434,9 @@ impl Error {
                     .add_span(error_span)
                     .add_annotation_opt_msg(error_span, AnnotationKind::Help, message.as_ref())
             }
-            Self::UndefinedField {
-                error_span,
-                field,
-                on_type,
-                suggested
-            } => {
-                let message = suggested.map(|v| format!("did you mean: `{v}`?"));
-                DiagnosticData::new(&format!("field `{field}` not found on type {on_type}"))
-                    .add_span(error_span)
-                    .add_annotation_opt_msg(error_span, AnnotationKind::Help, message.as_ref())
-            }
-            Self::NoFieldsOnType {
-                error_span,
-                on_type,
-            } => {
-                DiagnosticData::new(&format!("there are no fields on type {on_type}"))
-                    .add_span(error_span)
+            Self::FieldAccess { error_span } => {
+                DiagnosticData::new("GeoScript has no fields. Did you mean to call a method?")
+                .add_span(error_span)
             }
             Self::FeatureNotSupported {
                 error_span,
@@ -756,8 +729,8 @@ pub mod ty {
 
     /// A named bundle type.
     #[must_use]
-    pub const fn bundle(t: &'static str) -> Type {
-        Type::Bundle(t)
+    pub const fn derived(t: &'static str) -> Type {
+        Type::Derived(t)
     }
 }
 

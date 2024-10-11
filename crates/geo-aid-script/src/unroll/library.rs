@@ -1,7 +1,7 @@
 //! `GeoScript`'s builtin functions and types
 
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     marker::PhantomData,
     mem,
     ops::{Deref, DerefMut},
@@ -18,7 +18,8 @@ use crate::{
 };
 
 use super::{
-    context::CompileContext, figure::Node, most_similar, Convert, ConvertFrom, Properties,
+    context::CompileContext, figure::Node, most_similar, Convert, ConvertFrom, Dummy, Generic,
+    Properties, ScalarData,
 };
 
 pub mod angle;
@@ -43,15 +44,16 @@ pub mod prelude {
         unroll::{
             context::CompileContext,
             figure::{
-                BuildAssociated, BundleNode, CollectionNode, HierarchyNode, LineNode, LineType,
-                PointNode, ScalarNode,
+                BuildAssociated, CollectionNode, HierarchyNode, LineNode, LineType, PointNode,
+                ScalarNode,
             },
             library::{macros::*, Angle, Distance, Function, Library, Pc, Rule, Unitless},
-            Bundle, Circle, CloneWithNode, Expr, GeoType, Line, Point, Properties, ScalarData,
-            UnrolledRule, UnrolledRuleKind,
+            Circle, CloneWithNode, Derived, DerivedType, Expr, GeoType, Line, Point, Properties,
+            ScalarData, UnrolledRule, UnrolledRuleKind,
         },
     };
     pub(crate) use geo_aid_figure::Style;
+    pub(crate) use std::rc::Rc;
 }
 /// A `GeoScript` function.
 pub struct Function {
@@ -417,8 +419,6 @@ pub struct Library {
     functions: HashMap<&'static str, Definition<Function>>,
     /// The rule operators.
     rule_ops: HashMap<&'static str, Definition<Rule>>,
-    /// Bundle types.
-    bundles: HashMap<&'static str, HashSet<&'static str>>,
 }
 
 impl Library {
@@ -428,7 +428,6 @@ impl Library {
         let mut library = Self {
             functions: HashMap::new(),
             rule_ops: HashMap::new(),
-            bundles: HashMap::new(),
         };
 
         point::register(&mut library); // Point()
@@ -448,12 +447,6 @@ impl Library {
         lies_on::register(&mut library); // lies_on
 
         library
-    }
-
-    /// Get the bundle by its name.
-    #[must_use]
-    pub fn get_bundle(&self, name: &str) -> &HashSet<&'static str> {
-        &self.bundles[name]
     }
 
     /// Add a definition
@@ -611,13 +604,28 @@ impl<const DST_NUM: i64, const DST_DENOM: i64, const ANG_NUM: i64, const ANG_DEN
     }
 }
 
+impl<const DST_NUM: i64, const DST_DENOM: i64, const ANG_NUM: i64, const ANG_DENOM: i64> Dummy
+    for ScalarUnit<DST_NUM, DST_DENOM, ANG_NUM, ANG_DENOM>
+{
+    fn dummy() -> Self {
+        Self(Expr::new_spanless(Scalar {
+            unit: Some(Self::get_unit()),
+            data: ScalarData::Generic(Generic::Dummy),
+        }))
+    }
+
+    fn is_dummy(&self) -> bool {
+        self.0.is_dummy()
+    }
+}
+
 pub type Distance = ScalarUnit<1, 1, 0, 1>;
 pub type Angle = ScalarUnit<0, 1, 1, 1>;
 pub type Unitless = ScalarUnit<0, 1, 0, 1>;
 
 /// Returns what size of point collection can the given bundle type be cast onto.
 /// 0 signifies that casting is not possible
-pub const fn get_bundle_pc(_name: &'static str) -> usize {
+pub const fn get_derived_pc(_name: &'static str) -> usize {
     0
 }
 
@@ -644,22 +652,6 @@ pub mod macros {
         };
         (node $col:expr, $at:expr) => {
             ($col).index_with_node($at)
-        };
-    }
-
-    /// Get a specific field from a bundle.
-    macro_rules! field {
-        (node POINT $bundle:expr, $at:ident with $context:ident) => {
-            $crate::unroll::Convert::convert::<$crate::unroll::Point>(
-                ($bundle).index_with_node(stringify!($at)),
-                $context,
-            )
-        };
-        (no-node POINT $bundle:expr, $at:ident with $context:ident) => {
-            $crate::unroll::Convert::convert::<$crate::unroll::Point>(
-                ($bundle).index_without_node(stringify!($at)),
-                $context,
-            )
         };
     }
 
@@ -692,70 +684,78 @@ pub mod macros {
         };
     }
 
-    /// Construct a bundle from a name and fields
-    macro_rules! construct_bundle {
-        ($t:ident { $($field:ident : $value:expr),* $(,)? }) => {{
-            let mut fields = std::collections::HashMap::new();
-            let mut node = $crate::unroll::figure::BundleNode::new();
-
-            $(
-                let mut v = $crate::unroll::CloneWithNode::clone_with_node(&mut $value);
-                node.insert(stringify!($field).to_string(), $crate::unroll::CloneWithNode::clone_with_node(&mut v));
-                fields.insert(stringify!($field).to_string(), $crate::unroll::AnyExpr::from(v));
-            )*
-
-            $t::from($crate::unroll::Expr {
-                span: $crate::span!(0, 0, 0, 0),
-                data: std::rc::Rc::new($crate::unroll::Bundle {
-                    name: stringify!($t),
-                    data: $crate::unroll::BundleData::ConstructBundle(fields.into())
-                }),
-                node: Some($crate::unroll::figure::HierarchyNode::new(node))
-            })
-        }};
-    }
-
     /// Define a new bundle type
-    macro_rules! define_bundle {
-        ($t:ident {}) => {
-            pub struct $t(Expr<Bundle>);
+    macro_rules! impl_derived {
+        ($t:ty) => {
+            paste::paste! {
+                pub struct [<$t Expr>](pub Expr<Derived>);
 
-            impl GeoType for $t {
-                type Target = Bundle;
+                impl [<$t Expr>] {
+                    #[doc = "Create a new expression out of data and a node"]
+                    #[must_use]
+                    pub fn new(data: $t, node: HierarchyNode<dyn $crate::unroll::figure::Node>) -> Self {
+                        Self(Expr {
+                            data: Rc::new(Derived {
+                                name: stringify!($t),
+                                data: $crate::unroll::DerivedData::Data(Rc::new(data)),
+                            }),
+                            span: $crate::span!(0, 0, 0, 0),
+                            node: Some(node)
+                        })
+                    }
 
-                fn get_type() -> $crate::parser::Type {
-                    $crate::parser::Type::Bundle(stringify!($t))
+                    #[doc = "Get the underlying derived expression"]
+                    #[must_use]
+                    pub fn get(&self) -> Option<&$t> {
+                        match &<Derived as $crate::unroll::GetData>::get_data(&self.0.data).data {
+                            $crate::unroll::DerivedData::Generic($crate::unroll::Generic::Dummy) => {
+                                None
+                            }
+                            $crate::unroll::DerivedData::Data(d) => {
+                                d.as_ref().as_any().downcast_ref()
+                            }
+                            _ => unreachable!(),
+                        }
+                    }
                 }
-            }
 
-            impl From<Expr<Bundle>> for $t {
-                fn from(value: Expr<Bundle>) -> Self {
-                    assert_eq!(value.data.name, stringify!($t));
-                    Self(value)
+                impl GeoType for [<$t Expr>] {
+                    type Target = Derived;
+
+                    fn get_type() -> $crate::parser::Type {
+                        $crate::parser::Type::Derived(stringify!($t))
+                    }
                 }
-            }
 
-            impl std::ops::Deref for $t {
-                type Target = Expr<Bundle>;
-
-                fn deref(&self) -> &Self::Target {
-                    &self.0
+                impl From<Expr<Derived>> for [<$t Expr>] {
+                    fn from(value: Expr<Derived>) -> Self {
+                        assert!(value.data.name == stringify!($t));
+                        Self(value)
+                    }
                 }
-            }
 
-            impl std::ops::DerefMut for $t {
-                fn deref_mut(&mut self) -> &mut Self::Target {
-                    &mut self.0
+                impl From<[<$t Expr>]> for $crate::unroll::AnyExpr {
+                    fn from(value: [<$t Expr>]) -> Self {
+                        value.0.into()
+                    }
                 }
-            }
 
-            impl From<$t> for $crate::unroll::AnyExpr {
-                fn from(value: $t) -> Self {
-                    value.0.into()
+                impl std::ops::Deref for [<$t Expr>] {
+                    type Target = Expr<Derived>;
+
+                    fn deref(&self) -> &Self::Target {
+                        &self.0
+                    }
+                }
+
+                impl std::ops::DerefMut for [<$t Expr>] {
+                    fn deref_mut(&mut self) -> &mut Self::Target {
+                        &mut self.0
+                    }
                 }
             }
         };
     }
 
-    pub(crate) use {construct_bundle, define_bundle, field, index, number};
+    pub(crate) use {impl_derived, index, number};
 }

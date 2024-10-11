@@ -10,6 +10,7 @@ use flags::FlagSetConstructor;
 use geo_aid_derive::CloneWithNode;
 use geo_aid_figure::Style;
 use num_traits::{One, Zero};
+use std::any::Any;
 use std::fmt::Formatter;
 use std::mem;
 use std::{
@@ -27,14 +28,13 @@ use library::macros::index;
 
 use self::context::CompileContext;
 use self::figure::{
-    AnyExprNode, BundleNode, CircleNode, CollectionNode, EmptyNode, FromExpr, HierarchyNode,
-    LineNode, LineType, MaybeUnset, Node, PCNode, PointNode, ScalarNode,
+    AnyExprNode, CircleNode, CollectionNode, EmptyNode, FromExpr, HierarchyNode, LineNode,
+    LineType, MaybeUnset, Node, PCNode, PointNode, ScalarNode,
 };
 use self::library::Library;
 
 use super::parser::{
-    ExprBinop, ExprCall, FieldIndex, FromProperty, InputStream, Name, PointCollectionConstructor,
-    RefStatement,
+    ExprBinop, ExprCall, FromProperty, InputStream, Name, PointCollectionConstructor, RefStatement,
 };
 use super::token::number::{CompExponent, ProcNum};
 use super::token::Number;
@@ -529,7 +529,7 @@ macro_rules! impl_from_any {
                     AnyExpr::Scalar(v) => v.convert(context),
                     AnyExpr::Circle(v) => v.convert(context),
                     AnyExpr::PointCollection(v) => v.convert(context),
-                    AnyExpr::Bundle(v) => v.convert(context),
+                    AnyExpr::Derived(v) => v.convert(context),
                     AnyExpr::Unknown(v) => v.convert(context),
                 }
             }
@@ -541,7 +541,7 @@ macro_rules! impl_from_any {
                     AnyExpr::Scalar(v) => Self::can_convert_from(v),
                     AnyExpr::Circle(v) => Self::can_convert_from(v),
                     AnyExpr::PointCollection(v) => Self::can_convert_from(v),
-                    AnyExpr::Bundle(v) => Self::can_convert_from(v),
+                    AnyExpr::Derived(v) => Self::can_convert_from(v),
                     AnyExpr::Unknown(v) => Self::can_convert_from(v),
                 }
             }
@@ -816,7 +816,7 @@ impl_from_any! {Point}
 impl_from_unknown! {Point}
 impl_convert_err! {Circle -> Point}
 impl_convert_err! {Line -> Point}
-impl_convert_err! {Bundle -> Point}
+impl_convert_err! {Derived -> Point}
 impl_convert_err! {Scalar -> Point}
 
 impl_make_variable! {Point}
@@ -873,7 +873,7 @@ impl_from_unknown! {Circle}
 
 impl_convert_err! {Point -> Circle}
 impl_convert_err! {Line -> Circle}
-impl_convert_err! {Bundle -> Circle}
+impl_convert_err! {Derived -> Circle}
 impl_convert_err! {Scalar -> Circle}
 impl_convert_err! {PointCollection -> Circle}
 
@@ -1046,7 +1046,7 @@ impl Expr<Line> {
 impl_x_from_x! {Line}
 impl_from_any! {Line}
 impl_from_unknown! {Line}
-impl_convert_err! {Bundle -> Line}
+impl_convert_err! {Derived -> Line}
 impl_convert_err! {Circle -> Line}
 impl_convert_err! {Point -> Line}
 impl_convert_err! {Scalar -> Line}
@@ -1223,7 +1223,7 @@ impl_from_unknown! {Scalar}
 impl_convert_err! {Point -> Scalar}
 impl_convert_err! {Circle -> Scalar}
 impl_convert_err! {Line -> Scalar}
-impl_convert_err! {Bundle -> Scalar}
+impl_convert_err! {Derived -> Scalar}
 
 impl_make_variable! {Scalar {other: unit, data: ScalarData}}
 
@@ -1536,7 +1536,7 @@ impl_from_unknown! {PointCollection}
 impl_convert_err! {Circle -> PointCollection}
 impl_convert_err! {Line -> PointCollection}
 impl_convert_err! {Scalar -> PointCollection}
-impl_convert_err! {Bundle -> PointCollection}
+impl_convert_err! {Derived -> PointCollection}
 
 impl_make_variable! {PointCollection {other: length, data: PointCollectionData}}
 
@@ -1690,93 +1690,76 @@ impl Display for PointCollection {
 
 /// An unrolled bundle expression data
 #[derive(Debug, CloneWithNode)]
-pub enum BundleData {
+pub enum DerivedData {
     /// A generic expression
-    Generic(Generic<Bundle>),
+    Generic(Generic<Derived>),
     /// An explicit bundle construction.
-    ConstructBundle(ClonedMap<String, AnyExpr>),
+    Data(Rc<dyn DerivedType>),
 }
 
-impl Display for BundleData {
+impl Display for DerivedData {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Generic(v) => write!(f, "{v}"),
-            Self::ConstructBundle(fields) => {
-                write!(
-                    f,
-                    "{{ {} }}",
-                    fields
-                        .iter()
-                        .map(|(field, value)| format!("{field}: {value}"))
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                )
-            }
+            Self::Data(v) => write!(f, "{v}"),
         }
     }
 }
 
-/// An unrolled bundle expression with the bundle type's name.
-#[derive(Debug, CloneWithNode)]
-pub struct Bundle {
-    pub name: &'static str,
-    pub data: BundleData,
+/// Trait for derived types - a special kind in GeoScript.
+pub trait DerivedType: Debug + Display + 'static {
+    /// Cast this into an `Any` trait object
+    fn as_any(&self) -> &dyn Any;
 }
 
-impl_x_from_x! {Bundle}
-impl_from_any! {Bundle}
-impl_from_unknown! {Bundle}
+/// A special derived type expression. Used to encapsulate
+/// special behavior behind dynamic dispatch.
+#[derive(Debug, CloneWithNode)]
+pub struct Derived {
+    /// Name of this derived type.
+    pub name: &'static str,
+    /// The actual data.
+    pub data: DerivedData,
+}
 
-impl_convert_err! {Point -> Bundle}
-impl_convert_err! {Line -> Bundle}
-impl_convert_err! {Circle -> Bundle}
-impl_convert_err! {Scalar -> Bundle}
-impl_convert_err! {PointCollection -> Bundle}
+impl_x_from_x! {Derived}
+impl_from_any! {Derived}
+impl_from_unknown! {Derived}
 
-impl_make_variable! {Bundle {other: name, data: BundleData}}
+impl_convert_err! {Point -> Derived}
+impl_convert_err! {Line -> Derived}
+impl_convert_err! {Circle -> Derived}
+impl_convert_err! {Scalar -> Derived}
+impl_convert_err! {PointCollection -> Derived}
 
-impl Bundle {
+impl_make_variable! {Derived {other: name, data: DerivedData}}
+
+impl Derived {
     /// Associated type getter doesn't know the specific name, so always returns `"{}"`
     #[must_use]
     pub fn get_type() -> Type {
-        ty::bundle("{}")
-    }
-
-    /// Get the given field without taking its node.
-    #[must_use]
-    pub fn index(&self, field: &str) -> AnyExpr {
-        match &self.data {
-            BundleData::Generic(generic) => match &generic {
-                Generic::VariableAccess(var) => var.definition.index_without_node(field),
-                Generic::Boxed(expr) => expr.index_without_node(field),
-                Generic::Dummy => AnyExpr::Unknown(Expr::new_spanless(Unknown::dummy())),
-            },
-            BundleData::ConstructBundle(map) => map.get(field).map_or_else(
-                || AnyExpr::Unknown(Expr::new_spanless(Unknown::dummy())),
-                CloneWithNode::clone_without_node,
-            ),
-        }
+        ty::derived("{}")
     }
 }
 
-impl Displayed for Bundle {
-    type Node = BundleNode;
+impl Displayed for Derived {
+    type Node = dyn Node;
 }
 
-impl Dummy for Bundle {
+impl Dummy for Derived {
     fn dummy() -> Self {
         Self {
             name: "dummy",
-            data: BundleData::Generic(Generic::Dummy),
+            data: DerivedData::Generic(Generic::Dummy),
         }
     }
 
     fn is_dummy(&self) -> bool {
-        matches!(self.data, BundleData::Generic(Generic::Dummy))
+        matches!(self.data, DerivedData::Generic(Generic::Dummy))
     }
 }
 
-impl Expr<Bundle> {
+impl Expr<Derived> {
     /// Box the expression with the given span.
     #[must_use]
     pub fn boxed(mut self, span: Span) -> Self {
@@ -1784,71 +1767,12 @@ impl Expr<Bundle> {
 
         Self {
             span,
-            data: Rc::new(Bundle {
+            data: Rc::new(Derived {
                 name: self.data.name,
-                data: BundleData::Generic(Generic::Boxed(self)),
+                data: DerivedData::Generic(Generic::Boxed(self)),
             }),
             node,
         }
-    }
-
-    /// Get a field's value without taking the bundle's node.
-    #[must_use]
-    pub fn index_without_node(&self, field: &str) -> AnyExpr {
-        self.data.index(field)
-    }
-
-    /// Get a field's value and take the bundle's node.
-    ///
-    /// # Panics
-    /// If the given field does not exist.
-    #[must_use]
-    pub fn index_with_node(&mut self, field: &str) -> AnyExpr {
-        let mut expr = self.data.index(field);
-
-        if let Some(self_node) = self.take_node() {
-            let node: AnyExprNode = match &expr {
-                AnyExpr::Point(_) => {
-                    let mut n = HierarchyNode::new(<Point as Displayed>::Node::dummy());
-                    n.push_child(self_node);
-                    n.into()
-                }
-                AnyExpr::Line(_) => {
-                    let mut n = HierarchyNode::new(<Line as Displayed>::Node::dummy());
-                    n.push_child(self_node);
-                    n.into()
-                }
-                AnyExpr::Scalar(_) => {
-                    let mut n = HierarchyNode::new(<Scalar as Displayed>::Node::dummy());
-                    n.push_child(self_node);
-                    n.into()
-                }
-                AnyExpr::Circle(_) => {
-                    let mut n = HierarchyNode::new(<Circle as Displayed>::Node::dummy());
-                    n.push_child(self_node);
-                    n.into()
-                }
-                AnyExpr::PointCollection(_) => {
-                    let mut n = HierarchyNode::new(<PointCollection as Displayed>::Node::dummy());
-                    n.push_child(self_node);
-                    n.into()
-                }
-                AnyExpr::Bundle(_) => {
-                    let mut n = HierarchyNode::new(<Bundle as Displayed>::Node::dummy());
-                    n.push_child(self_node);
-                    n.into()
-                }
-                AnyExpr::Unknown(_) => {
-                    let mut n = HierarchyNode::new(<Unknown as Displayed>::Node::dummy());
-                    n.push_child(self_node);
-                    n.into()
-                }
-            };
-
-            expr.replace_node(Some(node));
-        }
-
-        expr
     }
 
     /// Check if the bundle's name matches the given name.
@@ -1857,30 +1781,44 @@ impl Expr<Bundle> {
     /// Returns an error if the bundle names don't match
     #[must_use]
     pub fn check_name(self, name: &'static str, context: &CompileContext) -> Self {
-        if self.data.name == name || matches!(self.data.data, BundleData::Generic(Generic::Dummy)) {
+        if self.data.name == name || matches!(self.data.data, DerivedData::Generic(Generic::Dummy))
+        {
             self
         } else {
             context.push_error(Error::ImplicitConversionDoesNotExist {
                 error_span: self.span,
                 from: self.get_value_type(),
-                to: ty::bundle(name),
+                to: ty::derived(name),
             });
 
             Self {
-                data: Rc::new(Bundle::dummy()),
+                data: Rc::new(Derived::dummy()),
                 ..self
             }
         }
     }
 }
 
-impl GetValueType for Bundle {
-    fn get_value_type(&self) -> Type {
-        ty::bundle(self.name)
+impl GetData for Derived {
+    fn get_data(&self) -> &Self {
+        match &self.data {
+            DerivedData::Generic(v) => match v {
+                Generic::VariableAccess(var) => var.definition.get_data(),
+                Generic::Boxed(v) => v.get_data(),
+                Generic::Dummy => self,
+            },
+            _ => self,
+        }
     }
 }
 
-impl Display for Bundle {
+impl GetValueType for Derived {
+    fn get_value_type(&self) -> Type {
+        ty::derived(self.name)
+    }
+}
+
+impl Display for Derived {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{} {}", self.name, self.data)
     }
@@ -1945,7 +1883,7 @@ pub enum AnyExpr {
     Scalar(Expr<Scalar>),
     Circle(Expr<Circle>),
     PointCollection(Expr<PointCollection>),
-    Bundle(Expr<Bundle>),
+    Derived(Expr<Derived>),
     Unknown(Expr<Unknown>),
 }
 
@@ -1954,7 +1892,7 @@ impl_any_from_x! {Line}
 impl_any_from_x! {Scalar}
 impl_any_from_x! {Circle}
 impl_any_from_x! {PointCollection}
-impl_any_from_x! {Bundle}
+impl_any_from_x! {Derived}
 impl_any_from_x! {Unknown}
 
 impl AnyExpr {
@@ -1967,7 +1905,7 @@ impl AnyExpr {
             Self::Scalar(v) => &mut v.span,
             Self::Circle(v) => &mut v.span,
             Self::PointCollection(v) => &mut v.span,
-            Self::Bundle(v) => &mut v.span,
+            Self::Derived(v) => &mut v.span,
             Self::Unknown(v) => &mut v.span,
         }
     }
@@ -1981,7 +1919,7 @@ impl AnyExpr {
             Self::Scalar(v) => v.span,
             Self::Circle(v) => v.span,
             Self::PointCollection(v) => v.span,
-            Self::Bundle(v) => v.span,
+            Self::Derived(v) => v.span,
             Self::Unknown(v) => v.span,
         }
     }
@@ -2005,8 +1943,8 @@ impl AnyExpr {
                 &mut v.node,
                 with.map(AnyExprNode::to_point_collection),
             )?),
-            Self::Bundle(v) => {
-                AnyExprNode::Bundle(mem::replace(&mut v.node, with.map(AnyExprNode::to_bundle))?)
+            Self::Derived(v) => {
+                AnyExprNode::Derived(mem::replace(&mut v.node, with.map(AnyExprNode::to_bundle))?)
             }
             Self::Unknown(v) => AnyExprNode::Unknown(mem::replace(
                 &mut v.node,
@@ -2024,7 +1962,7 @@ impl AnyExpr {
             Self::Scalar(x) => x.node.as_ref().map(|c| c as &dyn Node),
             Self::Circle(x) => x.node.as_ref().map(|c| c as &dyn Node),
             Self::PointCollection(x) => x.node.as_ref().map(|c| c as &dyn Node),
-            Self::Bundle(x) => x.node.as_ref().map(|c| c as &dyn Node),
+            Self::Derived(x) => x.node.as_ref().map(|c| c as &dyn Node),
             Self::Unknown(x) => x.node.as_ref().map(|c| c as &dyn Node),
         }
     }
@@ -2054,7 +1992,7 @@ impl AnyExpr {
             AnyExpr::Scalar(v) => v.get_value_type(),
             AnyExpr::Circle(v) => v.get_value_type(),
             AnyExpr::PointCollection(v) => v.get_value_type(),
-            AnyExpr::Bundle(v) => v.get_value_type(),
+            AnyExpr::Derived(v) => v.get_value_type(),
             AnyExpr::Unknown(v) => v.get_value_type(),
         }
     }
@@ -2073,7 +2011,7 @@ impl AnyExpr {
                 Self::PointCollection(self.convert(context).check_len(len, context))
             }
             Type::Circle => Self::Circle(self.convert(context)),
-            Type::Bundle(name) => Self::Bundle(self.convert(context).check_name(name, context)),
+            Type::Derived(name) => Self::Derived(self.convert(context).check_name(name, context)),
             Type::Unknown => Self::Unknown(Expr::dummy()),
         }
     }
@@ -2087,7 +2025,7 @@ impl AnyExpr {
             Type::Scalar(unit) => self.can_convert_to_scalar(unit).is_some(),
             Type::PointCollection(len) => self.can_convert_to_collection(len),
             Type::Circle => self.can_convert::<Circle>(),
-            Type::Bundle(name) => self.can_convert_to_bundle(name),
+            Type::Derived(name) => self.can_convert_to_bundle(name),
             Type::Unknown => true,
         }
     }
@@ -2100,7 +2038,7 @@ impl AnyExpr {
     #[must_use]
     pub fn can_convert_to_scalar(&self, unit: Option<ComplexUnit>) -> Option<Option<ComplexUnit>> {
         match self {
-            Self::Line(_) | Self::Bundle(_) | Self::Circle(_) | Self::Point(_) => None,
+            Self::Line(_) | Self::Derived(_) | Self::Circle(_) | Self::Point(_) => None,
             Self::PointCollection(v) => (v.data.length == 2
                 && (unit == Some(unit::DISTANCE) || unit.is_none()))
             .then_some(Some(unit::DISTANCE)),
@@ -2114,7 +2052,7 @@ impl AnyExpr {
     #[must_use]
     pub fn can_convert_to_collection(&self, len: usize) -> bool {
         match self {
-            Self::Line(_) | Self::Bundle(_) | Self::Circle(_) | Self::Scalar(_) => false,
+            Self::Line(_) | Self::Derived(_) | Self::Circle(_) | Self::Scalar(_) => false,
             Self::PointCollection(v) => v.data.length == len || len == 0,
             Self::Point(_) => len == 1,
             Self::Unknown(_) => true,
@@ -2125,7 +2063,7 @@ impl AnyExpr {
     #[must_use]
     pub fn can_convert_to_bundle(&self, name: &str) -> bool {
         match self {
-            Self::Bundle(bundle) => bundle.data.name == name,
+            Self::Derived(bundle) => bundle.data.name == name,
             Self::Unknown(_) => true,
             _ => false,
         }
@@ -2140,7 +2078,7 @@ impl AnyExpr {
             Self::Scalar(v) => Self::Scalar(v.boxed(span)),
             Self::Circle(v) => Self::Circle(v.boxed(span)),
             Self::PointCollection(v) => Self::PointCollection(v.boxed(span)),
-            Self::Bundle(v) => Self::Bundle(v.boxed(span)),
+            Self::Derived(v) => Self::Derived(v.boxed(span)),
             Self::Unknown(v) => Self::Unknown(v.boxed(span)),
         }
     }
@@ -2172,8 +2110,8 @@ impl AnyExpr {
                 PointCollectionData::Generic(Generic::VariableAccess(var)) => var.definition_span,
                 _ => panic!("not a variable"),
             },
-            Self::Bundle(v) => match &v.data.data {
-                BundleData::Generic(Generic::VariableAccess(var)) => var.definition_span,
+            Self::Derived(v) => match &v.data.data {
+                DerivedData::Generic(Generic::VariableAccess(var)) => var.definition_span,
                 _ => panic!("not a variable"),
             },
             Self::Unknown(v) => match v.data.as_ref() {
@@ -2192,7 +2130,7 @@ impl AnyExpr {
             Self::Scalar(v) => Self::Scalar(v.make_variable(name)),
             Self::Circle(v) => Self::Circle(v.make_variable(name)),
             Self::PointCollection(v) => Self::PointCollection(v.make_variable(name)),
-            Self::Bundle(v) => Self::Bundle(v.make_variable(name)),
+            Self::Derived(v) => Self::Derived(v.make_variable(name)),
             Self::Unknown(v) => Self::Unknown(v.make_variable(name)),
         }
     }
@@ -2210,7 +2148,7 @@ impl Dummy for AnyExpr {
             Self::Scalar(v) => v.is_dummy(),
             Self::Circle(v) => v.is_dummy(),
             Self::PointCollection(v) => v.is_dummy(),
-            Self::Bundle(v) => v.is_dummy(),
+            Self::Derived(v) => v.is_dummy(),
             Self::Unknown(v) => v.is_dummy(),
         }
     }
@@ -2224,7 +2162,7 @@ impl Display for AnyExpr {
             Self::Scalar(v) => write!(f, "{v}"),
             Self::Circle(v) => write!(f, "{v}"),
             Self::PointCollection(v) => write!(f, "{v}"),
-            Self::Bundle(v) => write!(f, "{v}"),
+            Self::Derived(v) => write!(f, "{v}"),
             Self::Unknown(v) => write!(f, "{v}"),
         }
     }
@@ -2252,7 +2190,7 @@ pub trait Dummy {
 /// A trait with a single associated type. Used with expressions that can be displayed.
 pub trait Displayed: Sized {
     /// The display node type to use for displaying `Self`
-    type Node: Node;
+    type Node: Node + ?Sized;
 }
 
 /// Get the underlying data with no indirections.
@@ -2413,7 +2351,7 @@ impl<T: Display + Displayed> Display for Expr<T> {
     }
 }
 
-impl<T: CloneWithNode + Displayed> Expr<T> {
+impl<T: Displayed> Expr<T> {
     /// Creates a new expression without a declared span. WARNING: the expression has no node.
     #[must_use]
     pub fn new_spanless(data: T) -> Self {
@@ -2430,7 +2368,7 @@ impl<T: CloneWithNode + Displayed> Expr<T> {
     }
 }
 
-impl<T: CloneWithNode + Displayed + Dummy> Dummy for Expr<T> {
+impl<T: Displayed + Dummy> Dummy for Expr<T> {
     fn dummy() -> Self {
         Self::new_spanless(T::dummy())
     }
@@ -2681,7 +2619,11 @@ impl Unroll for ExprCall {
                 if let Some(self_type) = self_type {
                     let self_type_name = format!("[{self_type}]::");
 
-                    let suggested = suggested.map(|name| name[self_type_name.len()..].to_string());
+                    let suggested = if suggested.is_some_and(|s| s.starts_with(&self_type_name)) {
+                        suggested.map(|name| name[self_type_name.len()..].to_string())
+                    } else {
+                        None
+                    };
 
                     context.push_error(Error::UndefinedMethod {
                         error_span: self.name.get_span(),
@@ -2716,125 +2658,6 @@ impl Unroll for ExprCall {
     }
 }
 
-impl Unroll for FieldIndex {
-    fn unroll(
-        &self,
-        context: &mut CompileContext,
-        library: &Library,
-        it_index: &HashMap<u8, usize>,
-        display: Properties,
-    ) -> AnyExpr {
-        let name: AnyExpr = self
-            .name
-            .unroll(context, library, it_index, Properties::default());
-
-        let name = if name.get_type() == Type::PointCollection(1) {
-            name.convert_to(Type::Point, context)
-        } else {
-            name
-        };
-
-        match name {
-            AnyExpr::Circle(circle) => match &self.field {
-                Ident::Named(named) => match named.ident.as_str() {
-                    "center" => circle.center(self.get_span(), display, context).into(),
-                    "radius" => circle.radius(self.get_span(), display, context).into(),
-                    x => {
-                        display.finish(context);
-
-                        context.push_error(Error::UndefinedField {
-                            error_span: self.get_span(),
-                            field: x.to_string(),
-                            on_type: ty::CIRCLE,
-                            suggested: most_similar(["center", "radius"], x),
-                        });
-
-                        AnyExpr::dummy()
-                    }
-                },
-                Ident::Collection(x) => {
-                    display.finish(context);
-
-                    context.push_error(Error::UndefinedField {
-                        error_span: self.get_span(),
-                        field: x.to_string(),
-                        on_type: ty::CIRCLE,
-                        suggested: most_similar(["center", "radius"], &x.to_string()),
-                    });
-
-                    AnyExpr::dummy()
-                }
-            },
-            AnyExpr::Point(point) => match &self.field {
-                Ident::Named(named) => match named.ident.as_str() {
-                    "x" => point.x(self.get_span(), display, context).into(),
-                    "y" => point.y(self.get_span(), display, context).into(),
-                    x => {
-                        display.finish(context);
-
-                        context.push_error(Error::UndefinedField {
-                            error_span: self.get_span(),
-                            field: x.to_string(),
-                            on_type: ty::CIRCLE,
-                            suggested: most_similar(["x", "y"], x),
-                        });
-
-                        AnyExpr::dummy()
-                    }
-                },
-                Ident::Collection(x) => {
-                    display.finish(context);
-
-                    context.push_error(Error::UndefinedField {
-                        error_span: self.get_span(),
-                        field: x.to_string(),
-                        on_type: ty::POINT,
-                        suggested: most_similar(["x", "y"], &x.to_string()),
-                    });
-
-                    AnyExpr::dummy()
-                }
-            },
-            AnyExpr::Bundle(mut bundle) => {
-                display.finish(context);
-                let field_name = self.field.to_string();
-                let bundle_fields = library.get_bundle(bundle.data.name);
-
-                if bundle_fields.contains(field_name.as_str()) {
-                    bundle
-                        .index_with_node(&self.field.to_string())
-                        .boxed(self.get_span())
-                } else {
-                    let suggested = most_similar(bundle_fields.iter().copied(), &field_name);
-
-                    context.push_error(Error::UndefinedField {
-                        error_span: self.get_span(),
-                        field: field_name,
-                        on_type: bundle.get_value_type(),
-                        suggested,
-                    });
-
-                    AnyExpr::dummy()
-                }
-            }
-            AnyExpr::Unknown(_) => {
-                display.finish(context);
-                AnyExpr::dummy()
-            }
-            v @ (AnyExpr::Scalar(_) | AnyExpr::Line(_) | AnyExpr::PointCollection(_)) => {
-                display.finish(context);
-
-                context.push_error(Error::NoFieldsOnType {
-                    error_span: self.get_span(),
-                    on_type: v.get_type(),
-                });
-
-                AnyExpr::dummy()
-            }
-        }
-    }
-}
-
 impl Unroll for Name {
     fn unroll(
         &self,
@@ -2847,7 +2670,13 @@ impl Unroll for Name {
             Self::Ident(i) => i.unroll(context, library, it_index, display),
             Self::Call(expr) => expr.unroll(context, library, it_index, display),
             Self::Expression(v) => v.content.unroll(context, library, it_index, display),
-            Self::FieldIndex(v) => v.unroll(context, library, it_index, display),
+            Self::FieldIndex(_) => {
+                context.push_error(Error::FieldAccess {
+                    error_span: self.get_span(),
+                });
+
+                Expr::new_spanless(Unknown::dummy()).into()
+            }
         }
     }
 }
@@ -3834,10 +3663,12 @@ fn unroll_eq(
                 context.scalar_eq_display(lhs, rhs, inverted, display)
             }
             ty => {
-                context.push_error(Error::ComparisonDoesNotExist {
-                    error_span: full_span,
-                    ty,
-                });
+                if ty != Type::Unknown {
+                    context.push_error(Error::ComparisonDoesNotExist {
+                        error_span: full_span,
+                        ty,
+                    });
+                }
 
                 // Pretend there is no rule.
                 context.scalar_eq_display(
