@@ -727,7 +727,7 @@ pub mod ty {
         Type::PointCollection(length)
     }
 
-    /// A named bundle type.
+    /// A derived type.
     #[must_use]
     pub const fn derived(t: &'static str) -> Type {
         Type::Derived(t)

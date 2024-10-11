@@ -626,9 +626,9 @@ impl AnyExprNode {
     }
 
     /// # Panics
-    /// If the node is not a bundle node.
+    /// If the node is not a derived type node.
     #[must_use]
-    pub fn to_bundle(self) -> HierarchyNode<<Derived as Displayed>::Node> {
+    pub fn to_derived(self) -> HierarchyNode<<Derived as Displayed>::Node> {
         if let Self::Derived(v) = self {
             v
         } else {

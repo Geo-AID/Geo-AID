@@ -15,7 +15,7 @@ lexer and parser, Geo-AID has two very important steps before compilation:
 
 #### **Unroll step**
 
-Unrolling is responsible for removing most language abstractions. The only ones it leaves are bundles and point
+Unrolling is responsible for removing most language abstractions. The only ones it leaves are derived types and point
 collections (see: language documentation). At this point, specific description of what is actually displayed on the
 figure is extracted and separated from figure definitions and rules. It also collects weighing information.
 

@@ -897,7 +897,7 @@ pub enum Type {
     PointCollection(usize),
     /// A circle
     Circle,
-    /// A bundle type.
+    /// A derived type.
     Derived(&'static str),
     /// Marks unknown type. Unknown type pretends to be valid, but isn't really.
     Unknown,

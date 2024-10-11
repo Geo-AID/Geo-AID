@@ -122,15 +122,10 @@ Here, `r` is set to the distance `BC` and said to be smaller than `AB`.
 
 Geo-AID mostly operates on expressions. They are variable definitions and both sides of rules. Expressions can be
 mathematical operations, function calls, lines, distances and literals. All expressions produce values of certain types.
-These can be divided into the following categories:
 
-- primitives
-- point collections
-- bundle types
-
-Primitives are points, lines, circles and scalars. They're what the generator operates on and what everything is
-ultimately compiled into. Everything else is just an abstraction over these primitives. Additionally, scalars can have
-units. Performing addition or subtraction on scalars with incompatible units is an error.
+Primary examples of these types are points, lines, circles and scalars. They're what the generator operates on and what
+everything is ultimately compiled into. Everything else is just an abstraction over these primitives. Additionally,
+scalars can have units. Performing addition or subtraction on scalars with incompatible units is an error.
 
 Point collections are sequences of point letters, like `AB`, `ABC`, `GFED`, `X`, `A'V`. For a name to be collectable, it
 has to be a single, uppercase letter with an arbitrary number of ticks (`'`) following it, that represents a point.
@@ -141,8 +136,7 @@ statements to unpack the rhs expression onto a point collection. Note, however, 
 let ABC = &(intersection(XY, GH), mid(G, H), intersection(TU, KL));
 ```
 
-Bundle types are essentially like structs in programming languages. They have their primitive fields and functions
-defined on them that can be used for more comfortable workflow.
+Other than that, there are other types, like, for example, `Segment`. These are used for more specific purposes.
 
 ### Implicit conversions
 

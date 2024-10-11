@@ -623,25 +623,11 @@ pub type Distance = ScalarUnit<1, 1, 0, 1>;
 pub type Angle = ScalarUnit<0, 1, 1, 1>;
 pub type Unitless = ScalarUnit<0, 1, 0, 1>;
 
-/// Returns what size of point collection can the given bundle type be cast onto.
+/// Returns what size of point collection can the given derived type be cast onto.
 /// 0 signifies that casting is not possible
 pub const fn get_derived_pc(_name: &'static str) -> usize {
     0
 }
-
-// macro_rules! ty {
-//     (DISTANCE) => {$crate::script::ty::DISTANCE};
-//     (ANGLE) => {$crate::script::ty::ANGLE};
-//     (SCALAR) => {$crate::script::ty::SCALAR};
-//     (SCALAR_UNKNOWN) => {$crate::script::ty::SCALAR_UNKNOWN};
-//     (POINT) => {$crate::script::ty::POINT};
-//     (LINE) => {$crate::script::ty::LINE};
-//     (CIRCLE) => {$crate::script::ty::CIRCLE};
-//     ($count:literal-P) => {
-//         $crate::script::ty::collection($count)
-//     };
-//     ($t:ident) => {$crate::script::ty::bundle(stringify!($t))}
-// }
 
 /// Helper macros
 pub mod macros {
@@ -684,7 +670,7 @@ pub mod macros {
         };
     }
 
-    /// Define a new bundle type
+    /// Define a new derived type
     macro_rules! impl_derived {
         ($t:ty) => {
             paste::paste! {

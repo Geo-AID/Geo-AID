@@ -1688,12 +1688,12 @@ impl Display for PointCollection {
     }
 }
 
-/// An unrolled bundle expression data
+/// An unrolled derived type expression data
 #[derive(Debug, CloneWithNode)]
 pub enum DerivedData {
     /// A generic expression
     Generic(Generic<Derived>),
-    /// An explicit bundle construction.
+    /// Data of this type.
     Data(Rc<dyn DerivedType>),
 }
 
@@ -1775,10 +1775,10 @@ impl Expr<Derived> {
         }
     }
 
-    /// Check if the bundle's name matches the given name.
+    /// Check if the type's name matches the given name.
     ///
     /// # Errors
-    /// Returns an error if the bundle names don't match
+    /// Returns an error if the type names don't match
     #[must_use]
     pub fn check_name(self, name: &'static str, context: &CompileContext) -> Self {
         if self.data.name == name || matches!(self.data.data, DerivedData::Generic(Generic::Dummy))
@@ -1943,9 +1943,10 @@ impl AnyExpr {
                 &mut v.node,
                 with.map(AnyExprNode::to_point_collection),
             )?),
-            Self::Derived(v) => {
-                AnyExprNode::Derived(mem::replace(&mut v.node, with.map(AnyExprNode::to_bundle))?)
-            }
+            Self::Derived(v) => AnyExprNode::Derived(mem::replace(
+                &mut v.node,
+                with.map(AnyExprNode::to_derived),
+            )?),
             Self::Unknown(v) => AnyExprNode::Unknown(mem::replace(
                 &mut v.node,
                 with.map(AnyExprNode::to_unknown),
@@ -2025,7 +2026,7 @@ impl AnyExpr {
             Type::Scalar(unit) => self.can_convert_to_scalar(unit).is_some(),
             Type::PointCollection(len) => self.can_convert_to_collection(len),
             Type::Circle => self.can_convert::<Circle>(),
-            Type::Derived(name) => self.can_convert_to_bundle(name),
+            Type::Derived(name) => self.can_convert_to_derived(name),
             Type::Unknown => true,
         }
     }
@@ -2059,11 +2060,11 @@ impl AnyExpr {
         }
     }
 
-    /// Check if the expression is convertible to a bundle with the given name.
+    /// Check if the expression is convertible to a derived type with the given name.
     #[must_use]
-    pub fn can_convert_to_bundle(&self, name: &str) -> bool {
+    pub fn can_convert_to_derived(&self, name: &str) -> bool {
         match self {
-            Self::Derived(bundle) => bundle.data.name == name,
+            Self::Derived(derived) => derived.data.name == name,
             Self::Unknown(_) => true,
             _ => false,
         }
