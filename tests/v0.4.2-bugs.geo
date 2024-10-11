@@ -12,6 +12,6 @@ P !lies_on BC;
 let pt_a, pt_b = A, B;
 
 # This line produced an error about there not being fields on point collections.
-A.y = B.y;
+A.y() = B.y();
 
 # As of v0.5.0, all these bugs have been fixed and the file should compile correctly.

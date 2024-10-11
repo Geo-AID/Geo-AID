@@ -11,7 +11,7 @@ use geo_aid_figure::Style;
 use std::{collections::HashMap, fmt::Debug, ops::Deref};
 
 use super::{
-    AnyExpr, Bundle, Circle, CloneWithNode, CompileContext, Displayed, Dummy, Expr, Line, Point,
+    Circle, CloneWithNode, CompileContext, Derived, Displayed, Dummy, Expr, Line, Point,
     PointCollection, Properties, Scalar, Unknown,
 };
 
@@ -32,6 +32,20 @@ pub trait Node: Debug {
         Self: Sized,
     {
         Box::new(self).build(compiler);
+    }
+}
+
+impl<T: Node + ?Sized> Node for Box<T> {
+    fn set_display(&mut self, display: bool) {
+        self.as_mut().set_display(display);
+    }
+
+    fn get_display(&self) -> bool {
+        self.as_ref().get_display()
+    }
+
+    fn build(self: Box<Self>, build: &mut Build) {
+        <T as Node>::build(*self, build);
     }
 }
 
@@ -270,7 +284,7 @@ impl Node for CollectionNode {
 
 /// Nodes can have associated nodes. They're a special kind of nodes unique to specific expressions.
 /// Usually utilized by builtins.
-pub trait BuildAssociated<T: Node>: Debug {
+pub trait BuildAssociated<T: Node + ?Sized>: Debug {
     /// Build the associated node.
     fn build_associated(self: Box<Self>, build: &mut Build, associated: &mut HierarchyNode<T>);
 }
@@ -332,7 +346,7 @@ impl From<MaybeUnset<LineType>> for AssociatedData {
 
 /// Contains a root node, apart from its children. Simulates a hierarchy.
 #[derive(Debug)]
-pub struct HierarchyNode<T: Node> {
+pub struct HierarchyNode<T: Node + ?Sized> {
     /// The root node.
     pub root: Box<T>,
     /// The child nodes.
@@ -343,7 +357,7 @@ pub struct HierarchyNode<T: Node> {
     pub associated_data: HashMap<&'static str, AssociatedData>,
 }
 
-impl<T: Node> Node for HierarchyNode<T> {
+impl<T: Node + ?Sized> Node for HierarchyNode<T> {
     fn set_display(&mut self, display: bool) {
         self.root.set_display(display);
     }
@@ -380,6 +394,7 @@ impl<U: Displayed, T: FromExpr<U>> FromExpr<U> for HierarchyNode<T> {
 
 impl<T: Node> HierarchyNode<T> {
     /// Create a new hierarchy node from its root. No children initially.
+    #[must_use]
     pub fn new(root: T) -> Self {
         Self {
             root: Box::new(root),
@@ -388,7 +403,22 @@ impl<T: Node> HierarchyNode<T> {
             associated_data: HashMap::new(),
         }
     }
+}
 
+impl HierarchyNode<dyn Node> {
+    /// Create a new dynamically dispatched hierarchy node.
+    #[must_use]
+    pub fn new_dyn(root: impl Node + 'static) -> Self {
+        Self {
+            root: Box::new(root),
+            children: Vec::new(),
+            associated: None,
+            associated_data: HashMap::new(),
+        }
+    }
+}
+
+impl<T: Node + ?Sized> HierarchyNode<T> {
     /// Push a child.
     pub fn push_child<U: Node + 'static>(&mut self, node: U) {
         self.children.push(Box::new(node));
@@ -513,7 +543,7 @@ pub enum AnyExprNode {
     Circle(HierarchyNode<<Circle as Displayed>::Node>),
     Scalar(HierarchyNode<<Scalar as Displayed>::Node>),
     PointCollection(HierarchyNode<<PointCollection as Displayed>::Node>),
-    Bundle(HierarchyNode<<Bundle as Displayed>::Node>),
+    Derived(HierarchyNode<<Derived as Displayed>::Node>),
     Unknown(HierarchyNode<<Unknown as Displayed>::Node>),
 }
 
@@ -522,7 +552,7 @@ impl_from_for_any! {Line}
 impl_from_for_any! {Circle}
 impl_from_for_any! {Scalar}
 impl_from_for_any! {PointCollection}
-impl_from_for_any! {Bundle}
+impl_from_for_any! {Derived}
 impl_from_for_any! {Unknown}
 
 impl AnyExprNode {
@@ -535,7 +565,7 @@ impl AnyExprNode {
             Self::Circle(v) => Box::new(v),
             Self::Scalar(v) => Box::new(v),
             Self::PointCollection(v) => Box::new(v),
-            Self::Bundle(v) => Box::new(v),
+            Self::Derived(v) => Box::new(v),
             Self::Unknown(v) => Box::new(v),
         }
     }
@@ -596,13 +626,13 @@ impl AnyExprNode {
     }
 
     /// # Panics
-    /// If the node is not a bundle node.
+    /// If the node is not a derived type node.
     #[must_use]
-    pub fn to_bundle(self) -> HierarchyNode<<Bundle as Displayed>::Node> {
-        if let Self::Bundle(v) = self {
+    pub fn to_derived(self) -> HierarchyNode<<Derived as Displayed>::Node> {
+        if let Self::Derived(v) = self {
             v
         } else {
-            panic!("not a bundle")
+            panic!("not a derived type")
         }
     }
 
@@ -626,7 +656,7 @@ impl Node for AnyExprNode {
             Self::Circle(v) => v.set_display(display),
             Self::Scalar(v) => v.set_display(display),
             Self::PointCollection(v) => v.set_display(display),
-            Self::Bundle(v) => v.set_display(display),
+            Self::Derived(v) => v.set_display(display),
             Self::Unknown(v) => v.set_display(display),
         }
     }
@@ -638,7 +668,7 @@ impl Node for AnyExprNode {
             Self::Circle(v) => v.get_display(),
             Self::Scalar(v) => v.get_display(),
             Self::PointCollection(v) => v.get_display(),
-            Self::Bundle(v) => v.get_display(),
+            Self::Derived(v) => v.get_display(),
             Self::Unknown(v) => v.get_display(),
         }
     }
@@ -650,77 +680,8 @@ impl Node for AnyExprNode {
             Self::Circle(v) => v.build_unboxed(build),
             Self::Scalar(v) => v.build_unboxed(build),
             Self::PointCollection(v) => v.build_unboxed(build),
-            Self::Bundle(v) => v.build_unboxed(build),
+            Self::Derived(v) => v.build_unboxed(build),
             Self::Unknown(v) => v.build_unboxed(build),
-        }
-    }
-}
-
-/// Node for bundles
-#[derive(Debug)]
-pub struct BundleNode {
-    /// Whether to display the node.
-    pub display: MaybeUnset<bool>,
-    /// Field-bound child nodes.
-    pub children: HashMap<String, AnyExpr>,
-}
-
-impl Default for BundleNode {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl Dummy for BundleNode {
-    fn dummy() -> Self {
-        Self::new()
-    }
-
-    fn is_dummy(&self) -> bool {
-        self.children.is_empty()
-    }
-}
-
-impl BundleNode {
-    /// Create a new, empty bundle node.
-    #[must_use]
-    pub fn new() -> Self {
-        Self {
-            display: MaybeUnset::new(true),
-            children: HashMap::new(),
-        }
-    }
-
-    /// Insert a field to construct its node from.
-    pub fn insert<T: Displayed>(&mut self, key: String, expr: Expr<T>)
-    where
-        AnyExpr: From<Expr<T>>,
-    {
-        self.children.insert(key, AnyExpr::from(expr));
-    }
-
-    /// Extend fields
-    pub fn extend<U: IntoIterator<Item = (String, AnyExpr)>>(&mut self, nodes: U) {
-        self.children.extend(nodes);
-    }
-}
-
-impl Node for BundleNode {
-    fn set_display(&mut self, display: bool) {
-        self.display.set(display);
-    }
-
-    fn get_display(&self) -> bool {
-        self.display.get_copied()
-    }
-
-    fn build(self: Box<Self>, build: &mut Build) {
-        if self.display.get_copied() {
-            for mut child in self.children.into_values() {
-                if let Some(node) = child.replace_node(None) {
-                    node.build_unboxed(build);
-                }
-            }
         }
     }
 }

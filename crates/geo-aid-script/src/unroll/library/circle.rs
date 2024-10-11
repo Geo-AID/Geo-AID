@@ -14,27 +14,38 @@ fn circle_function(
 
 /// Register the function
 pub fn register(library: &mut Library) {
-    library.add(
-        Function::new("circle")
-            .overload(circle_function)
-            .overload(
-                |radius: Distance, center: Expr<Point>, context: &CompileContext, display| {
-                    circle_function(center, radius, context, display)
-                },
-            )
-            .overload(|context: &mut CompileContext, display| {
-                let mut center = context.free_point();
-                let mut radius = context.free_scalar();
-
-                center.take_node();
-                radius.take_node();
-
-                circle_function(
-                    center,
-                    ScalarUnit::from(context.set_unit(radius, unit::DISTANCE)),
-                    context,
-                    display,
+    library
+        .add(
+            Function::new("circle")
+                .overload(circle_function)
+                .overload(
+                    |radius: Distance, center: Expr<Point>, context: &CompileContext, display| {
+                        circle_function(center, radius, context, display)
+                    },
                 )
-            }),
-    );
+                .overload(|context: &mut CompileContext, display| {
+                    let mut center = context.free_point();
+                    let mut radius = context.free_scalar();
+
+                    center.take_node();
+                    radius.take_node();
+
+                    circle_function(
+                        center,
+                        ScalarUnit::from(context.set_unit(radius, unit::DISTANCE)),
+                        context,
+                        display,
+                    )
+                }),
+        )
+        .add(Function::new("radius").alias("[circle]::radius").overload(
+            |circle: Expr<Circle>, context: &CompileContext, props| {
+                Distance::from(context.circle_radius_display(circle, props))
+            },
+        ))
+        .add(Function::new("center").alias("[circle]::center").overload(
+            |circle: Expr<Circle>, context: &CompileContext, props| {
+                context.circle_center_display(circle, props)
+            },
+        ));
 }

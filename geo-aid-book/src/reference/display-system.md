@@ -117,10 +117,6 @@ The `display` property works as usual.
 
 Point collections also have special behavior when they are used in the context of lines or distances (see: [conversions](types.md)). Specifically, when converted to a distance measurement or a line, they also accept properties related to `Line`s (see above).
 
-*`Bundle`*
-
-All bundle types accept a `display` property.
-
 ---
 
 Variables and literals don't accept any properties, no matter the type. Beyond that, additional properties may be added depending on the kind of construction (used function). Details on those are in the documentation of respective functions.

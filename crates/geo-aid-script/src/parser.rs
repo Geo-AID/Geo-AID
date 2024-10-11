@@ -897,8 +897,8 @@ pub enum Type {
     PointCollection(usize),
     /// A circle
     Circle,
-    /// A bundle type.
-    Bundle(&'static str),
+    /// A derived type.
+    Derived(&'static str),
     /// Marks unknown type. Unknown type pretends to be valid, but isn't really.
     Unknown,
 }
@@ -931,7 +931,7 @@ impl Display for Type {
             },
             Self::PointCollection(l) => write!(f, "Point collection ({l})"),
             Self::Circle => write!(f, "Circle"),
-            Self::Bundle(name) => write!(f, "{name}"),
+            Self::Derived(name) => write!(f, "{name}"),
             Type::Unknown => write!(f, "undefined"),
         }
     }
@@ -970,11 +970,11 @@ impl Type {
                 _ => false,
             },
             Type::Circle => matches!(into, Type::Circle),
-            Type::Bundle(name) => {
+            Type::Derived(name) => {
                 if into == self {
                     true
                 } else if let Type::PointCollection(count) = into {
-                    library::get_bundle_pc(name) == *count
+                    library::get_derived_pc(name) == *count
                 } else {
                     false
                 }

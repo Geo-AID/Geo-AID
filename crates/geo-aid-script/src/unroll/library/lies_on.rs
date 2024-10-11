@@ -2,7 +2,7 @@
 
 use num_traits::{One, Zero};
 
-use super::{prelude::*, segment::Segment};
+use super::{prelude::*, segment::SegmentExpr};
 use crate::token::number::ProcNum;
 
 /// `point lies_on circle` - a point lies on a circle.
@@ -179,7 +179,7 @@ fn col_lies_on_line(
 /// `point lies_on segment` - a point lies on a segment (on the containing line, between the delimiting points)
 fn pt_lies_on_segment(
     mut lhs: Expr<Point>,
-    mut rhs: Segment,
+    mut rhs: SegmentExpr,
     context: &mut CompileContext,
     display: Properties,
     inverted: bool,
@@ -189,10 +189,15 @@ fn pt_lies_on_segment(
     node.extend(lhs.node.take());
     node.extend(rhs.node.take());
 
+    let Some(segment) = rhs.get() else {
+        return node;
+    };
+
     let point = lhs;
+
     let line = context.line(
-        field!(node POINT rhs, A with context),
-        field!(node POINT rhs, B with context),
+        segment.a.clone_without_node(),
+        segment.b.clone_without_node(),
     );
 
     if inverted {
@@ -211,14 +216,14 @@ fn pt_lies_on_segment(
                     kind: UnrolledRuleKind::ScalarEq(
                         context.add(
                             context.distance_pp(
-                                field!(no-node POINT rhs, A with context),
+                                segment.a.clone_without_node(),
                                 point.clone_without_node(),
                             ),
-                            context.distance_pp(field!(no-node POINT rhs, B with context), point),
+                            context.distance_pp(segment.b.clone_without_node(), point),
                         ),
                         context.distance_pp(
-                            field!(no-node POINT rhs, A with context),
-                            field!(no-node POINT rhs, B with context),
+                            segment.a.clone_without_node(),
+                            segment.b.clone_without_node(),
                         ),
                     ),
                     inverted: true,
@@ -234,15 +239,12 @@ fn pt_lies_on_segment(
         context.push_rule(UnrolledRule {
             kind: UnrolledRuleKind::ScalarEq(
                 context.add(
-                    context.distance_pp(
-                        field!(no-node POINT rhs, A with context),
-                        point.clone_without_node(),
-                    ),
-                    context.distance_pp(field!(no-node POINT rhs, B with context), point),
+                    context.distance_pp(segment.a.clone_without_node(), point.clone_without_node()),
+                    context.distance_pp(segment.b.clone_without_node(), point),
                 ),
                 context.distance_pp(
-                    field!(no-node POINT rhs, A with context),
-                    field!(no-node POINT rhs, B with context),
+                    segment.a.clone_without_node(),
+                    segment.b.clone_without_node(),
                 ),
             ),
             inverted: false,
