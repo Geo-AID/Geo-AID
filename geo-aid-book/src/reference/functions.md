@@ -83,6 +83,15 @@ struct Bisector {
 
 **Returns**: a circle with an adjusted (free point) `center` and an adjusted (free scalar) `radius`.
 
+## `circumcircle`
+
+* `circumcircle(a: Point, b: Point, c: Point)`
+* `circumcircle(abc: 3-P)`
+
+**Return type**: [Circle](./types.md#Circle)
+
+**Returns**: a circle circumscribed on the three points given.
+
 ## `degrees` (alias `deg`)
 
 * `degrees(value: Scalar (no unit))`
@@ -145,7 +154,18 @@ struct Dst {
 
 **Returns**: the value with a distance unit.
 
+## `incircle`
+
+* `incircle(a: Point, b: Point, c: Point)`
+* `incircle(abc: 3-P)`
+
+**Return type**: [Circle](./types.md#Circle)
+
+**Returns**: a circle inscribed in the three points given.
+
 ## `intersection`
+
+All overloads by default don't display the point dot. This can be changed with properties.
 
 * `intersection(k: Line, l: Line)`
 
@@ -153,7 +173,18 @@ struct Dst {
 
 **Returns**: intersection of lines `k` and `l`.
 
-**Displays**: By default doesn't display the point dot. Modifiable with properties.
+* `intersection(k: Line, circle: Circle)`
+* `intersection(circle: Circle, k: Line)`
+
+**Return type**: [Point](./types.md#point)
+
+**Returns**: intersection of line `k` and circle `circle`.
+
+* `intersection(o1: Circle, o2: Circle)`
+
+**Return type**: [Point](./types.md#point)
+
+**Returns**: intersection of circles `o1` and `o2`.
 
 **Note**: `display_dot` property is not currently supported.
 

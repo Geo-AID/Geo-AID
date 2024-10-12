@@ -82,19 +82,23 @@ pub fn register(library: &mut Library) {
                     )
                 }),
         )
-        .add(Function::new("radius").alias("[circle]::radius").overload(
-            |circle: Expr<Circle>, context: &CompileContext, props| {
-                Distance::from(context.circle_radius_display(circle, props))
-            },
-        ))
-        .add(Function::new("center").alias("[circle]::center").overload(
-            |circle: Expr<Circle>, context: &CompileContext, props| {
-                context.circle_center_display(circle, props)
-            },
-        ))
+        .add(
+            Function::new("radius")
+                .alias_method(ty::CIRCLE, "radius")
+                .overload(|circle: Expr<Circle>, context: &CompileContext, props| {
+                    Distance::from(context.circle_radius_display(circle, props))
+                }),
+        )
+        .add(
+            Function::new("center")
+                .alias_method(ty::CIRCLE, "center")
+                .overload(|circle: Expr<Circle>, context: &CompileContext, props| {
+                    context.circle_center_display(circle, props)
+                }),
+        )
         .add(
             Function::new("circumcircle")
-                .alias("[point collection (3)]::circumcircle")
+                .alias_method(ty::collection(3), "circumcircle")
                 .overload(circumcircle)
                 .overload(|mut col: Pc<3>, context: &CompileContext, props| {
                     circumcircle(
@@ -108,7 +112,7 @@ pub fn register(library: &mut Library) {
         )
         .add(
             Function::new("incircle")
-                .alias("[point collection (3)]::incircle")
+                .alias_method(ty::collection(3), "incircle")
                 .overload(incircle)
                 .overload(|mut col: Pc<3>, context: &CompileContext, props| {
                     incircle(

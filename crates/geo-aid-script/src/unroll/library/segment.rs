@@ -172,9 +172,7 @@ pub fn register(library: &mut Library) {
         )
         .add(
             Function::new("len")
-                .alias_method(ty::bundle("Segment"), "len")
+                .alias_method(ty::derived("Segment"), "len")
                 .overload(len),
         );
-
-    library.bundles.insert("Segment", ["A", "B"].into());
 }

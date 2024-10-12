@@ -2597,7 +2597,7 @@ impl Unroll for ExprCall {
 
         let func = match self_type {
             Some(t) => library.get_method(t, &func_name),
-            None => library.get_function(&func_name)
+            None => library.get_function(&func_name),
         };
 
         let res = match func {
@@ -2623,17 +2623,6 @@ impl Unroll for ExprCall {
             }
             Err(suggested) => {
                 if let Some(self_type) = self_type {
-<<<<<<< HEAD
-                    let self_type_name = format!("[{self_type}]::");
-
-                    let suggested = if suggested.is_some_and(|s| s.starts_with(&self_type_name)) {
-                        suggested.map(|name| name[self_type_name.len()..].to_string())
-                    } else {
-                        None
-                    };
-
-=======
->>>>>>> Method rework, more functions
                     context.push_error(Error::UndefinedMethod {
                         error_span: self.name.get_span(),
                         function_name: func_name,
@@ -2719,9 +2708,7 @@ impl Unroll<FuncRef> for Name {
 
                 match self_param {
                     AnyExpr::Unknown(_) => FuncRef::Invalid,
-                    self_param => {
-                        FuncRef::Method(name, self_param)
-                    }
+                    self_param => FuncRef::Method(name, self_param),
                 }
             }
             _ => {

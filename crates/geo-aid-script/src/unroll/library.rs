@@ -40,7 +40,7 @@ pub mod segment;
 /// A prelude for builtin functions.
 pub mod prelude {
     pub(crate) use crate::{
-        unit,
+        ty, unit,
         unroll::{
             context::CompileContext,
             figure::{
@@ -82,7 +82,7 @@ impl Function {
             name,
             overloads: Vec::new(),
             aliases: Vec::new(),
-            method_aliases: Vec::new()
+            method_aliases: Vec::new(),
         }
     }
 
@@ -490,15 +490,22 @@ impl Library {
 
     /// Get the method by its name and self type. If the method doesn't exist,
     /// return the most similar name if one exists. The search is case-insensitive.
-    pub fn get_method(&self, self_type: Type, name: &str) -> Result<&Function, Option<&'static str>> {
-        let methods = self.methods
-        .get(&self_type).or_else(|| {
-            if matches!(self_type, Type::PointCollection(_)) {
-                self.methods.get(&Type::PointCollection(0))
-            } else {
-                None
-            }
-        }).ok_or(None)?;
+    pub fn get_method(
+        &self,
+        self_type: Type,
+        name: &str,
+    ) -> Result<&Function, Option<&'static str>> {
+        let methods = self
+            .methods
+            .get(&self_type)
+            .or_else(|| {
+                if matches!(self_type, Type::PointCollection(_)) {
+                    self.methods.get(&Type::PointCollection(0))
+                } else {
+                    None
+                }
+            })
+            .ok_or(None)?;
 
         methods
             .get(name.to_lowercase().as_str())
@@ -536,7 +543,11 @@ impl Addable for Function {
         }
 
         for (t, alias) in mem::take(&mut self.method_aliases) {
-            library.methods.entry(t).or_default().insert(alias, Definition::Alias(self.name));
+            library
+                .methods
+                .entry(t)
+                .or_default()
+                .insert(alias, Definition::Alias(self.name));
         }
 
         library

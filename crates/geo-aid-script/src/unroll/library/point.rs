@@ -14,8 +14,8 @@ pub fn register(library: &mut Library) {
         )
         .add(
             Function::new("x")
-                .alias("[point]::x")
-                .alias("[point collection (1)]::x")
+                .alias_method(ty::POINT, "x")
+                .alias_method(ty::collection(1), "x")
                 .overload(|mut point: Expr<Point>, context: &CompileContext, props| {
                     let node = point.take_node().map(|n| Box::new(n) as Box<dyn Node>);
                     Distance::from(context.expr_with(
@@ -30,8 +30,8 @@ pub fn register(library: &mut Library) {
         )
         .add(
             Function::new("y")
-                .alias("[point]::y")
-                .alias("[point collection (1)]::y")
+                .alias_method(ty::POINT, "y")
+                .alias_method(ty::collection(1), "y")
                 .overload(|mut point: Expr<Point>, context: &CompileContext, props| {
                     let node = point.take_node().map(|n| Box::new(n) as Box<dyn Node>);
                     Distance::from(context.expr_with(
