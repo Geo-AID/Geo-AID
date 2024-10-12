@@ -14,7 +14,36 @@ Any variable defined with an unknown-unit scalar is assumed to be unit-less.
 When performing multiplication/division over a scalar with a unit and a scalar with an unknown unit, the latter is
 automatically converted into a unit-less scalar.
 
-Note: A literal will never be coerced to an angle, since that would introduce uncertainty whether it should be treated as given in radians or degrees. Instead, look for their respective functions.
+Note: A literal will never be coerced to an angle, since that would introduce uncertainty whether it should be
+treated as given in radians or degrees. Instead, look for their respective functions.
+
+*Methods*
+
+* `degrees()` (alias `deg`) if the scalar is unitless.
+
+**Return type**: [Scalar (angle)](#scalar)
+
+**Returns**: Angle value with measurement equal to this number in degrees.
+
+* `degrees()` (alias `deg`) if the scalar is an angle.
+
+**Return type**: [Scalar (no unit)](#scalar)
+
+**Returns**: The measurement of this angle in degrees.
+
+*Methods*
+
+* `radians()` (alias `rad`) if the scalar is unitless.
+
+**Return type**: [Scalar (angle)](#scalar)
+
+**Returns**: Angle value with measurement equal to this number in radians.
+
+* `radians()` (alias `rad`) if the scalar is an angle.
+
+**Return type**: [Scalar (no unit)](#scalar)
+
+**Returns**: The measurement of this angle in radians.
 
 ## Point
 
@@ -52,6 +81,32 @@ A line is a line in Euclidean sense. Denoted as `Line`.
 ## Point collections
 
 Point collections are simply ordered collections of points. It is never a separate entity, only an abstraction over a set of points. Denoted as `<length>-P`. If `<length>` is given as `0`, it means a collection of any length. Most functions that accept points as arguments, also accept point collections.
+
+*Methods*
+
+* `circumcircle()` if the collection has length of 3.
+
+**Return type**: [Circle](#circle)
+
+**Returns**: The circle circumscribed on the three points.
+
+* `dst()` (alias `len`) if the collection has length of 2.
+
+**Return type**: [Scalar (distance)](#scalar)
+
+**Returns**: the distance between the two points.
+
+* `incircle()` if the collection has length of 3.
+
+**Return type**: [Circle](#circle)
+
+**Returns**: The circle inscribed in the three points.
+
+* `mid()` for any length.
+
+**Return type**: [Point](#point)
+
+**Returns**: The arithmetic average of the points included in the collection (coordinates-wise).
 
 ### Segment
 

@@ -1,5 +1,6 @@
 use crate::{
     parser::Type,
+    ty,
     unroll::{AnyExpr, Convert},
 };
 
@@ -82,17 +83,30 @@ impl Overload for MidScalar {
 //     have a way of specifying that there should be
 //     at least two `DISTANCE arguments in the last rule.
 pub fn register(library: &mut Library) {
-    library.add(
-        Function::new("mid")
-            .overload(|mut col: Pc<0>, context: &CompileContext, props| {
-                context.average_p_display(
-                    (0..col.0.data.length)
-                        .map(|i| index!(node col, i))
-                        .collect(),
-                    props,
-                )
-            })
-            .overload(MidScalar)
-            .overload(MidPoint),
-    );
+    library
+        .add(
+            Function::new("mid")
+                .overload(|mut col: Pc<0>, context: &CompileContext, props| {
+                    context.average_p_display(
+                        (0..col.0.data.length)
+                            .map(|i| index!(node col, i))
+                            .collect(),
+                        props,
+                    )
+                })
+                .overload(MidScalar)
+                .overload(MidPoint),
+        )
+        .add(
+            Function::new("[pc]::mid")
+                .alias_method(ty::collection(0), "mid")
+                .overload(|mut col: Pc<0>, context: &CompileContext, props| {
+                    context.average_p_display(
+                        (0..col.0.data.length)
+                            .map(|i| index!(node col, i))
+                            .collect(),
+                        props,
+                    )
+                }),
+        );
 }

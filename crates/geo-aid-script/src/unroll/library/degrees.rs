@@ -12,6 +12,10 @@ pub fn register(library: &mut Library) {
     library.add(
         Function::new("degrees")
             .alias("deg")
+            .alias_method(ty::ANGLE, "degrees")
+            .alias_method(ty::ANGLE, "deg")
+            .alias_method(ty::SCALAR, "degrees")
+            .alias_method(ty::SCALAR, "deg")
             .overload(|v: Unitless, context: &CompileContext, display| {
                 Angle::from(context.mult_display(
                     v.0,

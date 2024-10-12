@@ -170,5 +170,9 @@ pub fn register(library: &mut Library) {
                 })
                 .overload(segment_function_point_point),
         )
-        .add(Function::new("[segment]::len").overload(len));
+        .add(
+            Function::new("len")
+                .alias_method(ty::derived("Segment"), "len")
+                .overload(len),
+        );
 }
