@@ -3816,29 +3816,34 @@ fn unroll_rule_statement(
 ) -> Result<Vec<Box<dyn Node>>, Error> {
     let mut nodes = Vec::new();
 
-    let tree = IterNode::from2(&rule.lhs, &rule.rhs);
-    tree.get_iter_lengths(&mut HashMap::new(), rule.get_span())?;
+    let firsts = Some(&rule.first).into_iter().chain(rule.rules.iter().map(|v| &v.1));
 
-    let mut it_index = IterTreeIterator::new(&tree);
+    for (lhs, op, rhs) in firsts.zip(rule.rules.iter()).map(|(lhs, (op, rhs))| (lhs, op, rhs)) {
+        let tree = IterNode::from2(lhs, rhs);
+        let full_span = lhs.get_span().join(rhs.get_span());
+        tree.get_iter_lengths(&mut HashMap::new(), full_span)?;
 
-    while let Some(index) = it_index.get_currents() {
-        nodes.push(unroll_rule(
-            (
-                rule.lhs
-                    .unroll(context, library, index, Properties::default()),
-                &rule.op,
-                rule.rhs
-                    .unroll(context, library, index, Properties::default()),
-            ),
-            context,
-            library,
-            rule.get_span(),
-            false,
-            Properties::from(rule.display.clone()),
-        ));
+        let mut it_index = IterTreeIterator::new(&tree);
 
-        it_index.next();
-    }
+        while let Some(index) = it_index.get_currents() {
+            nodes.push(unroll_rule(
+                (
+                    rule.first
+                        .unroll(context, library, index, Properties::default()),
+                    op,
+                    rhs
+                        .unroll(context, library, index, Properties::default()),
+                ),
+                context,
+                library,
+                full_span,
+                false,
+                Properties::from(rule.display.clone()),
+            ));
+
+            it_index.next();
+        }
+    } 
 
     Ok(nodes)
 }

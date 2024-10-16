@@ -7,6 +7,7 @@ use num_traits::Zero;
 use crate::token::number::ProcNum;
 use crate::unroll::library;
 use std::fmt::Formatter;
+use std::ops::Deref;
 use std::{
     fmt::{Debug, Display},
     iter::Peekable,
@@ -105,6 +106,53 @@ impl<T: Parse> Parse for Vec<T> {
         }
 
         Ok(parsed)
+    }
+
+    fn get_span(&self) -> Span {
+        self.first().map_or(Span::empty(), |x| {
+            x.get_span().join(self.last().unwrap().get_span())
+        })
+    }
+}
+
+/// Vector with at least one element.
+pub struct AtLeastOne<T>(Vec<T>);
+
+impl<T: Debug> Debug for AtLeastOne<T> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self.0)
+    }
+}
+
+impl<T> Deref for AtLeastOne<T> {
+    type Target = Vec<T>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<T: Parse> Parse for AtLeastOne<T> {
+    type FirstToken = T::FirstToken;
+
+    fn parse<'t, I: Iterator<Item = &'t Token> + Clone>(
+        input: &mut InputStream<'t, I>,
+    ) -> Result<Self, Error>
+    where
+        Self: Sized,
+    {
+        let mut parsed = Vec::new();
+
+        // First element is forced.
+        if let Ok(v) = input.parse() {
+            parsed.push(v);
+        }
+
+        while let Ok(Some(v)) = input.parse() {
+            parsed.push(v);
+        }
+
+        Ok(Self(parsed))
     }
 
     fn get_span(&self) -> Span {
@@ -733,11 +781,9 @@ pub struct RuleStatement {
     /// Display properties.
     pub display: Option<DisplayProperties>,
     /// Left hand side
-    pub lhs: Expression<true>,
-    /// Rule operator
-    pub op: RuleOperator,
-    /// Right hand side
-    pub rhs: Expression<true>,
+    pub first: Expression<true>,
+    /// The rules themselves.
+    pub rules: AtLeastOne<(RuleOperator, Expression<true>)>,
     /// The ending semicolon.
     pub semi: Semi,
 }
