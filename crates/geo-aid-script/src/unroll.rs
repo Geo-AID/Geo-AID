@@ -5,7 +5,7 @@
 //!
 //! This is also where all information on how to handle the figure is extracted.
 
-use crate::span;
+use crate::{parser, span};
 use flags::FlagSetConstructor;
 use geo_aid_derive::CloneWithNode;
 use geo_aid_figure::Style;
@@ -3131,22 +3131,13 @@ impl Properties {
     }
 
     /// Merge the properties with other properties. Automatically finished the other properties.
+    /// If there are collisions, `other` overwrites current values.
     #[must_use]
     pub fn merge_with(mut self, mut other: Properties) -> Self {
         self.errors.extend(mem::take(&mut other.errors));
 
         for (k, v) in mem::take(&mut other.props) {
-            let error_span = v.0;
-            let option = k.clone();
-            let old = self.props.insert(k, v);
-
-            if let Some(old) = old {
-                self.errors.push(Error::RepeatedDisplayOption {
-                    error_span,
-                    first_span: old.0,
-                    option,
-                });
-            }
+            self.props.insert(k, v);
         }
 
         // no finish(), because that would require CompileContext. Here, however, no errors would happen anyway.
@@ -3375,6 +3366,7 @@ fn create_variables(
     stat: &LetStatement,
     context: &mut CompileContext,
     library: &Library,
+    external: Option<DisplayProperties>
 ) -> Result<Vec<Box<dyn Node>>, Error> {
     let mut variable_nodes = Vec::new();
 
@@ -3437,13 +3429,13 @@ fn create_variables(
 
     // Iterate over each identifier.
     for def in stat.ident.iter() {
-        let mut external = Properties::default();
+        let mut external = Properties::from(external.clone());
         external.props.insert(
             String::from("default-label"),
             (Span::empty(), PropertyValue::Ident(def.name.clone())),
         );
 
-        let display = Properties::from(def.display_properties.clone()).merge_with(external);
+        let display = external.merge_with(Properties::from(def.display_properties.clone()));
 
         let rhs_unrolled = stat.expr.unroll(
             context,
@@ -3471,12 +3463,12 @@ fn create_variables(
 
 /// Unroll a ref statement.
 fn unroll_ref(
-    stat: &RefStatement,
+    stat: &parser::Displayed<RefStatement>,
     context: &mut CompileContext,
     library: &Library,
 ) -> Result<Vec<Box<dyn Node>>, Error> {
     let mut nodes = Vec::new();
-    let tree = IterNode::from(&stat.operand);
+    let tree = IterNode::from(&stat.statement.operand);
 
     // Check the lengths
     tree.get_iter_lengths(&mut HashMap::new(), stat.get_span())?;
@@ -3485,10 +3477,10 @@ fn unroll_ref(
     let mut index = IterTreeIterator::new(&tree);
 
     while let Some(it_index) = index.get_currents() {
-        let mut display = Properties::from(stat.display.clone());
+        let mut display = Properties::from(stat.properties.clone());
         let weight = display.get("weight").get_or(ProcNum::zero());
 
-        let mut expr = stat.operand.unroll(context, library, it_index, display);
+        let mut expr = stat.statement.operand.unroll(context, library, it_index, display);
 
         if let AnyExpr::PointCollection(pc) = &mut expr {
             if let Some(node) = pc.node.take() {
@@ -3522,10 +3514,15 @@ fn unroll_ref(
 
 /// Unroll a `let` statement.
 fn unroll_let(
-    mut stat: LetStatement,
+    stat: parser::Displayed<LetStatement>,
     context: &mut CompileContext,
     library: &Library,
 ) -> Result<Vec<Box<dyn Node>>, Error> {
+    let parser::Displayed {
+        properties,
+        statement: mut stat
+    } = stat;
+
     // First, we construct an iterator out of lhs
     let lhs: Expression<true> = Expression::ImplicitIterator(ImplicitIterator {
         exprs: Punctuated {
@@ -3555,12 +3552,12 @@ fn unroll_let(
     });
 
     let stat_span = stat.get_span();
-    let rules = mem::take(&mut stat.rules);
+    let rule = mem::take(&mut stat.rule);
 
-    let mut nodes = create_variables(&stat, context, library)?;
+    let mut nodes = create_variables(&stat, context, library, properties)?;
 
     // Then, we run each rule through a tree iterator.
-    for (rule, expr) in rules {
+    if let Some((rule, expr)) = rule {
         let tree = IterNode::from2(&lhs, &expr);
 
         // Check the lengths
@@ -3810,11 +3807,15 @@ fn unroll_rule(
 
 /// Unroll a general rule statement.
 fn unroll_rule_statement(
-    rule: &RuleStatement,
+    rule: &parser::Displayed<RuleStatement>,
     context: &mut CompileContext,
     library: &Library,
 ) -> Result<Vec<Box<dyn Node>>, Error> {
     let mut nodes = Vec::new();
+    let parser::Displayed {
+        properties,
+        statement: rule
+    } = rule;
 
     let firsts = Some(&rule.first).into_iter().chain(rule.rules.iter().map(|v| &v.1));
 
@@ -3828,7 +3829,7 @@ fn unroll_rule_statement(
         while let Some(index) = it_index.get_currents() {
             nodes.push(unroll_rule(
                 (
-                    rule.first
+                    lhs
                         .unroll(context, library, index, Properties::default()),
                     op,
                     rhs
@@ -3838,7 +3839,7 @@ fn unroll_rule_statement(
                 library,
                 full_span,
                 false,
-                Properties::from(rule.display.clone()),
+                Properties::from(properties.clone()),
             ));
 
             it_index.next();

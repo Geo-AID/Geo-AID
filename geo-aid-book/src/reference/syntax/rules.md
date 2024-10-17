@@ -2,7 +2,7 @@
 
 > <sup>**Syntax**</sup>\
 > *RuleStatement* :\
-> &nbsp;&nbsp; *[Properties](properties.md)* *[Expression&lt;true&gt;](expressions.md)* *RuleOp* [Expression&lt;true&gt;](expressions.md)* `;`\
+> &nbsp;&nbsp; *[Properties](properties.md)* *[Expression&lt;true&gt;](expressions.md)* (*RuleOp* *[Expression&lt;true&gt;](expressions.md)*)<sup>\*</sup> `;`\
 > \
 > *RuleOp* :\
 > &nbsp;&nbsp; &nbsp;&nbsp; `<` | `<=` | `=` | `>=` | `>`\
@@ -15,6 +15,19 @@ Geo-AID attempts to generate a figure that obeys them as good as it can. Rules t
 supported rule operators are all comparison operators. When given an identifier, a proper *defined
 rule operator* is looked up and compiled accordingly (currently none supported). Rules can also be
 inverted with an exclamation mark in front of the operator.
+
+Rules can be chained like so:
+
+```
+2 < a < 3;
+```
+
+The above is equivalent to
+
+```
+2 < a;
+a < 3;
+```
 
 Weights on non-ident rules are assigned to them directly and end up being used directly in the
 generation process. Weights on ident rules are treated differently depending on the rule.

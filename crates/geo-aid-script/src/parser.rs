@@ -768,8 +768,8 @@ pub struct LetStatement {
     pub eq: Eq,
     /// The rhs expression.
     pub expr: Expression<true>,
-    /// The rules after the rhs expression.
-    pub rules: Vec<(RuleOperator, Expression<true>)>,
+    /// The rule after the rhs expression.
+    pub rule: Option<(RuleOperator, Expression<true>)>,
     /// The ending semicolon.
     pub semi: Semi,
 }
@@ -778,8 +778,6 @@ pub struct LetStatement {
 /// Defines a rule.
 #[derive(Debug, Parse)]
 pub struct RuleStatement {
-    /// Display properties.
-    pub display: Option<DisplayProperties>,
     /// Left hand side
     pub first: Expression<true>,
     /// The rules themselves.
@@ -791,8 +789,6 @@ pub struct RuleStatement {
 /// `?expr`. Used for displaying and biases.
 #[derive(Debug, Parse)]
 pub struct RefStatement {
-    /// Display properties.
-    pub display: Option<DisplayProperties>,
     /// The starting question mark.
     pub question: Question,
     /// Operand.
@@ -802,18 +798,72 @@ pub struct RefStatement {
 }
 
 /// A general statement. A rule, `let` or a ref
-#[derive(Debug, Parse)]
+#[derive(Debug)]
 pub enum Statement {
     /// No operation
     Noop(Semi),
     /// let
-    Let(LetStatement),
+    Let(Displayed<LetStatement>),
     /// Flag
     Flag(FlagStatement),
     /// Reference
-    Ref(RefStatement),
+    Ref(Displayed<RefStatement>),
     /// rule
-    Rule(RuleStatement),
+    Rule(Displayed<RuleStatement>),
+}
+
+impl Parse for Statement {
+    type FirstToken = TokenOr<LSquare, TokenOr<Semi, TokenOr<At, TokenOr<Question, TokenOr<Let, <SimpleExpression as Parse>::FirstToken>>>>>;
+
+    fn parse<'t, I: Iterator<Item = &'t Token> + Clone>(
+        input: &mut InputStream<'t, I>,
+    ) -> Result<Self, Error>
+    where
+        Self: Sized {
+        let props = input.parse()?;
+        input.expect_token()?;
+
+        let tok = input.it.peek().cloned().unwrap();
+
+        match tok {
+            Token::Let(_) => {
+                Ok(Self::Let(Displayed {
+                    properties: props,
+                    statement: input.parse()?
+                }))
+            }
+            Token::Semi(_) => {
+                if props.is_some() {
+                    Err(Error::UnexpectedProperties { error_span: props.get_span() })
+                } else {
+                    Ok(Self::Noop(input.parse()?))
+                }
+            }
+            Token::At(_) => {
+                if props.is_some() {
+                    Err(Error::UnexpectedProperties { error_span: props.get_span() })
+                } else {
+                    Ok(Self::Flag(input.parse()?))
+                }
+            }
+            Token::Question(_) => {
+                Ok(Self::Ref(Displayed {
+                    properties: props,
+                    statement: input.parse()?
+                }))
+            }
+            _ => {
+                Ok(Self::Rule(Displayed {
+                    properties: props,
+                    statement: input.parse()?
+                }))
+            }
+        }
+    }
+
+    fn get_span(&self) -> Span {
+        todo!()
+    }
 }
 
 impl Statement {
@@ -825,6 +875,15 @@ impl Statement {
             None
         }
     }
+}
+
+/// Generic structure for statements that accept display options.
+#[derive(Debug, Parse)]
+pub struct Displayed<T: Parse> {
+    /// The properties
+    pub properties: Option<DisplayProperties>,
+    /// The statement itself
+    pub statement: T
 }
 
 /// A utility struct for collections of parsed items with punctuators between them.

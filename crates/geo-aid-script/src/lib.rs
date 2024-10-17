@@ -31,6 +31,11 @@ pub enum Error {
         /// The token that was encountered.
         token: Token,
     },
+    /// Properties exncountered where not expected
+    UnexpectedProperties {
+        /// Where they were encountered.
+        error_span: Span
+    },
     /// Invalid (unsupported) character in the figure script.
     InvalidCharacter {
         /// The character that was encountered.
@@ -342,6 +347,9 @@ impl Error {
         match self {
             Self::InvalidToken { token } => {
                 DiagnosticData::new(&format!("invalid token: `{token}`")).add_span(token.get_span())
+            }
+            Self::UnexpectedProperties { error_span } => {
+                DiagnosticData::new(&"unexpected properties (display options)").add_span(error_span)
             }
             Self::InvalidCharacter {
                 character,
