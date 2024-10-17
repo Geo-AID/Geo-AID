@@ -8,7 +8,7 @@ Overloads are listed in the order they are checked.
 * `angle(ABC: 3-P)`
 * `angle(A: Point, B: Point, C: Point)`
 
-**Return type**: [Scalar (angle)](./types.md#scalar)
+**Return type**: [Number (angle)](./types.md#number)
 
 **Returns**: measurement of the angle `ABC`
 
@@ -27,7 +27,7 @@ struct Angle {
 
 * `angle(k: Line, l: Line)`
 
-**Return type**: [Scalar (angle)](./types.md#scalar)
+**Return type**: [Number (angle)](./types.md#number)
 
 **Returns**: measurement of the angle between `k` and `l`. Which angle, depends on the order of the lines. For predictable outcome, the point versions are strongly recommended.
 
@@ -70,8 +70,8 @@ struct Bisector {
 
 ## `circle`
 
-* `circle(center: Point, radius: Scalar (distance))`
-* `circle(radius: Scalar (distance), center: Point)`
+* `circle(center: Point, radius: Number (distance))`
+* `circle(radius: Number (distance), center: Point)`
 
 **Return type**: [Circle](./types.md#Circle)
 
@@ -81,7 +81,7 @@ struct Bisector {
 
 **Return type**: [Circle](./types.md#Circle)
 
-**Returns**: a circle with an adjusted (free point) `center` and an adjusted (free scalar) `radius`.
+**Returns**: a circle with an adjusted (free point) `center` and an adjusted (free real) `radius`.
 
 ## `circumcircle`
 
@@ -94,15 +94,15 @@ struct Bisector {
 
 ## `degrees` (alias `deg`)
 
-* `degrees(value: Scalar (no unit))`
+* `degrees(value: Number (no unit))`
 
-**Return type**: [Scalar (angle)](./types.md#Scalar)
+**Return type**: [Number (angle)](./types.md#number)
 
 **Returns**: an angle with the given measurement in degrees. Related: [radians](#radians)
 
-* `degrees(value: Scalar (angle))`
+* `degrees(value: Number (angle))`
 
-**Return type**: [Scalar (scalar)](./types.md#Scalar)
+**Return type**: [Number (no unit)](./types.md#number)
 
 **Returns**: the angle value in degrees. Related: [radians](#radians)
 
@@ -111,7 +111,7 @@ struct Bisector {
 * `dst(AB: 2-P)`
 * `dst(A: Point, B: Point)`
 
-**Return type**: [Scalar (distance)](./types.md#Scalar)
+**Return type**: [Number (distance)](./types.md#number)
 
 **Returns**: the distance between points `A` and `B`.
 
@@ -131,7 +131,7 @@ struct Dst {
 * `dst(P: Point, k: Line)`
 * `dst(k: Line, P: Point)`
 
-**Return type**: [Scalar (distance)](./types.md#Scalar)
+**Return type**: [Number (distance)](./types.md#number)
 
 **Returns**: the distance between point `P` and line `k`.
 
@@ -148,9 +148,9 @@ struct Dst {
 
 `display_segment` decides whether the segment should be displayed and `style` decides how it should be displayed.
 
-* `dst(value: Scalar (no unit / distance))`
+* `dst(value: Number (no unit / distance))`
 
-**Return type**: [Scalar (angle)](./types.md#Scalar)
+**Return type**: [Number (angle)](./types.md#number)
 
 **Returns**: the value with a distance unit.
 
@@ -209,9 +209,9 @@ All overloads by default don't display the point dot. This can be changed with p
 
 **Note**: The following functions allow any positive numbers of arguments.
 
-* `mid(v_1: Scalar (any unit u), v_2 Scalar (the same unit u), ..., v_n: Scalar (the same unit u))`
+* `mid(v_1: Number (any unit u), v_2 Number (the same unit u), ..., v_n: Number (the same unit u))`
 
-**Return type**: [Scalar (the same unit u)](./types.md#Scalar)
+**Return type**: [Number (the same unit u)](./types.md#number)
 
 **Returns**: The average value of `v_1`, `v_2`, ... `v_n`.
 
@@ -249,15 +249,15 @@ All overloads by default don't display the point dot. This can be changed with p
 
 ## `radians` (alias `rad`)
 
-* `radians(value: Scalar (no unit))`
+* `radians(value: Number (no unit))`
 
-**Return type**: [Scalar (angle)](./types.md#Scalar)
+**Return type**: [Number (angle)](./types.md#number)
 
 **Returns**: an angle with the given measurement in radians. Related: [degrees](#degrees)
 
-* `radians(value: Scalar (angle))`
+* `radians(value: Number (angle))`
 
-**Return type**: [Scalar (no unit)](./types.md#Scalar)
+**Return type**: [Number (no unit)](./types.md#number)
 
 **Returns**: the value of the angle in radians. Related: [degrees](#degrees)
 
@@ -265,7 +265,7 @@ All overloads by default don't display the point dot. This can be changed with p
 
 * `radius(circle: Circle)`
 
-**Return type**: [Scalar (distance)](./types.md#Scalar)
+**Return type**: [Number (distance)](./types.md#number)
 
 **Returns**: the radius of the given circle.
 
@@ -295,7 +295,7 @@ struct Segment {
 
 * `x(P: Point)`
 
-**Return type**: [Scalar (distance)](.types.md#Scalar)
+**Return type**: [Number (distance)](.types.md#number)
 
 **Returns**: The `x` coordinate of the point.
 
@@ -303,6 +303,6 @@ struct Segment {
 
 * `y(P: Point)`
 
-**Return type**: [Scalar (distance)](.types.md#Scalar)
+**Return type**: [Number (distance)](.types.md#number)
 
 **Returns**: The `y` coordinate of the point.

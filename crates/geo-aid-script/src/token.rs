@@ -340,7 +340,7 @@ pub enum Token {
     Gteq(Gteq),
     Exclamation(Exclamation),
     Ident(Ident),
-    Number(Number),
+    NumberLit(NumberLit),
     Dollar(Dollar),
     Ampersant(Ampersant),
     LBrace(LBrace),
@@ -393,9 +393,9 @@ impl Display for Token {
                     Ident::Collection(col) => format!("{col}"),
                 }
             ),
-            Self::Number(num) => match num {
-                Number::Integer(v) => write!(f, "{}", v.parsed),
-                Number::Float(v) => write!(f, "{}", v.parsed),
+            Self::NumberLit(num) => match num {
+                NumberLit::Integer(v) => write!(f, "{}", v.parsed),
+                NumberLit::Float(v) => write!(f, "{}", v.parsed),
             },
         }
     }
@@ -424,7 +424,7 @@ impl Token {
             Self::Gteq(v) => v.span,
             Self::Exclamation(v) => v.span,
             Self::Ident(v) => v.get_span(),
-            Self::Number(v) => v.get_span(),
+            Self::NumberLit(v) => v.get_span(),
             Self::Dollar(v) => v.span,
             Self::At(v) => v.span,
             Self::LBrace(v) => v.span,
@@ -565,12 +565,12 @@ impl Display for Ident {
 /// A number token. Can represent an integer or a decimal.
 #[derive(Debug, Clone, PartialEq, Eq, Parse)]
 #[parse(token)]
-pub enum Number {
+pub enum NumberLit {
     Integer(TokInteger),
     Float(TokFloat),
 }
 
-impl Number {
+impl NumberLit {
     /// Convert this number to a float.
     #[must_use]
     pub fn to_float(&self) -> f64 {
@@ -599,7 +599,7 @@ impl Number {
     }
 }
 
-impl Display for Number {
+impl Display for NumberLit {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Integer(v) => write!(f, "{v}"),
@@ -754,7 +754,10 @@ fn read_string<I: Iterator<Item = char>>(
 }
 
 /// Read a number token from a char iterator.
-fn read_number<I: Iterator<Item = char>>(it: &mut Peekable<I>, position: &mut Position) -> Number {
+fn read_number<I: Iterator<Item = char>>(
+    it: &mut Peekable<I>,
+    position: &mut Position,
+) -> NumberLit {
     let mut integer = ParsedIntBuilder::new();
     let mut floating = None;
     let begin_pos = *position;
@@ -779,7 +782,7 @@ fn read_number<I: Iterator<Item = char>>(it: &mut Peekable<I>, position: &mut Po
             floating = Some(integer.dot());
             break;
         } else {
-            return Number::Integer(TokInteger {
+            return NumberLit::Integer(TokInteger {
                 span: span!(
                     begin_pos.line,
                     begin_pos.column,
@@ -802,7 +805,7 @@ fn read_number<I: Iterator<Item = char>>(it: &mut Peekable<I>, position: &mut Po
             }
         }
 
-        Number::Float(TokFloat {
+        NumberLit::Float(TokFloat {
             span: span!(
                 begin_pos.line,
                 begin_pos.column,
@@ -1020,7 +1023,7 @@ pub fn tokenize(input: &str) -> Result<Vec<Token>, Error> {
                         _ => Token::Ident(dispatch_ident(sp, ident)),
                     });
                 } else if c.is_ascii_digit() {
-                    tokens.push(Token::Number(read_number(&mut it, &mut position)));
+                    tokens.push(Token::NumberLit(read_number(&mut it, &mut position)));
                 } else if c == '#' {
                     position.line += 1;
                     position.column = 1;

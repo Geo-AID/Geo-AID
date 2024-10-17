@@ -1,47 +1,47 @@
 # Types
 
-## Scalar
+## Number
 
-A scalar is a simple real value with a unit - a unit is a product of integer powers of simple units. The simple units are:
+A number is a simple complex value with a unit - a unit is a product of integer powers of simple units. The simple units are:
 - Distance
 - Angle
 
-Unknown-unit scalars (usually literals) can be converted into a scalar with a distance unit.
-Any scalar, whose unit cannot be determined, is assumed to be unit-less. Scalars in this reference are denoted as `Scalar(<unit>)`.
+Unknown-unit numbers (usually literals) can be converted into a number with a distance unit.
+Any number, whose unit cannot be determined, is assumed to be unit-less. Numbers in this reference are denoted as `Number(<unit>)`.
 A point collection consisting of two points can be converted into a line or the distance between the two points,
 depending on the context.
-Any variable defined with an unknown-unit scalar is assumed to be unit-less.
-When performing multiplication/division over a scalar with a unit and a scalar with an unknown unit, the latter is
-automatically converted into a unit-less scalar.
+Any variable defined with an unknown-unit number is assumed to be unit-less.
+When performing multiplication/division over a number with a unit and a number with an unknown unit, the latter is
+automatically converted into a unit-less number.
 
 Note: A literal will never be coerced to an angle, since that would introduce uncertainty whether it should be
 treated as given in radians or degrees. Instead, look for their respective functions.
 
 *Methods*
 
-* `degrees()` (alias `deg`) if the scalar is unitless.
+* `degrees()` (alias `deg`) if the number is unitless.
 
-**Return type**: [Scalar (angle)](#scalar)
+**Return type**: [Number (angle)](#number)
 
 **Returns**: Angle value with measurement equal to this number in degrees.
 
-* `degrees()` (alias `deg`) if the scalar is an angle.
+* `degrees()` (alias `deg`) if the number is an angle.
 
-**Return type**: [Scalar (no unit)](#scalar)
+**Return type**: [Number (no unit)](#number)
 
 **Returns**: The measurement of this angle in degrees.
 
 *Methods*
 
-* `radians()` (alias `rad`) if the scalar is unitless.
+* `radians()` (alias `rad`) if the number is unitless.
 
-**Return type**: [Scalar (angle)](#scalar)
+**Return type**: [Number (angle)](#number)
 
 **Returns**: Angle value with measurement equal to this number in radians.
 
-* `radians()` (alias `rad`) if the scalar is an angle.
+* `radians()` (alias `rad`) if the number is an angle.
 
-**Return type**: [Scalar (no unit)](#scalar)
+**Return type**: [Number (no unit)](#number)
 
 **Returns**: The measurement of this angle in radians.
 
@@ -68,7 +68,7 @@ Denoted as `Circle`.
 
 * `radius()`
 
-**Return type**: [Scalar (distance)](#scalar)
+**Return type**: [Number (distance)](#number)
 
 **Returns**: the circle's radius.
 
@@ -92,7 +92,7 @@ Point collections are simply ordered collections of points. It is never a separa
 
 * `dst()` (alias `len`) if the collection has length of 2.
 
-**Return type**: [Scalar (distance)](#scalar)
+**Return type**: [Number (distance)](#number)
 
 **Returns**: the distance between the two points.
 
@@ -116,7 +116,7 @@ Any two points can be connected with a `Segment`.
 
 * `len()`
 
-**Return type**: [Scalar (distance)](#scalar)
+**Return type**: [Number (distance)](#number)
 
 **Returns**: the distance `AB`.
 

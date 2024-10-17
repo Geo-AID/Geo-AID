@@ -70,11 +70,11 @@ fn distance_convert_pc(mut pc: Pc<2>, context: &CompileContext, display: Propert
 #[derive(Debug)]
 pub struct Associated;
 
-impl BuildAssociated<ScalarNode> for Associated {
+impl BuildAssociated<NumberNode> for Associated {
     fn build_associated(
         self: Box<Self>,
         build: &mut Build,
-        associated: &mut HierarchyNode<ScalarNode>,
+        associated: &mut HierarchyNode<NumberNode>,
     ) {
         let display_segment = associated
             .get_data("display_segment")
@@ -85,7 +85,7 @@ impl BuildAssociated<ScalarNode> for Associated {
 
         if display_segment.unwrap() {
             match &associated.root.expr.data.data {
-                ScalarData::PointPointDistance(a, b) => {
+                NumberData::PointPointDistance(a, b) => {
                     let p_id = build.load(a);
                     let q_id = build.load(b);
                     build.add(SegmentItem {
@@ -95,7 +95,7 @@ impl BuildAssociated<ScalarNode> for Associated {
                         style: style.unwrap(),
                     });
                 }
-                ScalarData::PointLineDistance(a, k) => {
+                NumberData::PointLineDistance(a, k) => {
                     // Projection
                     let b = Expr::new_spanless(Point::LineLineIntersection(
                         Expr::new_spanless(Line::PerpendicularThrough(
@@ -125,8 +125,8 @@ pub fn register(library: &mut Library) {
     library.add(
         Function::new("dst")
             .alias("len")
-            .alias("[point collection (2)]::dst")
-            .alias("[point collection (2)]::len")
+            .alias_method(ty::collection(2), "dst")
+            .alias_method(ty::collection(2), "len")
             .overload(distance_convert_pc)
             .overload(
                 |v: Distance, context: &CompileContext, display: Properties| {
@@ -138,9 +138,6 @@ pub fn register(library: &mut Library) {
                 Distance::from(context.set_unit_display(v.0, unit::DISTANCE, display))
             })
             .overload(distance_function_pp)
-            .overload(|mut col: Pc<2>, context: &CompileContext, props| {
-                distance_function_pp(index!(node col, 0), index!(node col, 1), context, props)
-            })
             .overload(distance_function_pl)
             .overload(
                 |line: Expr<Line>, point: Expr<Point>, context: &CompileContext, display| {

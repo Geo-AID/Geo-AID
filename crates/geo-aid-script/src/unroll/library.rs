@@ -13,13 +13,13 @@ use crate::{
     parser::Type,
     token::number::ProcNum,
     unit,
-    unroll::{AnyExpr, Expr, GeoType, PointCollection, Scalar},
+    unroll::{AnyExpr, Expr, GeoType, Number, PointCollection},
     ComplexUnit,
 };
 
 use super::{
     context::CompileContext, figure::Node, most_similar, Convert, ConvertFrom, Dummy, Generic,
-    Properties, ScalarData,
+    NumberData, Properties,
 };
 
 pub mod angle;
@@ -44,12 +44,12 @@ pub mod prelude {
         unroll::{
             context::CompileContext,
             figure::{
-                BuildAssociated, CollectionNode, HierarchyNode, LineNode, LineType, PointNode,
-                ScalarNode,
+                BuildAssociated, CollectionNode, HierarchyNode, LineNode, LineType, NumberNode,
+                PointNode,
             },
             library::{macros::*, Angle, Distance, Function, Library, Pc, Rule, Unitless},
-            Circle, CloneWithNode, Derived, DerivedType, Expr, GeoType, Line, Point, Properties,
-            ScalarData, UnrolledRule, UnrolledRuleKind,
+            Circle, CloneWithNode, Derived, DerivedType, Expr, GeoType, Line, NumberData, Point,
+            Properties, UnrolledRule, UnrolledRuleKind,
         },
     };
     pub(crate) use geo_aid_figure::Style;
@@ -598,16 +598,16 @@ impl<const N: usize> DerefMut for Pc<N> {
     }
 }
 
-/// Scalar with a specific unit.
-pub struct ScalarUnit<
+/// Number with a specific unit.
+pub struct NumberUnit<
     const DST_NUM: i64,
     const DST_DENOM: i64,
     const ANG_NUM: i64,
     const ANG_DENOM: i64,
->(pub Expr<Scalar>);
+>(pub Expr<Number>);
 
 impl<const DST_NUM: i64, const DST_DENOM: i64, const ANG_NUM: i64, const ANG_DENOM: i64>
-    ScalarUnit<DST_NUM, DST_DENOM, ANG_NUM, ANG_DENOM>
+    NumberUnit<DST_NUM, DST_DENOM, ANG_NUM, ANG_DENOM>
 {
     #[must_use]
     pub fn get_unit() -> ComplexUnit {
@@ -617,28 +617,28 @@ impl<const DST_NUM: i64, const DST_DENOM: i64, const ANG_NUM: i64, const ANG_DEN
 }
 
 impl<const DST_NUM: i64, const DST_DENOM: i64, const ANG_NUM: i64, const ANG_DENOM: i64> GeoType
-    for ScalarUnit<DST_NUM, DST_DENOM, ANG_NUM, ANG_DENOM>
+    for NumberUnit<DST_NUM, DST_DENOM, ANG_NUM, ANG_DENOM>
 {
-    type Target = Scalar;
+    type Target = Number;
 
     fn get_type() -> Type {
-        Type::Scalar(Some(Self::get_unit()))
+        Type::Number(Some(Self::get_unit()))
     }
 }
 
 impl<const DST_NUM: i64, const DST_DENOM: i64, const ANG_NUM: i64, const ANG_DENOM: i64>
-    From<Expr<Scalar>> for ScalarUnit<DST_NUM, DST_DENOM, ANG_NUM, ANG_DENOM>
+    From<Expr<Number>> for NumberUnit<DST_NUM, DST_DENOM, ANG_NUM, ANG_DENOM>
 {
-    fn from(value: Expr<Scalar>) -> Self {
+    fn from(value: Expr<Number>) -> Self {
         assert_eq!(value.data.unit, Some(Self::get_unit()));
         Self(value)
     }
 }
 
 impl<const DST_NUM: i64, const DST_DENOM: i64, const ANG_NUM: i64, const ANG_DENOM: i64> Deref
-    for ScalarUnit<DST_NUM, DST_DENOM, ANG_NUM, ANG_DENOM>
+    for NumberUnit<DST_NUM, DST_DENOM, ANG_NUM, ANG_DENOM>
 {
-    type Target = Expr<Scalar>;
+    type Target = Expr<Number>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -646,7 +646,7 @@ impl<const DST_NUM: i64, const DST_DENOM: i64, const ANG_NUM: i64, const ANG_DEN
 }
 
 impl<const DST_NUM: i64, const DST_DENOM: i64, const ANG_NUM: i64, const ANG_DENOM: i64> DerefMut
-    for ScalarUnit<DST_NUM, DST_DENOM, ANG_NUM, ANG_DENOM>
+    for NumberUnit<DST_NUM, DST_DENOM, ANG_NUM, ANG_DENOM>
 {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
@@ -654,20 +654,20 @@ impl<const DST_NUM: i64, const DST_DENOM: i64, const ANG_NUM: i64, const ANG_DEN
 }
 
 impl<const DST_NUM: i64, const DST_DENOM: i64, const ANG_NUM: i64, const ANG_DENOM: i64>
-    From<ScalarUnit<DST_NUM, DST_DENOM, ANG_NUM, ANG_DENOM>> for AnyExpr
+    From<NumberUnit<DST_NUM, DST_DENOM, ANG_NUM, ANG_DENOM>> for AnyExpr
 {
-    fn from(value: ScalarUnit<DST_NUM, DST_DENOM, ANG_NUM, ANG_DENOM>) -> Self {
+    fn from(value: NumberUnit<DST_NUM, DST_DENOM, ANG_NUM, ANG_DENOM>) -> Self {
         value.0.into()
     }
 }
 
 impl<const DST_NUM: i64, const DST_DENOM: i64, const ANG_NUM: i64, const ANG_DENOM: i64> Dummy
-    for ScalarUnit<DST_NUM, DST_DENOM, ANG_NUM, ANG_DENOM>
+    for NumberUnit<DST_NUM, DST_DENOM, ANG_NUM, ANG_DENOM>
 {
     fn dummy() -> Self {
-        Self(Expr::new_spanless(Scalar {
+        Self(Expr::new_spanless(Number {
             unit: Some(Self::get_unit()),
-            data: ScalarData::Generic(Generic::Dummy),
+            data: NumberData::Generic(Generic::Dummy),
         }))
     }
 
@@ -676,9 +676,9 @@ impl<const DST_NUM: i64, const DST_DENOM: i64, const ANG_NUM: i64, const ANG_DEN
     }
 }
 
-pub type Distance = ScalarUnit<1, 1, 0, 1>;
-pub type Angle = ScalarUnit<0, 1, 1, 1>;
-pub type Unitless = ScalarUnit<0, 1, 0, 1>;
+pub type Distance = NumberUnit<1, 1, 0, 1>;
+pub type Angle = NumberUnit<0, 1, 1, 1>;
+pub type Unitless = NumberUnit<0, 1, 0, 1>;
 
 /// Returns what size of point collection can the given derived type be cast onto.
 /// 0 signifies that casting is not possible
@@ -706,9 +706,9 @@ pub mod macros {
         (=$v:expr) => {
             $crate::unroll::Expr {
                 span: $crate::span!(0, 0, 0, 0),
-                data: std::rc::Rc::new($crate::unroll::Scalar {
+                data: std::rc::Rc::new($crate::unroll::Number {
                     unit: Some($crate::unit::DISTANCE),
-                    data: $crate::unroll::ScalarData::DstLiteral(
+                    data: $crate::unroll::NumberData::DstLiteral(
                         $v.clone()
                     )
                 }),
@@ -718,9 +718,9 @@ pub mod macros {
         ($t:ident $v:expr) => {
             $crate::unroll::Expr {
                 span: $crate::span!(0, 0, 0, 0),
-                data: std::rc::Rc::new($crate::unroll::Scalar {
+                data: std::rc::Rc::new($crate::unroll::Number {
                     unit: Some($crate::unit::$t),
-                    data: $crate::unroll::ScalarData::Number($v)
+                    data: $crate::unroll::NumberData::Number($v)
                 }),
                 node: None
             }

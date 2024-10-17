@@ -1,6 +1,6 @@
 //! Functions directly related to circles.
 
-use super::{bisector, prelude::*, ScalarUnit};
+use super::{bisector, prelude::*, NumberUnit};
 
 /// Circle constructor. Creates a circle based off of its center and radius.
 fn circle_function(
@@ -76,7 +76,7 @@ pub fn register(library: &mut Library) {
 
                     circle_function(
                         center,
-                        ScalarUnit::from(context.set_unit(radius, unit::DISTANCE)),
+                        NumberUnit::from(context.set_unit(radius, unit::DISTANCE)),
                         context,
                         display,
                     )

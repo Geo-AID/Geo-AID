@@ -123,9 +123,9 @@ Here, `r` is set to the distance `BC` and said to be smaller than `AB`.
 Geo-AID mostly operates on expressions. They are variable definitions and both sides of rules. Expressions can be
 mathematical operations, function calls, lines, distances and literals. All expressions produce values of certain types.
 
-Primary examples of these types are points, lines, circles and scalars. They're what the generator operates on and what
+Primary examples of these types are points, lines, circles and numbers. They're what the generator operates on and what
 everything is ultimately compiled into. Everything else is just an abstraction over these primitives. Additionally,
-scalars can have units. Performing addition or subtraction on scalars with incompatible units is an error.
+numbers can have units. Performing addition or subtraction on numbers with incompatible units is an error.
 
 Point collections are sequences of point letters, like `AB`, `ABC`, `GFED`, `X`, `A'V`. For a name to be collectable, it
 has to be a single, uppercase letter with an arbitrary number of ticks (`'`) following it, that represents a point.
@@ -142,13 +142,13 @@ Other than that, there are other types, like, for example, `Segment`. These are 
 
 Geo-AID is capable of performing some implicit conversions:
 
-* Unknown-unit scalars (usually literals) can be converted into a scalar with a distance unit.
+* Unknown-unit numbers (usually literals) can be converted into a number with a distance unit.
 * A point collection consisting of two points can be converted into a line or the distance between the two points,
   depending on the context.
 * A point collection of length one is always automatically converted into a point.
-* When performing multiplication/division over a scalar with a unit and a scalar with an unknown unit, the latter is
-  automatically converted into a unitless scalar (standard scalar in mathematics).
-* Any variable defined with an unknown-unit scalar is assumed to be unit-less.
+* When performing multiplication/division over a number with a unit and a number with an unknown unit, the latter is
+  automatically converted into a unitless number
+* Any variable defined with an unknown-unit number is assumed to be unit-less.
 
 ## Shortening the code with iterators
 

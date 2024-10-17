@@ -14,7 +14,20 @@ These are flags directly in the global scope of flags. They're not in any group 
 
 **Description**: Automatically adds rules for inequalities of all point entities.
 
-**Notes**: It increases the rule count by a lot, decreases figure stability. Experiments with it have rendered it unsuitable for most uses.
+**Notes**: Disabling this might lead to Geo-AID creating figures compressed into one point.
+Only recommended for debugging or experimenting.
+
+## `language`
+
+This group of flags modifies how the script is interpreted.
+
+### `complex_numbers`
+
+**Type**: `bool`
+
+**Default**: `false`
+
+**Description**: Creates a variable `i` containing the complex unit.
 
 ## `optimizations`
 

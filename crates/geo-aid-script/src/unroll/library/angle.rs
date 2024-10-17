@@ -111,11 +111,11 @@ pub fn display_angle_arms(
     }
 }
 
-impl BuildAssociated<ScalarNode> for Associated {
+impl BuildAssociated<NumberNode> for Associated {
     fn build_associated(
         self: Box<Self>,
         build: &mut Build,
-        associated: &mut HierarchyNode<ScalarNode>,
+        associated: &mut HierarchyNode<NumberNode>,
     ) {
         let display_arms = associated
             .get_data("display_arms")
@@ -140,8 +140,8 @@ impl BuildAssociated<ScalarNode> for Associated {
 
         if display_arms {
             match &associated.root.expr.data.data {
-                ScalarData::ThreePointAngle(a_expr, b_expr, c_expr)
-                | ScalarData::ThreePointAngleDir(a_expr, b_expr, c_expr) => {
+                NumberData::ThreePointAngle(a_expr, b_expr, c_expr)
+                | NumberData::ThreePointAngleDir(a_expr, b_expr, c_expr) => {
                     display_angle_arms(build, a_expr, b_expr, c_expr, arms_type, arms_style);
                 }
                 _ => unreachable!(),

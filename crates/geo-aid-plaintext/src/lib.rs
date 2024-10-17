@@ -88,26 +88,6 @@ impl Plaintext {
         self.draw_simple_segment(segment.points, segment.style, segment.label.as_ref());
     }
 
-    // fn draw_angle(&mut self, angle: &RenderedAngle, output: &Output) {
-    //     let p_1 = angle.points.0;
-    //     let p_origin = angle.points.1;
-    //     let p_2 = angle.points.2;
-    //     let no_arcs = String::from("l"); // Requires a change later! It has to be based on info from the script
-    //     match &angle.expr.kind {
-    //         ScalarExpr::AnglePoint(AnglePoint { arm1, origin, arm2 }) => {
-    //             self.content += &format!("\n3 points angle: points' coordinates point1 - {}, origin - {}, point2 - {}, number of arcs: {no_arcs}, mode: {} \n",
-    //                 get_point_name(arm1, output, p_1), get_point_name(origin, output, p_origin), get_point_name(arm2, output, p_2), styling(angle.style)
-    //             );
-    //         }
-    //         ScalarExpr::AngleLine(_) => {
-    //             self.content += &format!("\n2 lines angle: points' coordinates: point1 - ({}, {}), origin - ({}, {}), point2 - ({}, {}), number of arcs: {no_arcs}, mode: {} \n",
-    //                 p_1.real, p_1. imaginary, p_origin.real, p_origin.imaginary, p_2.real, p_2.imaginary, styling(angle.style)
-    //             );
-    //         }
-    //         _ => unreachable!(),
-    //     }
-    // }
-
     fn draw_circle(&mut self, circle: &CircleItem) {
         self.content += &format!(
             "{} circle at ({:.3}, {:.3}) with radius {:.3}\n",

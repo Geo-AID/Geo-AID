@@ -29,7 +29,7 @@ however, be worth a try to switch the engine.
 
 5. Maximum adjustment per generation cycle (`-a` option, 0.5 by default)
 
-This modifies how much can a single point/scalar be changed when adjusting for another cycle. Keep in mind that this is
+This modifies how much can a single point/number be changed when adjusting for another cycle. Keep in mind that this is
 only a base for calculations. In reality, the amount of adjustment allowed depends on the given point's quality and is
 different between different workers to allow both big *and* small changes in the same generation cycle. This parameter
 only works with the Rage engine.
