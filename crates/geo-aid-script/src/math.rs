@@ -408,6 +408,8 @@ pub enum ExprKind {
     AveragePoint { items: Vec<VarIndex> },
     /// Center of a circle.
     CircleCenter { circle: VarIndex },
+    /// Convert a complex number to a point (no-op)
+    ComplexToPoint { number: VarIndex },
 
     // NUMBER
     /// Sum of numbers.
@@ -465,6 +467,12 @@ pub enum ExprKind {
     PointX { point: VarIndex },
     /// The imaginary part of a point.
     PointY { point: VarIndex },
+    /// Convert a point to a complex number (no-op)
+    PointToComplex { point: VarIndex },
+    /// Real part of a number
+    Real { number: VarIndex },
+    /// Imaginary part of a number
+    Imaginary { number: VarIndex },
 
     // Line
     /// A line through two points.
@@ -510,6 +518,10 @@ impl ExprKind {
             Self::ParallelThrough { .. } => 17,
             Self::PerpendicularThrough { .. } => 18,
             Self::ConstructCircle { .. } => 19,
+            Self::PointToComplex { .. } => 20,
+            Self::ComplexToPoint { .. } => 21,
+            Self::Real { .. } => 22,
+            Self::Imaginary { .. } => 23,
         }
     }
 
@@ -701,7 +713,8 @@ impl ExprKind {
             Self::Entity { id } => entities[id.0].get_type(expressions, entities),
             Self::LineLineIntersection { .. }
             | Self::AveragePoint { .. }
-            | Self::CircleCenter { .. } => ExprType::Point,
+            | Self::CircleCenter { .. }
+            | Self::ComplexToPoint { .. } => ExprType::Point,
             Self::Sum { .. }
             | Self::Product { .. }
             | Self::Const { .. }
@@ -712,7 +725,10 @@ impl ExprKind {
             | Self::ThreePointAngleDir { .. }
             | Self::TwoLineAngle { .. }
             | Self::PointX { .. }
-            | Self::PointY { .. } => ExprType::Number,
+            | Self::PointY { .. }
+            | Self::Real { .. }
+            | Self::Imaginary { .. }
+            | Self::PointToComplex { .. } => ExprType::Number,
             Self::PointPoint { .. }
             | Self::AngleBisector { .. }
             | Self::ParallelThrough { .. }
@@ -729,6 +745,7 @@ impl From<ExprKind> for geo_aid_figure::ExpressionKind {
             ExprKind::LineLineIntersection { k, l } => Self::LineLineIntersection { k, l },
             ExprKind::AveragePoint { items } => Self::AveragePoint { items },
             ExprKind::CircleCenter { circle } => Self::CircleCenter { circle },
+            ExprKind::ComplexToPoint { number } => Self::ComplexToPoint { number },
             ExprKind::Sum { plus, minus } => Self::Sum { plus, minus },
             ExprKind::Product { times, by } => Self::Product { times, by },
             ExprKind::Const { value } => Self::Const {
@@ -747,6 +764,9 @@ impl From<ExprKind> for geo_aid_figure::ExpressionKind {
             ExprKind::TwoLineAngle { k, l } => Self::TwoLineAngle { k, l },
             ExprKind::PointX { point } => Self::PointX { point },
             ExprKind::PointY { point } => Self::PointY { point },
+            ExprKind::PointToComplex { point } => Self::PointToComplex { point },
+            ExprKind::Real { number } => Self::Real { number },
+            ExprKind::Imaginary { number } => Self::Imaginary { number },
             ExprKind::PointPoint { p, q } => Self::PointPoint { p, q },
             ExprKind::AngleBisector { p, q, r } => Self::AngleBisector { p, q, r },
             ExprKind::ParallelThrough { point, line } => Self::ParallelThrough { point, line },
@@ -779,7 +799,11 @@ impl FindEntities for ExprKind {
             Self::CircleCenter { circle: x }
             | Self::PointX { point: x }
             | Self::PointY { point: x }
-            | Self::Exponentiation { value: x, .. } => {
+            | Self::Exponentiation { value: x, .. }
+            | Self::PointToComplex { point: x }
+            | Self::ComplexToPoint { number: x }
+            | Self::Real { number: x }
+            | Self::Imaginary { number: x } => {
                 set.extend(previous[x.0].iter().copied());
             }
             Self::Sum {
@@ -840,6 +864,9 @@ impl FromUnrolled<UnrolledPoint> for ExprKind {
             },
             UnrolledPoint::Free => ExprKind::Entity {
                 id: math.add_point(),
+            },
+            UnrolledPoint::FromComplex(number) => ExprKind::ComplexToPoint {
+                number: math.load(number),
             },
             UnrolledPoint::Generic(_) => unreachable!(),
         };
@@ -931,6 +958,15 @@ impl FromUnrolled<unroll::Number> for ExprKind {
             },
             UnrolledNumber::PointY(point) => ExprKind::PointY {
                 point: math.load(point),
+            },
+            UnrolledNumber::FromPoint(point) => ExprKind::PointToComplex {
+                point: math.load(point),
+            },
+            UnrolledNumber::Real(number) => ExprKind::Real {
+                number: math.load(number),
+            },
+            UnrolledNumber::Imaginary(number) => ExprKind::Imaginary {
+                number: math.load(number),
             },
             UnrolledNumber::Generic(_) => unreachable!(),
         };
@@ -1028,7 +1064,11 @@ impl Normalize for ExprKind {
             | Self::ConstructCircle { .. }
             | Self::Const { .. }
             | Self::ThreePointAngleDir { .. } // DO NOT NORMALIZE DIRECTED ANGLES
-            | Self::Entity { .. } => (),
+            | Self::Entity { .. }
+            | Self::ComplexToPoint { .. }
+            | Self::PointToComplex { .. }
+            | Self::Real { .. }
+            | Self::Imaginary { .. } => (),
             Self::LineLineIntersection { k: a, l: b }
             | Self::PointPoint { p: a, q: b }
             | Self::TwoLineAngle { k: a, l: b }

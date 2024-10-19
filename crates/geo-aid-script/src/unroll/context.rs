@@ -148,9 +148,9 @@ macro_rules! take_nodes {
 
 /// Helper macro for a generic expression function.
 macro_rules! generic_expr {
-    {$f:ident($v0:ident : $t0:ident, $($v:ident : $t:ident),* $(,)?) -> Number[inferred] :: $k:ident} => {
+    {$f:ident($v0:ident : $t0:ident $(, $v:ident : $t:ident)* $(,)?) -> Number[inferred] :: $k:ident} => {
         paste! {
-            pub fn [<$f _display>](&self, mut $v0: Expr<super::$t0>, $(mut $v: Expr<super::$t>),*, display: Properties) -> Expr<super::Number> {
+            pub fn [<$f _display>](&self, mut $v0: Expr<super::$t0> $(, mut $v: Expr<super::$t>)*, display: Properties) -> Expr<super::Number> {
                 let nodes = take_nodes!($v0, $($v),*);
                 self.expr_with(super::Number {
                     unit: $v0.data.unit,
@@ -159,7 +159,7 @@ macro_rules! generic_expr {
             }
 
             pub fn $f(&self, $v0: Expr<super::$t0>, $($v: Expr<super::$t>),*) -> Expr<super::Number> {
-                self.[<$f _display>]($v0, $($v),*, Properties::default())
+                self.[<$f _display>]($v0 $(, $v)*, Properties::default())
             }
         }
     };
@@ -330,6 +330,10 @@ impl CompileContext {
     generic_expr! {circle(center: Point, radius: Number) -> Circle::Circle}
     generic_expr! {add(a: Number, b: Number) -> Number[inferred]::Add}
     generic_expr! {sub(a: Number, b: Number) -> Number[inferred]::Subtract}
+    generic_expr! {real(v: Number) -> Number[inferred]::Real}
+    generic_expr! {imaginary(v: Number) -> Number[inferred]::Imaginary}
+    generic_expr! {to_complex(p: Point) -> Number[unit::DISTANCE]::FromPoint}
+    generic_expr! {to_point(v: Number) -> Point::FromComplex}
 
     pub fn mult_display(
         &self,

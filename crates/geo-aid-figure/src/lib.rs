@@ -241,6 +241,11 @@ pub enum ExpressionKind {
         /// Circle to query
         circle: VarIndex,
     },
+    /// Convert a complex number to a point
+    ComplexToPoint {
+        /// The number to convert
+        number: VarIndex,
+    },
     /// Summation of numbers
     Sum {
         /// All the added ones
@@ -315,6 +320,21 @@ pub enum ExpressionKind {
     PointY {
         /// The point
         point: VarIndex,
+    },
+    /// Convert a point to a complex number
+    PointToComplex {
+        /// The point to convert.
+        point: VarIndex,
+    },
+    /// Real part of a number
+    Real {
+        /// The number to query.
+        number: VarIndex,
+    },
+    /// Imaginary part of a number
+    Imaginary {
+        /// The number to query.
+        number: VarIndex,
     },
     /// Line `pq`
     PointPoint {

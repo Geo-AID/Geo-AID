@@ -25,6 +25,7 @@ use super::{
 pub mod angle;
 pub mod bisector;
 pub mod circle;
+pub mod complex;
 pub mod degrees;
 pub mod dst;
 pub mod intersection;
@@ -100,7 +101,8 @@ impl Function {
         self
     }
 
-    /// Create an alias for this function
+    /// Create an alias for this function. For point collections, `self_type` length of 0
+    /// means any point collection. For numbers, unit of `None` means any unit.
     #[must_use]
     pub fn alias_method(mut self, self_type: Type, name: &'static str) -> Self {
         if name
@@ -451,6 +453,7 @@ impl Library {
             rule_ops: HashMap::new(),
         };
 
+        complex::register(&mut library);
         point::register(&mut library); // Point()
         dst::register(&mut library); // dst()
         angle::register(&mut library); // angle()
@@ -490,22 +493,13 @@ impl Library {
 
     /// Get the method by its name and self type. If the method doesn't exist,
     /// return the most similar name if one exists. The search is case-insensitive.
-    pub fn get_method(
+    /// Self type is expected to be concrete. Internal use only.
+    fn get_method_concrete(
         &self,
         self_type: Type,
         name: &str,
     ) -> Result<&Function, Option<&'static str>> {
-        let methods = self
-            .methods
-            .get(&self_type)
-            .or_else(|| {
-                if matches!(self_type, Type::PointCollection(_)) {
-                    self.methods.get(&Type::PointCollection(0))
-                } else {
-                    None
-                }
-            })
-            .ok_or(None)?;
+        let methods = self.methods.get(&self_type).ok_or(None)?;
 
         methods
             .get(name.to_lowercase().as_str())
@@ -514,6 +508,29 @@ impl Library {
                 Definition::Direct(f) => Ok(f),
                 Definition::Alias(n) => self.get_function(n),
             })
+    }
+
+    /// Get the method by its name and self type. If the method doesn't exist,
+    /// return the most similar name if one exists. The search is case-insensitive.
+    pub fn get_method(
+        &self,
+        self_type: Type,
+        name: &str,
+    ) -> Result<&Function, Option<&'static str>> {
+        let suggested = match self.get_method_concrete(self_type, name) {
+            Ok(method) => return Ok(method),
+            Err(suggested) => suggested,
+        };
+
+        self.get_method_concrete(
+            match self_type {
+                Type::PointCollection(_) => Type::PointCollection(0),
+                Type::Number(_) => Type::Number(None),
+                _ => return Err(suggested),
+            },
+            name,
+        )
+        .map_err(|err| most_similar(suggested.into_iter().chain(err), name))
     }
 
     /// Get the rule operator by its name. If the rule doesn't exist,

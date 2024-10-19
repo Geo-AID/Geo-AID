@@ -691,6 +691,8 @@ pub enum Point {
     CircleCenter(Expr<Circle>),
     /// A free point.
     Free,
+    /// A point made from a complex number.
+    FromComplex(Expr<Number>),
 }
 
 impl Point {
@@ -807,6 +809,7 @@ impl Display for Point {
                 write!(f, "{circle}.center")
             }
             Self::Free => write!(f, "Free point"),
+            Self::FromComplex(number) => write!(f, "to_point({number})"),
         }
     }
 }
@@ -1164,6 +1167,12 @@ pub enum NumberData {
     PointY(Expr<Point>),
     /// A free number.
     Free,
+    /// A point as a complex number
+    FromPoint(Expr<Point>),
+    /// Real part of a number
+    Real(Expr<Number>),
+    /// Imaginary part of a number
+    Imaginary(Expr<Number>),
 }
 
 impl Display for NumberData {
@@ -1205,6 +1214,9 @@ impl Display for NumberData {
             Self::PointX(expr) => write!(f, "{expr}.x"),
             Self::PointY(expr) => write!(f, "{expr}.y"),
             Self::Free => write!(f, "Free scalar"),
+            Self::FromPoint(point) => write!(f, "to_complex({point})"),
+            Self::Real(number) => write!(f, "Re({number})"),
+            Self::Imaginary(number) => write!(f, "Im({number})"),
         }
     }
 }
@@ -1370,6 +1382,7 @@ impl Expr<Number> {
                         | NumberData::CircleRadius(_)
                         | NumberData::PointX(_)
                         | NumberData::PointY(_)
+                        | NumberData::FromPoint(_)
                         | NumberData::SetUnit(_, _) => unreachable!(), // Always concrete
                         NumberData::Negate(v) => {
                             NumberData::Negate(v.clone_without_node().convert_unit(unit, context))
@@ -1418,6 +1431,12 @@ impl Expr<Number> {
                             base.clone_without_node()
                                 .convert_unit(unit.map(|x| x.pow(exponent.recip())), context),
                             *exponent,
+                        ),
+                        NumberData::Real(number) => NumberData::Real(
+                            number.clone_without_node().convert_unit(unit, context),
+                        ),
+                        NumberData::Imaginary(number) => NumberData::Imaginary(
+                            number.clone_without_node().convert_unit(unit, context),
                         ),
                     },
                 }),

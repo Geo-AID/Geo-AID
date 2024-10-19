@@ -19,6 +19,12 @@ treated as given in radians or degrees. Instead, look for their respective funct
 
 *Methods*
 
+* `conjugate()` for any unit
+
+**Return type**: [Number (same unit)](#number)
+
+**Returns**: the conjugate of this number.
+
 * `degrees()` (alias `deg`) if the number is unitless.
 
 **Return type**: [Number (angle)](#number)
@@ -31,7 +37,11 @@ treated as given in radians or degrees. Instead, look for their respective funct
 
 **Returns**: The measurement of this angle in degrees.
 
-*Methods*
+* `imaginary()` (alias `im`) for any unit
+
+**Return type**: [Number (same unit)](#number)
+
+**Returns**: The imaginary part of this number.
 
 * `radians()` (alias `rad`) if the number is unitless.
 
@@ -45,6 +55,18 @@ treated as given in radians or degrees. Instead, look for their respective funct
 
 **Returns**: The measurement of this angle in radians.
 
+* `real()` (alias `re`) for any unit
+
+**Return type**: [Number (same unit)](#number)
+
+**Returns**: The real part of this number.
+
+* `to_point()` for distances
+
+**Return type**: [Point](#point)
+
+**Returns**: this number as a point.
+
 ## Point
 
 A point is defined as a point on a Euclidean plane. Denoted as `Point`.
@@ -52,6 +74,14 @@ A point is defined as a point on a Euclidean plane. Denoted as `Point`.
 Points have two methods: `x` and `y`, returning the respective coordinate values.
 
 A point collection of length one is always automatically converted into a point.
+
+*Methods*
+
+* `to_complex()`
+
+**Return type**: [Number (distance)](#number)
+
+**Returns**: This point as a number.
 
 ## Circle
 

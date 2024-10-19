@@ -364,6 +364,7 @@ impl<'r> Compiler<'r> {
                 sum.div_real(len, &mut self.context).into()
             }
             ExprKind::CircleCenter { circle } => self.variables[circle.0].to_circle().center.into(),
+            ExprKind::ComplexToPoint { number } => self.variables[number.0],
             ExprKind::Sum { plus, minus } => {
                 let plus = self.compile_sum(plus);
                 let minus = self.compile_sum(minus);
@@ -475,6 +476,13 @@ impl<'r> Compiler<'r> {
             ExprKind::PointY { point } => {
                 let point = self.variables[point.0].to_complex();
                 ComplexExpr::real(point.imaginary).into()
+            }
+            ExprKind::PointToComplex { point } => self.variables[point.0],
+            ExprKind::Real { number } => {
+                ComplexExpr::real(self.variables[number.0].to_complex().real).into()
+            }
+            ExprKind::Imaginary { number } => {
+                ComplexExpr::real(self.variables[number.0].to_complex().imaginary).into()
             }
             ExprKind::PointPoint { p, q } => {
                 let p = self.variables[p.0].to_complex();

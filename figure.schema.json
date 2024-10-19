@@ -40,23 +40,38 @@
                     "$ref": "#/$defs/index"
                   }
                 },
-                "required": ["type", "id"]
+                "required": [
+                  "type",
+                  "id"
+                ]
               },
               {
                 "type": "object",
                 "description": "Intersection of k and l",
                 "properties": {
-                  "type": { "const": "line-line-intersection" },
-                  "k": { "$ref": "#/$defs/index" },
-                  "l": { "$ref": "#/$defs/index" }
+                  "type": {
+                    "const": "line-line-intersection"
+                  },
+                  "k": {
+                    "$ref": "#/$defs/index"
+                  },
+                  "l": {
+                    "$ref": "#/$defs/index"
+                  }
                 },
-                "required": ["type", "k", "l"]
+                "required": [
+                  "type",
+                  "k",
+                  "l"
+                ]
               },
               {
                 "type": "object",
                 "description": "The arithmetic average of points as complex numbers",
                 "properties": {
-                  "type": { "const": "average-point" },
+                  "type": {
+                    "const": "average-point"
+                  },
                   "items": {
                     "type": "array",
                     "items": {
@@ -65,22 +80,50 @@
                     "minItems": 1
                   }
                 },
-                "required": ["type", "items"]
+                "required": [
+                  "type",
+                  "items"
+                ]
               },
               {
                 "type": "object",
                 "description": "Center of a circle",
                 "properties": {
-                  "type": { "const": "circle-center" },
-                  "circle": { "$ref": "#/$defs/index" }
+                  "type": {
+                    "const": "circle-center"
+                  },
+                  "circle": {
+                    "$ref": "#/$defs/index"
+                  }
                 },
-                "required": ["type", "circle"]
+                "required": [
+                  "type",
+                  "circle"
+                ]
+              },
+              {
+                "type": "object",
+                "description": "Convert a complex number to a point",
+                "properties": {
+                  "type": {
+                    "const": "complex-to-point"
+                  },
+                  "number": {
+                    "$ref": "#/$defs/index"
+                  }
+                },
+                "required": [
+                  "type",
+                  "number"
+                ]
               },
               {
                 "type": "object",
                 "description": "Summation of numbers",
                 "properties": {
-                  "type": {"const": "sum"},
+                  "type": {
+                    "const": "sum"
+                  },
                   "plus": {
                     "type": "array",
                     "items": {
@@ -94,13 +137,19 @@
                     }
                   }
                 },
-                "required": ["type", "plus", "minus"]
+                "required": [
+                  "type",
+                  "plus",
+                  "minus"
+                ]
               },
               {
                 "type": "object",
                 "description": "Multiplication of numbers",
                 "properties": {
-                  "type": {"const": "product"},
+                  "type": {
+                    "const": "product"
+                  },
                   "times": {
                     "type": "array",
                     "items": {
@@ -114,152 +163,347 @@
                     }
                   }
                 },
-                "required": ["type", "times", "by"]
+                "required": [
+                  "type",
+                  "times",
+                  "by"
+                ]
               },
               {
                 "type": "object",
                 "description": "A constant number value",
                 "properties": {
-                  "type": {"const": "const"},
-                  "value": {"$ref": "#/$defs/complex"}
+                  "type": {
+                    "const": "const"
+                  },
+                  "value": {
+                    "$ref": "#/$defs/complex"
+                  }
                 },
-                "required": ["type", "value"]
+                "required": [
+                  "type",
+                  "value"
+                ]
               },
               {
                 "type": "object",
                 "description": "Raising a value to a rational power",
                 "properties": {
-                  "type": {"const": "power"},
-                  "value": {"$ref": "#/$defs/index"},
-                  "exponent": {"$ref": "#/$defs/ratio"}
+                  "type": {
+                    "const": "power"
+                  },
+                  "value": {
+                    "$ref": "#/$defs/index"
+                  },
+                  "exponent": {
+                    "$ref": "#/$defs/ratio"
+                  }
                 },
-                "required": ["type", "value", "exponent"]
+                "required": [
+                  "type",
+                  "value",
+                  "exponent"
+                ]
               },
               {
                 "type": "object",
                 "description": "Distance between `p` and `q`",
                 "properties": {
-                  "type": { "const": "point-point-distance" },
-                  "p": { "$ref": "#/$defs/index" },
-                  "q": { "$ref": "#/$defs/index" }
+                  "type": {
+                    "const": "point-point-distance"
+                  },
+                  "p": {
+                    "$ref": "#/$defs/index"
+                  },
+                  "q": {
+                    "$ref": "#/$defs/index"
+                  }
                 },
-                "required": ["type", "p", "q"]
+                "required": [
+                  "type",
+                  "p",
+                  "q"
+                ]
               },
               {
                 "type": "object",
                 "description": "Distance between `point` and `line`",
                 "properties": {
-                  "type": { "const": "point-line-distance" },
-                  "point": { "$ref": "#/$defs/index" },
-                  "line": { "$ref": "#/$defs/index" }
+                  "type": {
+                    "const": "point-line-distance"
+                  },
+                  "point": {
+                    "$ref": "#/$defs/index"
+                  },
+                  "line": {
+                    "$ref": "#/$defs/index"
+                  }
                 },
-                "required": ["type", "point", "line"]
+                "required": [
+                  "type",
+                  "point",
+                  "line"
+                ]
               },
               {
                 "type": "object",
                 "description": "Angle `abc`",
                 "properties": {
-                  "type": { "const": "three-point-angle" },
-                  "a": { "$ref": "#/$defs/index" },
-                  "b": { "$ref": "#/$defs/index" },
-                  "c": {"$ref": "#/$defs/index"}
+                  "type": {
+                    "const": "three-point-angle"
+                  },
+                  "a": {
+                    "$ref": "#/$defs/index"
+                  },
+                  "b": {
+                    "$ref": "#/$defs/index"
+                  },
+                  "c": {
+                    "$ref": "#/$defs/index"
+                  }
                 },
-                "required": ["type", "a", "b", "c"]
+                "required": [
+                  "type",
+                  "a",
+                  "b",
+                  "c"
+                ]
               },
               {
                 "type": "object",
                 "description": "Directed angle `abc`",
                 "properties": {
-                  "type": { "const": "three-point-angle-dir" },
-                  "a": { "$ref": "#/$defs/index" },
-                  "b": { "$ref": "#/$defs/index" },
-                  "c": {"$ref": "#/$defs/index"}
+                  "type": {
+                    "const": "three-point-angle-dir"
+                  },
+                  "a": {
+                    "$ref": "#/$defs/index"
+                  },
+                  "b": {
+                    "$ref": "#/$defs/index"
+                  },
+                  "c": {
+                    "$ref": "#/$defs/index"
+                  }
                 },
-                "required": ["type", "a", "b", "c"]
+                "required": [
+                  "type",
+                  "a",
+                  "b",
+                  "c"
+                ]
               },
               {
                 "type": "object",
                 "description": "Angle between `k` and `l`",
                 "properties": {
-                  "type": { "const": "two-line-angle" },
-                  "k": { "$ref": "#/$defs/index" },
-                  "l": { "$ref": "#/$defs/index" }
+                  "type": {
+                    "const": "two-line-angle"
+                  },
+                  "k": {
+                    "$ref": "#/$defs/index"
+                  },
+                  "l": {
+                    "$ref": "#/$defs/index"
+                  }
                 },
-                "required": ["type", "k", "l"]
+                "required": [
+                  "type",
+                  "k",
+                  "l"
+                ]
               },
               {
                 "type": "object",
                 "description": "X coordinate of a point",
                 "properties": {
-                  "type": { "const": "point-x" },
-                  "point": { "$ref": "#/$defs/index" }
+                  "type": {
+                    "const": "point-x"
+                  },
+                  "point": {
+                    "$ref": "#/$defs/index"
+                  }
                 },
-                "required": ["type", "point"]
+                "required": [
+                  "type",
+                  "point"
+                ]
               },
               {
                 "type": "object",
                 "description": "Y coordinate of a point",
                 "properties": {
-                  "type": { "const": "point-y" },
-                  "point": { "$ref": "#/$defs/index" }
+                  "type": {
+                    "const": "point-y"
+                  },
+                  "point": {
+                    "$ref": "#/$defs/index"
+                  }
                 },
-                "required": ["type", "point"]
+                "required": [
+                  "type",
+                  "point"
+                ]
+              },
+              {
+                "type": "object",
+                "description": "Convert a point to a complex number",
+                "properties": {
+                  "type": {
+                    "const": "point-to-complex"
+                  },
+                  "point": {
+                    "$ref": "#/$defs/index"
+                  }
+                },
+                "required": [
+                  "type",
+                  "point"
+                ]
+              },
+              {
+                "type": "object",
+                "description": "The real part of a number",
+                "properties": {
+                  "type": {
+                    "const": "real"
+                  },
+                  "number": {
+                    "$ref": "#/$defs/index"
+                  }
+                },
+                "required": [
+                  "type",
+                  "number"
+                ]
+              },
+              {
+                "type": "object",
+                "description": "The imaginary part of a number",
+                "properties": {
+                  "type": {
+                    "const": "imaginary"
+                  },
+                  "number": {
+                    "$ref": "#/$defs/index"
+                  }
+                },
+                "required": [
+                  "type",
+                  "number"
+                ]
               },
               {
                 "type": "object",
                 "description": "Line `pq`",
                 "properties": {
-                  "type": { "const": "point-point-line" },
-                  "p": { "$ref": "#/$defs/index" },
-                  "q": { "$ref": "#/$defs/index" }
+                  "type": {
+                    "const": "point-point-line"
+                  },
+                  "p": {
+                    "$ref": "#/$defs/index"
+                  },
+                  "q": {
+                    "$ref": "#/$defs/index"
+                  }
                 },
-                "required": ["type", "p", "q"]
+                "required": [
+                  "type",
+                  "p",
+                  "q"
+                ]
               },
               {
                 "type": "object",
                 "description": "Bisector of angle `abc`",
                 "properties": {
-                  "type": { "const": "angle-bisector" },
-                  "a": { "$ref": "#/$defs/index" },
-                  "b": { "$ref": "#/$defs/index" },
-                  "c": {"$ref": "#/$defs/index"}
+                  "type": {
+                    "const": "angle-bisector"
+                  },
+                  "a": {
+                    "$ref": "#/$defs/index"
+                  },
+                  "b": {
+                    "$ref": "#/$defs/index"
+                  },
+                  "c": {
+                    "$ref": "#/$defs/index"
+                  }
                 },
-                "required": ["type", "a", "b", "c"]
+                "required": [
+                  "type",
+                  "a",
+                  "b",
+                  "c"
+                ]
               },
               {
                 "type": "object",
                 "description": "Perpendicular line going through point",
                 "properties": {
-                  "type": { "const": "perpendicular-through" },
-                  "point": { "$ref": "#/$defs/index" },
-                  "line": { "$ref": "#/$defs/index" }
+                  "type": {
+                    "const": "perpendicular-through"
+                  },
+                  "point": {
+                    "$ref": "#/$defs/index"
+                  },
+                  "line": {
+                    "$ref": "#/$defs/index"
+                  }
                 },
-                "required": ["type", "point", "line"]
+                "required": [
+                  "type",
+                  "point",
+                  "line"
+                ]
               },
               {
                 "type": "object",
                 "description": "Parallel line going through `point`",
                 "properties": {
-                  "type": { "const": "parallel-through" },
-                  "point": { "$ref": "#/$defs/index" },
-                  "line": { "$ref": "#/$defs/index" }
+                  "type": {
+                    "const": "parallel-through"
+                  },
+                  "point": {
+                    "$ref": "#/$defs/index"
+                  },
+                  "line": {
+                    "$ref": "#/$defs/index"
+                  }
                 },
-                "required": ["type", "point", "line"]
+                "required": [
+                  "type",
+                  "point",
+                  "line"
+                ]
               },
               {
                 "type": "object",
                 "description": "A circle with center and radius",
                 "properties": {
-                  "type": { "const": "construct-circle" },
-                  "center": { "$ref": "#/$defs/index" },
-                  "radius": { "$ref": "#/$defs/index" }
+                  "type": {
+                    "const": "construct-circle"
+                  },
+                  "center": {
+                    "$ref": "#/$defs/index"
+                  },
+                  "radius": {
+                    "$ref": "#/$defs/index"
+                  }
                 },
-                "required": ["type", "center", "radius"]
+                "required": [
+                  "type",
+                  "center",
+                  "radius"
+                ]
               }
             ]
           }
         },
-        "required": ["hint", "kind"]
+        "required": [
+          "hint",
+          "kind"
+        ]
       }
     },
     "entities": {
@@ -280,40 +524,65 @@
                 "type": "object",
                 "description": "A free point",
                 "properties": {
-                  "type": {"const": "free-point"}
+                  "type": {
+                    "const": "free-point"
+                  }
                 },
-                "required": ["type"]
+                "required": [
+                  "type"
+                ]
               },
               {
                 "type": "object",
                 "description": "Point on a line",
                 "properties": {
-                  "type": {"const": "point-on-line"},
-                  "line": {"$ref": "#/$defs/index"}
+                  "type": {
+                    "const": "point-on-line"
+                  },
+                  "line": {
+                    "$ref": "#/$defs/index"
+                  }
                 },
-                "required": ["type", "line"]
+                "required": [
+                  "type",
+                  "line"
+                ]
               },
               {
                 "type": "object",
                 "description": "Point on a circle",
                 "properties": {
-                  "type": {"const": "point-on-circle"},
-                  "circle": {"$ref": "#/$defs/index"}
+                  "type": {
+                    "const": "point-on-circle"
+                  },
+                  "circle": {
+                    "$ref": "#/$defs/index"
+                  }
                 },
-                "required": ["type", "circle"]
+                "required": [
+                  "type",
+                  "circle"
+                ]
               },
               {
                 "type": "object",
                 "description": "A free real",
                 "properties": {
-                  "type": {"const": "free-real"}
+                  "type": {
+                    "const": "free-real"
+                  }
                 },
-                "required": ["type"]
+                "required": [
+                  "type"
+                ]
               }
             ]
           }
         },
-        "required": ["hint", "kind"]
+        "required": [
+          "hint",
+          "kind"
+        ]
       }
     },
     "items": {
@@ -325,12 +594,16 @@
             "type": "object",
             "description": "A point item",
             "properties": {
-              "type": {"const": "point"},
+              "type": {
+                "const": "point"
+              },
               "position": {
                 "$ref": "#/$defs/position",
                 "description": "Where the point should be displayed"
               },
-              "label": {"$ref": "#/$defs/label"},
+              "label": {
+                "$ref": "#/$defs/label"
+              },
               "id": {
                 "$ref": "#/$defs/index",
                 "description": "The defining expression index"
@@ -341,21 +614,31 @@
                 "default": false
               }
             },
-            "required": ["type", "position", "id"]
+            "required": [
+              "type",
+              "position",
+              "id"
+            ]
           },
           {
             "type": "object",
             "description": "A line item",
             "properties": {
-              "type": {"const": "line"},
+              "type": {
+                "const": "line"
+              },
               "points": {
                 "type": "array",
                 "description": "Delimiting points of the drawn line segment",
-                "items": {"$ref": "#/$defs/position"},
+                "items": {
+                  "$ref": "#/$defs/position"
+                },
                 "minItems": 2,
                 "maxItems": 2
               },
-              "label": {"$ref": "#/$defs/label"},
+              "label": {
+                "$ref": "#/$defs/label"
+              },
               "id": {
                 "$ref": "#/$defs/index",
                 "description": "The defining expression index"
@@ -366,21 +649,31 @@
                 "default": "solid"
               }
             },
-            "required": ["type", "points", "id"]
+            "required": [
+              "type",
+              "points",
+              "id"
+            ]
           },
           {
             "type": "object",
             "description": "A ray item",
             "properties": {
-              "type": {"const": "ray"},
+              "type": {
+                "const": "ray"
+              },
               "points": {
                 "type": "array",
                 "description": "Delimiting points of the drawn ray segment",
-                "items": {"$ref": "#/$defs/position"},
+                "items": {
+                  "$ref": "#/$defs/position"
+                },
                 "minItems": 2,
                 "maxItems": 2
               },
-              "label": {"$ref": "#/$defs/label"},
+              "label": {
+                "$ref": "#/$defs/label"
+              },
               "p-id": {
                 "$ref": "#/$defs/index",
                 "description": "The origin expression index"
@@ -395,21 +688,32 @@
                 "default": "solid"
               }
             },
-            "required": ["type", "points", "p-id", "q-id"]
+            "required": [
+              "type",
+              "points",
+              "p-id",
+              "q-id"
+            ]
           },
           {
             "type": "object",
             "description": "A segment item",
             "properties": {
-              "type": {"const": "segment"},
+              "type": {
+                "const": "segment"
+              },
               "points": {
                 "type": "array",
                 "description": "Delimiting points of the drawn segment segment",
-                "items": {"$ref": "#/$defs/position"},
+                "items": {
+                  "$ref": "#/$defs/position"
+                },
                 "minItems": 2,
                 "maxItems": 2
               },
-              "label": {"$ref": "#/$defs/label"},
+              "label": {
+                "$ref": "#/$defs/label"
+              },
               "p-id": {
                 "$ref": "#/$defs/index",
                 "description": "The first point's expression index"
@@ -424,13 +728,20 @@
                 "default": "solid"
               }
             },
-            "required": ["type", "points", "p-id", "q-id"]
+            "required": [
+              "type",
+              "points",
+              "p-id",
+              "q-id"
+            ]
           },
           {
             "type": "object",
             "description": "A circle item",
             "properties": {
-              "type": {"const": "circle"},
+              "type": {
+                "const": "circle"
+              },
               "center": {
                 "description": "The center of the drawn circle",
                 "$ref": "#/$defs/position"
@@ -440,7 +751,9 @@
                 "type": "number",
                 "minimum": 0
               },
-              "label": {"$ref": "#/$defs/label"},
+              "label": {
+                "$ref": "#/$defs/label"
+              },
               "id": {
                 "$ref": "#/$defs/index",
                 "description": "The defining expression index"
@@ -451,13 +764,24 @@
                 "default": "solid"
               }
             },
-            "required": ["type", "center", "radius", "id"]
+            "required": [
+              "type",
+              "center",
+              "radius",
+              "id"
+            ]
           }
         ]
       }
     }
   },
-  "required": ["width", "height", "expressions", "entities", "items"],
+  "required": [
+    "width",
+    "height",
+    "expressions",
+    "entities",
+    "items"
+  ],
   "$defs": {
     "index": {
       "type": "integer",
@@ -492,7 +816,9 @@
           "exclusiveMinimum": 0
         }
       },
-      "required": ["nom"]
+      "required": [
+        "nom"
+      ]
     },
     "value": {
       "description": "A value of an expression or an entity",
@@ -501,47 +827,83 @@
           "type": "object",
           "description": "A complex number",
           "properties": {
-            "type": {"const": "complex"},
-            "value": {"$ref": "#/$defs/complex"}
+            "type": {
+              "const": "complex"
+            },
+            "value": {
+              "$ref": "#/$defs/complex"
+            }
           },
-          "required": ["type", "value"]
+          "required": [
+            "type",
+            "value"
+          ]
         },
         {
           "type": "object",
           "description": "A line",
           "properties": {
-            "type": {"const": "line"},
+            "type": {
+              "const": "line"
+            },
             "value": {
               "type": "object",
               "properties": {
-                "origin": {"$ref": "#/$defs/complex"},
-                "direction": {"$ref": "#/$defs/complex"}
+                "origin": {
+                  "$ref": "#/$defs/complex"
+                },
+                "direction": {
+                  "$ref": "#/$defs/complex"
+                }
               },
-              "required": ["origin", "direction"]
+              "required": [
+                "origin",
+                "direction"
+              ]
             }
           },
-          "required": ["type", "value"]
+          "required": [
+            "type",
+            "value"
+          ]
         },
         {
           "type": "object",
           "description": "A circle",
           "properties": {
-            "type": {"const": "circle"},
+            "type": {
+              "const": "circle"
+            },
             "value": {
               "type": "object",
               "properties": {
-                "center": {"$ref": "#/$defs/complex"},
-                "radius": {"$ref": "#/$defs/complex"}
+                "center": {
+                  "$ref": "#/$defs/complex"
+                },
+                "radius": {
+                  "$ref": "#/$defs/complex"
+                }
               },
-              "required": ["center", "radius"]
+              "required": [
+                "center",
+                "radius"
+              ]
             }
           },
-          "required": ["type", "value"]
+          "required": [
+            "type",
+            "value"
+          ]
         }
       ]
     },
     "style": {
-      "enum": ["solid", "dotted", "dashed", "bold"],
+      "enum": [
+        "solid",
+        "dotted",
+        "dashed",
+        "bold"
+      ],
       "default": "solid",
       "description": "Defines how a line should be drawn"
     },
@@ -558,16 +920,26 @@
           "description": "The label contents"
         }
       },
-      "required": ["position", "content"]
+      "required": [
+        "position",
+        "content"
+      ]
     },
     "position": {
       "type": "object",
       "description": "Represents a figure space position",
       "properties": {
-        "x": {"type": "number"},
-        "y": {"type": "number"}
+        "x": {
+          "type": "number"
+        },
+        "y": {
+          "type": "number"
+        }
       },
-      "required": ["x", "y"]
+      "required": [
+        "x",
+        "y"
+      ]
     }
   }
 }

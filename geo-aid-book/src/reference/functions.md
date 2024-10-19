@@ -92,6 +92,14 @@ struct Bisector {
 
 **Returns**: a circle circumscribed on the three points given.
 
+## `conjugate`
+
+* `conjugate(v: Number (any unit))`
+
+**Return type**: [Number (the same unit)](#./types.md#Number)
+
+**Returns**: The conjugate of this number.
+
 ## `degrees` (alias `deg`)
 
 * `degrees(value: Number (no unit))`
@@ -153,6 +161,14 @@ struct Dst {
 **Return type**: [Number (angle)](./types.md#number)
 
 **Returns**: the value with a distance unit.
+
+## `imaginary` (alias `im`)
+
+* `imaginary(v: Number (any unit))`
+
+**Return type**: [Number (the same unit)](./types.md#number)
+
+**Returns**: The imaginary part of this number.
 
 ## `incircle`
 
@@ -269,6 +285,14 @@ All overloads by default don't display the point dot. This can be changed with p
 
 **Returns**: the radius of the given circle.
 
+## `real` (alias `re`)
+
+* `real(v: Number (any unit))`
+
+**Return type**: [Number (the same unit)](./types.md#number)
+
+**Returns**: The real part of this number.
+
 ## `segment`
 
 * `segment(AB: 2-P)`
@@ -291,11 +315,27 @@ struct Segment {
 
 `display_segment` decides whether the segment should be displayed and `style` decides how it should be displayed.
 
+## `to_complex`
+
+* `to_complex(A: Point)`
+
+**Return type**: [Number (distance)](types.md#Number)
+
+**Returns**: the point as a complex number.
+
+## `to_point`
+
+* `to_point(v: Number (distance))`
+
+**Return type**: [Point](types.md#Number)
+
+**Returns**: the complex number as a point.
+
 ## `x`
 
 * `x(P: Point)`
 
-**Return type**: [Number (distance)](.types.md#number)
+**Return type**: [Number (distance)](types.md#number)
 
 **Returns**: The `x` coordinate of the point.
 
@@ -303,6 +343,6 @@ struct Segment {
 
 * `y(P: Point)`
 
-**Return type**: [Number (distance)](.types.md#number)
+**Return type**: [Number (distance)](types.md#number)
 
 **Returns**: The `y` coordinate of the point.
