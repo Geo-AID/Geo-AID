@@ -13,18 +13,19 @@ use crate::{
     parser::Type,
     token::number::ProcNum,
     unit,
-    unroll::{AnyExpr, Expr, GeoType, PointCollection, Scalar},
+    unroll::{AnyExpr, Expr, GeoType, Number, PointCollection},
     ComplexUnit,
 };
 
 use super::{
     context::CompileContext, figure::Node, most_similar, Convert, ConvertFrom, Dummy, Generic,
-    Properties, ScalarData,
+    NumberData, Properties,
 };
 
 pub mod angle;
 pub mod bisector;
 pub mod circle;
+pub mod complex;
 pub mod degrees;
 pub mod dst;
 pub mod intersection;
@@ -44,12 +45,12 @@ pub mod prelude {
         unroll::{
             context::CompileContext,
             figure::{
-                BuildAssociated, CollectionNode, HierarchyNode, LineNode, LineType, PointNode,
-                ScalarNode,
+                BuildAssociated, CollectionNode, HierarchyNode, LineNode, LineType, NumberNode,
+                PointNode,
             },
             library::{macros::*, Angle, Distance, Function, Library, Pc, Rule, Unitless},
-            Circle, CloneWithNode, Derived, DerivedType, Expr, GeoType, Line, Point, Properties,
-            ScalarData, UnrolledRule, UnrolledRuleKind,
+            Circle, CloneWithNode, Derived, DerivedType, Expr, GeoType, Line, NumberData, Point,
+            Properties, UnrolledRule, UnrolledRuleKind,
         },
     };
     pub(crate) use geo_aid_figure::Style;
@@ -100,7 +101,8 @@ impl Function {
         self
     }
 
-    /// Create an alias for this function
+    /// Create an alias for this function. For point collections, `self_type` length of 0
+    /// means any point collection. For numbers, unit of `None` means any unit.
     #[must_use]
     pub fn alias_method(mut self, self_type: Type, name: &'static str) -> Self {
         if name
@@ -451,6 +453,7 @@ impl Library {
             rule_ops: HashMap::new(),
         };
 
+        complex::register(&mut library);
         point::register(&mut library); // Point()
         dst::register(&mut library); // dst()
         angle::register(&mut library); // angle()
@@ -490,22 +493,13 @@ impl Library {
 
     /// Get the method by its name and self type. If the method doesn't exist,
     /// return the most similar name if one exists. The search is case-insensitive.
-    pub fn get_method(
+    /// Self type is expected to be concrete. Internal use only.
+    fn get_method_concrete(
         &self,
         self_type: Type,
         name: &str,
     ) -> Result<&Function, Option<&'static str>> {
-        let methods = self
-            .methods
-            .get(&self_type)
-            .or_else(|| {
-                if matches!(self_type, Type::PointCollection(_)) {
-                    self.methods.get(&Type::PointCollection(0))
-                } else {
-                    None
-                }
-            })
-            .ok_or(None)?;
+        let methods = self.methods.get(&self_type).ok_or(None)?;
 
         methods
             .get(name.to_lowercase().as_str())
@@ -514,6 +508,29 @@ impl Library {
                 Definition::Direct(f) => Ok(f),
                 Definition::Alias(n) => self.get_function(n),
             })
+    }
+
+    /// Get the method by its name and self type. If the method doesn't exist,
+    /// return the most similar name if one exists. The search is case-insensitive.
+    pub fn get_method(
+        &self,
+        self_type: Type,
+        name: &str,
+    ) -> Result<&Function, Option<&'static str>> {
+        let suggested = match self.get_method_concrete(self_type, name) {
+            Ok(method) => return Ok(method),
+            Err(suggested) => suggested,
+        };
+
+        self.get_method_concrete(
+            match self_type {
+                Type::PointCollection(_) => Type::PointCollection(0),
+                Type::Number(_) => Type::Number(None),
+                _ => return Err(suggested),
+            },
+            name,
+        )
+        .map_err(|err| most_similar(suggested.into_iter().chain(err), name))
     }
 
     /// Get the rule operator by its name. If the rule doesn't exist,
@@ -598,16 +615,16 @@ impl<const N: usize> DerefMut for Pc<N> {
     }
 }
 
-/// Scalar with a specific unit.
-pub struct ScalarUnit<
+/// Number with a specific unit.
+pub struct NumberUnit<
     const DST_NUM: i64,
     const DST_DENOM: i64,
     const ANG_NUM: i64,
     const ANG_DENOM: i64,
->(pub Expr<Scalar>);
+>(pub Expr<Number>);
 
 impl<const DST_NUM: i64, const DST_DENOM: i64, const ANG_NUM: i64, const ANG_DENOM: i64>
-    ScalarUnit<DST_NUM, DST_DENOM, ANG_NUM, ANG_DENOM>
+    NumberUnit<DST_NUM, DST_DENOM, ANG_NUM, ANG_DENOM>
 {
     #[must_use]
     pub fn get_unit() -> ComplexUnit {
@@ -617,28 +634,28 @@ impl<const DST_NUM: i64, const DST_DENOM: i64, const ANG_NUM: i64, const ANG_DEN
 }
 
 impl<const DST_NUM: i64, const DST_DENOM: i64, const ANG_NUM: i64, const ANG_DENOM: i64> GeoType
-    for ScalarUnit<DST_NUM, DST_DENOM, ANG_NUM, ANG_DENOM>
+    for NumberUnit<DST_NUM, DST_DENOM, ANG_NUM, ANG_DENOM>
 {
-    type Target = Scalar;
+    type Target = Number;
 
     fn get_type() -> Type {
-        Type::Scalar(Some(Self::get_unit()))
+        Type::Number(Some(Self::get_unit()))
     }
 }
 
 impl<const DST_NUM: i64, const DST_DENOM: i64, const ANG_NUM: i64, const ANG_DENOM: i64>
-    From<Expr<Scalar>> for ScalarUnit<DST_NUM, DST_DENOM, ANG_NUM, ANG_DENOM>
+    From<Expr<Number>> for NumberUnit<DST_NUM, DST_DENOM, ANG_NUM, ANG_DENOM>
 {
-    fn from(value: Expr<Scalar>) -> Self {
+    fn from(value: Expr<Number>) -> Self {
         assert_eq!(value.data.unit, Some(Self::get_unit()));
         Self(value)
     }
 }
 
 impl<const DST_NUM: i64, const DST_DENOM: i64, const ANG_NUM: i64, const ANG_DENOM: i64> Deref
-    for ScalarUnit<DST_NUM, DST_DENOM, ANG_NUM, ANG_DENOM>
+    for NumberUnit<DST_NUM, DST_DENOM, ANG_NUM, ANG_DENOM>
 {
-    type Target = Expr<Scalar>;
+    type Target = Expr<Number>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -646,7 +663,7 @@ impl<const DST_NUM: i64, const DST_DENOM: i64, const ANG_NUM: i64, const ANG_DEN
 }
 
 impl<const DST_NUM: i64, const DST_DENOM: i64, const ANG_NUM: i64, const ANG_DENOM: i64> DerefMut
-    for ScalarUnit<DST_NUM, DST_DENOM, ANG_NUM, ANG_DENOM>
+    for NumberUnit<DST_NUM, DST_DENOM, ANG_NUM, ANG_DENOM>
 {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
@@ -654,20 +671,20 @@ impl<const DST_NUM: i64, const DST_DENOM: i64, const ANG_NUM: i64, const ANG_DEN
 }
 
 impl<const DST_NUM: i64, const DST_DENOM: i64, const ANG_NUM: i64, const ANG_DENOM: i64>
-    From<ScalarUnit<DST_NUM, DST_DENOM, ANG_NUM, ANG_DENOM>> for AnyExpr
+    From<NumberUnit<DST_NUM, DST_DENOM, ANG_NUM, ANG_DENOM>> for AnyExpr
 {
-    fn from(value: ScalarUnit<DST_NUM, DST_DENOM, ANG_NUM, ANG_DENOM>) -> Self {
+    fn from(value: NumberUnit<DST_NUM, DST_DENOM, ANG_NUM, ANG_DENOM>) -> Self {
         value.0.into()
     }
 }
 
 impl<const DST_NUM: i64, const DST_DENOM: i64, const ANG_NUM: i64, const ANG_DENOM: i64> Dummy
-    for ScalarUnit<DST_NUM, DST_DENOM, ANG_NUM, ANG_DENOM>
+    for NumberUnit<DST_NUM, DST_DENOM, ANG_NUM, ANG_DENOM>
 {
     fn dummy() -> Self {
-        Self(Expr::new_spanless(Scalar {
+        Self(Expr::new_spanless(Number {
             unit: Some(Self::get_unit()),
-            data: ScalarData::Generic(Generic::Dummy),
+            data: NumberData::Generic(Generic::Dummy),
         }))
     }
 
@@ -676,9 +693,9 @@ impl<const DST_NUM: i64, const DST_DENOM: i64, const ANG_NUM: i64, const ANG_DEN
     }
 }
 
-pub type Distance = ScalarUnit<1, 1, 0, 1>;
-pub type Angle = ScalarUnit<0, 1, 1, 1>;
-pub type Unitless = ScalarUnit<0, 1, 0, 1>;
+pub type Distance = NumberUnit<1, 1, 0, 1>;
+pub type Angle = NumberUnit<0, 1, 1, 1>;
+pub type Unitless = NumberUnit<0, 1, 0, 1>;
 
 /// Returns what size of point collection can the given derived type be cast onto.
 /// 0 signifies that casting is not possible
@@ -706,9 +723,9 @@ pub mod macros {
         (=$v:expr) => {
             $crate::unroll::Expr {
                 span: $crate::span!(0, 0, 0, 0),
-                data: std::rc::Rc::new($crate::unroll::Scalar {
+                data: std::rc::Rc::new($crate::unroll::Number {
                     unit: Some($crate::unit::DISTANCE),
-                    data: $crate::unroll::ScalarData::DstLiteral(
+                    data: $crate::unroll::NumberData::DstLiteral(
                         $v.clone()
                     )
                 }),
@@ -718,9 +735,9 @@ pub mod macros {
         ($t:ident $v:expr) => {
             $crate::unroll::Expr {
                 span: $crate::span!(0, 0, 0, 0),
-                data: std::rc::Rc::new($crate::unroll::Scalar {
+                data: std::rc::Rc::new($crate::unroll::Number {
                     unit: Some($crate::unit::$t),
-                    data: $crate::unroll::ScalarData::Number($v)
+                    data: $crate::unroll::NumberData::Number($v)
                 }),
                 node: None
             }

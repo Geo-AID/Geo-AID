@@ -114,6 +114,8 @@ pub enum Error {
         variable_name: String,
         /// The potentially intended name.
         suggested: Option<String>,
+        /// Whether to suggest adding the complex numbers flag.
+        suggest_complex: bool,
     },
     /// An undefined function was referenced.
     UndefinedFunction {
@@ -222,7 +224,7 @@ pub enum Error {
         /// The full span.
         error_span: Span,
         /// The potential intended name
-        suggested: Option<String>,
+        suggested: Option<&'static str>,
     },
     /// A flag set expected as a flag value.
     FlagSetExpected {
@@ -248,7 +250,7 @@ pub enum Error {
         /// The first definition's span
         first_defined: Span,
         /// Name of the flag
-        flag_name: String,
+        flag_name: &'static str,
     },
     /// Invalid value for an enumeration
     EnumInvalidValue {
@@ -406,12 +408,25 @@ impl Error {
             Self::UndefinedVariable {
                 error_span,
                 variable_name,
-                suggested
+                suggested,
+                suggest_complex
             } => {
                 let message = suggested.map(|v| format!("did you mean: `{v}`?"));
-                DiagnosticData::new(&format!("undefined variable: `{variable_name}`"))
+                let data = DiagnosticData::new(&format!("undefined variable: `{variable_name}`"))
                     .add_span(error_span)
-                    .add_annotation_opt_msg(error_span, AnnotationKind::Help, message.as_ref())
+                    .add_annotation_opt_msg(error_span, AnnotationKind::Help, message.as_ref());
+
+                if suggest_complex {
+                    data.add_fix(Fix {
+                        changes: vec![Change {
+                            span: span!(1, 1, 1, 1),
+                            new_content: vec![String::from("@language.complex_numbers: true;"), String::new()]
+                        }],
+                        message: String::from("Did you want to use a complex unit? If so, declare it with a flag.")
+                    })
+                } else {
+                    data
+                }
             }
             Self::UndefinedFunction {
                 error_span,
@@ -668,7 +683,7 @@ impl Error {
 pub enum SimpleUnit {
     Distance,
     Angle,
-    Scalar,
+    Unitless,
 }
 
 impl Mul for SimpleUnit {
@@ -683,7 +698,7 @@ impl Mul for SimpleUnit {
 
 /// How many different units are there, minus one for scalar
 const fn unit_count() -> usize {
-    SimpleUnit::Scalar as usize
+    SimpleUnit::Unitless as usize
 }
 
 /// Defines a complex unit: a product of simple units.
@@ -699,7 +714,7 @@ pub mod unit {
     /// An angle
     pub const ANGLE: ComplexUnit = ComplexUnit::new(SimpleUnit::Angle);
     /// A simple, unitless scalar.
-    pub const SCALAR: ComplexUnit = ComplexUnit::new(SimpleUnit::Scalar);
+    pub const SCALAR: ComplexUnit = ComplexUnit::new(SimpleUnit::Unitless);
 }
 
 /// Type constants
@@ -707,19 +722,19 @@ pub mod ty {
     use super::{parser::Type, ComplexUnit, SimpleUnit};
 
     /// The distance type
-    pub const DISTANCE: Type = Type::Scalar(Some(ComplexUnit::new(SimpleUnit::Distance)));
+    pub const DISTANCE: Type = Type::Number(Some(ComplexUnit::new(SimpleUnit::Distance)));
     /// The point type
     pub const POINT: Type = Type::Point;
     /// The angle type
-    pub const ANGLE: Type = Type::Scalar(Some(ComplexUnit::new(SimpleUnit::Angle)));
+    pub const ANGLE: Type = Type::Number(Some(ComplexUnit::new(SimpleUnit::Angle)));
     /// The line type
     pub const LINE: Type = Type::Line;
     /// The circle type
     pub const CIRCLE: Type = Type::Circle;
     /// The unitless scalar type
-    pub const SCALAR: Type = Type::Scalar(Some(ComplexUnit::new(SimpleUnit::Scalar)));
+    pub const SCALAR: Type = Type::Number(Some(ComplexUnit::new(SimpleUnit::Unitless)));
     /// The unknown-unit scalar type
-    pub const SCALAR_UNKNOWN: Type = Type::Scalar(None);
+    pub const SCALAR_UNKNOWN: Type = Type::Number(None);
 
     /// A point collection of given length. A length of 0 signifies a generic point collection
     #[must_use]
@@ -741,7 +756,7 @@ impl ComplexUnit {
         let mut arr = [CompExponent::new_raw(0, 1); unit_count()];
 
         match simple {
-            SimpleUnit::Scalar => (),
+            SimpleUnit::Unitless => (),
             _ => arr[simple as usize] = CompExponent::new_raw(1, 1),
         }
 
@@ -763,7 +778,7 @@ impl Display for ComplexUnit {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut s = String::new();
 
-        for i in 0..(SimpleUnit::Scalar as usize) {
+        for i in 0..(SimpleUnit::Unitless as usize) {
             if !self.0[i].is_zero() {
                 let name = match i {
                     0 => "Distance",
@@ -800,7 +815,7 @@ impl Mul<SimpleUnit> for ComplexUnit {
 
     fn mul(mut self, rhs: SimpleUnit) -> Self::Output {
         match rhs {
-            SimpleUnit::Scalar => (),
+            SimpleUnit::Unitless => (),
             // Clippy doesn't like exponentiation. Thanks, Clippy
             #[allow(clippy::suspicious_arithmetic_impl)]
             _ => self[rhs as usize] += 1,
@@ -826,7 +841,7 @@ impl Div<SimpleUnit> for ComplexUnit {
 
     fn div(mut self, rhs: SimpleUnit) -> Self::Output {
         match rhs {
-            SimpleUnit::Scalar => (),
+            SimpleUnit::Unitless => (),
             // Oh, c'mon, Clippy
             #[allow(clippy::suspicious_arithmetic_impl)]
             _ => self[rhs as usize] -= 1,

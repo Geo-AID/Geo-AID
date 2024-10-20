@@ -91,10 +91,10 @@ struct Circle {
 
 **NOTE**: Labels don't currently work with circles.
 
-*`Scalar`*
+*`Number`*
 
 ```rust
-struct Scalar {
+struct Number {
     display: bool, // Default: true,
     label: MathString, // Default empty (look at next section)
     display_label: Style, // Default: SOLID
@@ -103,7 +103,7 @@ struct Scalar {
 
 All properties work like described before.
 
-**NOTE**: Labels don't currently work with scalars.
+**NOTE**: Labels don't currently work with numbers.
 
 *`PointCollection`*
 

@@ -9,7 +9,7 @@ use std::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, SubAssign};
 use std::{fmt::Display, mem};
 
 use crate::geometry;
-use crate::token::Number;
+use crate::token::NumberLit;
 use num_rational::{BigRational, Rational64};
 use num_traits::{CheckedAdd, CheckedMul, FromPrimitive, One, ToPrimitive, Zero};
 use serde::Serialize;
@@ -252,6 +252,12 @@ impl ProcNum {
             BigRational::zero(),
         ))
     }
+
+    /// Create a complex unit.
+    #[must_use]
+    pub fn i() -> Self {
+        Self(Complex::new(BigRational::zero(), BigRational::one()))
+    }
 }
 
 impl FromPrimitive for ProcNum {
@@ -380,12 +386,12 @@ impl Ord for ProcNum {
     }
 }
 
-impl From<&Number> for ProcNum {
-    fn from(value: &Number) -> Self {
+impl From<&NumberLit> for ProcNum {
+    fn from(value: &NumberLit) -> Self {
         let ten = Complex::from_u8(10).unwrap();
 
         match value {
-            Number::Integer(i) => {
+            NumberLit::Integer(i) => {
                 let mut x: Complex<BigRational> = Complex::zero();
 
                 for digit in &i.parsed.digits {
@@ -395,7 +401,7 @@ impl From<&Number> for ProcNum {
 
                 Self(x)
             }
-            Number::Float(f) => {
+            NumberLit::Float(f) => {
                 let mut integral: Complex<BigRational> = Complex::zero();
                 let mut decimal: Complex<BigRational> = Complex::zero();
                 let mut denominator = BigInt::one();

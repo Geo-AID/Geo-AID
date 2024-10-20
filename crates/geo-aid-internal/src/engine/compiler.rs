@@ -364,6 +364,7 @@ impl<'r> Compiler<'r> {
                 sum.div_real(len, &mut self.context).into()
             }
             ExprKind::CircleCenter { circle } => self.variables[circle.0].to_circle().center.into(),
+            ExprKind::ComplexToPoint { number } => self.variables[number.0],
             ExprKind::Sum { plus, minus } => {
                 let plus = self.compile_sum(plus);
                 let minus = self.compile_sum(minus);
@@ -384,15 +385,11 @@ impl<'r> Compiler<'r> {
                 }
                 .into()
             }
-            ExprKind::PartialPower { value, exponent } => {
+            ExprKind::Exponentiation { value, exponent } => {
                 let value = self.variables[value.0].to_complex();
                 let exp = exponent.to_f64().unwrap();
 
-                ComplexExpr {
-                    real: self.context.pow(value.real, exp),
-                    imaginary: self.context.pow(value.imaginary, exp),
-                }
-                .into()
+                value.pow(exp, &mut self.context).into()
             }
             ExprKind::PointPointDistance { p, q } => {
                 let p = self.variables[p.0].to_complex();
@@ -479,6 +476,13 @@ impl<'r> Compiler<'r> {
             ExprKind::PointY { point } => {
                 let point = self.variables[point.0].to_complex();
                 ComplexExpr::real(point.imaginary).into()
+            }
+            ExprKind::PointToComplex { point } => self.variables[point.0],
+            ExprKind::Real { number } => {
+                ComplexExpr::real(self.variables[number.0].to_complex().real).into()
+            }
+            ExprKind::Imaginary { number } => {
+                ComplexExpr::real(self.variables[number.0].to_complex().imaginary).into()
             }
             ExprKind::PointPoint { p, q } => {
                 let p = self.variables[p.0].to_complex();
@@ -816,6 +820,27 @@ impl ComplexExpr {
         Self {
             real: context.neg(self.imaginary),
             imaginary: self.real,
+        }
+    }
+
+    /// Raise the number to a power.
+    #[must_use]
+    fn pow(&self, exp: f64, context: &mut Context) -> Self {
+        let c = context.constant(exp);
+
+        let a2 = context.mul(self.real, self.real);
+        let b2 = context.mul(self.imaginary, self.imaginary);
+        let a2_plus_b2 = context.add(a2, b2);
+        let a2_plus_b2_to_exp_by_2 = context.pow(a2_plus_b2, exp / 2.0);
+
+        let arg = context.atan2(self.imaginary, self.real);
+        let c_arg = context.mul(c, arg);
+        let cos_c_arg = context.cos(c_arg);
+        let sin_c_arg = context.sin(c_arg);
+
+        Self {
+            real: context.mul(a2_plus_b2_to_exp_by_2, cos_c_arg),
+            imaginary: context.mul(a2_plus_b2_to_exp_by_2, sin_c_arg),
         }
     }
 }

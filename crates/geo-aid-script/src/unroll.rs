@@ -29,7 +29,7 @@ use library::macros::index;
 use self::context::CompileContext;
 use self::figure::{
     AnyExprNode, CircleNode, CollectionNode, EmptyNode, FromExpr, HierarchyNode, LineNode,
-    LineType, MaybeUnset, Node, PCNode, PointNode, ScalarNode,
+    LineType, MaybeUnset, Node, NumberNode, PCNode, PointNode,
 };
 use self::library::Library;
 
@@ -37,7 +37,7 @@ use super::parser::{
     ExprBinop, ExprCall, FromProperty, InputStream, Name, PointCollectionConstructor, RefStatement,
 };
 use super::token::number::{CompExponent, ProcNum};
-use super::token::Number;
+use super::token::NumberLit;
 use super::{
     parser::{
         BinaryOperator, DisplayProperties, ExplicitIterator, Expression, ImplicitIterator,
@@ -442,9 +442,9 @@ pub enum UnrolledRuleKind {
     /// A point equality rule (distance of 0)
     PointEq(Expr<Point>, Expr<Point>),
     /// A scalar equality
-    ScalarEq(Expr<Scalar>, Expr<Scalar>),
+    NumberEq(Expr<Number>, Expr<Number>),
     /// a > b
-    Gt(Expr<Scalar>, Expr<Scalar>),
+    Gt(Expr<Number>, Expr<Number>),
     /// One of the rules must be true.
     Alternative(Vec<UnrolledRule>),
     /// Bias entities in an expression. Can alter behavior of some engines.
@@ -526,7 +526,7 @@ macro_rules! impl_from_any {
                 match value {
                     AnyExpr::Point(v) => v.convert(context),
                     AnyExpr::Line(v) => v.convert(context),
-                    AnyExpr::Scalar(v) => v.convert(context),
+                    AnyExpr::Number(v) => v.convert(context),
                     AnyExpr::Circle(v) => v.convert(context),
                     AnyExpr::PointCollection(v) => v.convert(context),
                     AnyExpr::Derived(v) => v.convert(context),
@@ -538,7 +538,7 @@ macro_rules! impl_from_any {
                 match value {
                     AnyExpr::Point(v) => Self::can_convert_from(v),
                     AnyExpr::Line(v) => Self::can_convert_from(v),
-                    AnyExpr::Scalar(v) => Self::can_convert_from(v),
+                    AnyExpr::Number(v) => Self::can_convert_from(v),
                     AnyExpr::Circle(v) => Self::can_convert_from(v),
                     AnyExpr::PointCollection(v) => Self::can_convert_from(v),
                     AnyExpr::Derived(v) => Self::can_convert_from(v),
@@ -691,6 +691,8 @@ pub enum Point {
     CircleCenter(Expr<Circle>),
     /// A free point.
     Free,
+    /// A point made from a complex number.
+    FromComplex(Expr<Number>),
 }
 
 impl Point {
@@ -742,13 +744,13 @@ impl Expr<Point> {
 
     /// Get the point's x coordinate expression.
     #[must_use]
-    pub fn x(self, span: Span, display: Properties, context: &CompileContext) -> Expr<Scalar> {
+    pub fn x(self, span: Span, display: Properties, context: &CompileContext) -> Expr<Number> {
         let mut expr = Expr {
             span,
             node: None,
-            data: Rc::new(Scalar {
+            data: Rc::new(Number {
                 unit: Some(unit::DISTANCE),
-                data: ScalarData::PointX(self),
+                data: NumberData::PointX(self),
             }),
         };
 
@@ -758,13 +760,13 @@ impl Expr<Point> {
 
     /// Get the point's y coordinate expression.
     #[must_use]
-    pub fn y(self, span: Span, display: Properties, context: &CompileContext) -> Expr<Scalar> {
+    pub fn y(self, span: Span, display: Properties, context: &CompileContext) -> Expr<Number> {
         let mut expr = Expr {
             span,
             node: None,
-            data: Rc::new(Scalar {
+            data: Rc::new(Number {
                 unit: Some(unit::DISTANCE),
-                data: ScalarData::PointY(self),
+                data: NumberData::PointY(self),
             }),
         };
 
@@ -807,6 +809,7 @@ impl Display for Point {
                 write!(f, "{circle}.center")
             }
             Self::Free => write!(f, "Free point"),
+            Self::FromComplex(number) => write!(f, "to_point({number})"),
         }
     }
 }
@@ -817,7 +820,7 @@ impl_from_unknown! {Point}
 impl_convert_err! {Circle -> Point}
 impl_convert_err! {Line -> Point}
 impl_convert_err! {Derived -> Point}
-impl_convert_err! {Scalar -> Point}
+impl_convert_err! {Number -> Point}
 
 impl_make_variable! {Point}
 
@@ -864,7 +867,7 @@ pub enum Circle {
     /// A generic expression
     Generic(Generic<Self>),
     /// A circle constructed from its center and radius.
-    Circle(Expr<Point>, Expr<Scalar>),
+    Circle(Expr<Point>, Expr<Number>),
 }
 
 impl_x_from_x! {Circle}
@@ -874,7 +877,7 @@ impl_from_unknown! {Circle}
 impl_convert_err! {Point -> Circle}
 impl_convert_err! {Line -> Circle}
 impl_convert_err! {Derived -> Circle}
-impl_convert_err! {Scalar -> Circle}
+impl_convert_err! {Number -> Circle}
 impl_convert_err! {PointCollection -> Circle}
 
 impl_make_variable! {Circle}
@@ -941,13 +944,13 @@ impl Expr<Circle> {
 
     /// Get the circle's radius expression.
     #[must_use]
-    pub fn radius(self, span: Span, display: Properties, context: &CompileContext) -> Expr<Scalar> {
+    pub fn radius(self, span: Span, display: Properties, context: &CompileContext) -> Expr<Number> {
         let mut expr = Expr {
             span,
             node: None,
-            data: Rc::new(Scalar {
+            data: Rc::new(Number {
                 unit: Some(unit::DISTANCE),
-                data: ScalarData::CircleRadius(self),
+                data: NumberData::CircleRadius(self),
             }),
         };
 
@@ -1049,7 +1052,7 @@ impl_from_unknown! {Line}
 impl_convert_err! {Derived -> Line}
 impl_convert_err! {Circle -> Line}
 impl_convert_err! {Point -> Line}
-impl_convert_err! {Scalar -> Line}
+impl_convert_err! {Number -> Line}
 
 impl_make_variable! {Line}
 
@@ -1121,52 +1124,58 @@ impl GeoType for Expr<Line> {
     }
 }
 
-/// An unrolled scalar expression
+/// An unrolled number expression
 #[derive(Debug, CloneWithNode)]
-pub enum ScalarData {
+pub enum NumberData {
     /// A generic expression
-    Generic(Generic<Scalar>),
+    Generic(Generic<Number>),
     /// A constant
     Number(ProcNum),
     /// A distance literal not meant to be multiplied by the distance unit.
     DstLiteral(ProcNum),
     /// Override the expression's unit.
-    SetUnit(Expr<Scalar>, ComplexUnit),
+    SetUnit(Expr<Number>, ComplexUnit),
     /// Distance between two points.
     PointPointDistance(Expr<Point>, Expr<Point>),
     /// Distance of a point from a line.
     PointLineDistance(Expr<Point>, Expr<Line>),
     /// Minus expression
-    Negate(Expr<Scalar>),
+    Negate(Expr<Number>),
     /// a + b
-    Add(Expr<Scalar>, Expr<Scalar>),
+    Add(Expr<Number>, Expr<Number>),
     /// a - b
-    Subtract(Expr<Scalar>, Expr<Scalar>),
+    Subtract(Expr<Number>, Expr<Number>),
     /// a * b
-    Multiply(Expr<Scalar>, Expr<Scalar>),
+    Multiply(Expr<Number>, Expr<Number>),
     /// a / b
-    Divide(Expr<Scalar>, Expr<Scalar>),
+    Divide(Expr<Number>, Expr<Number>),
     /// Angle defined by three points.
     ThreePointAngle(Expr<Point>, Expr<Point>, Expr<Point>),
     /// Directed angle defined by three points.
     ThreePointAngleDir(Expr<Point>, Expr<Point>, Expr<Point>),
     /// Angle between two lines.
     TwoLineAngle(Expr<Line>, Expr<Line>),
-    /// The arithmetic mean of scalars.
-    Average(ClonedVec<Expr<Scalar>>),
+    /// The arithmetic mean of numbers.
+    Average(ClonedVec<Expr<Number>>),
     /// Radius of a circle
     CircleRadius(Expr<Circle>),
-    /// Raise a scalar to a power
-    Pow(Expr<Scalar>, CompExponent),
+    /// Raise a number to a power
+    Pow(Expr<Number>, CompExponent),
     /// X coordinate of a point
     PointX(Expr<Point>),
     /// Y coordinate of a point
     PointY(Expr<Point>),
-    /// A free scalar.
+    /// A free number.
     Free,
+    /// A point as a complex number
+    FromPoint(Expr<Point>),
+    /// Real part of a number
+    Real(Expr<Number>),
+    /// Imaginary part of a number
+    Imaginary(Expr<Number>),
 }
 
-impl Display for ScalarData {
+impl Display for NumberData {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Generic(v) => write!(f, "{v}"),
@@ -1205,46 +1214,49 @@ impl Display for ScalarData {
             Self::PointX(expr) => write!(f, "{expr}.x"),
             Self::PointY(expr) => write!(f, "{expr}.y"),
             Self::Free => write!(f, "Free scalar"),
+            Self::FromPoint(point) => write!(f, "to_complex({point})"),
+            Self::Real(number) => write!(f, "Re({number})"),
+            Self::Imaginary(number) => write!(f, "Im({number})"),
         }
     }
 }
 
 /// A scalar with a unit.
 #[derive(Debug, CloneWithNode)]
-pub struct Scalar {
+pub struct Number {
     pub unit: Option<ComplexUnit>,
-    pub data: ScalarData,
+    pub data: NumberData,
 }
 
-impl_x_from_x! {Scalar}
-impl_from_any! {Scalar}
-impl_from_unknown! {Scalar}
+impl_x_from_x! {Number}
+impl_from_any! {Number}
+impl_from_unknown! {Number}
 
-impl_convert_err! {Point -> Scalar}
-impl_convert_err! {Circle -> Scalar}
-impl_convert_err! {Line -> Scalar}
-impl_convert_err! {Derived -> Scalar}
+impl_convert_err! {Point -> Number}
+impl_convert_err! {Circle -> Number}
+impl_convert_err! {Line -> Number}
+impl_convert_err! {Derived -> Number}
 
-impl_make_variable! {Scalar {other: unit, data: ScalarData}}
+impl_make_variable! {Number {other: unit, data: NumberData}}
 
-impl Dummy for Scalar {
+impl Dummy for Number {
     fn dummy() -> Self {
         Self {
             unit: None,
-            data: ScalarData::Generic(Generic::Dummy),
+            data: NumberData::Generic(Generic::Dummy),
         }
     }
 
     fn is_dummy(&self) -> bool {
-        matches!(self.data, ScalarData::Generic(Generic::Dummy))
+        matches!(self.data, NumberData::Generic(Generic::Dummy))
     }
 }
 
-impl Displayed for Scalar {
-    type Node = ScalarNode;
+impl Displayed for Number {
+    type Node = NumberNode;
 }
 
-impl ConvertFrom<Expr<PointCollection>> for Scalar {
+impl ConvertFrom<Expr<PointCollection>> for Number {
     fn convert_from(mut value: Expr<PointCollection>, context: &CompileContext) -> Expr<Self> {
         if value.data.length == 2 {
             // IMPORTANT: unwrap_or_else MUST be used to prevent
@@ -1271,7 +1283,7 @@ impl ConvertFrom<Expr<PointCollection>> for Scalar {
 
             expr.0
         } else {
-            convert_err!(PointCollection(value) -> Scalar with context)
+            convert_err!(PointCollection(value) -> Number with context)
         }
     }
 
@@ -1280,17 +1292,17 @@ impl ConvertFrom<Expr<PointCollection>> for Scalar {
     }
 }
 
-impl Scalar {
+impl Number {
     #[must_use]
     pub fn get_type() -> Type {
         ty::SCALAR
     }
 }
 
-impl GetData for Scalar {
+impl GetData for Number {
     fn get_data(&self) -> &Self {
         match &self.data {
-            ScalarData::Generic(v) => match v {
+            NumberData::Generic(v) => match v {
                 Generic::Boxed(v) => v.get_data(),
                 Generic::VariableAccess(v) => v.definition.get_data(),
                 Generic::Dummy => self,
@@ -1300,7 +1312,7 @@ impl GetData for Scalar {
     }
 }
 
-impl Expr<Scalar> {
+impl Expr<Number> {
     /// Box the expression with a span.
     #[must_use]
     pub fn boxed(mut self, span: Span) -> Self {
@@ -1308,9 +1320,9 @@ impl Expr<Scalar> {
 
         Self {
             span,
-            data: Rc::new(Scalar {
+            data: Rc::new(Number {
                 unit: self.data.unit,
-                data: ScalarData::Generic(Generic::Boxed(self)),
+                data: NumberData::Generic(Generic::Boxed(self)),
             }),
             node,
         }
@@ -1327,7 +1339,7 @@ impl Expr<Scalar> {
         let err = Error::ImplicitConversionDoesNotExist {
             error_span: self.span,
             from: self.get_value_type(),
-            to: Type::Scalar(unit),
+            to: Type::Number(unit),
         };
 
         if self.data.unit == unit {
@@ -1338,7 +1350,7 @@ impl Expr<Scalar> {
             // And pretend the conversion is valid.
             Expr {
                 span: self.span,
-                data: Rc::new(Scalar {
+                data: Rc::new(Number {
                     unit,
                     data: self.data.data.clone_without_node(),
                 }),
@@ -1347,66 +1359,67 @@ impl Expr<Scalar> {
         } else {
             // `unit` is concrete and self.unit is not
             Self {
-                data: Rc::new(Scalar {
+                data: Rc::new(Number {
                     unit,
                     data: match &self.data.data {
-                        ScalarData::Generic(generic) => match generic {
+                        NumberData::Generic(generic) => match generic {
                             Generic::VariableAccess(_) => unreachable!(), // Always concrete
-                            Generic::Boxed(v) => ScalarData::Generic(Generic::Boxed(
+                            Generic::Boxed(v) => NumberData::Generic(Generic::Boxed(
                                 v.clone_without_node().convert_unit(unit, context),
                             )),
-                            Generic::Dummy => ScalarData::Generic(Generic::Dummy),
+                            Generic::Dummy => NumberData::Generic(Generic::Dummy),
                         },
-                        v @ ScalarData::Number(_) => v.clone_without_node(),
-                        ScalarData::Free => {
-                            ScalarData::SetUnit(self.clone_without_node(), unit.unwrap_or_default())
+                        v @ NumberData::Number(_) => v.clone_without_node(),
+                        NumberData::Free => {
+                            NumberData::SetUnit(self.clone_without_node(), unit.unwrap_or_default())
                         }
-                        ScalarData::DstLiteral(_)
-                        | ScalarData::PointPointDistance(_, _)
-                        | ScalarData::PointLineDistance(_, _)
-                        | ScalarData::ThreePointAngle(_, _, _)
-                        | ScalarData::ThreePointAngleDir(_, _, _)
-                        | ScalarData::TwoLineAngle(_, _)
-                        | ScalarData::CircleRadius(_)
-                        | ScalarData::PointX(_)
-                        | ScalarData::PointY(_)
-                        | ScalarData::SetUnit(_, _) => unreachable!(), // Always concrete
-                        ScalarData::Negate(v) => {
-                            ScalarData::Negate(v.clone_without_node().convert_unit(unit, context))
+                        NumberData::DstLiteral(_)
+                        | NumberData::PointPointDistance(_, _)
+                        | NumberData::PointLineDistance(_, _)
+                        | NumberData::ThreePointAngle(_, _, _)
+                        | NumberData::ThreePointAngleDir(_, _, _)
+                        | NumberData::TwoLineAngle(_, _)
+                        | NumberData::CircleRadius(_)
+                        | NumberData::PointX(_)
+                        | NumberData::PointY(_)
+                        | NumberData::FromPoint(_)
+                        | NumberData::SetUnit(_, _) => unreachable!(), // Always concrete
+                        NumberData::Negate(v) => {
+                            NumberData::Negate(v.clone_without_node().convert_unit(unit, context))
                         }
-                        ScalarData::Add(a, b) => {
+                        NumberData::Add(a, b) => {
                             // Both operands are guaranteed to be unit-less here.
-                            ScalarData::Add(
+                            NumberData::Add(
                                 a.clone_without_node().convert_unit(unit, context),
                                 b.clone_without_node().convert_unit(unit, context),
                             )
                         }
-                        ScalarData::Subtract(a, b) => {
+                        NumberData::Subtract(a, b) => {
                             // Both operands are guaranteed to be unit-less here.
-                            ScalarData::Subtract(
+                            NumberData::Subtract(
                                 a.clone_without_node().convert_unit(unit, context),
                                 b.clone_without_node().convert_unit(unit, context),
                             )
                         }
-                        ScalarData::Multiply(a, b) => {
+                        NumberData::Multiply(a, b) => {
                             // Both operands are guaranteed to be unit-less here.
-                            ScalarData::Multiply(
+                            NumberData::Multiply(
                                 a.clone_without_node().convert_unit(unit, context),
                                 b.clone_without_node()
                                     .convert_unit(Some(unit::SCALAR), context),
                             )
                         }
-                        ScalarData::Divide(a, b) => {
+                        NumberData::Divide(a, b) => {
                             // Both operands are guaranteed to be unit-less here.
-                            ScalarData::Divide(
+                            NumberData::Divide(
                                 a.clone_without_node().convert_unit(unit, context),
                                 b.clone_without_node()
                                     .convert_unit(Some(unit::SCALAR), context),
                             )
                         }
-                        ScalarData::Average(exprs) => {
+                        NumberData::Average(exprs) => {
                             // All will be unit-less.
-                            ScalarData::Average(
+                            NumberData::Average(
                                 exprs
                                     .iter()
                                     .map(|v| v.clone_without_node().convert_unit(unit, context))
@@ -1414,10 +1427,16 @@ impl Expr<Scalar> {
                                     .into(),
                             )
                         }
-                        ScalarData::Pow(base, exponent) => ScalarData::Pow(
+                        NumberData::Pow(base, exponent) => NumberData::Pow(
                             base.clone_without_node()
                                 .convert_unit(unit.map(|x| x.pow(exponent.recip())), context),
                             *exponent,
+                        ),
+                        NumberData::Real(number) => NumberData::Real(
+                            number.clone_without_node().convert_unit(unit, context),
+                        ),
+                        NumberData::Imaginary(number) => NumberData::Imaginary(
+                            number.clone_without_node().convert_unit(unit, context),
                         ),
                     },
                 }),
@@ -1447,13 +1466,13 @@ impl Expr<Scalar> {
     }
 }
 
-impl GetValueType for Scalar {
+impl GetValueType for Number {
     fn get_value_type(&self) -> Type {
-        Type::Scalar(self.unit)
+        Type::Number(self.unit)
     }
 }
 
-impl Display for Scalar {
+impl Display for Number {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.data)
     }
@@ -1535,7 +1554,7 @@ impl_from_unknown! {PointCollection}
 
 impl_convert_err! {Circle -> PointCollection}
 impl_convert_err! {Line -> PointCollection}
-impl_convert_err! {Scalar -> PointCollection}
+impl_convert_err! {Number -> PointCollection}
 impl_convert_err! {Derived -> PointCollection}
 
 impl_make_variable! {PointCollection {other: length, data: PointCollectionData}}
@@ -1729,7 +1748,7 @@ impl_from_unknown! {Derived}
 impl_convert_err! {Point -> Derived}
 impl_convert_err! {Line -> Derived}
 impl_convert_err! {Circle -> Derived}
-impl_convert_err! {Scalar -> Derived}
+impl_convert_err! {Number -> Derived}
 impl_convert_err! {PointCollection -> Derived}
 
 impl_make_variable! {Derived {other: name, data: DerivedData}}
@@ -1880,7 +1899,7 @@ impl Expr<Unknown> {
 pub enum AnyExpr {
     Point(Expr<Point>),
     Line(Expr<Line>),
-    Scalar(Expr<Scalar>),
+    Number(Expr<Number>),
     Circle(Expr<Circle>),
     PointCollection(Expr<PointCollection>),
     Derived(Expr<Derived>),
@@ -1889,7 +1908,7 @@ pub enum AnyExpr {
 
 impl_any_from_x! {Point}
 impl_any_from_x! {Line}
-impl_any_from_x! {Scalar}
+impl_any_from_x! {Number}
 impl_any_from_x! {Circle}
 impl_any_from_x! {PointCollection}
 impl_any_from_x! {Derived}
@@ -1902,7 +1921,7 @@ impl AnyExpr {
         match self {
             Self::Point(v) => &mut v.span,
             Self::Line(v) => &mut v.span,
-            Self::Scalar(v) => &mut v.span,
+            Self::Number(v) => &mut v.span,
             Self::Circle(v) => &mut v.span,
             Self::PointCollection(v) => &mut v.span,
             Self::Derived(v) => &mut v.span,
@@ -1916,7 +1935,7 @@ impl AnyExpr {
         match self {
             Self::Point(v) => v.span,
             Self::Line(v) => v.span,
-            Self::Scalar(v) => v.span,
+            Self::Number(v) => v.span,
             Self::Circle(v) => v.span,
             Self::PointCollection(v) => v.span,
             Self::Derived(v) => v.span,
@@ -1933,8 +1952,8 @@ impl AnyExpr {
             Self::Line(v) => {
                 AnyExprNode::Line(mem::replace(&mut v.node, with.map(AnyExprNode::to_line))?)
             }
-            Self::Scalar(v) => {
-                AnyExprNode::Scalar(mem::replace(&mut v.node, with.map(AnyExprNode::to_scalar))?)
+            Self::Number(v) => {
+                AnyExprNode::Number(mem::replace(&mut v.node, with.map(AnyExprNode::to_scalar))?)
             }
             Self::Circle(v) => {
                 AnyExprNode::Circle(mem::replace(&mut v.node, with.map(AnyExprNode::to_circle))?)
@@ -1960,7 +1979,7 @@ impl AnyExpr {
         match self {
             Self::Point(x) => x.node.as_ref().map(|c| c as &dyn Node),
             Self::Line(x) => x.node.as_ref().map(|c| c as &dyn Node),
-            Self::Scalar(x) => x.node.as_ref().map(|c| c as &dyn Node),
+            Self::Number(x) => x.node.as_ref().map(|c| c as &dyn Node),
             Self::Circle(x) => x.node.as_ref().map(|c| c as &dyn Node),
             Self::PointCollection(x) => x.node.as_ref().map(|c| c as &dyn Node),
             Self::Derived(x) => x.node.as_ref().map(|c| c as &dyn Node),
@@ -1969,9 +1988,9 @@ impl AnyExpr {
     }
 
     #[must_use]
-    pub fn to_scalar(self) -> Option<Expr<Scalar>> {
+    pub fn to_scalar(self) -> Option<Expr<Number>> {
         match self {
-            Self::Scalar(v) => Some(v),
+            Self::Number(v) => Some(v),
             _ => None,
         }
     }
@@ -1990,7 +2009,7 @@ impl AnyExpr {
         match self {
             AnyExpr::Point(v) => v.get_value_type(),
             AnyExpr::Line(v) => v.get_value_type(),
-            AnyExpr::Scalar(v) => v.get_value_type(),
+            AnyExpr::Number(v) => v.get_value_type(),
             AnyExpr::Circle(v) => v.get_value_type(),
             AnyExpr::PointCollection(v) => v.get_value_type(),
             AnyExpr::Derived(v) => v.get_value_type(),
@@ -2007,7 +2026,7 @@ impl AnyExpr {
         match to {
             Type::Point => Self::Point(self.convert(context)),
             Type::Line => Self::Line(self.convert(context)),
-            Type::Scalar(unit) => Self::Scalar(self.convert(context).convert_unit(unit, context)),
+            Type::Number(unit) => Self::Number(self.convert(context).convert_unit(unit, context)),
             Type::PointCollection(len) => {
                 Self::PointCollection(self.convert(context).check_len(len, context))
             }
@@ -2023,7 +2042,7 @@ impl AnyExpr {
         match to {
             Type::Point => self.can_convert::<Point>(),
             Type::Line => self.can_convert::<Line>(),
-            Type::Scalar(unit) => self.can_convert_to_scalar(unit).is_some(),
+            Type::Number(unit) => self.can_convert_to_scalar(unit).is_some(),
             Type::PointCollection(len) => self.can_convert_to_collection(len),
             Type::Circle => self.can_convert::<Circle>(),
             Type::Derived(name) => self.can_convert_to_derived(name),
@@ -2043,7 +2062,7 @@ impl AnyExpr {
             Self::PointCollection(v) => (v.data.length == 2
                 && (unit == Some(unit::DISTANCE) || unit.is_none()))
             .then_some(Some(unit::DISTANCE)),
-            Self::Scalar(u) => (u.data.unit == unit || u.data.unit.is_none() || unit.is_none())
+            Self::Number(u) => (u.data.unit == unit || u.data.unit.is_none() || unit.is_none())
                 .then_some(u.data.unit.or(unit)),
             Self::Unknown(_) => Some(unit),
         }
@@ -2053,7 +2072,7 @@ impl AnyExpr {
     #[must_use]
     pub fn can_convert_to_collection(&self, len: usize) -> bool {
         match self {
-            Self::Line(_) | Self::Derived(_) | Self::Circle(_) | Self::Scalar(_) => false,
+            Self::Line(_) | Self::Derived(_) | Self::Circle(_) | Self::Number(_) => false,
             Self::PointCollection(v) => v.data.length == len || len == 0,
             Self::Point(_) => len == 1,
             Self::Unknown(_) => true,
@@ -2076,7 +2095,7 @@ impl AnyExpr {
         match self {
             Self::Point(v) => Self::Point(v.boxed(span)),
             Self::Line(v) => Self::Line(v.boxed(span)),
-            Self::Scalar(v) => Self::Scalar(v.boxed(span)),
+            Self::Number(v) => Self::Number(v.boxed(span)),
             Self::Circle(v) => Self::Circle(v.boxed(span)),
             Self::PointCollection(v) => Self::PointCollection(v.boxed(span)),
             Self::Derived(v) => Self::Derived(v.boxed(span)),
@@ -2099,8 +2118,8 @@ impl AnyExpr {
                 Line::Generic(Generic::VariableAccess(var)) => var.definition_span,
                 _ => panic!("not a variable"),
             },
-            Self::Scalar(v) => match &v.data.data {
-                ScalarData::Generic(Generic::VariableAccess(var)) => var.definition_span,
+            Self::Number(v) => match &v.data.data {
+                NumberData::Generic(Generic::VariableAccess(var)) => var.definition_span,
                 _ => panic!("not a variable"),
             },
             Self::Circle(v) => match v.data.as_ref() {
@@ -2128,7 +2147,7 @@ impl AnyExpr {
         match self {
             Self::Point(v) => Self::Point(v.make_variable(name)),
             Self::Line(v) => Self::Line(v.make_variable(name)),
-            Self::Scalar(v) => Self::Scalar(v.make_variable(name)),
+            Self::Number(v) => Self::Number(v.make_variable(name)),
             Self::Circle(v) => Self::Circle(v.make_variable(name)),
             Self::PointCollection(v) => Self::PointCollection(v.make_variable(name)),
             Self::Derived(v) => Self::Derived(v.make_variable(name)),
@@ -2146,7 +2165,7 @@ impl Dummy for AnyExpr {
         match self {
             Self::Point(v) => v.is_dummy(),
             Self::Line(v) => v.is_dummy(),
-            Self::Scalar(v) => v.is_dummy(),
+            Self::Number(v) => v.is_dummy(),
             Self::Circle(v) => v.is_dummy(),
             Self::PointCollection(v) => v.is_dummy(),
             Self::Derived(v) => v.is_dummy(),
@@ -2160,7 +2179,7 @@ impl Display for AnyExpr {
         match self {
             Self::Point(v) => write!(f, "{v}"),
             Self::Line(v) => write!(f, "{v}"),
-            Self::Scalar(v) => write!(f, "{v}"),
+            Self::Number(v) => write!(f, "{v}"),
             Self::Circle(v) => write!(f, "{v}"),
             Self::PointCollection(v) => write!(f, "{v}"),
             Self::Derived(v) => write!(f, "{v}"),
@@ -2396,7 +2415,7 @@ impl Display for UnrolledRule {
 
         match &self.kind {
             UnrolledRuleKind::PointEq(a, b) => write!(f, "{a} {inv}= {b}"),
-            UnrolledRuleKind::ScalarEq(a, b) => write!(f, "{a} {inv}= {b}"),
+            UnrolledRuleKind::NumberEq(a, b) => write!(f, "{a} {inv}= {b}"),
             UnrolledRuleKind::Gt(a, b) => {
                 write!(f, "{a} {} {b}", if self.inverted { "<=" } else { ">" })
             }
@@ -2437,6 +2456,7 @@ fn fetch_variable(context: &CompileContext, name: &str, variable_span: Span) -> 
             error_span: variable_span,
             variable_name: name.to_string(),
             suggested: suggested.cloned(),
+            suggest_complex: name == "i",
         });
 
         Expr::new_spanless(Unknown::dummy())
@@ -2460,7 +2480,7 @@ impl Unroll for SimpleExpression {
 
         let unrolled = self.kind.unroll(context, library, it_index, display);
         let unrolled = if let Some(exponent) = &self.exponent {
-            let mut unrolled: Expr<Scalar> = unrolled.convert(context);
+            let mut unrolled: Expr<Number> = unrolled.convert(context);
             let node = unrolled.node.take();
 
             let exponent = match exponent.exponent.as_comp() {
@@ -2477,11 +2497,11 @@ impl Unroll for SimpleExpression {
                 }
             };
 
-            AnyExpr::Scalar(Expr {
+            AnyExpr::Number(Expr {
                 span: self.get_span(),
-                data: Rc::new(Scalar {
+                data: Rc::new(Number {
                     unit: unrolled.data.unit.map(|v| v.pow(exponent)),
-                    data: ScalarData::Pow(unrolled, exponent),
+                    data: NumberData::Pow(unrolled, exponent),
                 }),
                 node,
             })
@@ -2490,14 +2510,14 @@ impl Unroll for SimpleExpression {
         };
 
         if self.minus.is_some() {
-            let mut unrolled: Expr<Scalar> = unrolled.convert(context);
+            let mut unrolled: Expr<Number> = unrolled.convert(context);
             let node = unrolled.node.take();
 
-            AnyExpr::Scalar(Expr {
+            AnyExpr::Number(Expr {
                 span: self.get_span(),
-                data: Rc::new(Scalar {
+                data: Rc::new(Number {
                     unit: unrolled.data.unit,
-                    data: ScalarData::Negate(unrolled),
+                    data: NumberData::Negate(unrolled),
                 }),
                 node,
             })
@@ -2722,7 +2742,7 @@ impl Unroll<FuncRef> for Name {
     }
 }
 
-impl Unroll for Number {
+impl Unroll for NumberLit {
     fn unroll(
         &self,
         context: &mut CompileContext,
@@ -2732,10 +2752,10 @@ impl Unroll for Number {
     ) -> AnyExpr {
         display.finish(context);
 
-        AnyExpr::Scalar(Expr {
-            data: Rc::new(Scalar {
+        AnyExpr::Number(Expr {
+            data: Rc::new(Number {
                 unit: None,
-                data: ScalarData::Number(self.into()),
+                data: NumberData::Number(self.into()),
             }),
             span: self.get_span(),
             node: None,
@@ -2847,7 +2867,7 @@ impl<const ITER: bool> Unroll for ExprBinop<ITER> {
             .unroll(context, library, it_index, Properties::default());
 
         let mut lhs = if lhs.can_convert_to(ty::SCALAR_UNKNOWN) {
-            lhs.convert::<Scalar>(context)
+            lhs.convert::<Number>(context)
         } else {
             context.push_error(Error::InvalidOperandType {
                 error_span: Box::new(self.get_span()),
@@ -2857,13 +2877,13 @@ impl<const ITER: bool> Unroll for ExprBinop<ITER> {
 
             Expr {
                 span: lhs.get_span(),
-                data: Rc::new(Scalar::dummy()),
+                data: Rc::new(Number::dummy()),
                 node: None,
             }
         };
 
         let mut rhs = if rhs.can_convert_to(ty::SCALAR_UNKNOWN) {
-            rhs.convert::<Scalar>(context)
+            rhs.convert::<Number>(context)
         } else {
             context.push_error(Error::InvalidOperandType {
                 error_span: Box::new(self.get_span()),
@@ -2873,7 +2893,7 @@ impl<const ITER: bool> Unroll for ExprBinop<ITER> {
 
             Expr {
                 span: rhs.get_span(),
-                data: Rc::new(Scalar::dummy()),
+                data: Rc::new(Number::dummy()),
                 node: None,
             }
         };
@@ -2893,24 +2913,24 @@ impl<const ITER: bool> Unroll for ExprBinop<ITER> {
                 let rhs = rhs.convert_unit(lhs.data.unit, context);
                 let mut expr = Expr {
                     span: self.get_span(),
-                    data: Rc::new(Scalar {
+                    data: Rc::new(Number {
                         unit: rhs.data.unit,
                         data: match &self.operator {
-                            BinaryOperator::Add(_) => ScalarData::Add(lhs, rhs),
-                            BinaryOperator::Sub(_) => ScalarData::Subtract(lhs, rhs),
+                            BinaryOperator::Add(_) => NumberData::Add(lhs, rhs),
+                            BinaryOperator::Sub(_) => NumberData::Subtract(lhs, rhs),
                             _ => unreachable!(),
                         },
                     }),
                     node: None,
                 };
 
-                let mut node = HierarchyNode::new(ScalarNode::from_expr(&expr, display, context));
+                let mut node = HierarchyNode::new(NumberNode::from_expr(&expr, display, context));
                 node.extend_children(lhs_node);
                 node.extend_children(rhs_node);
 
                 expr.node = Some(node);
 
-                AnyExpr::Scalar(expr)
+                AnyExpr::Number(expr)
             }
             BinaryOperator::Mul(_) | BinaryOperator::Div(_) => {
                 let lhs = lhs.specify_unit(context);
@@ -2918,24 +2938,24 @@ impl<const ITER: bool> Unroll for ExprBinop<ITER> {
                 let rhs = rhs.specify_unit(context);
                 let mut expr = Expr {
                     span: self.get_span(),
-                    data: Rc::new(Scalar {
+                    data: Rc::new(Number {
                         unit: Some(lhs.data.unit.unwrap() * rhs.data.unit.as_ref().unwrap()),
                         data: match &self.operator {
-                            BinaryOperator::Mul(_) => ScalarData::Multiply(lhs, rhs),
-                            BinaryOperator::Div(_) => ScalarData::Divide(lhs, rhs),
+                            BinaryOperator::Mul(_) => NumberData::Multiply(lhs, rhs),
+                            BinaryOperator::Div(_) => NumberData::Divide(lhs, rhs),
                             _ => unreachable!(),
                         },
                     }),
                     node: None,
                 };
 
-                let mut node = HierarchyNode::new(ScalarNode::from_expr(&expr, display, context));
+                let mut node = HierarchyNode::new(NumberNode::from_expr(&expr, display, context));
                 node.extend_children(lhs_node);
                 node.extend_children(rhs_node);
 
                 expr.node = Some(node);
 
-                AnyExpr::Scalar(expr)
+                AnyExpr::Number(expr)
             }
         }
     }
@@ -3652,7 +3672,7 @@ fn unroll_eq(
 
                 context.point_eq_display(lhs, rhs, inverted, display)
             }
-            Type::Scalar(_) => {
+            Type::Number(_) => {
                 let lhs = lhs.convert(context);
                 let rhs = rhs.convert(context);
 
@@ -3668,8 +3688,8 @@ fn unroll_eq(
 
                 // Pretend there is no rule.
                 context.scalar_eq_display(
-                    Expr::new_spanless(Scalar::dummy()),
-                    Expr::new_spanless(Scalar::dummy()),
+                    Expr::new_spanless(Number::dummy()),
+                    Expr::new_spanless(Number::dummy()),
                     inverted,
                     display,
                 )
@@ -3680,8 +3700,8 @@ fn unroll_eq(
 
 /// Unroll a greater-than rule.
 fn unroll_gt(
-    lhs: Expr<Scalar>,
-    rhs: Expr<Scalar>,
+    lhs: Expr<Number>,
+    rhs: Expr<Number>,
     context: &mut CompileContext,
     full_span: Span,
     inverted: bool,
@@ -3700,7 +3720,7 @@ fn unroll_gt(
             Expr {
                 span: rhs.span,
                 node: rhs.node,
-                data: Rc::new(Scalar::dummy()),
+                data: Rc::new(Number::dummy()),
             }
             .convert_unit(lhs.data.unit, context)
         };
@@ -3870,8 +3890,12 @@ pub fn unroll(input: &str) -> Result<(CompileContext, CollectionNode), Vec<Error
     }
 
     let mut flags = FlagSetConstructor::new()
-        .add_set(&"optimizations", FlagSetConstructor::new())
-        .add_bool_def(&"point_inequalities", true)
+        .add_set("optimizations", FlagSetConstructor::new())
+        .add_set(
+            "language",
+            FlagSetConstructor::new().add_bool_def("complex_numbers", false),
+        )
+        .add_bool_def("point_inequalities", true)
         .finish();
 
     for flag in statements.iter().filter_map(Statement::as_flag) {
@@ -3879,6 +3903,26 @@ pub fn unroll(input: &str) -> Result<(CompileContext, CollectionNode), Vec<Error
     }
 
     context.flags = flags;
+
+    // If complex numbers are enabled, create the complex unit variable.
+    let enable_complex = context.flags["language"].as_set().unwrap()["complex_numbers"]
+        .kind
+        .as_setting()
+        .unwrap();
+
+    if enable_complex.get_value().unwrap().as_bool().unwrap() {
+        context.variables.insert(
+            String::from("i"),
+            AnyExpr::Number(Expr {
+                span: enable_complex.get_span().unwrap(),
+                data: Rc::new(Number {
+                    unit: Some(unit::SCALAR),
+                    data: NumberData::Number(ProcNum::i()),
+                }),
+                node: None,
+            }),
+        );
+    }
 
     for stat in statements {
         // Unroll the statement

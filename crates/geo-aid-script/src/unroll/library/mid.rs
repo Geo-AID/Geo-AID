@@ -31,9 +31,9 @@ impl Overload for MidPoint {
     }
 }
 
-struct MidScalar;
+struct MidNumber;
 
-impl Overload for MidScalar {
+impl Overload for MidNumber {
     fn get_returned_type(&self, params: &[AnyExpr]) -> Option<Type> {
         // This overload is only valid if all params are scalars of the same unit.
         // To check this, we convert the first param to a scalar of any unit,
@@ -49,7 +49,7 @@ impl Overload for MidScalar {
             }
         }
 
-        Some(Type::Scalar(unit))
+        Some(Type::Number(unit))
     }
 
     fn unroll(
@@ -94,7 +94,7 @@ pub fn register(library: &mut Library) {
                         props,
                     )
                 })
-                .overload(MidScalar)
+                .overload(MidNumber)
                 .overload(MidPoint),
         )
         .add(

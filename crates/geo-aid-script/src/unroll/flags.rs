@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 use crate::{
     parser::{FlagStatement, Parse},
-    token::{Number, Span},
+    token::{NumberLit, Span},
     Error,
 };
 
@@ -14,7 +14,7 @@ use super::{context::CompileContext, most_similar};
 #[derive(Debug)]
 pub struct Flag {
     /// The flag's name
-    pub name: String,
+    pub name: &'static str,
     /// The flag kind.
     pub kind: FlagKind,
     /// The card type.
@@ -33,7 +33,7 @@ impl Flag {
     #[must_use]
     pub fn as_bool(&self) -> Option<bool> {
         match &self.kind {
-            FlagKind::Setting(setting) => setting.get_value().and_then(FlagValue::as_bool).copied(),
+            FlagKind::Setting(setting) => setting.get_value().and_then(FlagValue::as_bool),
             FlagKind::Set(_) => None,
         }
     }
@@ -73,6 +73,26 @@ pub enum FlagKind {
     Setting(FlagSetting),
     /// A nested flag set
     Set(FlagSet),
+}
+
+impl FlagKind {
+    #[must_use]
+    pub fn as_setting(&self) -> Option<&FlagSetting> {
+        if let Self::Setting(v) = self {
+            Some(v)
+        } else {
+            None
+        }
+    }
+
+    #[must_use]
+    pub fn as_set(&self) -> Option<&FlagSet> {
+        if let Self::Set(v) = self {
+            Some(v)
+        } else {
+            None
+        }
+    }
 }
 
 /// A flag setting.
@@ -115,9 +135,9 @@ pub enum FlagValue {
 
 impl FlagValue {
     #[must_use]
-    pub fn as_bool(&self) -> Option<&bool> {
+    pub fn as_bool(&self) -> Option<bool> {
         if let Self::Bool(v) = self {
-            Some(v)
+            Some(*v)
         } else {
             None
         }
@@ -134,11 +154,11 @@ impl FlagValue {
 }
 
 /// A set of flags, also referenced to as a flag group.
-pub type FlagSet = HashMap<String, Flag>;
+pub type FlagSet = HashMap<&'static str, Flag>;
 
 /// A helper struct for constructing a flag set.
 pub struct FlagSetConstructor {
-    pub flags: Vec<(String, Flag)>,
+    pub flags: Vec<(&'static str, Flag)>,
 }
 
 impl FlagSetConstructor {
@@ -150,11 +170,11 @@ impl FlagSetConstructor {
 
     /// Add a string flag.
     #[must_use]
-    pub fn add_ident<S: ToString>(mut self, name: &S) -> Self {
+    pub fn add_ident(mut self, name: &'static str) -> Self {
         self.flags.push((
-            name.to_string(),
+            name,
             Flag {
-                name: name.to_string(),
+                name,
                 kind: FlagKind::Setting(FlagSetting::Unset),
                 ty: FlagType::String,
             },
@@ -165,11 +185,11 @@ impl FlagSetConstructor {
 
     /// Add a string flag with a default
     #[must_use]
-    pub fn add_ident_def<S: ToString>(mut self, name: &S, default: &S) -> Self {
+    pub fn add_ident_def(mut self, name: &'static str, default: impl ToString) -> Self {
         self.flags.push((
-            name.to_string(),
+            name,
             Flag {
-                name: name.to_string(),
+                name,
                 kind: FlagKind::Setting(FlagSetting::Default(FlagValue::String(
                     default.to_string(),
                 ))),
@@ -182,11 +202,11 @@ impl FlagSetConstructor {
 
     /// Add a boolean flag
     #[must_use]
-    pub fn add_bool<S: ToString>(mut self, name: &S) -> Self {
+    pub fn add_bool(mut self, name: &'static str) -> Self {
         self.flags.push((
-            name.to_string(),
+            name,
             Flag {
-                name: name.to_string(),
+                name,
                 kind: FlagKind::Setting(FlagSetting::Unset),
                 ty: FlagType::Boolean,
             },
@@ -197,11 +217,11 @@ impl FlagSetConstructor {
 
     /// Add a boolean flag with a default
     #[must_use]
-    pub fn add_bool_def<S: ToString>(mut self, name: &S, default: bool) -> Self {
+    pub fn add_bool_def(mut self, name: &'static str, default: bool) -> Self {
         self.flags.push((
-            name.to_string(),
+            name,
             Flag {
-                name: name.to_string(),
+                name,
                 kind: FlagKind::Setting(FlagSetting::Default(FlagValue::Bool(default))),
                 ty: FlagType::Boolean,
             },
@@ -212,11 +232,11 @@ impl FlagSetConstructor {
 
     /// Add a nested flag set
     #[must_use]
-    pub fn add_set<S: ToString>(mut self, name: &S, set: FlagSetConstructor) -> Self {
+    pub fn add_set(mut self, name: &'static str, set: FlagSetConstructor) -> Self {
         self.flags.push((
-            name.to_string(),
+            name,
             Flag {
-                name: name.to_string(),
+                name,
                 kind: FlagKind::Set(set.finish()),
                 ty: FlagType::Set,
             },
@@ -250,7 +270,7 @@ fn set_flag_recursive(
     context: &CompileContext,
     depth: usize,
 ) {
-    let Some(flag_ref) = set.get_mut(&flag.name.name.get(depth).unwrap().ident) else {
+    let Some(flag_ref) = set.get_mut(flag.name.name.get(depth).unwrap().ident.as_str()) else {
         let flag_name = flag.name.name.get(depth).unwrap().ident.clone();
 
         let suggested = most_similar(set.keys(), &flag_name).cloned();
@@ -304,7 +324,7 @@ fn set_flag_recursive(
                             context.push_error(Error::RedefinedFlag {
                                 error_span: flag.get_span(),
                                 first_defined: *sp,
-                                flag_name: flag_ref.name.clone(),
+                                flag_name: flag_ref.name,
                             });
                         }
                     },
@@ -349,7 +369,7 @@ fn set_flag_bool(flag: &mut Flag, stmt: &FlagStatement) -> Result<(), Error> {
                     return Err(Error::RedefinedFlag {
                         error_span: stmt.get_span(),
                         first_defined: *sp,
-                        flag_name: flag.name.clone(),
+                        flag_name: flag.name,
                     })
                 }
             },
@@ -360,7 +380,7 @@ fn set_flag_bool(flag: &mut Flag, stmt: &FlagStatement) -> Result<(), Error> {
                 FlagSetting::Default(_) | FlagSetting::Unset => {
                     *s = FlagSetting::Set(
                         FlagValue::Bool(match num {
-                            Number::Integer(i) => match i.parsed.parse::<u8>() {
+                            NumberLit::Integer(i) => match i.parsed.parse::<u8>() {
                                 Ok(0) => false,
                                 Ok(1) => true,
                                 _ => {
@@ -369,7 +389,7 @@ fn set_flag_bool(flag: &mut Flag, stmt: &FlagStatement) -> Result<(), Error> {
                                     })
                                 }
                             },
-                            Number::Float(_) => {
+                            NumberLit::Float(_) => {
                                 return Err(Error::BooleanExpected {
                                     error_span: stmt.get_span(),
                                 })
@@ -382,7 +402,7 @@ fn set_flag_bool(flag: &mut Flag, stmt: &FlagStatement) -> Result<(), Error> {
                     return Err(Error::RedefinedFlag {
                         error_span: stmt.get_span(),
                         first_defined: *sp,
-                        flag_name: flag.name.clone(),
+                        flag_name: flag.name,
                     })
                 }
             },

@@ -6,5 +6,5 @@ let A, B = Point();
 
 let C = mid(AB);
 
-# now interpret mid(AB, AB+1) as scalar:
+# now interpret mid(AB, AB+1) as number:
 AC = mid(AB, AB+1);

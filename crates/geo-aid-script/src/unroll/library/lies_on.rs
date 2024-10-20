@@ -23,7 +23,7 @@ fn pt_lies_on_circle(
 
     if inverted {
         context.push_rule(UnrolledRule {
-            kind: UnrolledRuleKind::ScalarEq(
+            kind: UnrolledRuleKind::NumberEq(
                 context.circle_radius(circle.clone_without_node()),
                 context.distance_pp(point, context.circle_center(circle)),
             ),
@@ -55,7 +55,7 @@ fn pt_lies_on_line(
 
     if inverted {
         context.push_rule(UnrolledRule {
-            kind: UnrolledRuleKind::ScalarEq(
+            kind: UnrolledRuleKind::NumberEq(
                 number!(=ProcNum::zero()),
                 context.distance_pl(point, line),
             ),
@@ -160,7 +160,7 @@ fn col_lies_on_line(
     if !inverted {
         for i in 1..(len - 1) {
             context.push_rule(UnrolledRule {
-                kind: UnrolledRuleKind::ScalarEq(
+                kind: UnrolledRuleKind::NumberEq(
                     context.add(
                         context.distance_pp(index!(no-node lhs, i - 1), index!(no-node lhs, i)),
                         context.distance_pp(index!(no-node lhs, i), index!(no-node lhs, i + 1)),
@@ -205,7 +205,7 @@ fn pt_lies_on_segment(
         context.push_rule(UnrolledRule {
             kind: UnrolledRuleKind::Alternative(vec![
                 UnrolledRule {
-                    kind: UnrolledRuleKind::ScalarEq(
+                    kind: UnrolledRuleKind::NumberEq(
                         number!(=ProcNum::zero()),
                         context.distance_pl(point.clone_without_node(), line),
                     ),
@@ -213,7 +213,7 @@ fn pt_lies_on_segment(
                     weight: ProcNum::one(),
                 },
                 UnrolledRule {
-                    kind: UnrolledRuleKind::ScalarEq(
+                    kind: UnrolledRuleKind::NumberEq(
                         context.add(
                             context.distance_pp(
                                 segment.a.clone_without_node(),
@@ -237,7 +237,7 @@ fn pt_lies_on_segment(
         context.point_on_line(&point, &line, weight.clone());
 
         context.push_rule(UnrolledRule {
-            kind: UnrolledRuleKind::ScalarEq(
+            kind: UnrolledRuleKind::NumberEq(
                 context.add(
                     context.distance_pp(segment.a.clone_without_node(), point.clone_without_node()),
                     context.distance_pp(segment.b.clone_without_node(), point),

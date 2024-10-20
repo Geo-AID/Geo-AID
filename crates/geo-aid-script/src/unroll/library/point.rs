@@ -1,6 +1,6 @@
 //! The `Point` function.
 
-use crate::unroll::{figure::Node, Scalar};
+use crate::unroll::{figure::Node, Number};
 
 use super::prelude::*;
 
@@ -19,9 +19,9 @@ pub fn register(library: &mut Library) {
                 .overload(|mut point: Expr<Point>, context: &CompileContext, props| {
                     let node = point.take_node().map(|n| Box::new(n) as Box<dyn Node>);
                     Distance::from(context.expr_with(
-                        Scalar {
+                        Number {
                             unit: Some(unit::DISTANCE),
-                            data: ScalarData::PointX(point),
+                            data: NumberData::PointX(point),
                         },
                         props,
                         node.into_iter().collect(),
@@ -35,13 +35,20 @@ pub fn register(library: &mut Library) {
                 .overload(|mut point: Expr<Point>, context: &CompileContext, props| {
                     let node = point.take_node().map(|n| Box::new(n) as Box<dyn Node>);
                     Distance::from(context.expr_with(
-                        Scalar {
+                        Number {
                             unit: Some(unit::DISTANCE),
-                            data: ScalarData::PointY(point),
+                            data: NumberData::PointY(point),
                         },
                         props,
                         node.into_iter().collect(),
                     ))
+                }),
+        )
+        .add(
+            Function::new("to_point")
+                .alias_method(ty::POINT, "to_point")
+                .overload(|number: Distance, context: &CompileContext, props| {
+                    context.to_point_display(number.0, props)
                 }),
         );
 }

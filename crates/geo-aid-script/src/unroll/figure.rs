@@ -11,8 +11,8 @@ use geo_aid_figure::Style;
 use std::{collections::HashMap, fmt::Debug, ops::Deref};
 
 use super::{
-    Circle, CloneWithNode, CompileContext, Derived, Displayed, Dummy, Expr, Line, Point,
-    PointCollection, Properties, Scalar, Unknown,
+    Circle, CloneWithNode, CompileContext, Derived, Displayed, Dummy, Expr, Line, Number, Point,
+    PointCollection, Properties, Unknown,
 };
 
 /// A node is a trait characterising objects meant to be parts of the figure's display tree.
@@ -541,7 +541,7 @@ pub enum AnyExprNode {
     Point(HierarchyNode<<Point as Displayed>::Node>),
     Line(HierarchyNode<<Line as Displayed>::Node>),
     Circle(HierarchyNode<<Circle as Displayed>::Node>),
-    Scalar(HierarchyNode<<Scalar as Displayed>::Node>),
+    Number(HierarchyNode<<Number as Displayed>::Node>),
     PointCollection(HierarchyNode<<PointCollection as Displayed>::Node>),
     Derived(HierarchyNode<<Derived as Displayed>::Node>),
     Unknown(HierarchyNode<<Unknown as Displayed>::Node>),
@@ -550,7 +550,7 @@ pub enum AnyExprNode {
 impl_from_for_any! {Point}
 impl_from_for_any! {Line}
 impl_from_for_any! {Circle}
-impl_from_for_any! {Scalar}
+impl_from_for_any! {Number}
 impl_from_for_any! {PointCollection}
 impl_from_for_any! {Derived}
 impl_from_for_any! {Unknown}
@@ -563,7 +563,7 @@ impl AnyExprNode {
             Self::Point(v) => Box::new(v),
             Self::Line(v) => Box::new(v),
             Self::Circle(v) => Box::new(v),
-            Self::Scalar(v) => Box::new(v),
+            Self::Number(v) => Box::new(v),
             Self::PointCollection(v) => Box::new(v),
             Self::Derived(v) => Box::new(v),
             Self::Unknown(v) => Box::new(v),
@@ -606,8 +606,8 @@ impl AnyExprNode {
     /// # Panics
     /// If the node is not a scalar node.
     #[must_use]
-    pub fn to_scalar(self) -> HierarchyNode<<Scalar as Displayed>::Node> {
-        if let Self::Scalar(v) = self {
+    pub fn to_scalar(self) -> HierarchyNode<<Number as Displayed>::Node> {
+        if let Self::Number(v) = self {
             v
         } else {
             panic!("not a scalar")
@@ -654,7 +654,7 @@ impl Node for AnyExprNode {
             Self::Point(v) => v.set_display(display),
             Self::Line(v) => v.set_display(display),
             Self::Circle(v) => v.set_display(display),
-            Self::Scalar(v) => v.set_display(display),
+            Self::Number(v) => v.set_display(display),
             Self::PointCollection(v) => v.set_display(display),
             Self::Derived(v) => v.set_display(display),
             Self::Unknown(v) => v.set_display(display),
@@ -666,7 +666,7 @@ impl Node for AnyExprNode {
             Self::Point(v) => v.get_display(),
             Self::Line(v) => v.get_display(),
             Self::Circle(v) => v.get_display(),
-            Self::Scalar(v) => v.get_display(),
+            Self::Number(v) => v.get_display(),
             Self::PointCollection(v) => v.get_display(),
             Self::Derived(v) => v.get_display(),
             Self::Unknown(v) => v.get_display(),
@@ -678,7 +678,7 @@ impl Node for AnyExprNode {
             Self::Point(v) => v.build_unboxed(build),
             Self::Line(v) => v.build_unboxed(build),
             Self::Circle(v) => v.build_unboxed(build),
-            Self::Scalar(v) => v.build_unboxed(build),
+            Self::Number(v) => v.build_unboxed(build),
             Self::PointCollection(v) => v.build_unboxed(build),
             Self::Derived(v) => v.build_unboxed(build),
             Self::Unknown(v) => v.build_unboxed(build),
@@ -1092,14 +1092,14 @@ impl FromExpr<Line> for LineNode {
 
 /// A node for a scalar.
 #[derive(Debug)]
-pub struct ScalarNode {
+pub struct NumberNode {
     /// Whether to display the node
     pub display: MaybeUnset<bool>,
     /// Defining expression
-    pub expr: Expr<Scalar>,
+    pub expr: Expr<Number>,
 }
 
-impl Dummy for ScalarNode {
+impl Dummy for NumberNode {
     fn dummy() -> Self {
         Self {
             display: MaybeUnset::new(true),
@@ -1112,7 +1112,7 @@ impl Dummy for ScalarNode {
     }
 }
 
-impl Node for ScalarNode {
+impl Node for NumberNode {
     fn set_display(&mut self, display: bool) {
         self.display.set(display);
     }
@@ -1124,8 +1124,8 @@ impl Node for ScalarNode {
     fn build(self: Box<Self>, _build: &mut Build) {}
 }
 
-impl FromExpr<Scalar> for ScalarNode {
-    fn from_expr(expr: &Expr<Scalar>, mut props: Properties, context: &CompileContext) -> Self {
+impl FromExpr<Number> for NumberNode {
+    fn from_expr(expr: &Expr<Number>, mut props: Properties, context: &CompileContext) -> Self {
         props.ignore("label");
         props.ignore("display_label");
         props.ignore("default-label");

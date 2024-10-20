@@ -19,7 +19,7 @@ use super::{
     token::{
         number::CompExponent, Ampersant, Asterisk, At, Caret, Colon, Comma, Dollar, Dot, Eq,
         Exclamation, Gt, Gteq, Ident, LBrace, LParen, LSquare, Let, Lt, Lteq, Minus, NamedIdent,
-        Number, Plus, Question, RBrace, RParen, RSquare, Semi, Slash, Span, StrLit, TokInteger,
+        NumberLit, Plus, Question, RBrace, RParen, RSquare, Semi, Slash, Span, StrLit, TokInteger,
         Token,
     },
     unit, ComplexUnit, Error,
@@ -550,7 +550,7 @@ pub enum SimpleExpressionKind {
     /// A named (variable, field or function call)
     Name(Name),
     /// A raw number
-    Number(Number),
+    Number(NumberLit),
     /// An explicit iterator.
     ExplicitIterator(ExplicitIterator),
     /// A point collection construction
@@ -689,7 +689,7 @@ pub struct FlagSet {
 pub enum FlagValue {
     Ident(NamedIdent),
     Set(FlagSet),
-    Number(Number),
+    Number(NumberLit),
 }
 
 /// Defines a compiler flag or flagset.
@@ -837,13 +837,13 @@ impl<T: Parse, P: Parse> Punctuated<T, P> {
 }
 
 impl Parse for TokInteger {
-    type FirstToken = Number;
+    type FirstToken = NumberLit;
 
     fn parse<'r, I: Iterator<Item = &'r Token> + Clone>(
         input: &mut InputStream<'r, I>,
     ) -> Result<Self, Error> {
         match input.get_token()? {
-            Token::Number(Number::Integer(tok)) => Ok(tok.clone()),
+            Token::NumberLit(NumberLit::Integer(tok)) => Ok(tok.clone()),
             t => Err(Error::InvalidToken { token: t.clone() }),
         }
     }
@@ -891,8 +891,8 @@ pub enum Type {
     Point,
     /// A line
     Line,
-    /// A scalar of a certain unit.
-    Scalar(Option<ComplexUnit>),
+    /// A number with a certain unit.
+    Number(Option<ComplexUnit>),
     /// A point collection.
     PointCollection(usize),
     /// A circle
@@ -905,8 +905,8 @@ pub enum Type {
 
 impl Type {
     #[must_use]
-    pub fn as_scalar(&self) -> Option<&Option<ComplexUnit>> {
-        if let Self::Scalar(v) = self {
+    pub fn as_number(&self) -> Option<&Option<ComplexUnit>> {
+        if let Self::Number(v) = self {
             Some(v)
         } else {
             None
@@ -925,9 +925,9 @@ impl Display for Type {
         match self {
             Self::Point => write!(f, "Point"),
             Self::Line => write!(f, "Line"),
-            Self::Scalar(unit) => match unit {
-                Some(unit) => write!(f, "Scalar ({unit})"),
-                None => write!(f, "Scalar (no unit)"),
+            Self::Number(unit) => match unit {
+                Some(unit) => write!(f, "Number ({unit})"),
+                None => write!(f, "Number (no unit)"),
             },
             Self::PointCollection(l) => write!(f, "Point collection ({l})"),
             Self::Circle => write!(f, "Circle"),
@@ -946,17 +946,17 @@ impl Type {
             Type::Point => matches!(into, Type::Point | Type::PointCollection(1)),
             // A line can only be cast into another line.
             Type::Line => matches!(into, Type::Line),
-            // A scalar with a defined unit can only be cast into another scalar with the same unit.
-            Type::Scalar(Some(unit1)) => {
-                if let Type::Scalar(Some(unit2)) = into {
+            // A number with a defined unit can only be cast into another number with the same unit.
+            Type::Number(Some(unit1)) => {
+                if let Type::Number(Some(unit2)) = into {
                     unit1 == unit2
                 } else {
                     false
                 }
             }
-            // A scalar with no defined unit can be cast into any other scalar, except angle.
-            Type::Scalar(None) => match into {
-                Type::Scalar(unit) => match unit {
+            // A number with no defined unit can be cast into any other number, except angle.
+            Type::Number(None) => match into {
+                Type::Number(unit) => match unit {
                     Some(unit) => unit.0[1].is_zero(), // no angle
                     None => true,
                 },
@@ -965,7 +965,7 @@ impl Type {
             Type::PointCollection(l) => match into {
                 Type::Point => *l == 1,
                 Type::Line => *l == 2,
-                Type::Scalar(Some(u)) => *u == unit::DISTANCE && *l == 2,
+                Type::Number(Some(u)) => *u == unit::DISTANCE && *l == 2,
                 Type::PointCollection(v) => v == l || *v == 0,
                 _ => false,
             },
@@ -998,7 +998,7 @@ pub struct Property {
 /// A property's value
 #[derive(Debug, Clone, Parse)]
 pub enum PropertyValue {
-    Number(Number),
+    Number(NumberLit),
     Ident(Ident),
     RawString(RawString),
     String(StrLit),
@@ -1054,12 +1054,12 @@ impl FromProperty for bool {
                 }),
             },
             PropertyValue::Number(num) => match num {
-                Number::Integer(i) => match i.parsed.parse::<u8>() {
+                NumberLit::Integer(i) => match i.parsed.parse::<u8>() {
                     Ok(0) => Ok(false),
                     Ok(1) => Ok(true),
                     _ => Err(Error::BooleanExpected { error_span: i.span }),
                 },
-                Number::Float(f) => Err(Error::BooleanExpected { error_span: f.span }),
+                NumberLit::Float(f) => Err(Error::BooleanExpected { error_span: f.span }),
             },
             PropertyValue::String(s) => match s.content.as_str() {
                 "enabled" | "on" | "true" | "yes" => Ok(true),

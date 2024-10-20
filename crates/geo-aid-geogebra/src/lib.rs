@@ -198,6 +198,11 @@ impl<'f> Geogebra<'f> {
                 let circle = self.variables[circle.0].as_circle().unwrap();
                 self.workspace.var(circle.center()).into()
             }
+            ExpressionKind::ComplexToPoint { number: _ } => {
+                // let number = self.variables[number.0].as_number().unwrap();
+                todo!()
+                // self.workspace.var(number.point()).into()
+            }
             ExpressionKind::Sum { plus, minus } => {
                 let plus: List<Numeric> = plus
                     .iter()
@@ -293,6 +298,18 @@ impl<'f> Geogebra<'f> {
             ExpressionKind::PointY { point } => {
                 let point = self.variables[point.0].as_point().unwrap();
                 self.workspace.var(point.y()).into()
+            }
+            ExpressionKind::PointToComplex { point } => {
+                let point = self.variables[point.0].as_point().unwrap();
+                self.workspace.var(point.complex()).into()
+            }
+            ExpressionKind::Real { number } => {
+                let number = self.variables[number.0].as_number().unwrap();
+                self.workspace.var(number.real()).into()
+            }
+            ExpressionKind::Imaginary { number } => {
+                let number = self.variables[number.0].as_number().unwrap();
+                self.workspace.var(number.imaginary()).into()
             }
             ExpressionKind::PointPoint { p, q } => {
                 let p = self.variables[p.0].as_point().unwrap();
