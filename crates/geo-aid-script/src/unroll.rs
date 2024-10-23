@@ -3366,7 +3366,7 @@ fn create_variables(
     stat: &LetStatement,
     context: &mut CompileContext,
     library: &Library,
-    external: Option<DisplayProperties>
+    external: Option<DisplayProperties>,
 ) -> Result<Vec<Box<dyn Node>>, Error> {
     let mut variable_nodes = Vec::new();
 
@@ -3480,7 +3480,10 @@ fn unroll_ref(
         let mut display = Properties::from(stat.properties.clone());
         let weight = display.get("weight").get_or(ProcNum::zero());
 
-        let mut expr = stat.statement.operand.unroll(context, library, it_index, display);
+        let mut expr = stat
+            .statement
+            .operand
+            .unroll(context, library, it_index, display);
 
         if let AnyExpr::PointCollection(pc) = &mut expr {
             if let Some(node) = pc.node.take() {
@@ -3520,7 +3523,7 @@ fn unroll_let(
 ) -> Result<Vec<Box<dyn Node>>, Error> {
     let parser::Displayed {
         properties,
-        statement: mut stat
+        statement: mut stat,
     } = stat;
 
     // First, we construct an iterator out of lhs
@@ -3814,12 +3817,17 @@ fn unroll_rule_statement(
     let mut nodes = Vec::new();
     let parser::Displayed {
         properties,
-        statement: rule
+        statement: rule,
     } = rule;
 
-    let firsts = Some(&rule.first).into_iter().chain(rule.rules.iter().map(|v| &v.1));
+    let firsts = Some(&rule.first)
+        .into_iter()
+        .chain(rule.rules.iter().map(|v| &v.1));
 
-    for (lhs, op, rhs) in firsts.zip(rule.rules.iter()).map(|(lhs, (op, rhs))| (lhs, op, rhs)) {
+    for (lhs, op, rhs) in firsts
+        .zip(rule.rules.iter())
+        .map(|(lhs, (op, rhs))| (lhs, op, rhs))
+    {
         let tree = IterNode::from2(lhs, rhs);
         let full_span = lhs.get_span().join(rhs.get_span());
         tree.get_iter_lengths(&mut HashMap::new(), full_span)?;
@@ -3829,11 +3837,9 @@ fn unroll_rule_statement(
         while let Some(index) = it_index.get_currents() {
             nodes.push(unroll_rule(
                 (
-                    lhs
-                        .unroll(context, library, index, Properties::default()),
+                    lhs.unroll(context, library, index, Properties::default()),
                     op,
-                    rhs
-                        .unroll(context, library, index, Properties::default()),
+                    rhs.unroll(context, library, index, Properties::default()),
                 ),
                 context,
                 library,
@@ -3844,7 +3850,7 @@ fn unroll_rule_statement(
 
             it_index.next();
         }
-    } 
+    }
 
     Ok(nodes)
 }

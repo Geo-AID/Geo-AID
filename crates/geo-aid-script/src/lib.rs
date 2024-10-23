@@ -34,7 +34,7 @@ pub enum Error {
     /// Properties exncountered where not expected
     UnexpectedProperties {
         /// Where they were encountered.
-        error_span: Span
+        error_span: Span,
     },
     /// Invalid (unsupported) character in the figure script.
     InvalidCharacter {

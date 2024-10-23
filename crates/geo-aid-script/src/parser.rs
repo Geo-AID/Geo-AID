@@ -813,51 +813,56 @@ pub enum Statement {
 }
 
 impl Parse for Statement {
-    type FirstToken = TokenOr<LSquare, TokenOr<Semi, TokenOr<At, TokenOr<Question, TokenOr<Let, <SimpleExpression as Parse>::FirstToken>>>>>;
+    type FirstToken = TokenOr<
+        LSquare,
+        TokenOr<
+            Semi,
+            TokenOr<At, TokenOr<Question, TokenOr<Let, <SimpleExpression as Parse>::FirstToken>>>,
+        >,
+    >;
 
     fn parse<'t, I: Iterator<Item = &'t Token> + Clone>(
         input: &mut InputStream<'t, I>,
     ) -> Result<Self, Error>
     where
-        Self: Sized {
+        Self: Sized,
+    {
         let props = input.parse()?;
         input.expect_token()?;
 
         let tok = input.it.peek().cloned().unwrap();
 
         match tok {
-            Token::Let(_) => {
-                Ok(Self::Let(Displayed {
-                    properties: props,
-                    statement: input.parse()?
-                }))
-            }
+            Token::Let(_) => Ok(Self::Let(Displayed {
+                properties: props,
+                statement: input.parse()?,
+            })),
             Token::Semi(_) => {
                 if props.is_some() {
-                    Err(Error::UnexpectedProperties { error_span: props.get_span() })
+                    Err(Error::UnexpectedProperties {
+                        error_span: props.get_span(),
+                    })
                 } else {
                     Ok(Self::Noop(input.parse()?))
                 }
             }
             Token::At(_) => {
                 if props.is_some() {
-                    Err(Error::UnexpectedProperties { error_span: props.get_span() })
+                    Err(Error::UnexpectedProperties {
+                        error_span: props.get_span(),
+                    })
                 } else {
                     Ok(Self::Flag(input.parse()?))
                 }
             }
-            Token::Question(_) => {
-                Ok(Self::Ref(Displayed {
-                    properties: props,
-                    statement: input.parse()?
-                }))
-            }
-            _ => {
-                Ok(Self::Rule(Displayed {
-                    properties: props,
-                    statement: input.parse()?
-                }))
-            }
+            Token::Question(_) => Ok(Self::Ref(Displayed {
+                properties: props,
+                statement: input.parse()?,
+            })),
+            _ => Ok(Self::Rule(Displayed {
+                properties: props,
+                statement: input.parse()?,
+            })),
         }
     }
 
@@ -883,7 +888,7 @@ pub struct Displayed<T: Parse> {
     /// The properties
     pub properties: Option<DisplayProperties>,
     /// The statement itself
-    pub statement: T
+    pub statement: T,
 }
 
 /// A utility struct for collections of parsed items with punctuators between them.
