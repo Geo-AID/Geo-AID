@@ -477,6 +477,10 @@ pub enum ExprKind {
     Sin { angle: VarIndex },
     /// Cosine of an angle
     Cos { angle: VarIndex },
+    /// Arcsine function
+    Asin { value: VarIndex },
+    /// Arccosine function
+    Acos { value: VarIndex },
 
     // Line
     /// A line through two points.
@@ -527,7 +531,9 @@ impl ExprKind {
             Self::Real { .. } => 22,
             Self::Imaginary { .. } => 23,
             Self::Sin { .. } => 24,
-            Self::Cos { .. } => 25
+            Self::Cos { .. } => 25,
+            Self::Asin { .. } => 26,
+            Self::Acos { .. } => 27,
         }
     }
 
@@ -732,6 +738,8 @@ impl ExprKind {
             | Self::TwoLineAngle { .. }
             | Self::Sin { .. }
             | Self::Cos { .. }
+            | Self::Asin { .. }
+            | Self::Acos { .. }
             | Self::PointX { .. }
             | Self::PointY { .. }
             | Self::Real { .. }
@@ -772,6 +780,8 @@ impl From<ExprKind> for geo_aid_figure::ExpressionKind {
             ExprKind::TwoLineAngle { k, l } => Self::TwoLineAngle { k, l },
             ExprKind::Sin { angle } => Self::Sin { angle },
             ExprKind::Cos { angle } => Self::Cos { angle },
+            ExprKind::Asin { value } => Self::Asin { value },
+            ExprKind::Acos { value } => Self::Acos { value },
             ExprKind::PointX { point } => Self::PointX { point },
             ExprKind::PointY { point } => Self::PointY { point },
             ExprKind::PointToComplex { point } => Self::PointToComplex { point },
@@ -811,6 +821,8 @@ impl FindEntities for ExprKind {
             | Self::PointY { point: x }
             | Self::Sin { angle: x}
             | Self::Cos { angle: x}
+            | Self::Asin { value: x}
+            | Self::Acos { value: x}
             | Self::Exponentiation { value: x, .. }
             | Self::PointToComplex { point: x }
             | Self::ComplexToPoint { number: x }
@@ -971,10 +983,10 @@ impl FromUnrolled<unroll::Number> for ExprKind {
             UnrolledNumber::PointY(point) => ExprKind::PointY {
                 point: math.load(point),
             },
-            UnrolledScalar::Sin(angle) => ExprKind::Sin {
+            UnrolledNumber::Sin(angle) => ExprKind::Sin {
                 angle: math.load(angle)
             },
-            UnrolledScalar::Cos(angle) => ExprKind::Cos {
+            UnrolledNumber::Cos(angle) => ExprKind::Cos {
                 angle: math.load(angle)
             },
             UnrolledNumber::FromPoint(point) => ExprKind::PointToComplex {
@@ -1080,6 +1092,8 @@ impl Normalize for ExprKind {
             | Self::PointY { .. }
             | Self::Sin { .. }
             | Self::Cos { .. }
+            | Self::Asin { .. }
+            | Self::Acos { .. }
             | Self::Exponentiation { .. }
             | Self::ConstructCircle { .. }
             | Self::Const { .. }

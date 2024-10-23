@@ -494,6 +494,14 @@ impl<'r> Compiler<'r> {
                 // There's currently no way to obtain complex angles, so we don't need to worry about them.
                 ComplexExpr::real(self.context.cos(angle.real)).into()
             }
+            ExprKind::Asin { value } => {
+                let value = self.variables[value.0].to_complex();
+                ComplexExpr::real(self.context.asin(value.real)).into()
+            }
+            ExprKind::Acos { value } => {
+                let value = self.variables[value.0].to_complex();
+                ComplexExpr::real(self.context.acos(value.real)).into()
+            }
             ExprKind::PointPoint { p, q } => {
                 let p = self.variables[p.0].to_complex();
                 let q = self.variables[q.0].to_complex();

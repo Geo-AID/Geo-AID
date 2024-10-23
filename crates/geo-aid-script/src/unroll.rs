@@ -1174,9 +1174,9 @@ pub enum NumberData {
     /// Imaginary part of a number
     Imaginary(Expr<Number>),
     /// Sine
-    Sin(Expr<Scalar>),
+    Sin(Expr<Number>),
     /// Cosine
-    Cos(Expr<Scalar>)
+    Cos(Expr<Number>)
 }
 
 impl Display for NumberData {
@@ -1388,8 +1388,8 @@ impl Expr<Number> {
                         | NumberData::CircleRadius(_)
                         | NumberData::PointX(_)
                         | NumberData::PointY(_)
-                        | ScalarData::Sin(_)
-                        | ScalarData::Cos(_)
+                        | NumberData::Sin(_)
+                        | NumberData::Cos(_)
                         | NumberData::FromPoint(_)
                         | NumberData::SetUnit(_, _) => unreachable!(), // Always concrete
                         NumberData::Negate(v) => {

@@ -346,6 +346,16 @@ pub enum ExpressionKind {
         /// The angle to take cosine of
         angle: VarIndex
     },
+    /// Arcsine function
+    Asin {
+        /// The value to take arcsine of.
+        value: VarIndex,
+    },
+    /// Arccosine function
+    Acos {
+        /// The value to take arccosine of
+        value: VarIndex
+    },
     /// Line `pq`
     PointPoint {
         /// Point 1

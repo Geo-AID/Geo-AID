@@ -413,6 +413,24 @@
               },
               {
                 "type": "object",
+                "description": "Arcsine function",
+                "properties": {
+                  "type": { "const": "asin" },
+                  "angle": { "$ref": "#/$defs/index" }
+                },
+                "required": ["type", "value"]
+              },
+              {
+                "type": "object",
+                "description": "Arccosine function",
+                "properties": {
+                  "type": { "const": "acos" },
+                  "angle": { "$ref": "#/$defs/index" }
+                },
+                "required": ["type", "value"]
+              },
+              {
+                "type": "object",
                 "description": "Line `pq`",
                 "properties": {
                   "type": {
