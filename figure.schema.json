@@ -395,6 +395,24 @@
               },
               {
                 "type": "object",
+                "description": "Sine of an angle",
+                "properties": {
+                  "type": { "const": "sin" },
+                  "angle": { "$ref": "#/$defs/index" }
+                },
+                "required": ["type", "angle"]
+              },
+              {
+                "type": "object",
+                "description": "Cosine of an angle",
+                "properties": {
+                  "type": { "const": "cos" },
+                  "angle": { "$ref": "#/$defs/index" }
+                },
+                "required": ["type", "angle"]
+              },
+              {
+                "type": "object",
                 "description": "Line `pq`",
                 "properties": {
                   "type": {

@@ -1173,6 +1173,10 @@ pub enum NumberData {
     Real(Expr<Number>),
     /// Imaginary part of a number
     Imaginary(Expr<Number>),
+    /// Sine
+    Sin(Expr<Scalar>),
+    /// Cosine
+    Cos(Expr<Scalar>)
 }
 
 impl Display for NumberData {
@@ -1217,6 +1221,8 @@ impl Display for NumberData {
             Self::FromPoint(point) => write!(f, "to_complex({point})"),
             Self::Real(number) => write!(f, "Re({number})"),
             Self::Imaginary(number) => write!(f, "Im({number})"),
+            Self::Sin(v) => write!(f, "sin({v})"),
+            Self::Cos(v) => write!(f, "cos({v})"),
         }
     }
 }
@@ -1382,6 +1388,8 @@ impl Expr<Number> {
                         | NumberData::CircleRadius(_)
                         | NumberData::PointX(_)
                         | NumberData::PointY(_)
+                        | ScalarData::Sin(_)
+                        | ScalarData::Cos(_)
                         | NumberData::FromPoint(_)
                         | NumberData::SetUnit(_, _) => unreachable!(), // Always concrete
                         NumberData::Negate(v) => {

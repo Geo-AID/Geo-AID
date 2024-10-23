@@ -311,6 +311,14 @@ impl<'f> Geogebra<'f> {
                 let number = self.variables[number.0].as_number().unwrap();
                 self.workspace.var(number.imaginary()).into()
             }
+            ExpressionKind::Sin { angle } => {
+                let angle = self.variables[angle.0].as_point().unwrap();
+                self.workspace.var(angle.sin()).into()
+            }
+            ExpressionKind::Cos { angle } => {
+                let angle = self.variables[angle.0].as_point().unwrap();
+                self.workspace.var(angle.cos()).into()
+            }
             ExpressionKind::PointPoint { p, q } => {
                 let p = self.variables[p.0].as_point().unwrap();
                 let q = self.variables[q.0].as_point().unwrap();

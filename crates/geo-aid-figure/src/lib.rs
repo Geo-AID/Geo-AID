@@ -336,6 +336,16 @@ pub enum ExpressionKind {
         /// The number to query.
         number: VarIndex,
     },
+    /// Sine of an angle
+    Sin {
+        /// The angle to take sine of.
+        angle: VarIndex,
+    },
+    /// Cosine of an angle
+    Cos {
+        /// The angle to take cosine of
+        angle: VarIndex
+    },
     /// Line `pq`
     PointPoint {
         /// Point 1

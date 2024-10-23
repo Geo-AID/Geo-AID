@@ -484,6 +484,16 @@ impl<'r> Compiler<'r> {
             ExprKind::Imaginary { number } => {
                 ComplexExpr::real(self.variables[number.0].to_complex().imaginary).into()
             }
+            ExprKind::Sin { angle } => {
+                let angle = self.variables[angle.0].to_complex();
+                // There's currently no way to obtain complex angles, so we don't need to worry about them.
+                ComplexExpr::real(self.context.sin(angle.real)).into()
+            }
+            ExprKind::Cos { angle } => {
+                let angle = self.variables[angle.0].to_complex();
+                // There's currently no way to obtain complex angles, so we don't need to worry about them.
+                ComplexExpr::real(self.context.cos(angle.real)).into()
+            }
             ExprKind::PointPoint { p, q } => {
                 let p = self.variables[p.0].to_complex();
                 let q = self.variables[q.0].to_complex();
