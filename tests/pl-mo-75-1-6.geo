@@ -12,6 +12,8 @@ let M = mid(A, C);
 let amo_center = intersection(bisector(AM), bisector(MO)) [display=false];
 let amo = Circle(amo_center, dst(amo_center, A) [display = false]);
 
-let X = Point() lies_on Segment(BM) lies_on amo != M;
+let X = Point() on Segment(BM);
+
+M != X on amo;
 
 ?Circle(O, OA [display=false]);

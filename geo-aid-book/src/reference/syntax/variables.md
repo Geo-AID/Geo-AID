@@ -2,7 +2,7 @@
 
 > <sup>**Syntax**</sup>\
 > *LetStatement* :\
-> &nbsp;&nbsp; `let` *VariableDefinition* (`,` *VariableDefinition*)<sup>\*</sup> `=` *[Expression&lt;true&gt;](expressions.md)* (*[RuleOp](rules.md)* *[Expression&lt;true&gt;](expressions.md)*)<sup>\*</sup> `;`\
+> &nbsp;&nbsp; `let` *VariableDefinition* (`,` *VariableDefinition*)<sup>\*</sup> `=` *[Expression&lt;true&gt;](expressions.md)* (*[RuleOp](rules.md)* *[Expression&lt;true&gt;](expressions.md)*)<sup>?</sup> `;`\
 > \
 > *VariableDefinition* :\
 > &nbsp;&nbsp; [IDENT](identifiers.md) *[Properties](properties.md)*<sup>?</sup>
@@ -13,4 +13,4 @@ The rhs expression of the statement can either become the variable's definition 
 
 After each variable name there can be given properties that are later applied to the defining expression(s).
 
-The let statement accepts rules after its right hand side. They behave as if the lhs was a sequence of variable accesses in a 0-id iterator.
+The let statement also accepts a single rule after its right hand side. It behaves as if the lhs was a sequence of variable accesses in a 0-id iterator.
