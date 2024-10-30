@@ -37,6 +37,7 @@ pub mod perpendicular;
 pub mod point;
 pub mod radians;
 pub mod segment;
+pub mod transform;
 pub mod trigonometry;
 
 /// A prelude for builtin functions.
