@@ -3,6 +3,30 @@
 Here are listed all of GeoScript's functions. Note that, the names are case-insensitive.
 Overloads are listed in the order they are checked.
 
+## `acos`
+
+* `acos(v: Number (no unit))`
+
+**Return type**: [Number (angle)](.types.md#number)
+
+**Returns**: Arccosine of this value.
+
+## `acot` (alias `actg`)
+
+* `acot(v: Number (no unit))`
+
+**Return type**: [Number (angle)](.types.md#number)
+
+**Returns**: Arccotangent of this value.
+
+## `acsc`
+
+* `acsc(v: Number (no unit))`
+
+**Return type**: [Number (angle)](.types.md#number)
+
+**Returns**: Arccosecant of this value.
+
 ## `angle`
 
 * `angle(ABC: 3-P)`
@@ -30,6 +54,30 @@ struct Angle {
 **Return type**: [Number (angle)](./types.md#number)
 
 **Returns**: measurement of the angle between `k` and `l`. Which angle, depends on the order of the lines. For predictable outcome, the point versions are strongly recommended.
+
+## `asec`
+
+* `asec(v: Number (no unit))`
+
+**Return type**: [Number (angle)](.types.md#number)
+
+**Returns**: Arcsecant of this value.
+
+## `asin`
+
+* `asin(v: Number (no unit))`
+
+**Return type**: [Number (angle)](.types.md#number)
+
+**Returns**: Arcsine of this value.
+
+## `atan` (alias `atg`)
+
+* `atan(v: Number (no unit))`
+
+**Return type**: [Number (angle)](.types.md#number)
+
+**Returns**: Arctangent of this value.
 
 ## `bisector`
 
@@ -99,6 +147,30 @@ struct Bisector {
 **Return type**: [Number (the same unit)](#./types.md#Number)
 
 **Returns**: The conjugate of this number.
+
+## `cos`
+
+* `cos(v: Number (angle))`
+
+**Return type**: [Number (no unit)](.types.md#number)
+
+**Returns**: Cosine of this angle.
+
+## `cot` (alias `ctg`)
+
+* `cot(v: Number (angle))`
+
+**Return type**: [Number (no unit)](.types.md#number)
+
+**Returns**: Cotangent of this angle.
+
+## `csc`
+
+* `csc(v: Number (angle))`
+
+**Return type**: [Number (no unit)](.types.md#number)
+
+**Returns**: Cosecant of this angle.
 
 ## `degrees` (alias `deg`)
 
@@ -293,6 +365,20 @@ All overloads by default don't display the point dot. This can be changed with p
 
 **Returns**: The real part of this number.
 
+* `real()`
+
+**Return type**: [Number (no unit)](.types.md#number)
+
+**Returns**: A free, adjustable real number.
+
+## `sec`
+
+* `sec(v: Number (angle))`
+
+**Return type**: [Number (no unit)](.types.md#number)
+
+**Returns**: Secant of this angle.
+
 ## `segment`
 
 * `segment(AB: 2-P)`
@@ -314,6 +400,22 @@ struct Segment {
 ```
 
 `display_segment` decides whether the segment should be displayed and `style` decides how it should be displayed.
+
+## `sin`
+
+* `sin(v: Number (angle))`
+
+**Return type**: [Number (no unit)](.types.md#number)
+
+**Returns**: Sine of this angle.
+
+## `tan` (alias `tg`)
+
+* `tan(v: Number (angle))`
+
+**Return type**: [Number (no unit)](.types.md#number)
+
+**Returns**: Tangent of this angle.
 
 ## `to_complex`
 

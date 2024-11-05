@@ -47,7 +47,7 @@ impl Rage {
             ..
         } = super::compiler::compile(intermediate);
 
-        let error_fn = context.compute(errors.iter().copied());
+        let error_fn = context.exec(|ctx| ctx.compute(errors.iter().map(|v| v.expr)));
         let adjustables: Vec<_> = intermediate
             .adjusted
             .entities

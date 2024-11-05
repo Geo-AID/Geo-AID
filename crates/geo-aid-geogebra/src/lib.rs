@@ -198,10 +198,9 @@ impl<'f> Geogebra<'f> {
                 let circle = self.variables[circle.0].as_circle().unwrap();
                 self.workspace.var(circle.center()).into()
             }
-            ExpressionKind::ComplexToPoint { number: _ } => {
-                // let number = self.variables[number.0].as_number().unwrap();
-                todo!()
-                // self.workspace.var(number.point()).into()
+            ExpressionKind::ComplexToPoint { number } => {
+                let number = self.variables[number.0].as_number().unwrap();
+                self.workspace.var(number.point()).into()
             }
             ExpressionKind::Sum { plus, minus } => {
                 let plus: List<Numeric> = plus
@@ -311,13 +310,38 @@ impl<'f> Geogebra<'f> {
                 let number = self.variables[number.0].as_number().unwrap();
                 self.workspace.var(number.imaginary()).into()
             }
+            ExpressionKind::Log { number } => {
+                let number = self.variables[number.0].as_number().unwrap();
+                self.workspace.var(number.ln()).into()
+            }
+            ExpressionKind::Exp { number } => {
+                let number = self.variables[number.0].as_number().unwrap();
+                self.workspace.var(number.exp()).into()
+            }
             ExpressionKind::Sin { angle } => {
-                let angle = self.variables[angle.0].as_point().unwrap();
+                let angle = self.variables[angle.0].as_number().unwrap();
                 self.workspace.var(angle.sin()).into()
             }
             ExpressionKind::Cos { angle } => {
-                let angle = self.variables[angle.0].as_point().unwrap();
+                let angle = self.variables[angle.0].as_number().unwrap();
                 self.workspace.var(angle.cos()).into()
+            }
+            ExpressionKind::Asin { value } => {
+                let value = self.variables[value.0].as_number().unwrap();
+                self.workspace.var(value.asin()).into()
+            }
+            ExpressionKind::Acos { value } => {
+                let value = self.variables[value.0].as_number().unwrap();
+                self.workspace.var(value.acos()).into()
+            }
+            ExpressionKind::Atan { value } => {
+                let value = self.variables[value.0].as_number().unwrap();
+                self.workspace.var(value.atan()).into()
+            }
+            ExpressionKind::Atan2 { y, x } => {
+                let y = self.variables[y.0].as_number().unwrap();
+                let x = self.variables[x.0].as_number().unwrap();
+                self.workspace.var(Numeric::atan2(y, x)).into()
             }
             ExpressionKind::PointPoint { p, q } => {
                 let p = self.variables[p.0].as_point().unwrap();

@@ -178,7 +178,7 @@ impl EqPointDst {
     }
 }
 
-/// If angle ABC is a right angle,
+/// If angle ABC is a right angle, possibly place B on a circle.
 pub struct RightAngle;
 
 impl RightAngle {
@@ -192,10 +192,10 @@ impl RightAngle {
             return false;
         };
 
-        let ExprKind::ThreePointAngle { p, q, r } = &math.at(a).kind else {
+        let ExprKind::Const { value } = &math.at(a).kind else {
             return false;
         };
-        let ExprKind::Const { value } = &math.at(b).kind else {
+        let ExprKind::ThreePointAngle { p, q, r } = &math.at(b).kind else {
             return false;
         };
 

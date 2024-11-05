@@ -19,11 +19,65 @@ treated as given in radians or degrees. Instead, look for their respective funct
 
 *Methods*
 
+* `acos()` for no unit
+
+**Return type**: [Number (angle)](#number)
+
+**Returns**: Arccosine of this number.
+
+* `acot()` (alias `actg`) for no unit
+
+**Return type**: [Number (angle)](#number)
+
+**Returns**: Arccotangent of this number.
+
+* `acsc()` for no unit
+
+**Return type**: [Number (angle)](#number)
+
+**Returns**: Arccosecant of this number.
+
+* `asec()` for no unit
+
+**Return type**: [Number (angle)](#number)
+
+**Returns**: Arcsecant of this number.
+
+* `asin()` for no unit
+
+**Return type**: [Number (angle)](#number)
+
+**Returns**: Arcsine of this number.
+
+* `atan()` (alias `atg`) for no unit
+
+**Return type**: [Number (angle)](#number)
+
+**Returns**: Arctangent of this number.
+
 * `conjugate()` for any unit
 
 **Return type**: [Number (same unit)](#number)
 
 **Returns**: the conjugate of this number.
+
+* `cos()` for angle
+
+**Return type**: [Number (no unit)](#number)
+
+**Returns**: Cosine of this angle.
+
+* `cot()` (alias `ctg`) for angle
+
+**Return type**: [Number (no unit)](#number)
+
+**Returns**: Cotangent of this angle.
+
+* `csc()` for angle
+
+**Return type**: [Number (no unit)](#number)
+
+**Returns**: Cossecant of this angle.
 
 * `degrees()` (alias `deg`) if the number is unitless.
 
@@ -60,6 +114,24 @@ treated as given in radians or degrees. Instead, look for their respective funct
 **Return type**: [Number (same unit)](#number)
 
 **Returns**: The real part of this number.
+
+* `sec()` for angle
+
+**Return type**: [Number (no unit)](#number)
+
+**Returns**: Secant of this angle.
+
+* `sin()` for angle
+
+**Return type**: [Number (no unit)](#number)
+
+**Returns**: Sine of this angle.
+
+* `tan()` (alias `tg`) for angle
+
+**Return type**: [Number (no unit)](#number)
+
+**Returns**: Tangent of this angle.
 
 * `to_point()` for distances
 

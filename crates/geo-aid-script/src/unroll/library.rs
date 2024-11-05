@@ -37,6 +37,7 @@ pub mod perpendicular;
 pub mod point;
 pub mod radians;
 pub mod segment;
+pub mod trigonometry;
 
 /// A prelude for builtin functions.
 pub mod prelude {
@@ -454,6 +455,7 @@ impl Library {
         };
 
         complex::register(&mut library);
+        trigonometry::register(&mut library);
         point::register(&mut library); // Point()
         dst::register(&mut library); // dst()
         angle::register(&mut library); // angle()
@@ -718,7 +720,7 @@ pub mod macros {
     /// Create a constant number expression
     macro_rules! number {
         ($v:expr) => {
-            $crate::builtins::macros::number!(SCALAR $v)
+            $crate::unroll::library::macros::number!(SCALAR $v)
         };
         (=$v:expr) => {
             $crate::unroll::Expr {

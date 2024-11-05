@@ -5,7 +5,7 @@ use num_bigint::BigInt;
 use num_complex::Complex;
 use std::cmp::Ordering;
 use std::fmt::Formatter;
-use std::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, SubAssign};
+use std::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, SubAssign};
 use std::{fmt::Display, mem};
 
 use crate::geometry;
@@ -342,6 +342,14 @@ impl DivAssign<&Self> for ProcNum {
     }
 }
 
+impl Neg for ProcNum {
+    type Output = Self;
+
+    fn neg(self) -> Self::Output {
+        Self(-self.0)
+    }
+}
+
 impl Zero for ProcNum {
     fn zero() -> Self {
         Self(Complex::zero())
@@ -403,7 +411,6 @@ impl From<&NumberLit> for ProcNum {
             }
             NumberLit::Float(f) => {
                 let mut integral: Complex<BigRational> = Complex::zero();
-                let mut decimal: Complex<BigRational> = Complex::zero();
                 let mut denominator = BigInt::one();
 
                 for digit in &f.parsed.integral.digits {
@@ -413,11 +420,17 @@ impl From<&NumberLit> for ProcNum {
 
                 for digit in &f.parsed.decimal {
                     denominator *= BigInt::from_u8(10).unwrap();
-                    decimal *= &ten;
-                    decimal += Complex::from_u8(*digit).unwrap();
+                    integral *= &ten;
+                    integral += Complex::from_u8(*digit).unwrap();
                 }
 
-                Self(integral + decimal)
+                Self(
+                    integral
+                        * Complex::new(
+                            BigRational::new(BigInt::one(), denominator),
+                            BigRational::zero(),
+                        ),
+                )
             }
         }
     }

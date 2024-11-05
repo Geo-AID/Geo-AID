@@ -5,7 +5,7 @@ use geo_aid_internal::projector;
 use geo_aid_internal::projector::figure::{Item, Label, Position};
 use geo_aid_internal::script::math;
 use geo_aid_internal::script::math::Flags;
-use geo_aid_math::{Context as MathContext, Func};
+use geo_aid_math::Func;
 use macroquad::prelude::*;
 use rand::Rng;
 use std::fs;
@@ -111,7 +111,7 @@ impl Debugger {
 
                             if let Some(file) = file {
                                 let Compiled {
-                                    mut context,
+                                    context,
                                     errors,
                                     figure_fn,
                                     input_count,
@@ -122,13 +122,13 @@ impl Debugger {
                                 let errors_len = context.constant(errors.len() as f64);
                                 let mean_exponent = 2.0;
                                 let total_error_power =
-                                    errors.into_iter().fold(MathContext::zero(), |a, b| {
-                                        let b_strict = context.pow(b, mean_exponent);
-                                        let b_divided = context.div(b_strict, errors_len);
-                                        context.add(a, b_divided)
+                                    errors.into_iter().fold(context.real_zero(), |a, b| {
+                                        let b_strict = b.pow(&context.constant(mean_exponent));
+                                        let b_divided = b_strict / &errors_len;
+                                        a + &b_divided
                                     });
                                 let total_error =
-                                    context.pow(total_error_power, mean_exponent.recip());
+                                    total_error_power.pow(&context.constant(mean_exponent.recip()));
 
                                 let mut rng = rand::thread_rng();
 
@@ -137,7 +137,8 @@ impl Debugger {
                                 self.figure = Some(Figure {
                                     flags,
                                     // error_func: context.compute([total_error]),
-                                    gradient_func: context.compute_gradient(total_error),
+                                    gradient_func: context
+                                        .exec(|ctx| ctx.compute_gradient(total_error.expr)),
                                     figure_func: figure_fn,
                                     current_state: (0..input_count)
                                         .map(|_| rng.gen::<f64>() * 10.0)

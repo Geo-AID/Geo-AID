@@ -395,39 +395,135 @@
               },
               {
                 "type": "object",
+                "description": "Natural logarithm (base e)",
+                "properties": {
+                  "type": {
+                    "const": "log"
+                  },
+                  "number": {
+                    "$ref": "#/$defs/index"
+                  }
+                },
+                "required": [
+                  "type",
+                  "number"
+                ]
+              },
+              {
+                "type": "object",
+                "description": "Exponential function (e^this)",
+                "properties": {
+                  "type": {
+                    "const": "exp"
+                  },
+                  "number": {
+                    "$ref": "#/$defs/index"
+                  }
+                },
+                "required": [
+                  "type",
+                  "number"
+                ]
+              },
+              {
+                "type": "object",
                 "description": "Sine of an angle",
                 "properties": {
-                  "type": { "const": "sin" },
-                  "angle": { "$ref": "#/$defs/index" }
+                  "type": {
+                    "const": "sin"
+                  },
+                  "angle": {
+                    "$ref": "#/$defs/index"
+                  }
                 },
-                "required": ["type", "angle"]
+                "required": [
+                  "type",
+                  "angle"
+                ]
               },
               {
                 "type": "object",
                 "description": "Cosine of an angle",
                 "properties": {
-                  "type": { "const": "cos" },
-                  "angle": { "$ref": "#/$defs/index" }
+                  "type": {
+                    "const": "cos"
+                  },
+                  "angle": {
+                    "$ref": "#/$defs/index"
+                  }
                 },
-                "required": ["type", "angle"]
+                "required": [
+                  "type",
+                  "angle"
+                ]
               },
               {
                 "type": "object",
                 "description": "Arcsine function",
                 "properties": {
-                  "type": { "const": "asin" },
-                  "angle": { "$ref": "#/$defs/index" }
+                  "type": {
+                    "const": "asin"
+                  },
+                  "value": {
+                    "$ref": "#/$defs/index"
+                  }
                 },
-                "required": ["type", "value"]
+                "required": [
+                  "type",
+                  "value"
+                ]
               },
               {
                 "type": "object",
                 "description": "Arccosine function",
                 "properties": {
-                  "type": { "const": "acos" },
-                  "angle": { "$ref": "#/$defs/index" }
+                  "type": {
+                    "const": "acos"
+                  },
+                  "value": {
+                    "$ref": "#/$defs/index"
+                  }
                 },
-                "required": ["type", "value"]
+                "required": [
+                  "type",
+                  "value"
+                ]
+              },
+              {
+                "type": "object",
+                "description": "Arctan function",
+                "properties": {
+                  "type": {
+                    "const": "atan"
+                  },
+                  "value": {
+                    "$ref": "#/$defs/index"
+                  }
+                },
+                "required": [
+                  "type",
+                  "value"
+                ]
+              },
+              {
+                "type": "object",
+                "description": "Arctan2 function",
+                "properties": {
+                  "type": {
+                    "const": "atan2"
+                  },
+                  "y": {
+                    "$ref": "#/$defs/index"
+                  },
+                  "x": {
+                    "$ref": "#/$defs/index"
+                  }
+                },
+                "required": [
+                  "type",
+                  "y",
+                  "x"
+                ]
               },
               {
                 "type": "object",
