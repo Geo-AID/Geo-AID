@@ -336,6 +336,48 @@ pub enum ExpressionKind {
         /// The number to query.
         number: VarIndex,
     },
+    /// Natural logarithm (base e)
+    Log {
+        /// The number to take the logarithm of
+        number: VarIndex,
+    },
+    /// Exponential function (e^this)
+    Exp {
+        /// The exponent
+        number: VarIndex,
+    },
+    /// Sine of an angle
+    Sin {
+        /// The angle to take sine of.
+        angle: VarIndex,
+    },
+    /// Cosine of an angle
+    Cos {
+        /// The angle to take cosine of
+        angle: VarIndex,
+    },
+    /// Arcsine function
+    Asin {
+        /// The value to take arcsine of.
+        value: VarIndex,
+    },
+    /// Arccosine function
+    Acos {
+        /// The value to take arccosine of
+        value: VarIndex,
+    },
+    /// Arctan function
+    Atan {
+        /// The value to take arctan of
+        value: VarIndex,
+    },
+    /// Arctan2 function
+    Atan2 {
+        /// Y value
+        y: VarIndex,
+        /// X value
+        x: VarIndex,
+    },
     /// Line `pq`
     PointPoint {
         /// Point 1

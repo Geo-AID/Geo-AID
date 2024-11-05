@@ -1173,6 +1173,16 @@ pub enum NumberData {
     Real(Expr<Number>),
     /// Imaginary part of a number
     Imaginary(Expr<Number>),
+    /// Natural logarithm (base e)
+    Log(Expr<Number>),
+    /// Exp function (e^this)
+    Exp(Expr<Number>),
+    /// Sine
+    Sin(Expr<Number>),
+    /// Cosine
+    Cos(Expr<Number>),
+    /// Atan2
+    Atan2(Expr<Number>, Expr<Number>),
 }
 
 impl Display for NumberData {
@@ -1217,6 +1227,11 @@ impl Display for NumberData {
             Self::FromPoint(point) => write!(f, "to_complex({point})"),
             Self::Real(number) => write!(f, "Re({number})"),
             Self::Imaginary(number) => write!(f, "Im({number})"),
+            Self::Log(number) => write!(f, "log({number})"),
+            Self::Exp(number) => write!(f, "exp({number})"),
+            Self::Sin(v) => write!(f, "sin({v})"),
+            Self::Cos(v) => write!(f, "cos({v})"),
+            Self::Atan2(y, x) => write!(f, "atan2({y}, {x})"),
         }
     }
 }
@@ -1382,6 +1397,11 @@ impl Expr<Number> {
                         | NumberData::CircleRadius(_)
                         | NumberData::PointX(_)
                         | NumberData::PointY(_)
+                        | NumberData::Log(_)
+                        | NumberData::Exp(_)
+                        | NumberData::Sin(_)
+                        | NumberData::Cos(_)
+                        | NumberData::Atan2(_, _)
                         | NumberData::FromPoint(_)
                         | NumberData::SetUnit(_, _) => unreachable!(), // Always concrete
                         NumberData::Negate(v) => {

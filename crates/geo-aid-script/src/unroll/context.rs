@@ -1,5 +1,6 @@
 //! General functionality contained in the unroll context.
 
+use num_rational::Ratio;
 use num_traits::{One, Zero};
 use paste::paste;
 use std::cell::RefCell;
@@ -334,6 +335,9 @@ impl CompileContext {
     generic_expr! {imaginary(v: Number) -> Number[inferred]::Imaginary}
     generic_expr! {to_complex(p: Point) -> Number[unit::DISTANCE]::FromPoint}
     generic_expr! {to_point(v: Number) -> Point::FromComplex}
+    generic_expr! {sin(v: Number) -> Number[unit::SCALAR]::Sin}
+    generic_expr! {cos(v: Number) -> Number[unit::SCALAR]::Cos}
+    generic_expr! {log(v: Number) -> Number[unit::SCALAR]::Log}
 
     pub fn mult_display(
         &self,
@@ -354,6 +358,27 @@ impl CompileContext {
 
     pub fn mult(&self, a: Expr<Number>, b: Expr<Number>) -> Expr<Number> {
         self.mult_display(a, b, Properties::default())
+    }
+
+    pub fn pow_display(
+        &self,
+        mut v: Expr<Number>,
+        exponent: Ratio<i64>,
+        display: Properties,
+    ) -> Expr<Number> {
+        let nodes = take_nodes!(v);
+        self.expr_with(
+            Number {
+                unit: v.data.unit.map(|u| u.pow(exponent)),
+                data: NumberData::Pow(v, exponent),
+            },
+            display,
+            nodes,
+        )
+    }
+
+    pub fn pow(&self, v: Expr<Number>, exponent: Ratio<i64>) -> Expr<Number> {
+        self.pow_display(v, exponent, Properties::default())
     }
 
     pub fn div_display(

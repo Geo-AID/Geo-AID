@@ -1,4 +1,5 @@
 mod compiler;
+pub mod shared;
 
 /// A feature-specific floating point representation.
 #[cfg(feature = "f64")]
@@ -53,16 +54,18 @@ enum ExprKind {
     Sin(Expr),
     /// cosine of a value
     Cos(Expr),
-    /// inverse cosine
-    Acos(Expr),
     /// atan2 function
     Atan2(Expr, Expr),
     /// -expr
     Neg(Expr),
     /// If condition is true, returns first expression. Otherwise returns the second one.
     Ternary(Condition, Expr, Expr),
-    /// Raise expression to a real power.
-    Pow(Expr, Float),
+    /// Square root
+    Sqrt(Expr),
+    /// e^expr
+    Exp(Expr),
+    /// Natural logarithm
+    Log(Expr),
 }
 
 /// An entry in the expression record.
@@ -146,7 +149,6 @@ impl Context {
             ExprKind::Input(i) => format!("#{i}"),
             ExprKind::Sin(v) => format!("sin({})", self.stringify(v)),
             ExprKind::Cos(v) => format!("cos({})", self.stringify(v)),
-            ExprKind::Acos(v) => format!("acos({})", self.stringify(v)),
             ExprKind::Atan2(y, x) => format!("atan2({}, {})", self.stringify(y), self.stringify(x)),
             ExprKind::Neg(v) => format!("-{}", self.stringify(v)),
             ExprKind::Ternary(cond, then, else_) => format!(
@@ -155,7 +157,9 @@ impl Context {
                 self.stringify(then),
                 self.stringify(else_)
             ),
-            ExprKind::Pow(v, p) => format!("{}^{p}", self.stringify(v)),
+            ExprKind::Sqrt(v) => format!("sqrt({})", self.stringify(v)),
+            ExprKind::Exp(v) => format!("e^{}", self.stringify(v)),
+            ExprKind::Log(v) => format!("ln({})", self.stringify(v)),
         }
     }
 
@@ -322,20 +326,44 @@ impl Context {
         self.push_expr(ExprKind::Cos(v), derivatives)
     }
 
-    /// Calculates the arc-cosine of a value.
-    pub fn acos(&mut self, v: Expr) -> Expr {
-        // `dacos(v) = -1/sqrt(1 - v2) * dv`
+    /// Square root of a number
+    pub fn sqrt(&mut self, v: Expr) -> Expr {
+        // dsqrt(v) = dv / 2sqrt(v)
         let derivatives = (0..self.inputs)
             .map(|i| {
                 let dv = self.get_derivative(v, i);
-                let one = Self::one();
-                let v2 = self.push_expr_nodiff(ExprKind::Mul(v, v));
-                let one_minus_v2 = self.push_expr_nodiff(ExprKind::Sub(one, v2));
-                let inverse_square_root = self.push_expr_nodiff(ExprKind::Pow(one_minus_v2, -2.0));
-                self.push_expr_nodiff(ExprKind::Mul(inverse_square_root, dv))
+                let sqrt = self.push_expr_nodiff(ExprKind::Sqrt(v));
+                let two = self.push_expr_nodiff(ExprKind::Constant(2.0));
+                let two_sqrt = self.push_expr_nodiff(ExprKind::Mul(two, sqrt));
+                self.push_expr_nodiff(ExprKind::Div(dv, two_sqrt))
             })
             .collect();
-        self.push_expr(ExprKind::Acos(v), derivatives)
+        self.push_expr(ExprKind::Sqrt(v), derivatives)
+    }
+
+    /// Calculates e^expr
+    pub fn exp(&mut self, v: Expr) -> Expr {
+        // dexp(v) = dv*exp(v)
+        let derivatives = (0..self.inputs)
+            .map(|i| {
+                let dv = self.get_derivative(v, i);
+                let expv = self.push_expr_nodiff(ExprKind::Exp(v));
+                self.push_expr_nodiff(ExprKind::Mul(expv, dv))
+            })
+            .collect();
+        self.push_expr(ExprKind::Exp(v), derivatives)
+    }
+
+    /// Natural logarithm of expression
+    pub fn log(&mut self, v: Expr) -> Expr {
+        // dlog(v) = dv/v
+        let derivatives = (0..self.inputs)
+            .map(|i| {
+                let dv = self.get_derivative(v, i);
+                self.push_expr_nodiff(ExprKind::Div(dv, v))
+            })
+            .collect();
+        self.push_expr(ExprKind::Log(v), derivatives)
     }
 
     /// Calculates the atan2 of two value.
@@ -380,21 +408,6 @@ impl Context {
             a,
             b,
         )
-    }
-
-    /// Raises the value to an exponent.
-    pub fn pow(&mut self, v: Expr, e: Float) -> Expr {
-        // `d(v^e) = ev^(e-1) * dv`
-        let derivatives = (0..self.inputs)
-            .map(|i| {
-                let dv = self.get_derivative(v, i);
-                let raised = self.push_expr_nodiff(ExprKind::Pow(v, e - 1.0));
-                let e_const = self.push_expr_nodiff(ExprKind::Constant(e));
-                let multiplied = self.push_expr_nodiff(ExprKind::Mul(e_const, raised));
-                self.push_expr_nodiff(ExprKind::Mul(multiplied, dv))
-            })
-            .collect();
-        self.push_expr(ExprKind::Pow(v, e), derivatives)
     }
 
     /// Takes the absolute value.

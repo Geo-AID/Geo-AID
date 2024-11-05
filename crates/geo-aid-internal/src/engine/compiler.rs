@@ -9,7 +9,11 @@ use crate::script::math::{
     Entity, EntityKind, Expr, ExprKind, ExprType, Intermediate, Rule, RuleKind,
 };
 use geo_aid_figure::{EntityIndex, VarIndex};
-use geo_aid_math::{Comparison, ComparisonKind, Condition, Context, Expr as CompiledExpr};
+use geo_aid_math::shared::Shared;
+use geo_aid_math::{
+    shared::Complex as ComplexExpr, shared::Real as RealExpr, Comparison, ComparisonKind,
+    Condition, Context,
+};
 use num_traits::ToPrimitive;
 use std::f64::consts::PI;
 
@@ -22,14 +26,14 @@ pub struct Compiled {
     /// The figure function
     pub figure_fn: FigureFn,
     /// Errors of each adjustable
-    pub errors: Vec<CompiledExpr>,
+    pub errors: Vec<RealExpr>,
     /// The compile context. Can be used for further processing
-    pub context: Context,
+    pub context: Shared,
     /// The number of inputs of this figure.
     pub input_count: usize,
     /// Errors of each rule (for debugging purposes)
     #[allow(unused)]
-    pub rule_errors: Vec<CompiledExpr>,
+    pub rule_errors: Vec<RealExpr>,
 }
 
 /// Compile a Math IR into an (almost) compiled form.
@@ -84,22 +88,28 @@ pub fn compile(intermediate: &Intermediate) -> Compiled {
     let mut exprs = Vec::new();
     for value in compiler.variables.iter().chain(&entity_values) {
         match value {
-            ValueExpr::This(this) => exprs.push(*this),
+            ValueExpr::This(this) => exprs.push(this.expr),
             ValueExpr::Line(line) => exprs.extend([
-                line.origin.real,
-                line.origin.imaginary,
-                line.direction.real,
-                line.direction.imaginary,
+                line.origin.real.expr,
+                line.origin.imaginary.expr,
+                line.direction.real.expr,
+                line.direction.imaginary.expr,
             ]),
-            ValueExpr::Complex(complex) => exprs.extend([complex.real, complex.imaginary]),
+            ValueExpr::Complex(complex) => {
+                exprs.extend([complex.real.expr, complex.imaginary.expr]);
+            }
             ValueExpr::Circle(circle) => {
-                exprs.extend([circle.center.real, circle.center.imaginary, circle.radius]);
+                exprs.extend([
+                    circle.center.real.expr,
+                    circle.center.imaginary.expr,
+                    circle.radius.expr,
+                ]);
             }
         }
     }
 
     let outs_len = exprs.len();
-    let exprs = compiler.context.compute(exprs);
+    let exprs = compiler.context.exec(|ctx| ctx.compute(exprs));
     let fig = intermediate.figure.clone();
     let figure_fn = Box::new(move |inputs: &[f64]| {
         let mut outputs = Vec::new();
@@ -122,14 +132,16 @@ pub fn compile(intermediate: &Intermediate) -> Compiled {
         .map(|rule| (rule, compiler.compile_rule(rule)))
         .collect();
 
-    let rule_error_exprs = rule_errors.iter().map(|v| v.1).collect();
+    let rule_error_exprs = rule_errors.iter().map(|v| v.1.clone()).collect();
 
     // Gather entity errors
-    let mut entity_errors = [Context::zero()].repeat(intermediate.adjusted.entities.len());
+    let mut entity_errors: Vec<_> = (0..intermediate.adjusted.entities.len())
+        .map(|_| compiler.context.real_zero())
+        .collect();
     for (rule, quality) in rule_errors {
         // println!("{rule}");
         for ent in &rule.entities {
-            entity_errors[ent.0] = compiler.context.add(entity_errors[ent.0], quality);
+            entity_errors[ent.0] += &quality;
         }
     }
 
@@ -147,7 +159,7 @@ pub fn compile(intermediate: &Intermediate) -> Compiled {
 /// The compiler's state
 struct Compiler<'r> {
     entities: &'r [EntityKind],
-    context: Context,
+    context: Shared,
     variables: Vec<ValueExpr>,
     adjustables: Vec<ValueExpr>,
 }
@@ -157,7 +169,7 @@ impl<'r> Compiler<'r> {
     #[must_use]
     pub fn new(inputs: usize, entities: &'r [EntityKind], variables: &[Expr<()>]) -> Self {
         let mut adjustables = Vec::new();
-        let context = Context::new(inputs);
+        let context = Shared::new(inputs);
 
         let mut index = 0;
         #[allow(unused_variables)]
@@ -184,7 +196,7 @@ impl<'r> Compiler<'r> {
 
         let mut s = Self {
             entities,
-            context: Context::new(inputs),
+            context,
             variables: Vec::new(),
             adjustables,
         };
@@ -200,40 +212,34 @@ impl<'r> Compiler<'r> {
     }
 
     /// Compile the error function for a > b
-    fn gt(&mut self, a: &VarIndex, b: &VarIndex) -> CompiledExpr {
+    fn gt(&mut self, a: &VarIndex, b: &VarIndex) -> RealExpr {
         let a = self.variables[a.0].to_complex().real;
         let b = self.variables[b.0].to_complex().real;
-        let abs_b = self.context.abs(b);
         let one_tenth = self.context.constant(0.1);
-        let abs_b_plus_01 = self.context.add(abs_b, one_tenth);
-        let offset = self.context.mul(abs_b_plus_01, one_tenth);
-        let threshold = self.context.add(offset, b);
-        let a_minus_threshold = self.context.sub(a, threshold);
-        let one_side = self.context.mul(a_minus_threshold, a_minus_threshold);
+        let offset = (b.abs() + &one_tenth) * &one_tenth;
+        let threshold = b + &offset;
+        let a_minus_threshold = a.clone() - &threshold;
+        let one_side = a_minus_threshold.clone() * &a_minus_threshold;
         self.context.ternary(
             Condition::Comparison(Comparison {
-                a: threshold,
-                b: a,
+                a: threshold.expr,
+                b: a.expr,
                 kind: ComparisonKind::Gt,
             }),
             one_side,
-            Context::zero(),
+            self.context.real_zero(),
         )
     }
 
     /// Compile the error function for the given rule kind.
-    fn compile_rule_kind(&mut self, kind: &RuleKind) -> CompiledExpr {
+    fn compile_rule_kind(&mut self, kind: &RuleKind) -> RealExpr {
         match kind {
             RuleKind::PointEq(a, b) | RuleKind::NumberEq(a, b) => {
                 // Weirdly, enough, these two are actually the same, right now
                 let a = self.variables[a.0].to_complex();
                 let b = self.variables[b.0].to_complex();
-                let a_minus_b = a.sub(b, &mut self.context);
-                let real2 = self.context.mul(a_minus_b.real, a_minus_b.real);
-                let im2 = self.context.mul(a_minus_b.imaginary, a_minus_b.imaginary);
-                let mag = self.context.add(real2, im2);
                 let five = self.context.constant(5.0);
-                self.context.mul(mag, five)
+                (a - &b).norm() * &five
             }
             RuleKind::Gt(a, b) => self.gt(a, b),
             RuleKind::Alternative(rules) => {
@@ -243,26 +249,21 @@ impl<'r> Compiler<'r> {
                     .map(|rule| self.compile_rule_kind(rule))
                     .collect();
 
-                qualities
-                    .into_iter()
-                    .reduce(|a, b| self.context.min(a, b))
-                    .unwrap()
+                qualities.into_iter().reduce(|a, b| a.min(&b)).unwrap()
             }
             RuleKind::Invert(q) => {
-                let q = self.compile_rule_kind(q);
-                let ten = self.context.constant(10.0);
-                let ten_q = self.context.mul(q, ten);
-                self.context.div(Context::one(), ten_q)
+                self.context.real_one()
+                    / &(self.context.constant(10.0) * &self.compile_rule_kind(q))
             }
-            RuleKind::Bias => Context::zero(), // Bias in this approach doesn't really do anything
+            RuleKind::Bias => self.context.real_zero(), // Bias in this approach doesn't really do anything
         }
     }
 
     /// Compile the error function for the given rule.
-    fn compile_rule(&mut self, rule: &Rule) -> CompiledExpr {
+    fn compile_rule(&mut self, rule: &Rule) -> RealExpr {
         let quality = self.compile_rule_kind(&rule.kind);
         let weight = self.context.constant(rule.weight.to_complex().real);
-        self.context.mul(quality, weight)
+        quality * &weight
     }
 
     /// Compile the sum of given expressions.
@@ -270,11 +271,8 @@ impl<'r> Compiler<'r> {
         value
             .iter()
             .map(|i| self.variables[i.0].to_complex())
-            .reduce(|a, b| a.add(b, &mut self.context))
-            .unwrap_or(ComplexExpr {
-                real: Context::zero(),
-                imaginary: Context::zero(),
-            })
+            .reduce(|a, b| a + &b)
+            .unwrap_or(self.context.complex_zero())
     }
 
     /// Compile the product of different expressions
@@ -282,11 +280,8 @@ impl<'r> Compiler<'r> {
         value
             .iter()
             .map(|i| self.variables[i.0].to_complex())
-            .reduce(|a, b| a.mul(b, &mut self.context))
-            .unwrap_or(ComplexExpr {
-                real: Context::one(),
-                imaginary: Context::zero(),
-            })
+            .reduce(|a, b| a * &b)
+            .unwrap_or(self.context.complex_one())
     }
 
     /// Compile the specific expression.
@@ -299,27 +294,25 @@ impl<'r> Compiler<'r> {
             ExprKind::Entity { id } => {
                 let kind = self.entities[id.0].clone();
                 match kind {
-                    EntityKind::FreePoint => self.adjustables[id.0],
+                    EntityKind::FreePoint => self.adjustables[id.0].clone(),
                     EntityKind::PointOnLine { line } => {
                         let line = self.variables[line.0].to_line();
                         let offset = self.adjustables[id.0].to_single();
 
-                        let offset_times_dir = line.direction.mul_real(offset, &mut self.context);
-                        line.origin.add(offset_times_dir, &mut self.context).into()
+                        (line.origin + &(offset * &line.direction)).into()
                     }
                     EntityKind::PointOnCircle { circle } => {
                         let circle = self.variables[circle.0].to_circle();
                         let theta = self.adjustables[id.0].to_single();
                         let two_pi = self.context.constant(2.0 * PI);
-                        let theta = self.context.mul(theta, two_pi);
+                        let theta = theta * &two_pi;
 
                         let point_rel = ComplexExpr {
-                            real: self.context.cos(theta),
-                            imaginary: self.context.sin(theta),
-                        };
-                        let point_rel = point_rel.mul_real(circle.radius, &mut self.context);
+                            real: theta.cos(),
+                            imaginary: theta.sin(),
+                        } * &circle.radius;
 
-                        circle.center.add(point_rel, &mut self.context).into()
+                        (point_rel + &circle.center).into()
                     }
                     EntityKind::DistanceUnit | EntityKind::FreeReal => {
                         ComplexExpr::real(self.adjustables[id.0].to_single()).into()
@@ -348,34 +341,28 @@ impl<'r> Compiler<'r> {
                 // c = l.origin;
                 // d = l.direction;
 
-                let b_by_d = k.direction.div(l.direction, &mut self.context);
-                let a_sub_c = k.origin.sub(l.origin, &mut self.context);
-                let a_sub_c_by_d = a_sub_c.div(l.direction, &mut self.context);
-                let quotient = self.context.div(a_sub_c_by_d.imaginary, b_by_d.imaginary);
-                let b_times_quotient = k.direction.mul_real(quotient, &mut self.context);
+                let b_by_d = k.direction.clone() / &l.direction;
+                let a_sub_c = k.origin.clone() - &l.origin;
+                let a_sub_c_by_d = a_sub_c / &l.direction;
+                let quotient = a_sub_c_by_d.imaginary / &b_by_d.imaginary;
+                let b_times_quotient = k.direction * &quotient;
 
-                k.origin.sub(b_times_quotient, &mut self.context).into()
+                (k.origin - &b_times_quotient).into()
             }
             ExprKind::AveragePoint { items } => {
                 let sum = self.compile_sum(items);
 
                 #[allow(clippy::cast_precision_loss)]
                 let len = self.context.constant(items.len() as f64);
-                sum.div_real(len, &mut self.context).into()
+                (sum / &len).into()
             }
             ExprKind::CircleCenter { circle } => self.variables[circle.0].to_circle().center.into(),
-            ExprKind::ComplexToPoint { number } => self.variables[number.0],
+            ExprKind::ComplexToPoint { number } => self.variables[number.0].clone(),
             ExprKind::Sum { plus, minus } => {
-                let plus = self.compile_sum(plus);
-                let minus = self.compile_sum(minus);
-
-                plus.sub(minus, &mut self.context).into()
+                (self.compile_sum(plus) - &self.compile_sum(minus)).into()
             }
             ExprKind::Product { times, by } => {
-                let times = self.compile_mul(times);
-                let by = self.compile_mul(by);
-
-                times.div(by, &mut self.context).into()
+                (self.compile_mul(times) / &self.compile_mul(by)).into()
             }
             ExprKind::Const { value } => {
                 let value = value.to_complex();
@@ -387,31 +374,22 @@ impl<'r> Compiler<'r> {
             }
             ExprKind::Exponentiation { value, exponent } => {
                 let value = self.variables[value.0].to_complex();
-                let exp = exponent.to_f64().unwrap();
+                let exp = self.context.constant(exponent.to_f64().unwrap());
 
-                value.pow(exp, &mut self.context).into()
+                value.pow(&ComplexExpr::real(exp)).into()
             }
             ExprKind::PointPointDistance { p, q } => {
                 let p = self.variables[p.0].to_complex();
                 let q = self.variables[q.0].to_complex();
 
-                let p_minus_q = p.sub(q, &mut self.context);
-                ComplexExpr {
-                    real: p_minus_q.modulus(&mut self.context),
-                    imaginary: Context::zero(),
-                }
-                .into()
+                ComplexExpr::real((p - &q).abs()).into()
             }
             ExprKind::PointLineDistance { point, line } => {
                 // ((point - line.origin) / line.direction).imaginary.abs()
                 let point = self.variables[point.0].to_complex();
                 let line = self.variables[line.0].to_line();
 
-                let point_minus_line_origin = point.sub(line.origin, &mut self.context);
-                let that_by_direction =
-                    point_minus_line_origin.div(line.direction, &mut self.context);
-                let real = self.context.abs(that_by_direction.imaginary);
-                ComplexExpr::real(real).into()
+                ComplexExpr::real(((point - &line.origin) / &line.direction).imaginary.abs()).into()
             }
             ExprKind::ThreePointAngle { p, q, r } => {
                 // geometry.rs code
@@ -427,17 +405,15 @@ impl<'r> Compiler<'r> {
                 let q = self.variables[q.0].to_complex();
                 let r = self.variables[r.0].to_complex();
 
-                let arm1_vec = p.sub(q, &mut self.context);
-                let arm2_vec = r.sub(q, &mut self.context);
+                let arm1_vec = p - &q;
+                let arm2_vec = r - &q;
 
-                let dot_product_alpha = self.context.mul(arm1_vec.real, arm2_vec.real);
-                let dot_product_beta = self.context.mul(arm1_vec.imaginary, arm2_vec.imaginary);
-                let dot_product = self.context.add(dot_product_alpha, dot_product_beta);
-                let mag1 = arm1_vec.modulus(&mut self.context);
-                let mag2 = arm2_vec.modulus(&mut self.context);
-                let mag_product = self.context.mul(mag1, mag2);
-                let quotient = self.context.div(dot_product, mag_product);
-                ComplexExpr::real(self.context.acos(quotient)).into()
+                let mag_product = arm1_vec.abs() * &arm2_vec.abs();
+                let dot_product_alpha = arm1_vec.real * &arm2_vec.real;
+                let dot_product_beta = arm1_vec.imaginary * &arm2_vec.imaginary;
+                let dot_product = dot_product_alpha + &dot_product_beta;
+                let quotient = dot_product / &mag_product;
+                ComplexExpr::real(quotient.acos()).into()
             }
             ExprKind::ThreePointAngleDir { p, q, r } => {
                 // geometry.rs code
@@ -454,20 +430,18 @@ impl<'r> Compiler<'r> {
                 let q = self.variables[q.0].to_complex();
                 let r = self.variables[r.0].to_complex();
 
-                let arm1_vec = p.sub(q, &mut self.context);
-                let arm2_vec = r.sub(q, &mut self.context);
+                let arm1_vec = p - &q;
+                let arm2_vec = r - &q;
 
-                let rotated = arm2_vec.div(arm1_vec, &mut self.context);
-                ComplexExpr::real(self.context.atan2(rotated.imaginary, rotated.real)).into()
+                let rotated = arm2_vec / &arm1_vec;
+                ComplexExpr::real(rotated.arg()).into()
             }
             ExprKind::TwoLineAngle { k, l } => {
                 // (k.direction / l.direction).arg().abs()
                 let k = self.variables[k.0].to_line();
                 let l = self.variables[l.0].to_line();
-                let quotient = k.direction.div(l.direction, &mut self.context);
-                let arg = self.context.atan2(quotient.imaginary, quotient.real);
-                let abs = self.context.abs(arg);
-                ComplexExpr::real(abs).into()
+                let quotient = k.direction / &l.direction;
+                ComplexExpr::real(quotient.arg().abs()).into()
             }
             ExprKind::PointX { point } => {
                 let point = self.variables[point.0].to_complex();
@@ -477,22 +451,37 @@ impl<'r> Compiler<'r> {
                 let point = self.variables[point.0].to_complex();
                 ComplexExpr::real(point.imaginary).into()
             }
-            ExprKind::PointToComplex { point } => self.variables[point.0],
+            ExprKind::PointToComplex { point } => self.variables[point.0].clone(),
             ExprKind::Real { number } => {
                 ComplexExpr::real(self.variables[number.0].to_complex().real).into()
             }
             ExprKind::Imaginary { number } => {
                 ComplexExpr::real(self.variables[number.0].to_complex().imaginary).into()
             }
+            ExprKind::Log { number } => self.variables[number.0].to_complex().log().into(),
+            ExprKind::Exp { number } => self.variables[number.0].to_complex().exp().into(),
+            ExprKind::Sin { angle } => {
+                let angle = self.variables[angle.0].to_complex();
+                angle.sin().into()
+            }
+            ExprKind::Cos { angle } => {
+                let angle = self.variables[angle.0].to_complex();
+                angle.cos().into()
+            }
+            ExprKind::Atan2 { y, x } => {
+                // Atan2 is never expected to take complex arguments.
+                let y = self.variables[y.0].to_complex().real;
+                let x = self.variables[x.0].to_complex().real;
+
+                ComplexExpr::real(RealExpr::atan2(&y, &x)).into()
+            }
             ExprKind::PointPoint { p, q } => {
                 let p = self.variables[p.0].to_complex();
                 let q = self.variables[q.0].to_complex();
-                let q_minus_p = q.sub(p, &mut self.context);
-                let mag = q_minus_p.modulus(&mut self.context);
-                let normalized = q_minus_p.div_real(mag, &mut self.context);
+                let q_minus_p = q - &p;
                 LineExpr {
                     origin: p,
-                    direction: normalized,
+                    direction: q_minus_p.clone() / &q_minus_p.abs(),
                 }
                 .into()
             }
@@ -521,33 +510,26 @@ impl<'r> Compiler<'r> {
                 let origin = self.variables[q.0].to_complex();
                 let arm2 = self.variables[r.0].to_complex();
 
-                let a = arm1.sub(origin, &mut self.context);
-                let b = arm2.sub(origin, &mut self.context);
-                let ab = a.mul(b, &mut self.context);
+                let ab = (arm1 - &origin) * &(arm2 - &origin);
 
                 // sqrt_norm time
-                let minus_ab = ab.neg(&mut self.context);
+                let minus_ab = -ab.clone();
 
                 let condition = Condition::Comparison(Comparison {
-                    a: ab.real,
+                    a: ab.real.expr,
                     b: Context::zero(),
                     kind: ComparisonKind::Gt,
                 });
-                let self_ = ComplexExpr::ternary(condition, ab, minus_ab, &mut self.context);
+                let self_ = self.context.complex_ternary(condition, ab, minus_ab);
 
-                let r = self_.modulus(&mut self.context);
-                let self_plus_r = self_.add_real(r, &mut self.context);
-                let mag = self_plus_r.modulus(&mut self.context);
-                let normalized = self_plus_r.div_real(mag, &mut self.context);
-                let normalized_mul_i = normalized.mul_i(&mut self.context);
+                let self_plus_r = self_.clone() + &self_.abs();
+                let normalized = self_plus_r.clone() / &self_plus_r.abs();
+                let normalized_mul_i = normalized.mul_i();
 
                 // Another ternary
-                let direction = ComplexExpr::ternary(
-                    condition,
-                    normalized,
-                    normalized_mul_i,
-                    &mut self.context,
-                );
+                let direction =
+                    self.context
+                        .complex_ternary(condition, normalized, normalized_mul_i);
 
                 LineExpr { origin, direction }.into()
             }
@@ -564,7 +546,7 @@ impl<'r> Compiler<'r> {
 
                 LineExpr {
                     origin: point,
-                    direction: line.direction.mul_i(&mut self.context),
+                    direction: line.direction.mul_i(),
                 }
                 .into()
             }
@@ -583,9 +565,9 @@ impl<'r> Compiler<'r> {
 }
 
 /// A generic compiled value of an expression.
-#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
+#[derive(Debug, Clone)]
 enum ValueExpr {
-    This(CompiledExpr),
+    This(RealExpr),
     Line(LineExpr),
     Complex(ComplexExpr),
     Circle(CircleExpr),
@@ -594,9 +576,9 @@ enum ValueExpr {
 impl ValueExpr {
     /// Returns a line if the expression is one. Panics otherwise.
     #[must_use]
-    fn to_line(self) -> LineExpr {
+    fn to_line(&self) -> LineExpr {
         if let Self::Line(x) = self {
-            x
+            x.clone()
         } else {
             panic!("self was not a line");
         }
@@ -604,9 +586,9 @@ impl ValueExpr {
 
     /// Returns a point if the expression is one. Panics otherwise.
     #[must_use]
-    fn to_complex(self) -> ComplexExpr {
+    fn to_complex(&self) -> ComplexExpr {
         if let Self::Complex(x) = self {
-            x
+            x.clone()
         } else {
             panic!("self was not a complex");
         }
@@ -614,18 +596,18 @@ impl ValueExpr {
 
     /// Returns a circle if the expression is one. Panics otherwise.
     #[must_use]
-    fn to_circle(self) -> CircleExpr {
+    fn to_circle(&self) -> CircleExpr {
         if let Self::Circle(x) = self {
-            x
+            x.clone()
         } else {
             panic!("self was not a circle");
         }
     }
 
     /// Returns a scalar if the expression is one. Panics otherwise.
-    fn to_single(self) -> CompiledExpr {
+    fn to_single(&self) -> RealExpr {
         if let Self::This(x) = self {
-            x
+            x.clone()
         } else {
             panic!("self was not a single expression");
         }
@@ -651,199 +633,192 @@ impl From<CircleExpr> for ValueExpr {
 }
 
 /// A line with an origin point and a normalized direction vector.
-#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
+#[derive(Debug, Clone)]
 struct LineExpr {
     origin: ComplexExpr,
     direction: ComplexExpr,
 }
 
 /// A circle with an origin and a radius.
-#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
+#[derive(Debug, Clone)]
 struct CircleExpr {
     center: ComplexExpr,
-    radius: CompiledExpr,
+    radius: RealExpr,
 }
 
-/// A complex value with a real and imaginary part.
-#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
-struct ComplexExpr {
-    real: CompiledExpr,
-    imaginary: CompiledExpr,
-}
+// impl ComplexExpr {
+//     /// Create a complex value from a real.
+//     #[must_use]
+//     fn real(real: CompiledExpr) -> Self {
+//         Self {
+//             real,
+//             imaginary: Context::zero(),
+//         }
+//     }
 
-impl ComplexExpr {
-    /// Create a complex value from a real.
-    #[must_use]
-    fn real(real: CompiledExpr) -> Self {
-        Self {
-            real,
-            imaginary: Context::zero(),
-        }
-    }
+//     /// Subtract complex values.
+//     #[must_use]
+//     fn sub(self, other: Self, context: &mut Context) -> Self {
+//         Self {
+//             real: context.sub(self.real, other.real),
+//             imaginary: context.sub(self.imaginary, other.imaginary),
+//         }
+//     }
 
-    /// Subtract complex values.
-    #[must_use]
-    fn sub(self, other: Self, context: &mut Context) -> Self {
-        Self {
-            real: context.sub(self.real, other.real),
-            imaginary: context.sub(self.imaginary, other.imaginary),
-        }
-    }
+//     /// Add complex values.
+//     #[must_use]
+//     fn add(self, other: Self, context: &mut Context) -> Self {
+//         Self {
+//             real: context.add(self.real, other.real),
+//             imaginary: context.add(self.imaginary, other.imaginary),
+//         }
+//     }
 
-    /// Add complex values.
-    #[must_use]
-    fn add(self, other: Self, context: &mut Context) -> Self {
-        Self {
-            real: context.add(self.real, other.real),
-            imaginary: context.add(self.imaginary, other.imaginary),
-        }
-    }
+//     /// Add a real to a complex.
+//     #[must_use]
+//     fn add_real(self, other: CompiledExpr, context: &mut Context) -> Self {
+//         Self {
+//             real: context.add(self.real, other),
+//             ..self
+//         }
+//     }
 
-    /// Add a real to a complex.
-    #[must_use]
-    fn add_real(self, other: CompiledExpr, context: &mut Context) -> Self {
-        Self {
-            real: context.add(self.real, other),
-            ..self
-        }
-    }
+//     /// Multiply complex values.
+//     #[must_use]
+//     fn mul(self, other: Self, context: &mut Context) -> Self {
+//         // self = a + bi
+//         // other = c + di
+//         // quotient = (ac - bd) + (ad + bc)i
+//         let Self {
+//             real: a,
+//             imaginary: b,
+//         } = self;
+//         let Self {
+//             real: c,
+//             imaginary: d,
+//         } = other;
 
-    /// Multiply complex values.
-    #[must_use]
-    fn mul(self, other: Self, context: &mut Context) -> Self {
-        // self = a + bi
-        // other = c + di
-        // quotient = (ac - bd) + (ad + bc)i
-        let Self {
-            real: a,
-            imaginary: b,
-        } = self;
-        let Self {
-            real: c,
-            imaginary: d,
-        } = other;
+//         let ac = context.mul(a, c);
+//         let bd = context.mul(b, d);
+//         let bc = context.mul(b, c);
+//         let ad = context.mul(a, d);
 
-        let ac = context.mul(a, c);
-        let bd = context.mul(b, d);
-        let bc = context.mul(b, c);
-        let ad = context.mul(a, d);
+//         let ac_sub_bd = context.sub(ac, bd);
+//         let bc_plus_ad = context.add(bc, ad);
 
-        let ac_sub_bd = context.sub(ac, bd);
-        let bc_plus_ad = context.add(bc, ad);
+//         Self {
+//             real: ac_sub_bd,
+//             imaginary: bc_plus_ad,
+//         }
+//     }
 
-        Self {
-            real: ac_sub_bd,
-            imaginary: bc_plus_ad,
-        }
-    }
+//     /// Divide complex values.
+//     #[must_use]
+//     fn div(self, other: Self, context: &mut Context) -> Self {
+//         // self = a + bi
+//         // other = c + di
+//         // quotient = ((ac + bd) + (bc - ad)i)/(c^2 + d^2)
+//         let Self {
+//             real: a,
+//             imaginary: b,
+//         } = self;
+//         let Self {
+//             real: c,
+//             imaginary: d,
+//         } = other;
 
-    /// Divide complex values.
-    #[must_use]
-    fn div(self, other: Self, context: &mut Context) -> Self {
-        // self = a + bi
-        // other = c + di
-        // quotient = ((ac + bd) + (bc - ad)i)/(c^2 + d^2)
-        let Self {
-            real: a,
-            imaginary: b,
-        } = self;
-        let Self {
-            real: c,
-            imaginary: d,
-        } = other;
+//         let ac = context.mul(a, c);
+//         let bd = context.mul(b, d);
+//         let bc = context.mul(b, c);
+//         let ad = context.mul(a, d);
+//         let c2 = context.mul(c, c);
+//         let d2 = context.mul(d, d);
 
-        let ac = context.mul(a, c);
-        let bd = context.mul(b, d);
-        let bc = context.mul(b, c);
-        let ad = context.mul(a, d);
-        let c2 = context.mul(c, c);
-        let d2 = context.mul(d, d);
+//         let ac_plus_bd = context.add(ac, bd);
+//         let bc_sub_ad = context.sub(bc, ad);
+//         let c2_plus_d2 = context.add(c2, d2);
 
-        let ac_plus_bd = context.add(ac, bd);
-        let bc_sub_ad = context.sub(bc, ad);
-        let c2_plus_d2 = context.add(c2, d2);
+//         let real = context.div(ac_plus_bd, c2_plus_d2);
+//         let imaginary = context.div(bc_sub_ad, c2_plus_d2);
 
-        let real = context.div(ac_plus_bd, c2_plus_d2);
-        let imaginary = context.div(bc_sub_ad, c2_plus_d2);
+//         Self { real, imaginary }
+//     }
 
-        Self { real, imaginary }
-    }
+//     /// Multiply a complex by a real.
+//     #[must_use]
+//     fn mul_real(self, other: CompiledExpr, context: &mut Context) -> Self {
+//         Self {
+//             real: context.mul(self.real, other),
+//             imaginary: context.mul(self.imaginary, other),
+//         }
+//     }
 
-    /// Multiply a complex by a real.
-    #[must_use]
-    fn mul_real(self, other: CompiledExpr, context: &mut Context) -> Self {
-        Self {
-            real: context.mul(self.real, other),
-            imaginary: context.mul(self.imaginary, other),
-        }
-    }
+//     /// Divide a complex by a real.
+//     #[must_use]
+//     fn div_real(self, other: CompiledExpr, context: &mut Context) -> Self {
+//         Self {
+//             real: context.div(self.real, other),
+//             imaginary: context.div(self.imaginary, other),
+//         }
+//     }
 
-    /// Divide a complex by a real.
-    #[must_use]
-    fn div_real(self, other: CompiledExpr, context: &mut Context) -> Self {
-        Self {
-            real: context.div(self.real, other),
-            imaginary: context.div(self.imaginary, other),
-        }
-    }
+//     /// Get the magnitude of a complex as vector (distance from 0)
+//     fn modulus(self, context: &mut Context) -> CompiledExpr {
+//         // |a + bi| = (a^2 + b^2)^0.5
+//         let a2 = context.mul(self.real, self.real);
+//         let b2 = context.mul(self.imaginary, self.imaginary);
+//         let a2_plus_b2 = context.add(a2, b2);
+//         context.pow(a2_plus_b2, 0.5)
+//     }
 
-    /// Get the magnitude of a complex as vector (distance from 0)
-    fn modulus(self, context: &mut Context) -> CompiledExpr {
-        // |a + bi| = (a^2 + b^2)^0.5
-        let a2 = context.mul(self.real, self.real);
-        let b2 = context.mul(self.imaginary, self.imaginary);
-        let a2_plus_b2 = context.add(a2, b2);
-        context.pow(a2_plus_b2, 0.5)
-    }
+//     /// Negate the complex
+//     #[must_use]
+//     fn neg(self, context: &mut Context) -> Self {
+//         Self {
+//             real: context.neg(self.real),
+//             imaginary: context.neg(self.imaginary),
+//         }
+//     }
 
-    /// Negate the complex
-    #[must_use]
-    fn neg(self, context: &mut Context) -> Self {
-        Self {
-            real: context.neg(self.real),
-            imaginary: context.neg(self.imaginary),
-        }
-    }
+//     /// A ternary operator. If `cond` is true, return `then`, otherwise return `else_`
+//     #[must_use]
+//     fn ternary(cond: Condition, then: Self, else_: Self, context: &mut Context) -> Self {
+//         Self {
+//             real: context.ternary(cond, then.real, else_.real),
+//             imaginary: context.ternary(cond, then.imaginary, else_.imaginary),
+//         }
+//     }
 
-    /// A ternary operator. If `cond` is true, return `then`, otherwise return `else_`
-    #[must_use]
-    fn ternary(cond: Condition, then: Self, else_: Self, context: &mut Context) -> Self {
-        Self {
-            real: context.ternary(cond, then.real, else_.real),
-            imaginary: context.ternary(cond, then.imaginary, else_.imaginary),
-        }
-    }
+//     /// Multiply the complex by `i`. A separate function as it's a simple operation.
+//     #[must_use]
+//     fn mul_i(self, context: &mut Context) -> Self {
+//         Self {
+//             real: context.neg(self.imaginary),
+//             imaginary: self.real,
+//         }
+//     }
 
-    /// Multiply the complex by `i`. A separate function as it's a simple operation.
-    #[must_use]
-    fn mul_i(self, context: &mut Context) -> Self {
-        Self {
-            real: context.neg(self.imaginary),
-            imaginary: self.real,
-        }
-    }
+//     /// Raise the number to a power.
+//     #[must_use]
+//     fn pow(&self, exp: f64, context: &mut Context) -> Self {
+//         let c = context.constant(exp);
 
-    /// Raise the number to a power.
-    #[must_use]
-    fn pow(&self, exp: f64, context: &mut Context) -> Self {
-        let c = context.constant(exp);
+//         let a2 = context.mul(self.real, self.real);
+//         let b2 = context.mul(self.imaginary, self.imaginary);
+//         let a2_plus_b2 = context.add(a2, b2);
+//         let a2_plus_b2_to_exp_by_2 = context.pow(a2_plus_b2, exp / 2.0);
 
-        let a2 = context.mul(self.real, self.real);
-        let b2 = context.mul(self.imaginary, self.imaginary);
-        let a2_plus_b2 = context.add(a2, b2);
-        let a2_plus_b2_to_exp_by_2 = context.pow(a2_plus_b2, exp / 2.0);
+//         let arg = context.atan2(self.imaginary, self.real);
+//         let c_arg = context.mul(c, arg);
+//         let cos_c_arg = context.cos(c_arg);
+//         let sin_c_arg = context.sin(c_arg);
 
-        let arg = context.atan2(self.imaginary, self.real);
-        let c_arg = context.mul(c, arg);
-        let cos_c_arg = context.cos(c_arg);
-        let sin_c_arg = context.sin(c_arg);
-
-        Self {
-            real: context.mul(a2_plus_b2_to_exp_by_2, cos_c_arg),
-            imaginary: context.mul(a2_plus_b2_to_exp_by_2, sin_c_arg),
-        }
-    }
-}
+//         Self {
+//             real: context.mul(a2_plus_b2_to_exp_by_2, cos_c_arg),
+//             imaginary: context.mul(a2_plus_b2_to_exp_by_2, sin_c_arg),
+//         }
+//     }
+// }
 
 /// Get a single complex from an iterator over floats.
 fn get_complex<I: Iterator<Item = f64>>(value: &mut I) -> Complex {

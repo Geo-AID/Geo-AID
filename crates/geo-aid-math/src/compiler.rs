@@ -18,9 +18,12 @@ const FLOAT: Type = types::F32;
 struct External {
     sin: FuncRef,
     cos: FuncRef,
-    acos: FuncRef,
-    pow: FuncRef,
+    sqrt: FuncRef,
     atan2: FuncRef,
+    /// Natural logarithm
+    log: FuncRef,
+    /// e^x
+    exp: FuncRef,
 }
 
 /// Link an external function.
@@ -53,16 +56,18 @@ fn link_float_func(
 fn link_external(func: &mut Function, module: &mut JITModule) -> External {
     let sin = link_float_func(func, module, 1, "sin");
     let cos = link_float_func(func, module, 1, "cos");
-    let acos = link_float_func(func, module, 1, "acos");
-    let pow = link_float_func(func, module, 2, "pow");
+    let sqrt = link_float_func(func, module, 1, "sqrt");
     let atan2 = link_float_func(func, module, 2, "atan2");
+    let log = link_float_func(func, module, 1, "log");
+    let exp = link_float_func(func, module, 1, "exp");
 
     External {
         sin,
         cos,
-        acos,
-        pow,
+        sqrt,
         atan2,
+        log,
+        exp,
     }
 }
 
@@ -197,9 +202,19 @@ fn compile_expr(builder: &mut FunctionBuilder, kind: ExprKind, external: Externa
             let tmp = builder.ins().call(external.cos, &[v]);
             builder.inst_results(tmp)[0]
         }
-        ExprKind::Acos(v) => {
+        ExprKind::Exp(v) => {
             let v = builder.use_var(var(v));
-            let tmp = builder.ins().call(external.acos, &[v]);
+            let tmp = builder.ins().call(external.exp, &[v]);
+            builder.inst_results(tmp)[0]
+        }
+        ExprKind::Log(v) => {
+            let v = builder.use_var(var(v));
+            let tmp = builder.ins().call(external.log, &[v]);
+            builder.inst_results(tmp)[0]
+        }
+        ExprKind::Sqrt(v) => {
+            let v = builder.use_var(var(v));
+            let tmp = builder.ins().call(external.sqrt, &[v]);
             builder.inst_results(tmp)[0]
         }
         ExprKind::Neg(v) => {
@@ -241,12 +256,6 @@ fn compile_expr(builder: &mut FunctionBuilder, kind: ExprKind, external: Externa
             builder.seal_block(merge_block);
             builder.switch_to_block(merge_block);
             builder.block_params(merge_block)[0]
-        }
-        ExprKind::Pow(v, e) => {
-            let v = builder.use_var(var(v));
-            let e = float_constant(builder, e);
-            let tmp = builder.ins().call(external.pow, &[v, e]);
-            builder.inst_results(tmp)[0]
         }
         ExprKind::Atan2(a, b) => {
             let a = builder.use_var(var(a));

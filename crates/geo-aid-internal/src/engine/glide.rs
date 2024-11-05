@@ -8,7 +8,7 @@ use crate::engine::thread_pool::ThreadPool;
 use crate::engine::QualityRecord;
 use crate::script::figure::Generated;
 use crate::script::math::Intermediate;
-use geo_aid_math::{Context, Func};
+use geo_aid_math::Func;
 use rand::Rng;
 use std::time::{Duration, Instant};
 
@@ -47,7 +47,7 @@ impl Glide {
     #[must_use]
     pub fn new(params: Params, intermediate: &Intermediate) -> Self {
         let Compiled {
-            mut context,
+            context,
             errors,
             figure_fn,
             input_count,
@@ -64,20 +64,20 @@ impl Glide {
         let errors_len = context.constant(errors.len() as f64);
         // The higher the error, the worse the figure. Therefore, exponent should be positive.
         let mean_exponent = params.strictness;
-        let total_error_power = errors.into_iter().fold(Context::zero(), |a, b| {
-            let b_strict = context.pow(b, mean_exponent);
-            let b_divided = context.div(b_strict, errors_len);
-            context.add(a, b_divided)
+        let total_error_power = errors.into_iter().fold(context.real_zero(), |a, b| {
+            let b_strict = b.pow(&context.constant(mean_exponent));
+            let b_divided = b_strict / &errors_len;
+            a + &b_divided
         });
-        let total_error = context.pow(total_error_power, mean_exponent.recip());
+        let total_error = total_error_power.pow(&context.constant(mean_exponent.recip()));
 
         let mut rng = rand::thread_rng();
         let inputs = (0..input_count).map(|_| rng.gen::<f64>() * 10.0 - 5.0);
 
         Self {
             params,
-            error_fn: context.compute([total_error]),
-            gradient_fn: context.compute_gradient(total_error),
+            error_fn: context.exec(|ctx| ctx.compute([total_error.expr])),
+            gradient_fn: context.exec(|ctx| ctx.compute_gradient(total_error.expr)),
             figure_fn,
             inputs: inputs.collect(),
         }

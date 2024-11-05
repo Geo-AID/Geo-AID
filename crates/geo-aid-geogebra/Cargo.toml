@@ -8,5 +8,5 @@ repository = "https://github.com/Geo-AID/Geo-AID"
 
 [dependencies]
 geo-aid-figure = { version = "0.6.0", path = "../geo-aid-figure" }
-geogebra-types = "0.1.0"
+geogebra-types = "0.1.2"
 num-traits = "0.2"

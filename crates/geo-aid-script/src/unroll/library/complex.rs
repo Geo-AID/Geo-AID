@@ -117,6 +117,15 @@ pub fn register(library: &mut Library) {
                 .alias_method(ty::SCALAR_UNKNOWN, "real")
                 .alias_method(ty::SCALAR_UNKNOWN, "re")
                 .overload(Real)
+                .overload(|context: &CompileContext, props| {
+                    Unitless::from(context.free_scalar_display(props))
+                }),
+        )
+        .add(
+            Function::new("imaginary")
+                .alias("im")
+                .alias_method(ty::SCALAR_UNKNOWN, "imaginary")
+                .alias_method(ty::SCALAR_UNKNOWN, "im")
                 .overload(Imaginary),
         )
         .add(
