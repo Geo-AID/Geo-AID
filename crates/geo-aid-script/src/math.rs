@@ -1133,13 +1133,13 @@ impl Normalize for ExprKind {
             }
             Self::Sum { plus, minus } => {
                 normalize_sum(plus, minus, math);
-                if plus.len() == 1 && minus.len() == 0 {
+                if plus.len() == 1 && minus.is_empty() {
                     new_self = Some(math.at(&plus[0]).kind.clone());
                 }
             }
             Self::Product { times, by } => {
                 normalize_product(times, by, math);
-                if times.len() == 1 && by.len() == 0 {
+                if times.len() == 1 && by.is_empty() {
                     new_self = Some(math.at(&times[0]).kind.clone());
                 }
             }
