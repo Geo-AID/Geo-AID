@@ -210,6 +210,12 @@ Point collections are simply ordered collections of points. It is never a separa
 
 **Returns**: The arithmetic average of the points included in the collection (coordinates-wise).
 
+* `vector()` (alias `vec`) if the collection has length of 2.
+
+**Return type**: [Number (distance)](#number)
+
+**Returns**: The vector from the first point to the second point.
+
 ### Segment
 
 Any two points can be connected with a `Segment`.
@@ -223,3 +229,21 @@ Any two points can be connected with a `Segment`.
 **Returns**: the distance `AB`.
 
 **Displays**: exactly what `dst` displays, except that the `draw_segment` property is `false` by default.
+
+### TransformType
+
+Represents a plane transformation. Currently only similarities are supported.
+
+*Methods*
+
+* `compose(other: TransformType)`
+
+**Return type**: [TransformType](#transformtype)
+
+**Returns**: The composition of this transform and the other transform (the other is performed first).
+
+* `transform(object: Any)` (alias `t`)
+
+**Return type**: Depends on the transformation.
+
+**Returns**: The transformed object. If the transformation doesn't support a type, an error will be raised.

@@ -234,6 +234,15 @@ struct Dst {
 
 **Returns**: the value with a distance unit.
 
+## `homothety`
+
+* `homothety(origin: Point, scale: Number (no unit))`
+* `homothety(scale: Number (no unit), origin: Point)`
+
+**Return type**: [TransformType](./types.md#transformtype)
+
+**Returns**: a homothety with an origin and scale.
+
 ## `imaginary` (alias `im`)
 
 * `imaginary(v: Number (any unit))`
@@ -367,15 +376,38 @@ All overloads by default don't display the point dot. This can be changed with p
 
 * `real()`
 
-**Return type**: [Number (no unit)](.types.md#number)
+**Return type**: [Number (no unit)](./types.md#number)
 
 **Returns**: A free, adjustable real number.
+
+## `reflect` (alias `reflection`)
+
+* `reflect(line: Line)`
+
+**Return type**: [TransformType](./types.md#transformtype)
+
+**Returns**: A reflection about a line.
+
+## `rotate` (alias `rotation`)
+
+* `rotate(origin: Point, angle: Number (angle), scale: Number (unitless))`
+* `rotate(origin: Point, scale: Number (unitless), angle: Number (angle))`
+* `rotate(angle: Number (angle), origin: Point, scale: Number (unitless))`
+* `rotate(angle: Number (angle), scale: Number (unitless), origin: Point)`
+* `rotate(scale: Number (unitless), origin: Point, angle: Number (angle))`
+* `rotate(scale: Number (unitless), angle: Number (angle), origin: Point)`
+* `rotate(angle: Number (angle), origin: Point)`
+* `rotate(origin: Point, angle: Number (angle))`
+
+**Return type**: [TransformType](./types.md#transformtype)
+
+**Returns**: A rotation around an origin by an angle (possibly negative), along with an optional homothety at the same point.
 
 ## `sec`
 
 * `sec(v: Number (angle))`
 
-**Return type**: [Number (no unit)](.types.md#number)
+**Return type**: [Number (no unit)](./types.md#number)
 
 **Returns**: Secant of this angle.
 
@@ -432,6 +464,22 @@ struct Segment {
 **Return type**: [Point](types.md#Number)
 
 **Returns**: the complex number as a point.
+
+## `transform`
+
+* `transform(t: TransformType, object: Any)`
+
+**Return type**: Depends on the transformationi and input.
+
+**Returns**: The object transformed using the transformation. Is type isn't supported, a compile error will be raised.
+
+## `translate` (alias `translation`)
+
+* `translate(vector: Distance)`
+
+**Return type**: [TransformType](./types.md#transformtype)
+
+**Returns**: A translation by a vector.
 
 ## `x`
 
