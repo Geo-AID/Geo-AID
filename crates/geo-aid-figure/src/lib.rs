@@ -378,12 +378,24 @@ pub enum ExpressionKind {
         /// X value
         x: VarIndex,
     },
+    /// Direction vector of a line
+    DirectionVector {
+        /// Line to query
+        line: VarIndex,
+    },
     /// Line `pq`
-    PointPoint {
+    PointPointLine {
         /// Point 1
         p: VarIndex,
         /// Point 2
         q: VarIndex,
+    },
+    /// Line from point and direction vector
+    PointVectorLine {
+        /// Point
+        point: VarIndex,
+        /// Vector
+        vector: VarIndex,
     },
     /// Bisector of angle `abc`
     AngleBisector {

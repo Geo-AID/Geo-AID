@@ -996,6 +996,8 @@ pub enum Line {
     PerpendicularThrough(Expr<Line>, Expr<Point>),
     /// A line perpendicular to another one, going through a specific point
     ParallelThrough(Expr<Line>, Expr<Point>),
+    /// A line made from a point and a direction vector
+    PointVector(Expr<Point>, Expr<Number>),
 }
 
 impl Line {
@@ -1112,6 +1114,7 @@ impl Display for Line {
             Self::ParallelThrough(l, p) => {
                 write!(f, "parallel-through({l}, {p})")
             }
+            Self::PointVector(p, v) => write!(f, "point-vector({p}, {v})"),
         }
     }
 }
@@ -1183,6 +1186,8 @@ pub enum NumberData {
     Cos(Expr<Number>),
     /// Atan2
     Atan2(Expr<Number>, Expr<Number>),
+    /// A line's direction vector
+    Direction(Expr<Line>),
 }
 
 impl Display for NumberData {
@@ -1232,6 +1237,7 @@ impl Display for NumberData {
             Self::Sin(v) => write!(f, "sin({v})"),
             Self::Cos(v) => write!(f, "cos({v})"),
             Self::Atan2(y, x) => write!(f, "atan2({y}, {x})"),
+            Self::Direction(line) => write!(f, "dir({line})"),
         }
     }
 }
@@ -1402,6 +1408,7 @@ impl Expr<Number> {
                         | NumberData::Sin(_)
                         | NumberData::Cos(_)
                         | NumberData::Atan2(_, _)
+                        | NumberData::Direction(_)
                         | NumberData::FromPoint(_)
                         | NumberData::SetUnit(_, _) => unreachable!(), // Always concrete
                         NumberData::Negate(v) => {
@@ -2174,6 +2181,23 @@ impl AnyExpr {
             Self::Unknown(v) => Self::Unknown(v.make_variable(name)),
         }
     }
+
+    #[must_use]
+    pub fn as_derived(&self) -> Option<&Expr<Derived>> {
+        if let Self::Derived(v) = self {
+            Some(v)
+        } else {
+            None
+        }
+    }
+
+    pub fn try_into_derived(self) -> Result<Expr<Derived>, Self> {
+        if let Self::Derived(v) = self {
+            Ok(v)
+        } else {
+            Err(self)
+        }
+    }
 }
 
 impl Dummy for AnyExpr {
@@ -2621,7 +2645,11 @@ impl Unroll for ExprCall {
         let (func_name, self_param) = match name {
             FuncRef::Function(x) => (x, None),
             FuncRef::Method(x, y) => (x, Some(y)),
-            FuncRef::Invalid => return AnyExpr::Unknown(Expr::new_spanless(Unknown::dummy())),
+            FuncRef::Invalid => {
+                display.ignore_all();
+                display.finish(context);
+                return AnyExpr::Unknown(Expr::new_spanless(Unknown::dummy()));
+            }
         };
 
         let self_type = self_param.as_ref().map(AnyExpr::get_type);

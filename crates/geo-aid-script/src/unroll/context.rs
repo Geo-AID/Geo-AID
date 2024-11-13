@@ -338,6 +338,9 @@ impl CompileContext {
     generic_expr! {sin(v: Number) -> Number[unit::SCALAR]::Sin}
     generic_expr! {cos(v: Number) -> Number[unit::SCALAR]::Cos}
     generic_expr! {log(v: Number) -> Number[unit::SCALAR]::Log}
+    generic_expr! {direction(k: Line) -> Number[unit::SCALAR]::Direction}
+    generic_expr! {neg(v: Number) -> Number[inferred]::Negate}
+    generic_expr! {point_vector(p: Point, v: Number) -> Line::PointVector}
 
     pub fn mult_display(
         &self,

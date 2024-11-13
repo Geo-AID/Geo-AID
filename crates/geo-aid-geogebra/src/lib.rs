@@ -8,7 +8,7 @@ use geo_aid_figure::{
 };
 use geo_aid_figure::{Expression, ExpressionKind};
 
-use geogebra_types::{prelude::*, Var};
+use geogebra_types::{prelude::*, LineAccess, Var};
 use geogebra_types::{Geogebra as Ggb, LineStyle, LineType};
 
 use num_traits::ToPrimitive;
@@ -343,11 +343,21 @@ impl<'f> Geogebra<'f> {
                 let x = self.variables[x.0].as_number().unwrap();
                 self.workspace.var(Numeric::atan2(y, x)).into()
             }
-            ExpressionKind::PointPoint { p, q } => {
+            ExpressionKind::DirectionVector { line } => {
+                let line = self.variables[line.0].as_line().unwrap();
+                self.workspace.var(line.direction().normalize()).into()
+            }
+            ExpressionKind::PointPointLine { p, q } => {
                 let p = self.variables[p.0].as_point().unwrap();
                 let q = self.variables[q.0].as_point().unwrap();
 
                 self.workspace.var(Line::new(p, q)).into()
+            }
+            ExpressionKind::PointVectorLine { point, vector } => {
+                let point = self.variables[point.0].as_point().unwrap();
+                let vector = self.variables[vector.0].as_number().unwrap();
+
+                self.workspace.var(Line::point_vector(point, vector)).into()
             }
             ExpressionKind::AngleBisector { p, q, r } => {
                 let p = self.variables[p.0].as_point().unwrap();

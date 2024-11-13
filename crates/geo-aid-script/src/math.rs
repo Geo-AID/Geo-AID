@@ -483,6 +483,8 @@ pub enum ExprKind {
     Cos { angle: VarIndex },
     /// Arctan2 function
     Atan2 { y: VarIndex, x: VarIndex },
+    /// Line's direction vector
+    DirectionVector { line: VarIndex },
 
     // Line
     /// A line through two points.
@@ -497,6 +499,8 @@ pub enum ExprKind {
     ParallelThrough { point: VarIndex, line: VarIndex },
     /// A line perpendicular to another `line` going through a `point`
     PerpendicularThrough { point: VarIndex, line: VarIndex },
+    /// A line made from a point and a direction vector
+    PointVector { point: VarIndex, vector: VarIndex },
 
     // Circle
     /// A circle constructed from its center and radius.
@@ -537,6 +541,8 @@ impl ExprKind {
             Self::Atan2 { .. } => 26,
             Self::Log { .. } => 27,
             Self::Exp { .. } => 28,
+            Self::DirectionVector { .. } => 29,
+            Self::PointVector { .. } => 30,
         }
     }
 
@@ -748,11 +754,13 @@ impl ExprKind {
             | Self::Imaginary { .. }
             | Self::Log { .. }
             | Self::Exp { .. }
+            | Self::DirectionVector { .. }
             | Self::PointToComplex { .. } => ExprType::Number,
             Self::PointPoint { .. }
             | Self::AngleBisector { .. }
             | Self::ParallelThrough { .. }
-            | Self::PerpendicularThrough { .. } => ExprType::Line,
+            | Self::PerpendicularThrough { .. }
+            | Self::PointVector { .. } => ExprType::Line,
             Self::ConstructCircle { .. } => ExprType::Circle,
         }
     }
@@ -785,6 +793,7 @@ impl From<ExprKind> for geo_aid_figure::ExpressionKind {
             ExprKind::Sin { angle } => Self::Sin { angle },
             ExprKind::Cos { angle } => Self::Cos { angle },
             ExprKind::Atan2 { y, x } => Self::Atan2 { y, x },
+            ExprKind::DirectionVector { line } => Self::DirectionVector { line },
             ExprKind::PointX { point } => Self::PointX { point },
             ExprKind::PointY { point } => Self::PointY { point },
             ExprKind::PointToComplex { point } => Self::PointToComplex { point },
@@ -792,7 +801,8 @@ impl From<ExprKind> for geo_aid_figure::ExpressionKind {
             ExprKind::Imaginary { number } => Self::Imaginary { number },
             ExprKind::Log { number } => Self::Log { number },
             ExprKind::Exp { number } => Self::Exp { number },
-            ExprKind::PointPoint { p, q } => Self::PointPoint { p, q },
+            ExprKind::PointPoint { p, q } => Self::PointPointLine { p, q },
+            ExprKind::PointVector { point, vector } => Self::PointVectorLine { point, vector },
             ExprKind::AngleBisector { p, q, r } => Self::AngleBisector { p, q, r },
             ExprKind::ParallelThrough { point, line } => Self::ParallelThrough { point, line },
             ExprKind::PerpendicularThrough { point, line } => {
@@ -831,6 +841,7 @@ impl FindEntities for ExprKind {
             | Self::ComplexToPoint { number: x }
             | Self::Log { number: x }
             | Self::Exp { number: x }
+            | Self::DirectionVector { line: x }
             | Self::Real { number: x }
             | Self::Imaginary { number: x } => {
                 set.extend(previous[x.0].iter().copied());
@@ -851,6 +862,10 @@ impl FindEntities for ExprKind {
             | Self::PerpendicularThrough { point: a, line: b }
             | Self::PointPoint { p: a, q: b }
             | Self::Atan2 { y: a, x: b }
+            | Self::PointVector {
+                point: a,
+                vector: b,
+            }
             | Self::ConstructCircle {
                 center: a,
                 radius: b,
@@ -999,6 +1014,9 @@ impl FromUnrolled<unroll::Number> for ExprKind {
                 y: math.load(y),
                 x: math.load(x),
             },
+            UnrolledNumber::Direction(line) => ExprKind::DirectionVector {
+                line: math.load(line),
+            },
             UnrolledNumber::FromPoint(point) => ExprKind::PointToComplex {
                 point: math.load(point),
             },
@@ -1068,6 +1086,10 @@ impl FromUnrolled<UnrolledLine> for ExprKind {
                     },
                 }
             }
+            UnrolledLine::PointVector(point, vector) => Self::PointVector {
+                point: math.load(point),
+                vector: math.load(vector),
+            },
             UnrolledLine::Generic(_) => unreachable!(),
         };
 
@@ -1108,6 +1130,7 @@ impl Normalize for ExprKind {
             | Self::PointY { .. }
             | Self::Sin { .. }
             | Self::Cos { .. }
+            | Self::DirectionVector { .. }
             | Self::Atan2 { .. }
             | Self::Exponentiation { .. }
             | Self::ConstructCircle { .. }
@@ -1118,6 +1141,7 @@ impl Normalize for ExprKind {
             | Self::PointToComplex { .. }
             | Self::Log { .. }
             | Self::Exp { .. }
+            | Self::PointVector { .. }
             | Self::Real { .. }
             | Self::Imaginary { .. } => (),
             Self::LineLineIntersection { k: a, l: b }

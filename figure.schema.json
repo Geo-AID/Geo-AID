@@ -527,6 +527,22 @@
               },
               {
                 "type": "object",
+                "description": "Direction vector of a line.",
+                "properties": {
+                  "type": {
+                    "const": "direction-vector"
+                  },
+                  "line": {
+                    "$ref": "#/$defs/index"
+                  }
+                },
+                "required": [
+                  "type",
+                  "line"
+                ]
+              },
+              {
+                "type": "object",
                 "description": "Line `pq`",
                 "properties": {
                   "type": {
@@ -543,6 +559,26 @@
                   "type",
                   "p",
                   "q"
+                ]
+              },
+              {
+                "type": "object",
+                "description": "Line from a point and a direction vector",
+                "properties": {
+                  "type": {
+                    "const": "point-vector-line"
+                  },
+                  "point": {
+                    "$ref": "#/$defs/index"
+                  },
+                  "vector": {
+                    "$ref": "#/$defs/index"
+                  }
+                },
+                "required": [
+                  "type",
+                  "point",
+                  "vector"
                 ]
               },
               {

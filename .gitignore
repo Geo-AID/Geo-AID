@@ -1,6 +1,7 @@
 /target
 .vscode
 .helix
+.ropeproject
 test.geo
 playground
 Cargo.lock
