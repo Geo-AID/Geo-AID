@@ -305,7 +305,7 @@ impl Rule {
     pub fn new(name: &'static str) -> Self {
         if name
             .chars()
-            .any(|c| !c.is_ascii() || !c.is_lowercase() && c.is_alphabetic())
+            .any(|c| !c.is_ascii() || !c.is_lowercase() && c.is_alphabetic() || c == '_')
         {
             panic!("Function name must be ASCII and lowercase. Received name: {name}");
         }
@@ -322,7 +322,7 @@ impl Rule {
     pub fn alias(mut self, name: &'static str) -> Self {
         if name
             .chars()
-            .any(|c| !c.is_ascii() || !c.is_lowercase() && c.is_alphabetic())
+            .any(|c| !c.is_ascii() || !c.is_lowercase() && c.is_alphabetic() || c == '_')
         {
             panic!("Rule name must be ASCII and lowercase. Received name: {name}");
         }
@@ -489,11 +489,13 @@ impl Library {
     }
 
     /// Get the function by its name. If the function doesn't exist,
-    /// return the most similar name if one exists. The search is case-insensitive.
+    /// return the most similar name if one exists. The search is case-insensitive and ignores underscores.
     pub fn get_function(&self, name: &str) -> Result<&Function, Option<&'static str>> {
+        let mut name = name.to_lowercase();
+        name.retain(|c| c != '_');
         self.functions
-            .get(name.to_lowercase().as_str())
-            .ok_or_else(|| most_similar(self.functions.keys().copied(), name))
+            .get(name.as_str())
+            .ok_or_else(|| most_similar(self.functions.keys().copied(), name.as_str()))
             .and_then(|f| match f {
                 Definition::Direct(f) => Ok(f),
                 Definition::Alias(n) => self.get_function(n),
@@ -501,7 +503,7 @@ impl Library {
     }
 
     /// Get the method by its name and self type. If the method doesn't exist,
-    /// return the most similar name if one exists. The search is case-insensitive.
+    /// return the most similar name if one exists. The search is case-insensitive and ignores underscores.
     /// Self type is expected to be concrete. Internal use only.
     fn get_method_concrete(
         &self,
@@ -520,7 +522,7 @@ impl Library {
     }
 
     /// Get the method by its name and self type. If the method doesn't exist,
-    /// return the most similar name if one exists. The search is case-insensitive.
+    /// return the most similar name if one exists. The search is case-insensitive and ignores underscores.
     pub fn get_method(
         &self,
         self_type: Type,
@@ -543,11 +545,13 @@ impl Library {
     }
 
     /// Get the rule operator by its name. If the rule doesn't exist,
-    /// return the most similar name if one exists. The search is case-insensitive.
+    /// return the most similar name if one exists. The search is case-insensitive and ignores underscores.
     pub fn get_rule(&self, name: &str) -> Result<&Rule, Option<&'static str>> {
+        let mut name = name.to_lowercase();
+        name.retain(|c| c != '_');
         self.rule_ops
-            .get(name.to_lowercase().as_str())
-            .ok_or_else(|| most_similar(self.rule_ops.keys().copied(), name))
+            .get(name.as_str())
+            .ok_or_else(|| most_similar(self.rule_ops.keys().copied(), name.as_str()))
             .and_then(|f| match f {
                 Definition::Direct(f) => Ok(f),
                 Definition::Alias(n) => self.get_rule(n),

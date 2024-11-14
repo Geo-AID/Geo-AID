@@ -128,6 +128,13 @@ fn main() {
     let target_path = args
         .output
         .unwrap_or_else(|| args.input.parent().unwrap().to_path_buf());
+
+    let target_path = if target_path.is_dir() {
+        target_path
+    } else {
+        PathBuf::from(".")
+    };
+
     if !target_path.is_dir() {
         println!("Output path must be a directory.");
         return;

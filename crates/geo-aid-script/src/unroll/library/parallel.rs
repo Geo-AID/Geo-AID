@@ -15,7 +15,7 @@ fn line_point(
 /// Register the function
 pub fn register(library: &mut Library) {
     library.add(
-        Function::new("parallel_through")
+        Function::new("parallelthrough")
             .alias("parallel")
             .overload(line_point)
             .overload(
