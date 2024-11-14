@@ -475,6 +475,7 @@ impl<'r> Compiler<'r> {
 
                 ComplexExpr::real(RealExpr::atan2(&y, &x)).into()
             }
+            ExprKind::DirectionVector { line } => self.variables[line.0].to_line().direction.into(),
             ExprKind::PointPoint { p, q } => {
                 let p = self.variables[p.0].to_complex();
                 let q = self.variables[q.0].to_complex();
@@ -482,6 +483,16 @@ impl<'r> Compiler<'r> {
                 LineExpr {
                     origin: p,
                     direction: q_minus_p.clone() / &q_minus_p.abs(),
+                }
+                .into()
+            }
+            ExprKind::PointVector { point, vector } => {
+                let point = self.variables[point.0].to_complex();
+                let vector = self.variables[vector.0].to_complex();
+
+                LineExpr {
+                    origin: point,
+                    direction: vector.clone() / &vector.abs(),
                 }
                 .into()
             }

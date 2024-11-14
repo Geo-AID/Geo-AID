@@ -1140,3 +1140,34 @@ impl FromExpr<Number> for NumberNode {
         node
     }
 }
+
+/// Node that has no contents. Designed to use in hierarchy node to only show the children.
+#[derive(Debug)]
+pub struct NoContentNode {
+    /// Whether to display the node
+    pub display: MaybeUnset<bool>,
+}
+
+impl Dummy for NoContentNode {
+    fn dummy() -> Self {
+        Self {
+            display: MaybeUnset::new(true),
+        }
+    }
+
+    fn is_dummy(&self) -> bool {
+        false
+    }
+}
+
+impl Node for NoContentNode {
+    fn set_display(&mut self, display: bool) {
+        self.display.set(display);
+    }
+
+    fn get_display(&self) -> bool {
+        self.display.get_copied()
+    }
+
+    fn build(self: Box<Self>, _build: &mut Build) {}
+}

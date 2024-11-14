@@ -2,6 +2,7 @@
 
 use std::{
     collections::HashMap,
+    fmt::Display,
     marker::PhantomData,
     mem,
     ops::{Deref, DerefMut},
@@ -37,6 +38,7 @@ pub mod perpendicular;
 pub mod point;
 pub mod radians;
 pub mod segment;
+pub mod transform;
 pub mod trigonometry;
 
 /// A prelude for builtin functions.
@@ -456,6 +458,7 @@ impl Library {
 
         complex::register(&mut library);
         trigonometry::register(&mut library);
+        transform::register(&mut library);
         point::register(&mut library); // Point()
         dst::register(&mut library); // dst()
         angle::register(&mut library); // angle()
@@ -618,12 +621,21 @@ impl<const N: usize> DerefMut for Pc<N> {
 }
 
 /// Number with a specific unit.
+#[derive(Debug)]
 pub struct NumberUnit<
     const DST_NUM: i64,
     const DST_DENOM: i64,
     const ANG_NUM: i64,
     const ANG_DENOM: i64,
 >(pub Expr<Number>);
+
+impl<const DST_NUM: i64, const DST_DENOM: i64, const ANG_NUM: i64, const ANG_DENOM: i64> Display
+    for NumberUnit<DST_NUM, DST_DENOM, ANG_NUM, ANG_DENOM>
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        Display::fmt(&self.0, f)
+    }
+}
 
 impl<const DST_NUM: i64, const DST_DENOM: i64, const ANG_NUM: i64, const ANG_DENOM: i64>
     NumberUnit<DST_NUM, DST_DENOM, ANG_NUM, ANG_DENOM>
@@ -750,7 +762,14 @@ pub mod macros {
     macro_rules! impl_derived {
         ($t:ty) => {
             paste::paste! {
+                #[derive(Debug)]
                 pub struct [<$t Expr>](pub Expr<Derived>);
+
+                impl std::fmt::Display for [<$t Expr>] {
+                    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                        std::fmt::Display::fmt(&self.0, f)
+                    }
+                }
 
                 impl [<$t Expr>] {
                     #[doc = "Create a new expression out of data and a node"]

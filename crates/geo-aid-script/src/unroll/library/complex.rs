@@ -108,6 +108,21 @@ impl Overload for Conjugate {
     }
 }
 
+fn vector(
+    origin: Expr<Point>,
+    target: Expr<Point>,
+    context: &CompileContext,
+    props: Properties,
+) -> Distance {
+    context
+        .sub_display(
+            context.to_complex(target),
+            context.to_complex(origin),
+            props,
+        )
+        .into()
+}
+
 /// Register all the functions that need to be registered.
 pub fn register(library: &mut Library) {
     library
@@ -139,5 +154,20 @@ pub fn register(library: &mut Library) {
             Function::new("conjugate")
                 .alias_method(ty::SCALAR_UNKNOWN, "conjugate")
                 .overload(Conjugate),
+        )
+        .add(
+            Function::new("vector")
+                .alias("vec")
+                .alias_method(ty::collection(2), "vector")
+                .alias_method(ty::collection(2), "vec")
+                .overload(vector)
+                .overload(|col: Pc<2>, context: &CompileContext, props| {
+                    vector(
+                        col.index_without_node(0),
+                        col.index_without_node(1),
+                        context,
+                        props,
+                    )
+                }),
         );
 }
