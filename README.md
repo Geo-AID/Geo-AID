@@ -38,7 +38,10 @@ mdbook serve --open
 
 ## Goals
 
-The ultimate goal of Geo-AID is to reduce the pain related to figure drawing to bare minimum. It aims to allow writing and generating complicated figures and rendering them in various formats the user may find useful (primarily LaTeX, SVG, GGB (WIP)). It should enable article and book writers to put figures in their works without too much of a hassle, aid teachers in conducting helpful geometry lessons and lectures, and help students (especially those starting in olympiads) learn their craft.
+The ultimate goal of Geo-AID is to reduce the pain related to figure drawing to bare minimum. It aims to allow writing and generating
+complicated figures and rendering them in various formats the user may find useful (primarily LaTeX, SVG, GGB). It should enable article
+and book writers to put figures in their works without too much of a hassle, aid teachers in conducting helpful geometry lessons and
+lectures, and help students (especially those starting in olympiads) learn their craft.
 
 ## How to contribute?
 

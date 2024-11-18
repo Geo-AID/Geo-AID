@@ -178,6 +178,8 @@ pub enum Error {
         error_span: Span,
         /// The type that cannot be unpacked.
         ty: Type,
+        /// The desired collection length
+        length: usize,
     },
     /// There's no implicit conversion between two types.
     ImplicitConversionDoesNotExist {
@@ -484,8 +486,8 @@ impl Error {
                 DiagnosticData::new(&format!("overload for function `{function_name}` with params `({})` not found", params.into_iter().map(|x| format!("{x}")).collect::<Vec<String>>().join(", ")))
                     .add_span(error_span)
             },
-            Self::CannotUnpack { error_span, ty } => {
-                DiagnosticData::new(&format!("could not unpack `{ty}` onto a point collection"))
+            Self::CannotUnpack { error_span, ty, length } => {
+                DiagnosticData::new(&format!("could not unpack `{ty}` onto a point collection of length {length}"))
                     .add_span(error_span)
             }
             Self::ImplicitConversionDoesNotExist {

@@ -913,7 +913,9 @@ impl FromUnrolled<UnrolledPoint> for ExprKind {
             UnrolledPoint::FromComplex(number) => ExprKind::ComplexToPoint {
                 number: math.load(number),
             },
-            UnrolledPoint::Generic(_) => unreachable!(),
+            UnrolledPoint::Generic(g) => {
+                unreachable!("Expression shouldn't have reached math stage: {g}")
+            }
         };
 
         kind.normalize(math);

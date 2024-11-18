@@ -117,7 +117,7 @@ fn col_lies_on_circle(
                             index!(no-node lhs, i_plus_2),
                         ),
                     ),
-                    number!(ANGLE ProcNum::zero()),
+                    number!(ANGLE ProcNum::zero()), // technically, the unit is invalid, but it's not checked later on anyway.
                 ),
                 inverted: false,
                 weight: weight.clone(),

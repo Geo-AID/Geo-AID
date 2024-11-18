@@ -1618,17 +1618,20 @@ impl GetData for PointCollection {
 
 impl ConvertFrom<Expr<Point>> for PointCollection {
     fn convert_from(mut value: Expr<Point>, _context: &CompileContext) -> Expr<Self> {
-        let mut node = PCNode::new();
-        node.push(value.node.take());
-
-        Expr {
+        let value_node = value.take_node();
+        let mut expr = Expr {
             span: value.span,
             data: Rc::new(PointCollection {
                 length: 1,
                 data: PointCollectionData::PointCollection(vec![value].into()),
             }),
-            node: Some(HierarchyNode::new(node)),
-        }
+            node: None,
+        };
+        let mut node = PCNode::new(expr.clone_without_node());
+        node.push(value_node);
+        expr.node = Some(HierarchyNode::new(node));
+
+        expr
     }
 
     fn can_convert_from(_value: &Expr<Point>) -> bool {
@@ -2070,7 +2073,7 @@ impl AnyExpr {
             Type::Point => self.can_convert::<Point>(),
             Type::Line => self.can_convert::<Line>(),
             Type::Number(unit) => self.can_convert_to_scalar(unit).is_some(),
-            Type::PointCollection(len) => self.can_convert_to_collection(len),
+            Type::PointCollection(len) => self.can_convert_to_collection(len).is_some(),
             Type::Circle => self.can_convert::<Circle>(),
             Type::Derived(name) => self.can_convert_to_derived(name),
             Type::Unknown => true,
@@ -2097,12 +2100,12 @@ impl AnyExpr {
 
     /// Check if the expression is convertible to a point collection of the given length.
     #[must_use]
-    pub fn can_convert_to_collection(&self, len: usize) -> bool {
+    pub fn can_convert_to_collection(&self, len: usize) -> Option<usize> {
         match self {
-            Self::Line(_) | Self::Derived(_) | Self::Circle(_) | Self::Number(_) => false,
-            Self::PointCollection(v) => v.data.length == len || len == 0,
-            Self::Point(_) => len == 1,
-            Self::Unknown(_) => true,
+            Self::Line(_) | Self::Derived(_) | Self::Circle(_) | Self::Number(_) => None,
+            Self::PointCollection(v) => (v.data.length == len || len == 0).then_some(v.data.length),
+            Self::Point(_) => (len == 1 || len == 0).then_some(1),
+            Self::Unknown(_) => Some(0),
         }
     }
 
@@ -2196,6 +2199,15 @@ impl AnyExpr {
             Ok(v)
         } else {
             Err(self)
+        }
+    }
+
+    #[must_use]
+    pub fn as_number(&self) -> Option<&Expr<Number>> {
+        if let Self::Number(v) = self {
+            Some(v)
+        } else {
+            None
         }
     }
 }
@@ -2604,7 +2616,7 @@ impl Unroll for Ident {
                 pc_children.resize_with(col.collection.len(), || None);
 
                 // No options are expected, as pcs don't generate nodes.
-                AnyExpr::PointCollection(Expr {
+                let mut expr = Expr {
                     data: Rc::new(PointCollection {
                         length: col.collection.len(),
                         data: PointCollectionData::PointCollection(
@@ -2619,12 +2631,15 @@ impl Unroll for Ident {
                         ),
                     }),
                     span: col.span,
-                    node: Some(HierarchyNode::new(PCNode {
-                        display: display_pc,
-                        children: pc_children,
-                        props: Some(display),
-                    })),
-                })
+                    node: None,
+                };
+                expr.node = Some(HierarchyNode::new(PCNode {
+                    display: display_pc,
+                    children: pc_children,
+                    props: Some(display),
+                    expr: expr.clone_without_node(),
+                }));
+                AnyExpr::PointCollection(expr)
             }
         }
     }
@@ -2838,7 +2853,7 @@ impl Unroll for PointCollectionConstructor {
         let mut pc_children = Vec::new();
         pc_children.resize_with(self.points.len(), || None);
 
-        AnyExpr::PointCollection(Expr {
+        let mut expr = Expr {
             span: self.get_span(),
             data: Rc::new(PointCollection {
                 length: self.points.len(),
@@ -2873,12 +2888,17 @@ impl Unroll for PointCollectionConstructor {
                     points.into()
                 }),
             }),
-            node: Some(HierarchyNode::new(PCNode {
-                display: display_pc,
-                children: pc_children,
-                props: Some(display),
-            })),
-        })
+            node: None,
+        };
+
+        expr.node = Some(HierarchyNode::new(PCNode {
+            display: display_pc,
+            children: pc_children,
+            props: Some(display),
+            expr: expr.clone_without_node(),
+        }));
+
+        AnyExpr::PointCollection(expr)
     }
 }
 
@@ -3357,14 +3377,13 @@ fn create_variable_collection(
     let maybe_error = Error::CannotUnpack {
         error_span: rhs_unrolled.get_span(),
         ty: rhs_unrolled.get_type(),
+        length: col.len(),
     };
-    let mut rhs_unpacked = rhs_unrolled.convert::<PointCollection>(context);
 
-    if rhs_unpacked.data.length != col.len()
-        && !matches!(
-            rhs_unpacked.data.data,
-            PointCollectionData::Generic(Generic::Dummy)
-        )
+    let mut rhs = rhs_unrolled.convert::<PointCollection>(context);
+
+    if rhs.data.length != col.len()
+        && !matches!(rhs.data.data, PointCollectionData::Generic(Generic::Dummy))
     {
         return Err(maybe_error);
     }
@@ -3379,25 +3398,16 @@ fn create_variable_collection(
     //     None
     // };
 
-    let mut rhs_node = rhs_unpacked.take_node();
-    let mut rhs_unpacked: Box<dyn Iterator<Item = Expr<Point>>> =
-        match &rhs_unpacked.data.get_data().data {
-            PointCollectionData::PointCollection(collection) => {
-                Box::new(collection.clone_without_node().0.into_iter())
-                    as Box<dyn Iterator<Item = Expr<Point>>>
-            }
-            PointCollectionData::Generic(Generic::Dummy) => {
-                Box::new(std::iter::repeat_with(|| Expr {
-                    data: Rc::new(Point::dummy()),
-                    span: rhs_unpacked.span,
-                    node: None,
-                }))
-            }
-            PointCollectionData::Generic(_) => unreachable!(),
-        };
-
     for (i, pt) in col.collection.iter().enumerate() {
         let id = format!("{pt}");
+        let mut var = rhs.index_with_node(i);
+        let mut pt_node = var
+            .take_node()
+            .unwrap_or(HierarchyNode::new(PointNode::from_expr(
+                &var,
+                Properties::default(),
+                context,
+            )));
 
         match context.variables.entry(id.clone()) {
             // If the variable already exists, it's a redefinition error.
@@ -3410,13 +3420,9 @@ fn create_variable_collection(
             }
             // Otherwise, create a new variable
             Entry::Vacant(entry) => {
-                let var = rhs_unpacked.next().unwrap();
+                pt_node.root.default_label = SpannedMathString::from(pt.clone());
 
-                if let Some(rhs_node) = &mut rhs_node {
-                    let pt_node = rhs_node.root.children.get_mut(i).and_then(Option::take);
-
-                    variable_nodes.extend(pt_node.map(|x| Box::new(x) as Box<dyn Node>));
-                }
+                variable_nodes.push(Box::new(pt_node));
 
                 let var = var.make_variable(entry.key().clone());
 
@@ -3425,6 +3431,8 @@ fn create_variable_collection(
             }
         }
     }
+
+    variable_nodes.extend(rhs.take_node().map(|n| Box::new(n) as Box<dyn Node>));
 
     Ok(())
 }
@@ -3498,10 +3506,13 @@ fn create_variables(
     // Iterate over each identifier.
     for def in stat.ident.iter() {
         let mut external = Properties::from(external.clone());
-        external.props.insert(
-            String::from("default-label"),
-            (Span::empty(), PropertyValue::Ident(def.name.clone())),
-        );
+
+        if def.name.is_named() {
+            external.props.insert(
+                String::from("default-label"),
+                (Span::empty(), PropertyValue::Ident(def.name.clone())),
+            );
+        }
 
         let display = external.merge_with(Properties::from(def.display_properties.clone()));
 

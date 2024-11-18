@@ -1,5 +1,7 @@
 //! All functions for complex number manipulation
 
+use num_rational::Ratio;
+
 use crate::{
     parser::Type,
     token::number::ProcNum,
@@ -123,6 +125,49 @@ fn vector(
         .into()
 }
 
+/// Absolute value of a number, real or complex.
+#[must_use]
+pub fn abs(num: Expr<Number>, context: &CompileContext, props: Properties) -> Expr<Number> {
+    let re2 = context.mult(
+        context.real(num.clone_without_node()),
+        context.real(num.clone_without_node()),
+    );
+    let im2 = context.mult(
+        context.imaginary(num.clone_without_node()),
+        context.imaginary(num.clone_without_node()),
+    );
+    let norm = context.add(re2, im2);
+    context.pow_display(norm, Ratio::new(1, 2), props)
+}
+
+#[derive(Debug)]
+struct Abs;
+
+impl Overload for Abs {
+    fn get_returned_type(&self, params: &[AnyExpr]) -> Option<Type> {
+        if params.len() != 1 {
+            return None;
+        }
+
+        params[0].can_convert_to_scalar(None).map(Type::Number)
+    }
+
+    fn unroll(
+        &self,
+        mut params: Vec<AnyExpr>,
+        context: &mut CompileContext,
+        props: Properties,
+    ) -> AnyExpr {
+        let num = params
+            .swap_remove(0)
+            .convert_to(Type::Number(None), context)
+            .to_scalar()
+            .unwrap();
+
+        abs(num, context, props).into()
+    }
+}
+
 /// Register all the functions that need to be registered.
 pub fn register(library: &mut Library) {
     library
@@ -161,13 +206,20 @@ pub fn register(library: &mut Library) {
                 .alias_method(ty::collection(2), "vector")
                 .alias_method(ty::collection(2), "vec")
                 .overload(vector)
-                .overload(|col: Pc<2>, context: &CompileContext, props| {
+                .overload(|mut col: Pc<2>, context: &CompileContext, props| {
                     vector(
-                        col.index_without_node(0),
+                        col.index_with_node(0),
                         col.index_without_node(1),
                         context,
                         props,
                     )
                 }),
+        )
+        .add(
+            Function::new("abs")
+                .alias("module")
+                .alias_method(Type::Number(None), "abs")
+                .alias_method(Type::Number(None), "module")
+                .overload(Abs),
         );
 }
