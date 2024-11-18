@@ -55,6 +55,17 @@ struct Angle {
 
 **Returns**: measurement of the angle between `k` and `l`. Which angle, depends on the order of the lines. For predictable outcome, the point versions are strongly recommended.
 
+## `area`
+
+* `area(A (Point), B (Point), C (Point), ...)`
+* `area(ABC... (Point collection))`
+
+Works for 3 or more points.
+
+**Return type**: [Number (distance^2)](./types.md#number)
+
+**Returns**: the area of the given polygon.
+
 ## `asec`
 
 * `asec(v: Number (no unit))`
@@ -147,6 +158,16 @@ struct Bisector {
 **Return type**: [Number (the same unit)](#./types.md#Number)
 
 **Returns**: The conjugate of this number.
+
+## `convex` (alias `convexpolygon`, `convexpoly`)
+
+* `convex(n: Number (literal, no unit))`
+
+Only works with a number literal.
+
+**Return type**: [PC-n](./types.md#pointcollections)
+
+**Returns**: A convex polygon with `n` sides.
 
 ## `cos`
 
@@ -344,6 +365,16 @@ All overloads by default don't display the point dot. This can be changed with p
 
 **Returns**: an adjusted (free) point.
 
+## `polygon` (alias `poly`)
+
+* `polygon(n: Number (literal, no unit))`
+
+Only works with a number literal.
+
+**Return type**: [PC-n](./types.md#pointcollections)
+
+**Returns**: A polygon with `n` sides. Possibly concave, possibly self-intersecting.
+
 ## `radians` (alias `rad`)
 
 * `radians(value: Number (no unit))`
@@ -432,6 +463,17 @@ struct Segment {
 ```
 
 `display_segment` decides whether the segment should be displayed and `style` decides how it should be displayed.
+
+## `signedarea`
+
+* `signedarea(A (Point), B (Point), C (Point), ...)`
+* `signedarea(ABC... (Point collection))`
+
+Works for 3 or more points.
+
+**Return type**: [Number (distance^2)](./types.md#number)
+
+**Returns**: the signed area of the given polygon.
 
 ## `sin`
 

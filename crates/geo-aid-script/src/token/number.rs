@@ -229,7 +229,7 @@ impl Display for Parsed {
 
 /// Arbitrary precision complex number for processing
 #[derive(Debug, Clone, Hash, Serialize, PartialEq, Eq)]
-pub struct ProcNum(Complex<BigRational>);
+pub struct ProcNum(pub Complex<BigRational>);
 
 impl ProcNum {
     /// Turn this into a floating point 64-bit precision complex number.

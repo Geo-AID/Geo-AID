@@ -24,6 +24,7 @@ use super::{
 };
 
 pub mod angle;
+pub mod area;
 pub mod bisector;
 pub mod circle;
 pub mod complex;
@@ -36,6 +37,7 @@ pub mod mid;
 pub mod parallel;
 pub mod perpendicular;
 pub mod point;
+pub mod polygon;
 pub mod radians;
 pub mod segment;
 pub mod transform;
@@ -51,7 +53,7 @@ pub mod prelude {
                 BuildAssociated, CollectionNode, HierarchyNode, LineNode, LineType, NumberNode,
                 PointNode,
             },
-            library::{macros::*, Angle, Distance, Function, Library, Pc, Rule, Unitless},
+            library::{macros::*, Angle, Area, Distance, Function, Library, Pc, Rule, Unitless},
             Circle, CloneWithNode, Derived, DerivedType, Expr, GeoType, Line, NumberData, Point,
             Properties, UnrolledRule, UnrolledRuleKind,
         },
@@ -472,6 +474,8 @@ impl Library {
         circle::register(&mut library); // Circle()
         segment::register(&mut library); // Segment()
         line::register(&mut library); // Line()
+        area::register(&mut library);
+        polygon::register(&mut library);
 
         lies_on::register(&mut library); // lies_on
 
@@ -708,6 +712,7 @@ impl<const DST_NUM: i64, const DST_DENOM: i64, const ANG_NUM: i64, const ANG_DEN
 }
 
 pub type Distance = NumberUnit<1, 1, 0, 1>;
+pub type Area = NumberUnit<2, 1, 0, 1>;
 pub type Angle = NumberUnit<0, 1, 1, 1>;
 pub type Unitless = NumberUnit<0, 1, 0, 1>;
 

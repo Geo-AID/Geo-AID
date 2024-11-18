@@ -464,22 +464,19 @@ pub struct PCNode {
     pub children: Vec<Option<HierarchyNode<<Point as Displayed>::Node>>>,
     /// Properties are stored for later processing as they might be used for conversions.
     pub props: Option<Properties>,
-}
-
-impl Default for PCNode {
-    fn default() -> Self {
-        Self::new()
-    }
+    /// The defining expression
+    pub expr: Expr<PointCollection>,
 }
 
 impl PCNode {
     /// Create a new, empty point collection node.
     #[must_use]
-    pub fn new() -> Self {
+    pub fn new(expr: Expr<PointCollection>) -> Self {
         Self {
             display: MaybeUnset::new(true),
             children: Vec::new(),
             props: None,
+            expr,
         }
     }
 
@@ -499,7 +496,7 @@ impl PCNode {
 
 impl Dummy for PCNode {
     fn dummy() -> Self {
-        Self::new()
+        Self::new(Expr::dummy())
     }
 
     fn is_dummy(&self) -> bool {

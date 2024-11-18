@@ -551,6 +551,14 @@ impl Ident {
             None
         }
     }
+
+    /// Returns `true` if the ident is [`Named`].
+    ///
+    /// [`Named`]: Ident::Named
+    #[must_use]
+    pub fn is_named(&self) -> bool {
+        matches!(self, Self::Named(..))
+    }
 }
 
 impl Display for Ident {

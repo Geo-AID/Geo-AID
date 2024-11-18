@@ -186,6 +186,18 @@ Point collections are simply ordered collections of points. It is never a separa
 
 *Methods*
 
+* `area()` if the collection has length of at least 3.
+
+**Return type**: [Number (distance^2)](#number)
+
+**Returns**: The area of the polygon.
+
+* `signedarea()` if the collection has length of at least 3.
+
+**Return type**: [Number (distance^2)](#number)
+
+**Returns**: The signed area of the polygon, where the sign depends on the clockwiseness of the points given.
+
 * `circumcircle()` if the collection has length of 3.
 
 **Return type**: [Circle](#circle)
