@@ -15,7 +15,7 @@ pub fn line_point(
 /// Register the function
 pub fn register(library: &mut Library) {
     library.add(
-        Function::new("perpendicular_through")
+        Function::new("perpendicularthrough")
             .alias("pependicular")
             .overload(line_point)
             .overload(

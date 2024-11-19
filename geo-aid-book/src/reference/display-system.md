@@ -128,3 +128,8 @@ Variable definitions display their defining expressions. Properties defined on d
 ## Properties on rules
 
 Currently, rules only accept a `display` property and display both of their sides.
+
+## Matching properties
+
+All property names are case-insensitive and ignore underscores. Therefore, `display_label`, `displaylabel` and
+`DiSplaYl__aBE__l` all refer to the same property.

@@ -258,7 +258,7 @@ fn pt_lies_on_segment(
 /// Register the rule
 pub fn register(library: &mut Library) {
     library.add(
-        Rule::new("lies_on")
+        Rule::new("lieson")
             .alias("on")
             .overload(pt_lies_on_circle)
             .overload(pt_lies_on_line)

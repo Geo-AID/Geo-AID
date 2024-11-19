@@ -2,8 +2,11 @@
 
 use std::mem;
 
+use num_traits::FromPrimitive;
+
 use crate::{
     parser::Type,
+    token::number::ProcNum,
     unroll::{AnyExpr, Convert, PointCollection},
 };
 
@@ -25,7 +28,14 @@ fn area(
     let bc = context.distance_pp(b, c);
 
     context
-        .mult_display(sin_angle, context.mult(ba, bc), props)
+        .mult_display(
+            context.mult(
+                sin_angle,
+                number!(SCALAR ProcNum::from_i64(1).unwrap() / &ProcNum::from_i64(2).unwrap()),
+            ),
+            context.mult(ba, bc),
+            props,
+        )
         .into()
 }
 
@@ -45,7 +55,14 @@ fn signed_area(
     let bc = context.distance_pp(b, c);
 
     context
-        .mult_display(sin_angle, context.mult(ba, bc), props)
+        .mult_display(
+            context.mult(
+                sin_angle,
+                number!(SCALAR ProcNum::from_i64(1).unwrap() / &ProcNum::from_i64(2).unwrap()),
+            ),
+            context.mult(ba, bc),
+            props,
+        )
         .into()
 }
 

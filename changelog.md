@@ -1,3 +1,24 @@
+## Version 0.7.0
+
+- **GeoScript**: Function, rule, and property names now ignore casing of letters and underscores.
+- **GeoScript**: Trigonometry functions were added.
+- **GeoScript**: Complex numbers are now supported.
+- **GeoScript**: Isometric and similar transforms were added (homothety, rotation, reflection, translation and composition of these)
+- **GeoScript**: Area functions are now supported, both absolute and signed.
+- **GeoScript**: Shorthands for polygons and convex polygons were added.
+- **GeoScript**: Let statements now support display properties.
+- **GeoScript**: Let statements now only support one rule. Decision was made to avoid conflicts with:
+- **GeoScript**: Rule chains were added to the language (e.g. `a < b < c`).
+- **GeoScript**: Field syntax was removed from the language in favor of methods, all for the sake of consistency.
+- **GeoScript**: Function and method aliases are now supported.
+- **GeoScript**: More, various functions were added.
+- **GeoScript**: Added a "point collection lies on line" rule, ensures the order of points.
+- **GeoScript**: Fixed a critical bug, that caused decimal numbers to be read incorrectly.
+- **GeoScript**: `mid` for a point collection with 2 points now returns the midpoint, rather than the distance.
+- **GeoScript**: Multiple functions are now generic over point collection length.
+- Fixed various other bugs.
+- Multiple improvements for further development.
+
 ## Version 0.6.0
 
 - **Interface**: The command line interface changed to support generating output in multiple formats.

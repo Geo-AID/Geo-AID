@@ -1,10 +1,10 @@
 [package]
 name = "geo-aid-plaintext"
 description = "Support for plaintext output from Geo-AID."
-version = "0.6.0"
+version = "0.7.0"
 edition = "2021"
 license = "MIT"
 repository = "https://github.com/Geo-AID/Geo-AID"
 
 [dependencies]
-geo-aid-figure = { version = "0.6.0", path = "../geo-aid-figure" }
+geo-aid-figure = { version = "0.7.0", path = "../geo-aid-figure" }

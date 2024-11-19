@@ -1,6 +1,6 @@
 # Rule operators
 
-Here are listed all of GeoScript's rules. Note that, the names are case-insensitive.
+Here are listed all of GeoScript's rules. Note that, the names are case-insensitive and ignore underscores. This means that rules `lies_on`, `lieson`, `LIEsoN` and `L_ie_s___On` are the same rule.
 Overloads are listed in the order they are checked.
 
 ## Comparison

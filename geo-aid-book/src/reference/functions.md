@@ -1,6 +1,6 @@
 # Functions
 
-Here are listed all of GeoScript's functions. Note that, the names are case-insensitive.
+Here are listed all of GeoScript's functions. Note that, the names are case-insensitive and ignore underscores. This means that functions `perpendicular_through`, `perpendicularthrough`, `PERPendicularthrougH` and `P_erpendic_ular___Through_` are the same function.
 Overloads are listed in the order they are checked.
 
 ## `acos`

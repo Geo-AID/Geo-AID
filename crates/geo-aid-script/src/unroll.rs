@@ -3108,8 +3108,8 @@ pub fn most_similar<'r, I: IntoIterator<Item = &'r T>, T: AsRef<str> + ?Sized + 
 /// Properties, commonly used for display options.
 #[derive(Debug)]
 pub struct Properties {
-    /// Name-(span, value) pairs.
-    props: HashMap<String, (Span, PropertyValue)>,
+    /// (normalized name)-(span, used-name, value) pairs.
+    props: HashMap<String, (Span, String, PropertyValue)>,
     /// Whether the properties are safe to close.
     finished: bool,
     /// Errors encountered when parsing properties
@@ -3156,6 +3156,14 @@ impl Default for Properties {
 }
 
 impl Properties {
+    fn normalize(property: &str) -> String {
+        property
+            .chars()
+            .filter(|c| *c != '_')
+            .map(|c| c.to_ascii_lowercase())
+            .collect()
+    }
+
     /// Finish parsing these properties and submit all their errors.
     pub fn finish(mut self, context: &CompileContext) {
         self.finished = true;
@@ -3163,12 +3171,12 @@ impl Properties {
         let props = mem::take(&mut self.props);
         let expected = mem::take(&mut self.expected);
 
-        self.errors.extend(props.into_iter().map(|(key, value)| {
-            let suggested = most_similar(expected.iter().copied(), &key);
+        self.errors.extend(props.into_values().map(|value| {
+            let suggested = most_similar(expected.iter().copied(), &value.1);
 
             Error::UnexpectedDisplayOption {
                 error_span: value.0,
-                option: key,
+                option: value.1,
                 suggested,
             }
         }));
@@ -3179,7 +3187,8 @@ impl Properties {
     /// Get a property value by its name.
     #[must_use]
     pub fn get<T: FromProperty>(&mut self, property: &'static str) -> Property<T> {
-        if let Some((_, prop)) = self.props.remove(property) {
+        let norm = Self::normalize(property);
+        if let Some((_, _, prop)) = self.props.remove(&norm) {
             let prop_span = prop.get_span();
 
             Property {
@@ -3204,7 +3213,7 @@ impl Properties {
 
     /// Ignore the given property.
     pub fn ignore(&mut self, property: &'static str) {
-        self.props.remove(property);
+        self.props.remove(&Self::normalize(property));
     }
 
     /// Add a property along with a value if it is not present yet.
@@ -3213,9 +3222,11 @@ impl Properties {
         property: &'static str,
         (key_span, value): (Span, PropertyValue),
     ) {
-        self.props
-            .entry(property.to_string())
-            .or_insert((key_span, value));
+        self.props.entry(Self::normalize(property)).or_insert((
+            key_span,
+            property.to_string(),
+            value,
+        ));
     }
 
     /// Merge the properties with other properties. Automatically finished the other properties.
@@ -3246,7 +3257,12 @@ impl From<Option<DisplayProperties>> for Properties {
             props: value
                 .into_iter()
                 .flat_map(|x| x.properties.into_parsed_iter())
-                .map(|v| (v.name.ident.clone(), (v.name.span, v.value.clone())))
+                .map(|v| {
+                    (
+                        Self::normalize(&v.name.ident),
+                        (v.name.span, v.name.ident.clone(), v.value.clone()),
+                    )
+                })
                 .collect(),
             finished: false,
             errors: Vec::new(),
@@ -3508,9 +3524,9 @@ fn create_variables(
         let mut external = Properties::from(external.clone());
 
         if def.name.is_named() {
-            external.props.insert(
-                String::from("default-label"),
-                (Span::empty(), PropertyValue::Ident(def.name.clone())),
+            external.add_if_not_present(
+                "default-label",
+                (def.name.get_span(), PropertyValue::Ident(def.name.clone())),
             );
         }
 
