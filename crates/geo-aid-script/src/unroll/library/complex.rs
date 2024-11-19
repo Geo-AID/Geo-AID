@@ -189,8 +189,8 @@ pub fn register(library: &mut Library) {
                 .overload(Imaginary),
         )
         .add(
-            Function::new("to_complex")
-                .alias_method(ty::POINT, "to_complex")
+            Function::new("tocomplex")
+                .alias_method(ty::POINT, "tocomplex")
                 .overload(|point: Expr<Point>, context: &CompileContext, props| {
                     Distance::from(context.to_complex_display(point, props))
                 }),

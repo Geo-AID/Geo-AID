@@ -79,9 +79,9 @@ impl Function {
     pub fn new(name: &'static str) -> Self {
         if name
             .chars()
-            .any(|c| !c.is_ascii() || !c.is_lowercase() && c.is_alphabetic())
+            .any(|c| !c.is_ascii() || !c.is_lowercase() && c.is_alphabetic() || c == '_')
         {
-            panic!("Function name must be ASCII and lowercase. Received name: {name}");
+            panic!("Function name must be ASCII, lowercase and not contain underscores. Received name: {name}");
         }
 
         Self {
@@ -97,9 +97,9 @@ impl Function {
     pub fn alias(mut self, name: &'static str) -> Self {
         if name
             .chars()
-            .any(|c| !c.is_ascii() || !c.is_lowercase() && c.is_alphabetic())
+            .any(|c| !c.is_ascii() || !c.is_lowercase() && c.is_alphabetic() || c == '_')
         {
-            panic!("Function name must be ASCII and lowercase. Received name: {name}");
+            panic!("Function name must be ASCII, lowercase and not contain underscores. Received name: {name}");
         }
 
         self.aliases.push(name);
@@ -307,7 +307,7 @@ impl Rule {
             .chars()
             .any(|c| !c.is_ascii() || !c.is_lowercase() && c.is_alphabetic() || c == '_')
         {
-            panic!("Function name must be ASCII and lowercase. Received name: {name}");
+            panic!("Function name must be ASCII, lowercase and not contain underscores. Received name: {name}");
         }
 
         Self {
@@ -324,7 +324,7 @@ impl Rule {
             .chars()
             .any(|c| !c.is_ascii() || !c.is_lowercase() && c.is_alphabetic() || c == '_')
         {
-            panic!("Rule name must be ASCII and lowercase. Received name: {name}");
+            panic!("Rule name must be ASCII, lowercase and not contain underscores. Received name: {name}");
         }
 
         self.aliases.push(name);

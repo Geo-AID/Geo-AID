@@ -45,8 +45,8 @@ pub fn register(library: &mut Library) {
                 }),
         )
         .add(
-            Function::new("to_point")
-                .alias_method(ty::POINT, "to_point")
+            Function::new("topoint")
+                .alias_method(ty::POINT, "topoint")
                 .overload(|number: Distance, context: &CompileContext, props| {
                     context.to_point_display(number.0, props)
                 }),
