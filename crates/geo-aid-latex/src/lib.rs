@@ -5,36 +5,37 @@ use geo_aid_figure::{
     CircleItem, Figure, Item, LineItem, PointItem, Position, Style, TwoPointItem,
 };
 use num_traits::ToPrimitive;
+use std::io::{self, Seek, Write};
 use std::string::String;
 
 /// The LaTeX format writer.
-#[derive(Debug, Default)]
-pub struct Latex {
-    /// The current file contents
-    content: String,
+#[derive(Debug)]
+pub struct Latex<W: Write + Seek> {
+    /// Write stream
+    writer: W
 }
 
-impl Latex {
+impl<W: Write + Seek> Latex<W> {
     /// Get the figure in LaTeX format.
     #[must_use]
-    pub fn draw(figure: &Figure) -> String {
-        let mut latex = Self::default();
+    pub fn draw(figure: &Figure, writer: W) -> Result<(), std::io::Error> {
+        let mut latex = Self { writer };
 
-        latex.begin();
+        latex.begin()?;
 
         for item in &figure.items {
             match item {
-                Item::Point(point) => latex.draw_point(point),
-                Item::Line(line) => latex.draw_line(line),
-                Item::Ray(ray) => latex.draw_ray(ray),
-                Item::Segment(segment) => latex.draw_segment(segment),
-                Item::Circle(circle) => latex.draw_circle(circle),
+                Item::Point(point) => latex.draw_point(point)?,
+                Item::Line(line) => latex.draw_line(line)?,
+                Item::Ray(ray) => latex.draw_ray(ray)?,
+                Item::Segment(segment) => latex.draw_segment(segment)?,
+                Item::Circle(circle) => latex.draw_circle(circle)?,
             }
         }
 
-        latex.end();
+        latex.end()?;
 
-        latex.content
+        Ok(())
     }
 
     /// Convert the given math string into a LaTeX string.
@@ -72,8 +73,8 @@ impl Latex {
     }
 
     /// Draw a styled segment delimited by two points.
-    fn draw_simple_segment(&mut self, points: &(Position, Position), style: Style) {
-        self.content += &format!(
+    fn draw_simple_segment(&mut self, points: &(Position, Position), style: Style) -> io::Result<()> {
+        write!(&mut self.writer,
             r#"
                 \begin{{scope}}
                     \coordinate (A) at ({},{});
@@ -86,57 +87,59 @@ impl Latex {
             points.1.x,
             points.1.y,
             Self::get_style_name(style)
-        );
+        )
     }
 
-    fn begin(&mut self) {
-        self.content = String::from(
+    fn begin(&mut self) -> io::Result<()> {
+        write!(&mut self.writer,
             r"
-                \documentclass{article}
-                \usepackage{tikz}
-                \usepackage{tkz-euclide}
-                \usetikzlibrary {angles,calc,quotes}
-                \begin{document}
-                \begin{tikzpicture}
+                \documentclass{{article}}
+                \usepackage{{tikz}}
+                \usepackage{{tkz-euclide}}
+                \usetikzlibrary {{angles,calc,quotes}}
+                \begin{{document}}
+                \begin{{tikzpicture}}
             ",
-        );
+        )
     }
 
-    fn draw_point(&mut self, point: &PointItem) {
+    fn draw_point(&mut self, point: &PointItem) -> io::Result<()> {
         let pos = point.position;
         let id = format!("expr{}", point.id.0);
 
-        self.content += &format!(
+        write!(&mut self.writer,
             r#"
                 \coordinate ({}) at ({}, {}); \fill[black] ({}) circle (1pt);
             "#,
             id, pos.x, pos.y, id
-        );
+        )?;
 
         if let Some(label) = &point.label {
             let label_pos = label.position;
 
-            self.content += &format!(
+            write!(&mut self.writer,
                 r#"
                 \node at ({}, {}) {{${}$}};
             "#,
                 label_pos.x,
                 label_pos.y,
                 Self::math_to_latex(&label.content)
-            );
+            )?;
         }
+
+        Ok(())
     }
 
-    fn draw_line(&mut self, line: &LineItem) {
-        self.draw_simple_segment(&line.points, line.style);
+    fn draw_line(&mut self, line: &LineItem) -> io::Result<()> {
+        self.draw_simple_segment(&line.points, line.style)
     }
 
-    fn draw_ray(&mut self, ray: &TwoPointItem) {
-        self.draw_simple_segment(&ray.points, ray.style);
+    fn draw_ray(&mut self, ray: &TwoPointItem) -> io::Result<()> {
+        self.draw_simple_segment(&ray.points, ray.style)
     }
 
-    fn draw_segment(&mut self, segment: &TwoPointItem) {
-        self.draw_simple_segment(&segment.points, segment.style);
+    fn draw_segment(&mut self, segment: &TwoPointItem) -> io::Result<()> {
+        self.draw_simple_segment(&segment.points, segment.style)
     }
 
     // fn draw_angle(&mut self, angle: &RenderedAngle) {
@@ -225,7 +228,7 @@ impl Latex {
     //     };
     // }
 
-    fn draw_circle(&mut self, circle: &CircleItem) {
+    fn draw_circle(&mut self, circle: &CircleItem) -> io::Result<()> {
         let pos1 = circle.center;
         let pos2 = circle.center
             + Position {
@@ -233,7 +236,7 @@ impl Latex {
                 y: 0.0,
             };
 
-        self.content += &format!(
+        write!(&mut self.writer,
             r#"
             \begin{{scope}}
                 \coordinate (A) at ({}, {});
@@ -246,11 +249,10 @@ impl Latex {
             pos2.x,
             pos2.y,
             Self::get_style_name(circle.style)
-        );
+        )
     }
 
-    fn end(&mut self) -> &str {
-        self.content += "\\end{tikzpicture} \\end{document}";
-        &self.content
+    fn end(&mut self) -> io::Result<()> {
+        write!(&mut self.writer, "\\end{{tikzpicture}} \\end{{document}}")
     }
 }
