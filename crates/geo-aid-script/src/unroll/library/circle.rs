@@ -91,7 +91,9 @@ pub fn register(library: &mut Library) {
         )
         .add(
             Function::new("center")
+                .alias("centre")
                 .alias_method(ty::CIRCLE, "center")
+                .alias_method(ty::CIRCLE, "centre")
                 .overload(|circle: Expr<Circle>, context: &CompileContext, props| {
                     context.circle_center_display(circle, props)
                 }),

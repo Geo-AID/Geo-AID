@@ -121,7 +121,7 @@ struct Bisector {
 
 * `angle(k: Line, l: Line)`
 
-## `center`
+## `center` (alias `centre`)
 
 * `center(circle: Circle)`
 
@@ -338,6 +338,15 @@ All overloads by default don't display the point dot. This can be changed with p
 **Return type**: [Point](./types.md#Point)
 
 **Returns**: The middle point of `P_1`, `P_2`, ... `P_n`. Special cases: when `n=2`, the middle of a segment; When `n=3`, the centroid of a triangle.
+
+## `orthocenter` (alias `orthocentre`)
+
+* `orthocenter(A: Point, B: Point, C: Point)`
+* `orthocenter(ABC: 3-P)`
+
+**Return type**: [Point](./types.md#Point)
+
+**Returns**: The intersection of the triangles altitudes.
 
 ## `parallel_through` (alias `parallel`)
 
