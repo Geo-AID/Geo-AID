@@ -11,7 +11,7 @@ use geo_aid_figure::{
 #[derive(Debug)]
 pub struct Svg<W: Write + Seek> {
     /// Writer stream
-    writer: W
+    writer: W,
 }
 
 impl<W: Write + Seek> Svg<W> {
@@ -54,8 +54,13 @@ impl<W: Write + Seek> Svg<W> {
     }
 
     /// Draw a styled segment delimited by two points.
-    fn draw_simple_segment(&mut self, (p1, p2): (Position, Position), style: Style) -> io::Result<()> {
-        write!(&mut self.writer,
+    fn draw_simple_segment(
+        &mut self,
+        (p1, p2): (Position, Position),
+        style: Style,
+    ) -> io::Result<()> {
+        write!(
+            &mut self.writer,
             r#"
                 <line stroke-width="{}" stroke-dasharray="{}" stroke="black" x1="{}" x2="{}" y1="{}" y2="{}"/>
             "#,
@@ -69,7 +74,8 @@ impl<W: Write + Seek> Svg<W> {
     }
 
     fn begin(&mut self, figure: &Figure) -> io::Result<()> {
-        write!(&mut self.writer,
+        write!(
+            &mut self.writer,
             r#"
                 <svg height="{}" width="{}" xmlns="http://www.w3.org/2000/svg">
                     <font>
@@ -85,13 +91,15 @@ impl<W: Write + Seek> Svg<W> {
 
     fn draw_point(&mut self, point: &PointItem) -> io::Result<()> {
         let pos = point.position;
-        write!(&mut self.writer,
+        write!(
+            &mut self.writer,
             r#"<circle cx="{}" cy="{}" fill="black" r="1"/>"#,
             pos.x, pos.y
         )?;
 
         if let Some(label) = &point.label {
-            write!(&mut self.writer,
+            write!(
+                &mut self.writer,
                 r#"
                 <text transform="scale(1,-1)"
                     text-anchor="middle" dominant-baseline="middle"
@@ -141,7 +149,8 @@ impl<W: Write + Seek> Svg<W> {
     // }
 
     fn draw_circle(&mut self, circle: &CircleItem) -> io::Result<()> {
-        write!(&mut self.writer,
+        write!(
+            &mut self.writer,
             r#"
                 <circle cx="{}" cy="{}" r="{}" stroke="black" stroke-width="{}" stroke-dasharray="{}" fill="transparent"/>
             "#,

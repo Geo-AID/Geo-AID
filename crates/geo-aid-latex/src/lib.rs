@@ -12,7 +12,7 @@ use std::string::String;
 #[derive(Debug)]
 pub struct Latex<W: Write + Seek> {
     /// Write stream
-    writer: W
+    writer: W,
 }
 
 impl<W: Write + Seek> Latex<W> {
@@ -73,8 +73,13 @@ impl<W: Write + Seek> Latex<W> {
     }
 
     /// Draw a styled segment delimited by two points.
-    fn draw_simple_segment(&mut self, points: &(Position, Position), style: Style) -> io::Result<()> {
-        write!(&mut self.writer,
+    fn draw_simple_segment(
+        &mut self,
+        points: &(Position, Position),
+        style: Style,
+    ) -> io::Result<()> {
+        write!(
+            &mut self.writer,
             r#"
                 \begin{{scope}}
                     \coordinate (A) at ({},{});
@@ -91,7 +96,8 @@ impl<W: Write + Seek> Latex<W> {
     }
 
     fn begin(&mut self) -> io::Result<()> {
-        write!(&mut self.writer,
+        write!(
+            &mut self.writer,
             r"
                 \documentclass{{article}}
                 \usepackage{{tikz}}
@@ -107,7 +113,8 @@ impl<W: Write + Seek> Latex<W> {
         let pos = point.position;
         let id = format!("expr{}", point.id.0);
 
-        write!(&mut self.writer,
+        write!(
+            &mut self.writer,
             r#"
                 \coordinate ({}) at ({}, {}); \fill[black] ({}) circle (1pt);
             "#,
@@ -117,7 +124,8 @@ impl<W: Write + Seek> Latex<W> {
         if let Some(label) = &point.label {
             let label_pos = label.position;
 
-            write!(&mut self.writer,
+            write!(
+                &mut self.writer,
                 r#"
                 \node at ({}, {}) {{${}$}};
             "#,
@@ -236,7 +244,8 @@ impl<W: Write + Seek> Latex<W> {
                 y: 0.0,
             };
 
-        write!(&mut self.writer,
+        write!(
+            &mut self.writer,
             r#"
             \begin{{scope}}
                 \coordinate (A) at ({}, {});

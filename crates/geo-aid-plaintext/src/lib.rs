@@ -11,7 +11,7 @@ use geo_aid_figure::{
 #[derive(Debug)]
 pub struct Plaintext<W: Write + Seek> {
     /// The write stream
-    writer: W
+    writer: W,
 }
 
 impl<W: Write + Seek> Plaintext<W> {
@@ -52,7 +52,8 @@ impl<W: Write + Seek> Plaintext<W> {
     ) -> io::Result<()> {
         let label = label.map(|l| l.content.to_string()).unwrap_or_default();
 
-        write!(&mut self.writer,
+        write!(
+            &mut self.writer,
             "{} line \"{}\" from ({:.3}, {:.3}) to ({:.3}, {:.3})\n",
             Self::get_style_name(style),
             label,
@@ -70,7 +71,8 @@ impl<W: Write + Seek> Plaintext<W> {
             .map(|x| format!("\"{}\"", x.content))
             .unwrap_or_default();
 
-        write!(&mut self.writer,
+        write!(
+            &mut self.writer,
             "point \"{label}\" at ({:.3}, {:.3})\n",
             point.position.x, point.position.y
         )
@@ -89,7 +91,8 @@ impl<W: Write + Seek> Plaintext<W> {
     }
 
     fn draw_circle(&mut self, circle: &CircleItem) -> io::Result<()> {
-        write!(&mut self.writer,
+        write!(
+            &mut self.writer,
             "{} circle at ({:.3}, {:.3}) with radius {:.3}\n",
             Self::get_style_name(circle.style),
             circle.center.x,
