@@ -17,7 +17,6 @@ pub struct Latex<W: Write + Seek> {
 
 impl<W: Write + Seek> Latex<W> {
     /// Get the figure in LaTeX format.
-    #[must_use]
     pub fn draw(figure: &Figure, writer: W) -> Result<(), std::io::Error> {
         let mut latex = Self { writer };
 

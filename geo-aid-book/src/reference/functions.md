@@ -149,7 +149,16 @@ struct Bisector {
 
 **Return type**: [Circle](./types.md#Circle)
 
-**Returns**: a circle circumscribed on the three points given.
+**Returns**: the circle circumscribed on the three points given.
+
+## `circumcenter`
+
+* `circumcenter(a: Point, b: Point, c: Point)`
+* `icircumcenter(abc: 3-P)`
+
+**Return type**: [Point](./types.md#Point)
+
+**Returns**: the cetner of the circle circumscribed on the three points given.
 
 ## `conjugate`
 
@@ -279,7 +288,16 @@ struct Dst {
 
 **Return type**: [Circle](./types.md#Circle)
 
-**Returns**: a circle inscribed in the three points given.
+**Returns**: the circle inscribed in the three points given.
+
+## `incenter`
+
+* `incenter(a: Point, b: Point, c: Point)`
+* `incenter(abc: 3-P)`
+
+**Return type**: [Point](./types.md#Point)
+
+**Returns**: the cetner of the circle inscribed in the three points given.
 
 ## `intersection`
 

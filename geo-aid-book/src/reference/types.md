@@ -204,6 +204,12 @@ Point collections are simply ordered collections of points. It is never a separa
 
 **Returns**: The circle circumscribed on the three points.
 
+* `circumcenter()` (alias `circumcentre`) if the collection has length of 3.
+
+**Return type**: [Point](#point)
+
+**Returns**: The center of the circle circumscribed on the three points.
+
 * `dst()` (alias `len`) if the collection has length of 2.
 
 **Return type**: [Number (distance)](#number)
@@ -215,6 +221,14 @@ Point collections are simply ordered collections of points. It is never a separa
 **Return type**: [Circle](#circle)
 
 **Returns**: The circle inscribed in the three points.
+
+**Returns**: the distance between the two points.
+
+* `incenter()` (alias `incentre`) if the collection has length of 3.
+
+**Return type**: [Point](#point)
+
+**Returns**: The cetner of the circle inscribed in the three points.
 
 * `mid()` for any length.
 

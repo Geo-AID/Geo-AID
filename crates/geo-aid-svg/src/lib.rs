@@ -16,7 +16,6 @@ pub struct Svg<W: Write + Seek> {
 
 impl<W: Write + Seek> Svg<W> {
     /// Get the figure in SVG format.
-    #[must_use]
     pub fn draw(figure: &Figure, writer: W) -> io::Result<()> {
         let mut svg = Self { writer };
 

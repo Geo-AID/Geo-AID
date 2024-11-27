@@ -16,7 +16,6 @@ pub struct Plaintext<W: Write + Seek> {
 
 impl<W: Write + Seek> Plaintext<W> {
     /// Get the figure in plaintext format.
-    #[must_use]
     pub fn draw(figure: &Figure, writer: W) -> io::Result<()> {
         let mut plain = Self { writer };
 
@@ -52,9 +51,9 @@ impl<W: Write + Seek> Plaintext<W> {
     ) -> io::Result<()> {
         let label = label.map(|l| l.content.to_string()).unwrap_or_default();
 
-        write!(
+        writeln!(
             &mut self.writer,
-            "{} line \"{}\" from ({:.3}, {:.3}) to ({:.3}, {:.3})\n",
+            "{} line \"{}\" from ({:.3}, {:.3}) to ({:.3}, {:.3})",
             Self::get_style_name(style),
             label,
             p1.x,
@@ -71,9 +70,9 @@ impl<W: Write + Seek> Plaintext<W> {
             .map(|x| format!("\"{}\"", x.content))
             .unwrap_or_default();
 
-        write!(
+        writeln!(
             &mut self.writer,
-            "point \"{label}\" at ({:.3}, {:.3})\n",
+            "point \"{label}\" at ({:.3}, {:.3})",
             point.position.x, point.position.y
         )
     }
@@ -91,9 +90,9 @@ impl<W: Write + Seek> Plaintext<W> {
     }
 
     fn draw_circle(&mut self, circle: &CircleItem) -> io::Result<()> {
-        write!(
+        writeln!(
             &mut self.writer,
-            "{} circle at ({:.3}, {:.3}) with radius {:.3}\n",
+            "{} circle at ({:.3}, {:.3}) with radius {:.3}",
             Self::get_style_name(circle.style),
             circle.center.x,
             circle.center.y,
