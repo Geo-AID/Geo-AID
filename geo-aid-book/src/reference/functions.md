@@ -121,7 +121,7 @@ struct Bisector {
 
 * `angle(k: Line, l: Line)`
 
-## `center`
+## `center` (alias `centre`)
 
 * `center(circle: Circle)`
 
@@ -149,7 +149,16 @@ struct Bisector {
 
 **Return type**: [Circle](./types.md#Circle)
 
-**Returns**: a circle circumscribed on the three points given.
+**Returns**: the circle circumscribed on the three points given.
+
+## `circumcenter`
+
+* `circumcenter(a: Point, b: Point, c: Point)`
+* `icircumcenter(abc: 3-P)`
+
+**Return type**: [Point](./types.md#Point)
+
+**Returns**: the cetner of the circle circumscribed on the three points given.
 
 ## `conjugate`
 
@@ -279,7 +288,16 @@ struct Dst {
 
 **Return type**: [Circle](./types.md#Circle)
 
-**Returns**: a circle inscribed in the three points given.
+**Returns**: the circle inscribed in the three points given.
+
+## `incenter`
+
+* `incenter(a: Point, b: Point, c: Point)`
+* `incenter(abc: 3-P)`
+
+**Return type**: [Point](./types.md#Point)
+
+**Returns**: the cetner of the circle inscribed in the three points given.
 
 ## `intersection`
 
@@ -338,6 +356,15 @@ All overloads by default don't display the point dot. This can be changed with p
 **Return type**: [Point](./types.md#Point)
 
 **Returns**: The middle point of `P_1`, `P_2`, ... `P_n`. Special cases: when `n=2`, the middle of a segment; When `n=3`, the centroid of a triangle.
+
+## `orthocenter` (alias `orthocentre`)
+
+* `orthocenter(A: Point, B: Point, C: Point)`
+* `orthocenter(ABC: 3-P)`
+
+**Return type**: [Point](./types.md#Point)
+
+**Returns**: The intersection of the triangles altitudes.
 
 ## `parallel_through` (alias `parallel`)
 

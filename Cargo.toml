@@ -21,6 +21,9 @@ geo-aid-plaintext = { version = "0.7.0", path = "crates/geo-aid-plaintext" }
 geo-aid-json = { version = "0.7.0", path = "crates/geo-aid-json" }
 geo-aid-geogebra = { version = "0.7.0", path = "crates/geo-aid-geogebra" }
 
+[profile.release]
+lto = true
+
 [profile.dev]
 opt-level = 1
 

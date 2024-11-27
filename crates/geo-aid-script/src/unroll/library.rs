@@ -41,6 +41,7 @@ pub mod polygon;
 pub mod radians;
 pub mod segment;
 pub mod transform;
+pub mod triangle;
 pub mod trigonometry;
 
 /// A prelude for builtin functions.
@@ -476,6 +477,7 @@ impl Library {
         line::register(&mut library); // Line()
         area::register(&mut library);
         polygon::register(&mut library);
+        triangle::register(&mut library);
 
         lies_on::register(&mut library); // lies_on
 

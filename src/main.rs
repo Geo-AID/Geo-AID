@@ -270,12 +270,12 @@ fn main() {
         });
 
         match File::create(&final_path) {
-            Ok(mut file) => {
+            Ok(file) => {
                 let res = match format {
-                    Format::Latex => file.write_all(Latex::draw(&rendered).as_bytes()),
-                    Format::Json => file.write_all(Json::draw(&rendered).as_bytes()),
-                    Format::Svg => file.write_all(Svg::draw(&rendered).as_bytes()),
-                    Format::Plaintext => file.write_all(Plaintext::draw(&rendered).as_bytes()),
+                    Format::Latex => Latex::draw(&rendered, file),
+                    Format::Json => Json::draw(&rendered, file),
+                    Format::Svg => Svg::draw(&rendered, file),
+                    Format::Plaintext => Plaintext::draw(&rendered, file),
                     Format::Geogebra => Geogebra::draw(&rendered, file),
                 };
 
