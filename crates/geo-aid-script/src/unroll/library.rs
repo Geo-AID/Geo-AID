@@ -630,6 +630,12 @@ impl<const N: usize> DerefMut for Pc<N> {
     }
 }
 
+impl<const N: usize> From<Pc<N>> for AnyExpr {
+    fn from(value: Pc<N>) -> Self {
+        Self::PointCollection(value.0)
+    }
+}
+
 /// Number with a specific unit.
 #[derive(Debug)]
 pub struct NumberUnit<
