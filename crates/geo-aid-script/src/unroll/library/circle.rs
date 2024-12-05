@@ -1,5 +1,7 @@
 //! Functions directly related to circles.
 
+use crate::unroll::Number;
+
 use super::{bisector, prelude::*, NumberUnit};
 
 /// Circle constructor. Creates a circle based off of its center and radius.
@@ -12,14 +14,37 @@ fn circle_function(
     context.circle_display(center, radius.0, display)
 }
 
-/// A circle circumscribed on three points.
-fn circumcircle(
-    a: Expr<Point>,
-    b: Expr<Point>,
-    c: Expr<Point>,
+fn simple_circle(
+    mut center: Expr<Point>,
+    mut radius: Expr<Number>,
+    nodes: [Option<HierarchyNode<PointNode>>; 3],
     context: &CompileContext,
     props: Properties,
 ) -> Expr<Circle> {
+    center.take_node();
+    radius.take_node();
+
+    let mut expr = context.circle_display(center, radius, props);
+
+    if let Some(node) = expr.node.as_mut() {
+        node.extend_children(nodes.into_iter().flatten());
+    }
+
+    expr
+}
+
+/// A circle circumscribed on three points.
+fn circumcircle(
+    mut a: Expr<Point>,
+    mut b: Expr<Point>,
+    mut c: Expr<Point>,
+    context: &CompileContext,
+    props: Properties,
+) -> Expr<Circle> {
+    let a_node = a.take_node();
+    let b_node = b.take_node();
+    let c_node = c.take_node();
+
     let k = bisector::point_point(
         a.clone_without_node(),
         b.clone_without_node(),
@@ -31,17 +56,21 @@ fn circumcircle(
     let center = context.intersection(k, l);
     let radius = context.distance_pp(center.clone_without_node(), a);
 
-    context.circle_display(center, radius, props)
+    simple_circle(center, radius, [a_node, b_node, c_node], context, props)
 }
 
 /// A circle inscribed in three points.
 fn incircle(
-    a: Expr<Point>,
-    b: Expr<Point>,
-    c: Expr<Point>,
+    mut a: Expr<Point>,
+    mut b: Expr<Point>,
+    mut c: Expr<Point>,
     context: &CompileContext,
     props: Properties,
 ) -> Expr<Circle> {
+    let a_node = a.take_node();
+    let b_node = b.take_node();
+    let c_node = c.take_node();
+
     let k = context.bisector_ppp(
         a.clone_without_node(),
         b.clone_without_node(),
@@ -53,7 +82,40 @@ fn incircle(
     let center = context.intersection(k, l);
     let radius = context.distance_pl(center.clone_without_node(), ab);
 
-    context.circle_display(center, radius, props)
+    simple_circle(center, radius, [a_node, b_node, c_node], context, props)
+}
+
+/// A circle exscribed (?) to three points.
+fn excircle(
+    mut a: Expr<Point>,
+    mut b: Expr<Point>,
+    mut c: Expr<Point>,
+    context: &CompileContext,
+    props: Properties,
+) -> Expr<Circle> {
+    let a_node = a.take_node();
+    let b_node = b.take_node();
+    let c_node = c.take_node();
+
+    let k = context.bisector_ppp(
+        a.clone_without_node(),
+        b.clone_without_node(),
+        c.clone_without_node(),
+    );
+    let l = context.perpendicular_through(
+        context.bisector_ppp(
+            b.clone_without_node(),
+            c.clone_without_node(),
+            a.clone_without_node(),
+        ),
+        c,
+    );
+    let ab = context.line(a, b);
+
+    let center = context.intersection(k, l);
+    let radius = context.distance_pl(center.clone_without_node(), ab);
+
+    simple_circle(center, radius, [a_node, b_node, c_node], context, props)
 }
 
 /// Register the function
@@ -118,6 +180,20 @@ pub fn register(library: &mut Library) {
                 .overload(incircle)
                 .overload(|mut col: Pc<3>, context: &CompileContext, props| {
                     incircle(
+                        index!(node col, 0),
+                        index!(node col, 1),
+                        index!(node col, 2),
+                        context,
+                        props,
+                    )
+                }),
+        )
+        .add(
+            Function::new("excircle")
+                .alias_method(ty::collection(3), "excircle")
+                .overload(excircle)
+                .overload(|mut col: Pc<3>, context: &CompileContext, props| {
+                    excircle(
                         index!(node col, 0),
                         index!(node col, 1),
                         index!(node col, 2),

@@ -264,6 +264,23 @@ struct Dst {
 
 **Returns**: the value with a distance unit.
 
+## `equilateral` (alias `equilateral_triangle`)
+
+* `equilateral()`
+
+**Return type**: [Point collection (3)](./types.md#point-collections)
+
+**Returns**: an equilateral triangle.
+
+## `excircle`
+
+* `excircle(a: Point, b: Point, c: Point)`
+* `excircle(abc: 3-P)`
+
+**Return type**: [Circle](./types.md#Circle)
+
+**Returns**: the circle excribed to the points given, with the center on the bisector of angle `ABC`.
+
 ## `homothety`
 
 * `homothety(origin: Point, scale: Number (no unit))`
@@ -324,6 +341,14 @@ All overloads by default don't display the point dot. This can be changed with p
 
 **Note**: `display_dot` property is not currently supported.
 
+## `isosceles` (alias `isosceles_triangle`)
+
+* `isosceles()`
+
+**Return type**: [Point collection (3)](./types.md#point-collections)
+
+**Returns**: an isosceles triangle with `AC = BC`.
+
 ## `line`
 
 * `line(col: 2-PC)`
@@ -334,6 +359,38 @@ All overloads by default don't display the point dot. This can be changed with p
 **Returns**: a line through two given points.
 
 **Displays**: The created line.
+
+## `main_equilateral` (alias `main_equilateral_triangle`)
+
+* `main_equilateral()`
+
+**Return type**: [Point collection (3)](./types.md#point-collections)
+
+**Returns**: an equilateral triangle with `C.y > A.y = B.y` and `A.x < B.x`.
+
+## `main_isosceles` (alias `main_isosceles_triangle`)
+
+* `main_isosceles()`
+
+**Return type**: [Point collection (3)](./types.md#point-collections)
+
+**Returns**: an isosceles triangle with `AC = BC`, `C.y > A.y = B.y` and `A.x < B.x`.
+
+## `main_right` (alias `main_right_triangle`)
+
+* `main_right()`
+
+**Return type**: [Point collection (3)](./types.md#point-collections)
+
+**Returns**: a right triangle with `angle(ACB) = deg(90)`, `B.y > A.y = C.y` and `C.x < A.x`.
+
+## `main_triangle` (alias `main_triangle`)
+
+* `main_triangle()`
+
+**Return type**: [Point collection (3)](./types.md#point-collections)
+
+**Returns**: a triangle with `C.y > A.y = B.y` and `A.x < B.x`.
 
 ## `mid`
 
@@ -461,6 +518,14 @@ Only works with a number literal.
 
 **Returns**: A rotation around an origin by an angle (possibly negative), along with an optional homothety at the same point.
 
+## `right` (alias `right_triangle`)
+
+* `right()`
+
+**Return type**: [Point collection (3)](./types.md#point-collections)
+
+**Returns**: a right triangle with `angle(ACB) = deg(90)`.
+
 ## `sec`
 
 * `sec(v: Number (angle))`
@@ -549,6 +614,14 @@ Works for 3 or more points.
 **Return type**: [TransformType](./types.md#transformtype)
 
 **Returns**: A translation by a vector.
+
+## `triagngle` (alias `triangle`)
+
+* `triangle()`
+
+**Return type**: [Point collection (3)](./types.md#point-collections)
+
+**Returns**: a triangle.
 
 ## `x`
 

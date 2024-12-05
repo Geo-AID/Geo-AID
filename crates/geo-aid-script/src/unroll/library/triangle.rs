@@ -1,13 +1,15 @@
 //! Triangle-related functions
 
-use crate::{token::Span, unroll::{figure::PCNode, PointCollection, PointCollectionData}};
+use num_traits::FromPrimitive;
+
+use crate::{
+    token::{number::ProcNum, Span},
+    unroll::{figure::PCNode, PointCollection, PointCollectionData},
+};
 
 use super::{bisector, prelude::*};
 
-fn triangle(
-    context: &CompileContext,
-    mut props: Properties
-) -> Pc<3> {
+fn triangle(context: &CompileContext, mut props: Properties) -> Pc<3> {
     let points = (0..3).map(|_| context.free_point()).collect::<Vec<_>>();
 
     let mut expr = Expr {
@@ -35,7 +37,7 @@ fn triangle(
     node.root.props = Some(props);
     expr.node = Some(node);
 
-    expr
+    expr.into()
 }
 
 fn main_triangle(context: &mut CompileContext, props: Properties) -> Pc<3> {
@@ -101,6 +103,38 @@ fn main_equilateral_triangle(context: &mut CompileContext, props: Properties) ->
     context.scalar_eq(a_y, b_y.clone_without_node(), false);
     context.gt(c_y, b_y, false);
     context.gt(b_x, a_x, false);
+
+    pc.into()
+}
+
+fn right_triangle(context: &mut CompileContext, props: Properties) -> Pc<3> {
+    let pc = triangle(context, props);
+
+    let acb = context.angle_ppp(
+        pc.index_without_node(0),
+        pc.index_without_node(2),
+        pc.index_without_node(1),
+    );
+    context.scalar_eq(
+        acb,
+        number!(ANGLE ProcNum::pi() / &ProcNum::from_i8(2).unwrap()),
+        false,
+    );
+
+    pc
+}
+
+fn main_right_triangle(context: &mut CompileContext, props: Properties) -> Pc<3> {
+    let pc = right_triangle(context, props);
+
+    let a_y = context.point_y(pc.index_without_node(0));
+    let a_x = context.point_x(pc.index_without_node(0));
+    let b_y = context.point_y(pc.index_without_node(1));
+    let c_y = context.point_y(pc.index_without_node(2));
+    let c_x = context.point_x(pc.index_without_node(2));
+    context.scalar_eq(a_y, c_y.clone_without_node(), false);
+    context.gt(b_y, c_y, false);
+    context.gt(a_x, c_x, false);
 
     pc.into()
 }
@@ -248,32 +282,36 @@ pub fn register(library: &mut Library) {
                     )
                 }),
         )
-        .add(
-            Function::new("triangle")
-                .overload(triangle)
-        )
-        .add(
-            Function::new("maintriangle")
-                .overload(main_triangle)
-        )
+        .add(Function::new("triangle").overload(triangle))
+        .add(Function::new("maintriangle").overload(main_triangle))
         .add(
             Function::new("isoscelestriangle")
                 .alias("isosceles")
-                .overload(isosceles_triangle)
+                .overload(isosceles_triangle),
         )
         .add(
             Function::new("mainisoscelestriangle")
                 .alias("mainisosceles")
-                .overload(main_isosceles_triangle)
+                .overload(main_isosceles_triangle),
         )
         .add(
             Function::new("equilateraltriangle")
                 .alias("equilateral")
-                .overload(equilateral_triangle)
+                .overload(equilateral_triangle),
         )
         .add(
             Function::new("mainequilateraltriangle")
                 .alias("mainequilateral")
-                .overload(main_equilateral_triangle)
+                .overload(main_equilateral_triangle),
+        )
+        .add(
+            Function::new("righttriangle")
+                .alias("right")
+                .overload(right_triangle),
+        )
+        .add(
+            Function::new("mainrighttriangle")
+                .alias("mainright")
+                .overload(main_right_triangle),
         );
 }

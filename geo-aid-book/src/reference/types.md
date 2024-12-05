@@ -216,6 +216,12 @@ Point collections are simply ordered collections of points. It is never a separa
 
 **Returns**: the distance between the two points.
 
+* `excircle` if the collection has length of 3
+
+**Return type**: [Circle](#Circle)
+
+**Returns**: the circle excribed to the points given, with the center on the bisector of angle `ABC`.
+
 * `incircle()` if the collection has length of 3.
 
 **Return type**: [Circle](#circle)
