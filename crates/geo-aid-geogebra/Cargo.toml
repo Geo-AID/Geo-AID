@@ -1,12 +1,12 @@
 [package]
 name = "geo-aid-geogebra"
 description = "Support for Geogebra (*.ggb) output from Geo-AID."
-version = "0.7.0"
+version = "0.7.1"
 edition = "2021"
 license = "MIT"
 repository = "https://github.com/Geo-AID/Geo-AID"
 
 [dependencies]
-geo-aid-figure = { version = "0.7.0", path = "../geo-aid-figure" }
+geo-aid-figure = { version = "0.7.1", path = "../geo-aid-figure" }
 geogebra-types = "0.1.5"
 num-traits = "0.2"
