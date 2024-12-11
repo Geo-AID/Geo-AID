@@ -1,3 +1,7 @@
+## Version 0.7.1
+
+- **GeoScript**: More functions for triangles and circles.
+
 ## Version 0.7.0
 
 - **GeoScript**: Function, rule, and property names now ignore casing of letters and underscores.
