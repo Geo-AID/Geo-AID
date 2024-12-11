@@ -77,7 +77,7 @@ fn main_isosceles_triangle(context: &mut CompileContext, props: Properties) -> P
     context.gt(c_y, b_y, false);
     context.gt(b_x, a_x, false);
 
-    pc.into()
+    pc
 }
 
 fn equilateral_triangle(context: &mut CompileContext, props: Properties) -> Pc<3> {
@@ -104,7 +104,7 @@ fn main_equilateral_triangle(context: &mut CompileContext, props: Properties) ->
     context.gt(c_y, b_y, false);
     context.gt(b_x, a_x, false);
 
-    pc.into()
+    pc
 }
 
 fn right_triangle(context: &mut CompileContext, props: Properties) -> Pc<3> {
@@ -136,7 +136,7 @@ fn main_right_triangle(context: &mut CompileContext, props: Properties) -> Pc<3>
     context.gt(b_y, c_y, false);
     context.gt(a_x, c_x, false);
 
-    pc.into()
+    pc
 }
 
 fn orthocenter(
