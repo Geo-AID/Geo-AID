@@ -139,7 +139,7 @@ impl<'f> Geogebra<'f> {
     }
 }
 
-impl<'f> Geogebra<'f> {
+impl Geogebra<'_> {
     /// Convert the given math string into a LaTeX string.
     fn math_to_latex(math: &MathString) -> String {
         let mut s = String::new();
