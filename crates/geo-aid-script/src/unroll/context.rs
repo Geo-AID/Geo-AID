@@ -341,6 +341,8 @@ impl CompileContext {
     generic_expr! {direction(k: Line) -> Number[unit::SCALAR]::Direction}
     generic_expr! {neg(v: Number) -> Number[inferred]::Negate}
     generic_expr! {point_vector(p: Point, v: Number) -> Line::PointVector}
+    generic_expr! {point_x(p: Point) -> Number[unit::DISTANCE]::PointX}
+    generic_expr! {point_y(p: Point) -> Number[unit::DISTANCE]::PointY}
 
     pub fn mult_display(
         &self,

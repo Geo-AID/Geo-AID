@@ -391,7 +391,7 @@ impl<'r> Diagnostic<'r> {
     }
 }
 
-impl<'r> Display for Diagnostic<'r> {
+impl Display for Diagnostic<'_> {
     #[allow(clippy::too_many_lines)]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // Display the main message

@@ -90,7 +90,7 @@ impl Overload for Poly {
 }
 
 #[derive(Debug)]
-struct Associated;
+pub struct Associated;
 
 impl BuildAssociated<PCNode> for Associated {
     fn build_associated(
