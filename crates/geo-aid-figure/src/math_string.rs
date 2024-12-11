@@ -423,7 +423,7 @@ impl<'de> Deserialize<'de> for MathString {
 
 struct MathStringVisitor;
 
-impl<'de> Visitor<'de> for MathStringVisitor {
+impl Visitor<'_> for MathStringVisitor {
     type Value = MathString;
 
     fn expecting(&self, formatter: &mut Formatter) -> std::fmt::Result {
